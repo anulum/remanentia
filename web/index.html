@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Remanentia — The State of Remaining</title>
+<meta name="description" content="Remanentia: Persistent AI memory with SNN-orchestrated consolidation, entity graphs, and deep contextual recall. 92.9% retrieval precision.">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#0a0a0f;color:#e0e0e8}
+.bg{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none}
+.bg canvas{width:100%;height:100%}
+
+section{position:relative;z-index:1;max-width:680px;margin:0 auto;padding:0 1.5rem}
+.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+h1{font-size:3.2rem;font-weight:300;letter-spacing:0.12em;color:#c8b8e8;margin-bottom:0.3rem;text-transform:uppercase;transition:color 0.3s,text-shadow 0.3s}
+.latin{font-size:1rem;font-style:italic;color:#8878a8;letter-spacing:0.08em;margin-bottom:2.4rem}
+.divider{width:80px;height:1px;background:linear-gradient(90deg,transparent,#6858a0,transparent);margin:0 auto 2rem}
+p{font-size:1.05rem;line-height:1.7;color:#a0a0b0;margin-bottom:1.2rem}
+
+/* Stats row */
+.stats{display:flex;flex-wrap:wrap;justify-content:center;margin:1.8rem 0}
+.stat{text-align:center;padding:0 1.2rem}
+.stat+.stat{border-left:1px solid #2a2840}
+.stat-val{font-size:1.4rem;font-weight:600;color:#c8b8e8}
+.stat-label{font-size:0.72rem;color:#6868a0;letter-spacing:0.04em;margin-top:0.1rem}
+
+/* Sections */
+.content-section{padding-top:4rem;padding-bottom:4rem}
+h2{font-size:1.3rem;font-weight:400;letter-spacing:0.06em;color:#b0a0d0;margin-bottom:1.5rem;text-align:center}
+
+/* How it works */
+.pipeline{display:flex;align-items:center;justify-content:center;gap:0.4rem;margin:1.5rem 0;flex-wrap:wrap}
+.pipe-step{background:#12121f;border:1px solid #2a2840;border-radius:4px;padding:0.6rem 1rem;text-align:center;min-width:120px}
+.pipe-step strong{display:block;font-size:0.95rem;color:#c8b8e8;font-weight:500}
+.pipe-step span{font-size:0.72rem;color:#7070a0}
+.pipe-arrow{color:#4040608f;font-size:1.2rem}
+
+/* Differentiators */
+.diff-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin:1.5rem 0}
+.diff-item{background:#0e0e1a;border:1px solid #1e1e30;border-radius:4px;padding:1rem;text-align:center}
+.diff-item .icon{font-size:1.5rem;margin-bottom:0.4rem}
+.diff-item strong{display:block;font-size:0.88rem;color:#c0b0e0;margin-bottom:0.3rem}
+.diff-item span{font-size:0.75rem;color:#7878a0;line-height:1.4}
+
+/* Research honesty */
+.honesty{background:#0c0c18;border:1px solid #1e1e30;border-radius:4px;padding:1.2rem 1.5rem;margin:1.5rem 0;text-align:center}
+.honesty p{font-size:0.9rem;color:#9090b0;margin-bottom:0.5rem}
+.honesty strong{color:#c8b8e8}
+
+/* Tech stack */
+.tech-row{display:flex;flex-wrap:wrap;justify-content:center;gap:0.5rem;margin:1.2rem 0}
+.tech-badge{background:#14142a;border:1px solid #2a2840;border-radius:3px;padding:0.25rem 0.7rem;font-size:0.75rem;color:#8888b0;letter-spacing:0.03em}
+
+/* Links row */
+.links-row{display:flex;flex-wrap:wrap;justify-content:center;gap:0.8rem;margin:1.2rem 0}
+.link-pill{display:inline-flex;align-items:center;gap:0.3rem;padding:0.35rem 0.9rem;border:1px solid #2a2840;border-radius:3px;font-size:0.8rem;color:#8888b0;text-decoration:none;transition:border-color 0.2s,color 0.2s}
+.link-pill:hover{border-color:#6858a0;color:#c8b8e8}
+.link-pill.coming{opacity:0.5;pointer-events:none}
+
+/* Invest */
+.invest{margin-top:2.5rem;text-align:center}
+.invest-line{font-size:0.9rem;color:#8878a8;margin-bottom:0.6rem}
+.invest-cta{display:inline-block;padding:0.45rem 1.4rem;border:1px solid #6858a0;border-radius:3px;color:#c8b8e8;font-size:0.85rem;letter-spacing:0.04em;text-decoration:none;transition:background 0.2s,color 0.2s}
+.invest-cta:hover{background:#6858a0;color:#0a0a0f}
+
+/* Ecosystem */
+.eco{text-align:center;font-size:0.85rem;color:#6868a0;margin-top:1rem}
+.eco a{color:#8878b0;text-decoration:none}
+.eco a:hover{color:#c8b8e8}
+
+/* Status */
+.status{display:inline-block;margin-top:1.5rem;padding:0.5rem 1.6rem;border:1px solid #2a2840;border-radius:2px;font-size:0.85rem;color:#7868a0;letter-spacing:0.06em}
+.dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#6858a0;margin-right:8px;animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:0.4}50%{opacity:1}}
+
+/* Footer */
+footer{position:relative;z-index:1;text-align:center;padding:3rem 1rem 1.5rem;font-size:0.78rem;color:#484858;letter-spacing:0.04em;line-height:1.6}
+footer a{color:#6858a0;text-decoration:none}
+footer a:hover{color:#8878b0}
+
+/* Responsive */
+@media(max-width:520px){
+  h1{font-size:2.2rem}
+  .stat{padding:0 0.6rem}.stat-val{font-size:1.1rem}
+  .diff-grid{grid-template-columns:1fr}
+  .pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg)}
+}
+</style>
+</head>
+<body>
+<div class="bg"><canvas id="c"></canvas></div>
+
+<!-- HERO -->
+<section class="hero">
+<h1>Remanentia</h1>
+<div class="latin">remanentem &mdash; the state of remaining</div>
+<div class="divider"></div>
+<p>Persistent AI memory with SNN-orchestrated consolidation. Not a vector store. A system that encodes, consolidates, and recalls with temporal context, entity graphs, and cross-project insight.</p>
+
+<div class="stats">
+<div class="stat"><div class="stat-val">92.9%</div><div class="stat-label">Retrieval P@1</div></div>
+<div class="stat"><div class="stat-val">20,000</div><div class="stat-label">LIF neurons</div></div>
+<div class="stat"><div class="stat-val">197</div><div class="stat-label">Relations</div></div>
+<div class="stat"><div class="stat-val">28</div><div class="stat-label">Entities</div></div>
+<div class="stat"><div class="stat-val">24/7</div><div class="stat-label">Consolidation</div></div>
+</div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="content-section">
+<h2>How It Works</h2>
+<div class="pipeline">
+  <div class="pipe-step"><strong>Encode</strong><span>Text, timestamps, project context</span></div>
+  <div class="pipe-arrow">&rarr;</div>
+  <div class="pipe-step"><strong>Consolidate</strong><span>Cluster, extract facts, build graph</span></div>
+  <div class="pipe-arrow">&rarr;</div>
+  <div class="pipe-step"><strong>Recall</strong><span>Trace + knowledge + timeline + entities</span></div>
+</div>
+<p style="text-align:center;font-size:0.9rem">A 20,000-neuron spiking network runs continuously, detecting novelty in incoming information and orchestrating when memories consolidate from raw episodes into structured knowledge.</p>
+</section>
+
+<!-- WHAT MAKES THIS DIFFERENT -->
+<section class="content-section">
+<h2>What Makes This Different</h2>
+<div class="diff-grid">
+  <div class="diff-item">
+    <div class="icon">&#x1f9e0;</div>
+    <strong>Deep Recall</strong>
+    <span>Returns matched trace + consolidated knowledge + entity graph + temporal timeline + cross-project links. Not just a ranked list.</span>
+  </div>
+  <div class="diff-item">
+    <div class="icon">&#x1f50d;</div>
+    <strong>Entity Graph</strong>
+    <span>197 weighted relations with evidence trails. Every connection traceable to source traces. Provenance built in.</span>
+  </div>
+  <div class="diff-item">
+    <div class="icon">&#x26a1;</div>
+    <strong>Always On</strong>
+    <span>SNN daemon consolidates 24/7. Not post-session. Novelty detection prioritizes what matters. Continuous, not reactive.</span>
+  </div>
+</div>
+</section>
+
+<!-- RESEARCH HONESTY -->
+<section class="content-section">
+<div class="honesty">
+  <p><strong>Built on 60+ experiments and honest negative results.</strong></p>
+  <p>We tested holographic Kuramoto memory, complex Hebbian coupling, E/I attractor networks, contrastive learning, reservoir readouts, and 5 architectural variants. We publish what fails. The current architecture exists because we measured what works and discarded what doesn't.</p>
+</div>
+</section>
+
+<!-- TECH STACK -->
+<section class="content-section">
+<h2>Stack</h2>
+<div class="tech-row">
+  <span class="tech-badge">Python</span>
+  <span class="tech-badge">PyTorch CUDA</span>
+  <span class="tech-badge">Rust / PyO3</span>
+  <span class="tech-badge">sentence-transformers</span>
+  <span class="tech-badge">NumPy / SciPy</span>
+  <span class="tech-badge">LIF + STDP</span>
+  <span class="tech-badge">BM25 / TF-IDF</span>
+</div>
+
+<div class="links-row">
+  <a href="https://github.com/anulum/remanentia" class="link-pill coming">GitHub (coming soon)</a>
+  <a href="https://doi.org/10.5281/zenodo.19098792" class="link-pill coming">DOI: 10.5281/zenodo.19098792</a>
+  <a href="https://pypi.org/project/remanentia/" class="link-pill coming">PyPI (coming soon)</a>
+</div>
+
+<div class="eco">Part of the <a href="https://www.anulum.li">SCPN framework</a> by Anulum</div>
+</section>
+
+<!-- CTA -->
+<section class="content-section" style="text-align:center">
+<div class="status"><span class="dot"></span>Paper &amp; software in preparation</div>
+<div class="invest">
+  <p class="invest-line">Early-stage research. Open to strategic partners and investors.</p>
+  <a href="mailto:protoscience@anulum.li" class="invest-cta">protoscience@anulum.li</a>
+</div>
+</section>
+
+<footer>
+<div><a href="https://github.com/anulum">GitHub</a> &middot; <a href="https://www.linkedin.com/in/anulum/">LinkedIn</a> &middot; <a href="https://x.com/anulum">X</a> &middot; <a href="https://independent.academia.edu/fortisstudio">Academia</a> &middot; <a href="https://orcid.org/my-orcid?orcid=0009-0009-3560-0851">ORCID</a></div>
+<div>&copy; Concepts 1996&ndash;2026 Miroslav &Scaron;otek. All rights reserved.</div>
+<div>&copy; Code 2020&ndash;2026 Miroslav &Scaron;otek. All rights reserved.</div>
+</footer>
+
+<script>
+const c=document.getElementById('c'),x=c.getContext('2d');
+let w,h,pts=[];
+let frame=0;
+
+function resize(){
+  w=c.width=innerWidth;h=c.height=innerHeight;pts=[];
+  for(let i=0;i<120;i++) pts.push({
+    x:Math.random()*w, y:Math.random()*h,
+    vx:(Math.random()-0.5)*0.4, vy:(Math.random()-0.5)*0.4,
+    r:Math.random()*2.2+0.8,
+    heat:0, heatDecay:0, mode:0,
+  });
+}
+
+function ignite(){
+  const seed=Math.floor(Math.random()*pts.length);
+  const isWrite=Math.random()>0.5;
+  pts[seed].heat=1.0;
+  pts[seed].heatDecay=isWrite?0.008:0.012;
+  pts[seed].mode=isWrite?1:2;
+}
+
+function draw(){
+  frame++;
+  x.clearRect(0,0,w,h);
+  if(frame%180===0) ignite();
+  if(frame%540===0){ignite();ignite();}
+
+  for(let i=0;i<pts.length;i++){
+    let p=pts[i];
+    if(p.heat>0.3){
+      for(let j=0;j<pts.length;j++){
+        if(i===j) continue;
+        let q=pts[j];
+        let dx=p.x-q.x, dy=p.y-q.y, d=Math.sqrt(dx*dx+dy*dy);
+        if(d<180){
+          let spread=p.mode===1 ? 0.015 : 0.01;
+          let transfer=spread*(1-d/180)*p.heat;
+          if(q.heat<p.heat-0.1){
+            q.heat=Math.min(q.heat+transfer, p.heat*0.85);
+            q.heatDecay=q.heatDecay||0.01;
+            q.mode=q.mode||p.mode;
+          }
+        }
+      }
+    }
+  }
+
+  for(let i=0;i<pts.length;i++){
+    let p=pts[i];
+    p.x+=p.vx; p.y+=p.vy;
+    if(p.x<0||p.x>w) p.vx*=-1;
+    if(p.y<0||p.y>h) p.vy*=-1;
+    if(p.heat>0){
+      p.heat=Math.max(0, p.heat-p.heatDecay);
+      if(p.heat<0.01){p.heat=0;p.mode=0;p.heatDecay=0;}
+    }
+    let t=p.heat;
+    let cr=Math.round(130+125*t), cg=Math.round(110-70*t), cb=Math.round(190-130*t);
+    let alpha=0.7+0.3*t;
+    let drawR=p.r+p.r*t*1.5;
+    if(t>0.3){
+      let glow=x.createRadialGradient(p.x,p.y,0,p.x,p.y,drawR*4);
+      glow.addColorStop(0,`rgba(${cr},${cg-20},${cb-30},${t*0.25})`);
+      glow.addColorStop(1,'rgba(0,0,0,0)');
+      x.beginPath();x.arc(p.x,p.y,drawR*4,0,Math.PI*2);
+      x.fillStyle=glow;x.fill();
+    }
+    x.beginPath();x.arc(p.x,p.y,drawR,0,Math.PI*2);
+    x.fillStyle=`rgba(${cr},${cg},${cb},${alpha})`;
+    x.fill();
+    for(let j=i+1;j<pts.length;j++){
+      let q=pts[j];
+      let dx=p.x-q.x, dy=p.y-q.y, d=Math.sqrt(dx*dx+dy*dy);
+      if(d<180){
+        let lt=Math.max(p.heat, q.heat);
+        let lr=Math.round(130+125*lt), lg=Math.round(110-70*lt), lb=Math.round(190-130*lt);
+        let la=0.32*(1-d/180)+0.4*lt*(1-d/180);
+        x.beginPath();x.moveTo(p.x,p.y);x.lineTo(q.x,q.y);
+        x.strokeStyle=`rgba(${lr},${lg},${lb},${la})`;
+        x.lineWidth=0.8+lt*1.2;
+        x.stroke();
+      }
+    }
+  }
+  let maxHeat=0;
+  for(let i=0;i<pts.length;i++) if(pts[i].heat>maxHeat) maxHeat=pts[i].heat;
+  const h1=document.querySelector('h1');
+  if(h1){
+    let t=maxHeat;
+    let tr=Math.round(200+55*t), tg=Math.round(184-144*t), tb=Math.round(232-172*t);
+    h1.style.color=`rgb(${tr},${tg},${tb})`;
+    if(t>0.2){
+      let gl=Math.round(t*18);
+      h1.style.textShadow=`0 0 ${gl}px rgba(${tr},${tg-20},${tb-30},${t*0.6}), 0 0 ${gl*2}px rgba(${tr},${tg-20},${tb-30},${t*0.3})`;
+    } else {
+      h1.style.textShadow='none';
+    }
+  }
+  requestAnimationFrame(draw);
+}
+resize();draw();addEventListener('resize',resize);
+</script>
+</body>
+</html>
