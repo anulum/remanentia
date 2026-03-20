@@ -204,19 +204,30 @@ class GPULIFNetwork(_BaseLIFNetwork):
         return spikes_total
 
     def _apply_stdp_gpu(self, spike_idx: np.ndarray) -> None:
-        """STDP weight update — runs on GPU via scatter ops."""
+        """STDP weight update — asymmetric Hebbian (Bi & Poo 1998).
+
+        LTP: pre fires before post (dt > 0) → strengthen w[post, pre]
+        LTD: post fires before pre (dt < 0) → weaken w[post, pre]
+        """
         torch = self.torch
         t_now = self.t
         dt_pre = t_now - self.last_spike
 
-        for i in spike_idx[:20]:  # cap at 20 spikes per step for speed
-            dt_arr = torch.from_numpy(dt_pre.astype(np.float32)).to(self.device)
-            mask = (dt_arr > 0) & (dt_arr < 100)
-            dw = STDP_A_PLUS * torch.exp(-dt_arr / STDP_TAU) * mask
-            self.w[i, :] = torch.clamp(self.w[i, :] + dw, 0, STDP_W_MAX)
+        # Hoist tensor allocation outside loop (was per-spike, 20K transfers)
+        dt_arr = torch.from_numpy(dt_pre.astype(np.float32)).to(self.device)
 
-            dw_neg = -STDP_A_MINUS * torch.exp(-dt_arr / STDP_TAU) * mask
-            self.w[:, i] = torch.clamp(self.w[:, i] + dw_neg, 0, STDP_W_MAX)
+        for i in spike_idx[:20]:
+            # LTP: neuron i just fired (post). Strengthen inputs from
+            # neurons that fired recently BEFORE i (dt > 0 = pre before post)
+            mask_ltp = (dt_arr > 0) & (dt_arr < 100)
+            dw_ltp = STDP_A_PLUS * torch.exp(-dt_arr / STDP_TAU) * mask_ltp
+            self.w[i, :] = torch.clamp(self.w[i, :] + dw_ltp, 0, STDP_W_MAX)
+
+            # LTD: neuron i just fired (pre). Weaken connections TO neurons
+            # that fired recently BEFORE i (dt > 0 = they were post, i is now pre)
+            # This is anti-causal: post fired, then pre fires → depress
+            dw_ltd = STDP_A_MINUS * torch.exp(-dt_arr / STDP_TAU) * mask_ltp
+            self.w[:, i] = torch.clamp(self.w[:, i] - dw_ltd, 0, STDP_W_MAX)
 
         self.last_spike[spike_idx] = t_now
 

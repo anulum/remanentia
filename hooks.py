@@ -54,7 +54,10 @@ def session_start(project: str, context_text: str = "", agent: str = "claude") -
     p_phases = extract_physical(osc_ids)
 
     # Three-channel blend: I (0.5) + S (0.3) + P (0.2)
-    phases = 0.5 * i_phases + 0.3 * s_phases + 0.2 * p_phases
+    # Circular mean: weighted average on the unit circle (not linear on angles)
+    sin_blend = 0.5 * np.sin(i_phases) + 0.3 * np.sin(s_phases) + 0.2 * np.sin(p_phases)
+    cos_blend = 0.5 * np.cos(i_phases) + 0.3 * np.cos(s_phases) + 0.2 * np.cos(p_phases)
+    phases = np.arctan2(sin_blend, cos_blend)
 
     R = _compute_R(phases)
 

@@ -25,10 +25,10 @@ Architecture::
     cosine similarity vs cached trace spike features ──► SNN affinity score
         │
         ▼
-    TF-IDF + filename overlap + paragraph embedding score
+    TF-IDF + filename overlap + entity graph + paragraph embedding
         │
         ▼
-    combined: 0.35 × keyword + 0.35 × snn + 0.10 × name + 0.20 × embedding
+    combined: 0.30 × keyword + 0.25 × name + 0.10 × graph + 0.45 × embedding
         │
         ▼
     ranked trace list with scores
@@ -70,6 +70,7 @@ logger = logging.getLogger("ArcSap.Retrieve")
 BASE_DIR = Path(__file__).parent
 STATE_DIR = BASE_DIR / "snn_state"
 TRACES_DIR = BASE_DIR / "reasoning_traces"
+SEMANTIC_DIR = BASE_DIR / "memory" / "semantic"
 RETRIEVAL_STATE_PATH = STATE_DIR / "retrieval_state.json"
 DEFAULT_NETWORK_PATH = STATE_DIR / "identity_net.pkl"
 EMBED_NETWORK_PATH = STATE_DIR / "identity_net_embedding_trained.pkl"
@@ -85,10 +86,10 @@ _PROBE_DURATION = 0.1
 _PROBE_DT = 0.001
 _EMBED_RERANK_MIN = 8
 _EMBED_RERANK_FACTOR = 3
-_WEIGHT_KW = 0.20
-_WEIGHT_SNN = 0.30
+_WEIGHT_KW = 0.30
+_WEIGHT_SNN = 0.00  # proven to add zero across 70+ experiments
 _WEIGHT_NAME = 0.25
-_WEIGHT_EMB = 0.25
+_WEIGHT_EMB = 0.45  # best-paragraph embedding is the strongest signal
 _LIVE_RETRIEVAL_TIMEOUT_S = 30.0
 _LIVE_SERVICE_STALE_S = 300.0
 
@@ -200,7 +201,7 @@ def _build_idf(trace_texts: dict[str, str]) -> dict[str, float]:
         terms = set(tokens) | set(_bigrams(tokens))
         for t in terms:
             df[t] += 1
-    return {t: math.log(n_docs / (1 + count)) for t, count in df.items()}
+    return {t: math.log(1 + n_docs / (1 + count)) for t, count in df.items()}
 
 
 def _tfidf_score(query: str, doc_name: str, doc_text: str, idf: dict[str, float]) -> float:
@@ -460,10 +461,15 @@ def _persist_trace_index_cache(cache_key: str, payload: dict) -> None:
 
 def _build_trace_index(tdir: Path, data: dict) -> dict:
     trace_files = sorted(tdir.glob("*.md"))
+    # Include semantic memories in search corpus
+    semantic_files = []
+    if SEMANTIC_DIR.exists():
+        semantic_files = sorted(SEMANTIC_DIR.rglob("*.md"))
+    all_files = trace_files + semantic_files
     cache_key = (
         f"{data['_state_signature']}:"
         f"{data['_encoding_backend']}:"
-        f"{_trace_fingerprint(trace_files)}"
+        f"{_trace_fingerprint(all_files)}"
     )
     cached = _TRACE_INDEX_CACHE.get(cache_key)
     if cached is not None:
@@ -472,6 +478,9 @@ def _build_trace_index(tdir: Path, data: dict) -> dict:
     trace_texts: dict[str, str] = {}
     for tf in trace_files:
         trace_texts[tf.name] = tf.read_text(encoding="utf-8")
+    for sf in semantic_files:
+        rel = str(sf.relative_to(SEMANTIC_DIR))
+        trace_texts[f"[semantic] {rel}"] = sf.read_text(encoding="utf-8")
 
     disk_cached = _load_trace_index_cache(cache_key)
     if disk_cached is not None:
@@ -632,6 +641,71 @@ def _trace_tier(path: Path) -> str:
 def _tier_boost(tier: str) -> float:
     """Recency boost factor for tiered retrieval. All tiers persist forever."""
     return _TIER_WEIGHTS.get(tier, 1.0)
+
+
+# ── Entity graph signal ──────────────────────────────────────────
+
+_GRAPH_ENTITIES: dict | None = None
+_GRAPH_RELATIONS: list | None = None
+
+
+def _load_graph_once():
+    """Lazy-load entity graph for retrieval boosting."""
+    global _GRAPH_ENTITIES, _GRAPH_RELATIONS
+    if _GRAPH_ENTITIES is not None:
+        return
+    graph_dir = BASE_DIR / "memory" / "graph"
+    _GRAPH_ENTITIES = {}
+    _GRAPH_RELATIONS = []
+    ent_path = graph_dir / "entities.jsonl"
+    rel_path = graph_dir / "relations.jsonl"
+    if ent_path.exists():
+        for line in ent_path.read_text(encoding="utf-8").strip().split("\n"):
+            if line.strip():
+                e = json.loads(line)
+                _GRAPH_ENTITIES[e["id"]] = e
+    if rel_path.exists():
+        for line in rel_path.read_text(encoding="utf-8").strip().split("\n"):
+            if line.strip():
+                _GRAPH_RELATIONS.append(json.loads(line))
+
+
+def _entity_graph_score(query: str, trace_name: str) -> float:
+    """Score based on shared entity connections between query and trace.
+
+    Finds entities mentioned in the query, then checks how many of those
+    entities have graph connections to entities in the trace filename.
+    """
+    _load_graph_once()
+    if not _GRAPH_ENTITIES or not _GRAPH_RELATIONS:
+        return 0.0
+
+    q_lower = query.lower()
+    q_entities = [eid for eid in _GRAPH_ENTITIES if eid in q_lower]
+    if not q_entities:
+        return 0.0
+
+    t_lower = trace_name.lower().replace("-", " ").replace("_", " ")
+    t_entities = [eid for eid in _GRAPH_ENTITIES if eid in t_lower]
+    if not t_entities:
+        return 0.0
+
+    # Count weighted connections between query entities and trace entities
+    score = 0.0
+    for r in _GRAPH_RELATIONS:
+        src, tgt = r.get("source", ""), r.get("target", "")
+        w = r.get("weight", 1)
+        if (src in q_entities and tgt in t_entities) or \
+           (tgt in q_entities and src in t_entities):
+            score += w
+        elif src in q_entities and src in t_entities:
+            score += w * 0.5
+        elif tgt in q_entities and tgt in t_entities:
+            score += w * 0.5
+
+    # Normalize by max possible
+    max_w = max((r.get("weight", 1) for r in _GRAPH_RELATIONS), default=1)
+    return min(score / max(max_w * len(q_entities), 1), 1.0)
 
 
 def _filename_bonus(query: str, name_lower: str, idf: dict[str, float]) -> float:
@@ -1005,27 +1079,31 @@ def retrieve(
     scored = []
     for trace_name, text in trace_texts.items():
         kw = _tfidf_score(query, trace_name, text, idf)
-        snn = _cosine_sim(query_spikes, trace_spikes[trace_name])
 
         name_lower = trace_names_lower[trace_name]
         name_bonus = _filename_bonus(query, name_lower, idf)
 
-        # Embedding content similarity (discriminates keyword-identical traces)
+        # Entity graph signal (Phase 1: 4-way retrieval)
+        graph_score = _entity_graph_score(query, trace_name)
+
         # Tiered memory: recency boost (all tiers persist, hot scores higher)
         trace_path = tdir / trace_name
-        tier = _trace_tier(trace_path)
+        if not trace_path.exists() and SEMANTIC_DIR.exists():
+            # Semantic memory — check in semantic dir
+            trace_path = SEMANTIC_DIR / trace_name.replace("[semantic] ", "")
+        tier = _trace_tier(trace_path) if trace_path.exists() else "cold"
         tier_boost = _tier_boost(tier)
         base_score = (
             _WEIGHT_KW * kw
-            + _WEIGHT_SNN * snn
             + _WEIGHT_NAME * name_bonus
+            + 0.10 * graph_score  # entity graph boost
         ) * tier_boost
 
         scored.append({
             "trace": trace_name,
             "score": round(base_score, 4),
             "kw_score": round(kw, 4),
-            "snn_score": round(snn, 4),
+            "graph_score": round(graph_score, 4),
             "emb_score": 0.0,
             "tier": tier,
             "_base_score": base_score,

@@ -210,17 +210,18 @@ class SimpleLIFNetwork:
         a_minus = 0.005
 
         spike_idx = np.where(spiked)[0]
+        dt_pre = self.t - self.last_spike  # hoist outside loop
         for i in spike_idx:
-            dt_pre = self.t - self.last_spike  # time since each neuron last spiked
-            # Pre-before-post: strengthen
-            pre_mask = (dt_pre > 0) & (dt_pre < 100)
-            dw = a_plus * np.exp(-dt_pre / tau_plus) * pre_mask
+            # LTP: neuron i fired (post). Strengthen from pre neurons
+            # that fired recently before i (dt > 0 = causal)
+            mask_ltp = (dt_pre > 0) & (dt_pre < 100)
+            dw = a_plus * np.exp(-dt_pre / tau_plus) * mask_ltp
             self.w[i, :] = np.clip(self.w[i, :] + dw, 0, 2)
 
-            # Post-before-pre: weaken
-            post_mask = (dt_pre > 0) & (dt_pre < 100)
-            dw_neg = -a_minus * np.exp(-dt_pre / tau_minus) * post_mask
-            self.w[:, i] = np.clip(self.w[:, i] + dw_neg, 0, 2)
+            # LTD: neuron i fired (pre). Weaken connections TO neurons
+            # that fired before i (anti-causal direction)
+            dw_neg = a_minus * np.exp(-dt_pre / tau_minus) * mask_ltp
+            self.w[:, i] = np.clip(self.w[:, i] - dw_neg, 0, 2)
 
     def inject_stimulus(self, pattern: np.ndarray):
         """Set external current from a stimulus pattern.
@@ -416,12 +417,11 @@ def drop_stimulus(text: str, source: str = "unknown"):
     ts = int(time.time())
     safe_source = source.replace("/", "_").replace("\\", "_")
     path = STIMULUS_DIR / f"{safe_source}_{ts}.json"
-    pattern = encode_text_to_stimulus(text, 500).tolist()
+    # Store text only — daemon re-encodes at its own neuron count
     data = {
         "text": text,
         "source": source,
         "timestamp": ts,
-        "pattern": pattern,
     }
     path.write_text(json.dumps(data, indent=2) + "\n")
     logger.info("Stimulus dropped by %s: %s", source, path.name)

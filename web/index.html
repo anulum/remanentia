@@ -96,14 +96,12 @@ footer a:hover{color:#8878b0}
 <h1>Remanentia</h1>
 <div class="latin">remanentem &mdash; the state of remaining</div>
 <div class="divider"></div>
-<p>Persistent AI memory with SNN-orchestrated consolidation. Not a vector store. A system that encodes, consolidates, and recalls with temporal context, entity graphs, and cross-project insight.</p>
+<p>Persistent AI memory. TF-IDF + paragraph-level embedding retrieval. Consolidation pipeline that compresses episodes into structured knowledge. Entity graph with evidence trails. LLM-free core operations.</p>
 
 <div class="stats">
-<div class="stat"><div class="stat-val">92.9%</div><div class="stat-label">Retrieval P@1</div></div>
-<div class="stat"><div class="stat-val">20,000</div><div class="stat-label">LIF neurons</div></div>
-<div class="stat"><div class="stat-val">197</div><div class="stat-label">Relations</div></div>
-<div class="stat"><div class="stat-val">28</div><div class="stat-label">Entities</div></div>
-<div class="stat"><div class="stat-val">24/7</div><div class="stat-label">Consolidation</div></div>
+<div class="stat"><div class="stat-val">14/14</div><div class="stat-label">P@1 (internal bench, 20 traces)</div></div>
+<div class="stat"><div class="stat-val">2.1s</div><div class="stat-label">per query</div></div>
+<div class="stat"><div class="stat-val">0</div><div class="stat-label">LLM calls required</div></div>
 </div>
 </section>
 
@@ -117,7 +115,7 @@ footer a:hover{color:#8878b0}
   <div class="pipe-arrow">&rarr;</div>
   <div class="pipe-step"><strong>Recall</strong><span>Trace + knowledge + timeline + entities</span></div>
 </div>
-<p style="text-align:center;font-size:0.9rem">A 20,000-neuron spiking network runs continuously, detecting novelty in incoming information and orchestrating when memories consolidate from raw episodes into structured knowledge.</p>
+<p style="text-align:center;font-size:0.9rem">Retrieval uses TF-IDF + best-paragraph embedding (no neural network in the retrieval path). A background daemon accumulates experience for consolidation. Early-stage research — no external benchmark validation yet.</p>
 </section>
 
 <!-- WHAT MAKES THIS DIFFERENT -->
@@ -127,17 +125,17 @@ footer a:hover{color:#8878b0}
   <div class="diff-item">
     <div class="icon">&#x1f9e0;</div>
     <strong>Deep Recall</strong>
-    <span>Returns matched trace + consolidated knowledge + entity graph + temporal timeline + cross-project links. Not just a ranked list.</span>
+    <span>Returns matched trace + consolidated knowledge + entity graph + temporal timeline. More context than a ranked list.</span>
   </div>
   <div class="diff-item">
     <div class="icon">&#x1f50d;</div>
-    <strong>Entity Graph</strong>
-    <span>197 weighted relations with evidence trails. Every connection traceable to source traces. Provenance built in.</span>
+    <strong>LLM-Free</strong>
+    <span>Core retrieval and consolidation run without LLM API calls. TF-IDF + embeddings + heuristic extraction. Runs on a consumer GPU.</span>
   </div>
   <div class="diff-item">
     <div class="icon">&#x26a1;</div>
-    <strong>Always On</strong>
-    <span>SNN daemon consolidates 24/7. Not post-session. Novelty detection prioritizes what matters. Continuous, not reactive.</span>
+    <strong>Honest Research</strong>
+    <span>70+ experiments documented including failures. We tested 4 SNN learning rules, 8 architectures, and proved what doesn't work before shipping what does.</span>
   </div>
 </div>
 </section>
@@ -145,8 +143,8 @@ footer a:hover{color:#8878b0}
 <!-- RESEARCH HONESTY -->
 <section class="content-section">
 <div class="honesty">
-  <p><strong>Built on 60+ experiments and honest negative results.</strong></p>
-  <p>We tested holographic Kuramoto memory, complex Hebbian coupling, E/I attractor networks, contrastive learning, reservoir readouts, and 5 architectural variants. We publish what fails. The current architecture exists because we measured what works and discarded what doesn't.</p>
+  <p><strong>Built on 70+ experiments. We publish what fails.</strong></p>
+  <p>We tested STDP, BCPNN, holographic Kuramoto, complex Hebbian coupling, E/I attractor networks, contrastive learning, and reservoir readouts. None created discriminative features for text retrieval. The root cause: 384-dim embedding compression creates patterns too correlated for any local learning rule. The current system uses off-the-shelf TF-IDF + sentence-transformer embedding because that's what the experiments showed works. The consolidation pipeline and entity graph are early-stage — heuristic extraction that captures 20-30% of content. Work in progress.</p>
 </div>
 </section>
 
