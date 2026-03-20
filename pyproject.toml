@@ -1,0 +1,69 @@
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "remanentia"
+version = "0.2.0"
+description = "Persistent AI memory with SNN-orchestrated consolidation, entity graphs, and deep contextual recall"
+readme = "README.md"
+license = "AGPL-3.0-or-later"
+requires-python = ">=3.10"
+authors = [
+    {name = "Miroslav Sotek", email = "protoscience@anulum.li"},
+]
+keywords = [
+    "memory", "ai-agents", "consolidation", "snn", "stdp",
+    "entity-graph", "retrieval", "neuromorphic", "spiking-neural-network",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+]
+
+dependencies = [
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+retrieval = ["scikit-learn>=1.3"]
+embedding = ["sentence-transformers>=2.0"]
+gpu = ["torch>=2.0"]
+sparse = ["scipy>=1.11"]
+api = ["fastapi>=0.100", "uvicorn>=0.20"]
+all = [
+    "scikit-learn>=1.3",
+    "sentence-transformers>=2.0",
+    "scipy>=1.11",
+    "fastapi>=0.100",
+    "uvicorn>=0.20",
+]
+
+[project.scripts]
+remanentia = "remanentia.cli:main"
+
+[project.urls]
+Homepage = "https://remanentia.com"
+Repository = "https://github.com/anulum/remanentia"
+Documentation = "https://remanentia.com/docs"
+Issues = "https://github.com/anulum/remanentia/issues"
+Author = "https://www.anulum.li"
+
+[tool.setuptools.package-dir]
+remanentia = "."
+
+[tool.setuptools.packages]
+find = {where = [".."], include = ["04_ARCANE_SAPIENCE"]}
+
+[tool.setuptools.package-data]
+remanentia = [
+    "*.md",
+    "memory/**/*.md",
+    "memory/**/*.json",
+    "memory/**/*.jsonl",
+]
