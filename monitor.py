@@ -205,7 +205,9 @@ def _query_suggestions(prefix: str) -> list[str]:
 
 def _session_detail(filename: str) -> dict:
     """Read a session state file and return its content."""
-    path = SESSION_STATES_DIR / filename
+    path = (SESSION_STATES_DIR / filename).resolve()
+    if not path.is_relative_to(SESSION_STATES_DIR.resolve()):
+        return {"error": "forbidden"}
     if not path.exists():
         return {"error": "not found"}
     try:

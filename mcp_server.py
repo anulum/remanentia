@@ -50,16 +50,17 @@ def handle_recall(query: str, top_k: int = 3) -> str:
 
 def handle_status() -> str:
     """System status summary."""
+    import io
+    old_stdout = sys.stdout
     try:
-        import io
-        old_stdout = sys.stdout
         sys.stdout = buf = io.StringIO()
         from cli import cmd_status
         cmd_status(type("Args", (), {})())
-        sys.stdout = old_stdout
         return buf.getvalue()
     except Exception as e:
         return f"Status error: {e}"
+    finally:
+        sys.stdout = old_stdout
 
 
 def handle_graph(entity: str = "", top: int = 10) -> str:
