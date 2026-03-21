@@ -39,13 +39,80 @@ GRAPH_DIR = BASE / "memory" / "graph"
 
 
 def handle_recall(query: str, top_k: int = 3) -> str:
-    """Deep memory recall — returns structured context."""
-    try:
-        from memory_recall import recall
-        ctx = recall(query, top_k=top_k, include_content=False)
-        return ctx.to_llm_context()
-    except Exception as e:
-        return f"Recall error: {e}"
+    """Memory recall via cached in-memory index. <200ms response time.
+
+    Uses lightweight token-overlap search over all traces and semantic
+    memories. Does NOT load the 1.6GB SNN checkpoint or embedding model.
+    """
+    return _lightweight_recall(query, top_k)
+
+
+_RECALL_INDEX: dict[str, tuple[set, str]] | None = None
+
+
+def _build_recall_index() -> dict[str, tuple[set, str]]:
+    """Build in-memory token index of all traces and semantic memories.
+
+    Called once, cached for the process lifetime.
+    """
+    import re
+    global _RECALL_INDEX
+    if _RECALL_INDEX is not None:
+        return _RECALL_INDEX
+
+    index = {}
+    traces_dir = BASE / "reasoning_traces"
+    semantic_dir = BASE / "memory" / "semantic"
+
+    if traces_dir.exists():
+        for f in traces_dir.glob("*.md"):
+            text = f.read_text(encoding="utf-8")
+            tokens = set(re.findall(r"\w{3,}", text.lower()))
+            index[f.name] = (tokens, text[:500])
+
+    if semantic_dir.exists():
+        for f in semantic_dir.rglob("*.md"):
+            text = f.read_text(encoding="utf-8")
+            tokens = set(re.findall(r"\w{3,}", text.lower()))
+            rel = str(f.relative_to(semantic_dir))
+            index[f"[semantic] {rel}"] = (tokens, text[:500])
+
+    _RECALL_INDEX = index
+    return index
+
+
+def _lightweight_recall(query: str, top_k: int = 3) -> str:
+    """Fast recall from cached in-memory index.
+
+    First call: ~2s (reads files). Subsequent calls: <50ms.
+    """
+    import re
+    q_tokens = set(re.findall(r"\w{3,}", query.lower()))
+    if not q_tokens:
+        return "Empty query."
+
+    index = _build_recall_index()
+    scored = []
+    for name, (t_tokens, snippet) in index.items():
+        overlap = len(q_tokens & t_tokens) / max(len(q_tokens), 1)
+        if overlap > 0:
+            scored.append((name, overlap, snippet))
+
+    scored.sort(key=lambda x: -x[1])
+    top = scored[:top_k]
+
+    if not top:
+        return f"No memories found for: {query}"
+
+    parts = []
+    for name, score, snippet in top:
+        parts.append(f"[{name} (score={score:.2f})]\n{snippet}")
+
+    graph_parts = handle_graph(entity="", top=5)
+    if graph_parts and "No relations" not in graph_parts:
+        parts.append(f"\n[Entity graph]\n{graph_parts}")
+
+    return "\n\n".join(parts)
 
 
 def handle_status() -> str:
