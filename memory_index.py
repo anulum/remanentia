@@ -41,18 +41,41 @@ INDEX_PATH = BASE / "snn_state" / "memory_index.pkl"
 
 # All knowledge sources to index
 SOURCES = {
+    # Arcane Sapience core
     "traces": BASE / "reasoning_traces",
     "paper": BASE / "paper",
     "semantic": BASE / "memory" / "semantic",
+    "disposition": BASE / "disposition",
+    # Coordination
     "sessions_as": GOTM_ROOT / ".coordination" / "sessions" / "arcane-sapience",
     "sessions_codex": GOTM_ROOT / ".coordination" / "sessions" / "CODEX",
     "handovers_as": GOTM_ROOT / ".coordination" / "handovers" / "arcane-sapience",
     "handovers_codex": GOTM_ROOT / ".coordination" / "handovers" / "codex",
+    # Cross-repo research
     "qc_research": GOTM_ROOT / ".coordination" / "handovers" / "scpn-quantum-control",
     "po_research": GOTM_ROOT / ".coordination" / "handovers" / "scpn-phase-orchestrator",
     "nc_research": GOTM_ROOT / "03_CODE" / "sc-neurocore" / "docs" / "internal",
+    # Claude memory
     "claude_memory": Path.home() / ".claude" / "projects" / "C--aaa-God-of-the-Math-Collection" / "memory",
-    "disposition": BASE / "disposition",
+    # INDEXER catalog
+    "indexer": GOTM_ROOT / "INDEXER",
+    # Code: Remanentia
+    "code_remanentia": BASE,
+    # Code: key repos (top-level Python files only, not venvs/node_modules)
+    "code_orchestrator": GOTM_ROOT / "03_CODE" / "scpn-phase-orchestrator" / "src",
+    "code_quantum": GOTM_ROOT / "03_CODE" / "scpn-quantum-control" / "src",
+    "code_neurocore": GOTM_ROOT / "03_CODE" / "sc-neurocore" / "src",
+    "code_director": GOTM_ROOT / "03_CODE" / "DIRECTOR_AI" / "src",
+}
+
+# File extensions to index per source type
+SOURCE_EXTENSIONS = {
+    "code_remanentia": {".py"},
+    "code_orchestrator": {".py", ".rs"},
+    "code_quantum": {".py", ".rs"},
+    "code_neurocore": {".py", ".rs"},
+    "code_director": {".py"},
+    "indexer": {".md", ".yaml"},
 }
 
 
@@ -108,7 +131,17 @@ class MemoryIndex:
         for source_name, source_dir in SOURCES.items():
             if not source_dir.exists():
                 continue
-            for f in sorted(source_dir.rglob("*.md")):
+            # Determine which extensions to index
+            exts = SOURCE_EXTENSIONS.get(source_name, {".md"})
+            files = []
+            for ext in exts:
+                files.extend(source_dir.rglob(f"*{ext}"))
+            # Skip venvs, node_modules, __pycache__, .git
+            files = [f for f in sorted(set(files))
+                     if not any(skip in str(f) for skip in
+                                [".venv", "venv", "node_modules", "__pycache__",
+                                 ".git", "target", "dist", ".egg"])]
+            for f in files:
                 try:
                     text = f.read_text(encoding="utf-8")
                 except (OSError, UnicodeDecodeError):
@@ -116,7 +149,8 @@ class MemoryIndex:
                 if len(text) < 50:
                     continue
 
-                paragraphs = _split_paragraphs(text)
+                is_code = f.suffix in (".py", ".rs", ".v", ".ts", ".js")
+                paragraphs = _split_paragraphs(text, is_code=is_code)
                 all_tokens = set()
                 for p in paragraphs:
                     all_tokens.update(_tokenize(p))
@@ -268,7 +302,7 @@ class MemoryIndex:
         return results
 
     def save(self, path: Path | None = None):
-        """Save index to disk (without embeddings — recompute on load)."""
+        """Save index to disk including embeddings."""
         path = path or INDEX_PATH
         path.parent.mkdir(parents=True, exist_ok=True)
         data = {
@@ -276,6 +310,7 @@ class MemoryIndex:
             "paragraph_index": self.paragraph_index,
             "paragraph_tokens": [list(t) for t in self.paragraph_tokens],
             "idf": self.idf,
+            "embeddings": self.embeddings,
             "timestamp": time.time(),
         }
         with open(path, "wb") as f:
@@ -296,14 +331,22 @@ class MemoryIndex:
             self.paragraph_index = data["paragraph_index"]
             self.paragraph_tokens = [set(t) for t in data["paragraph_tokens"]]
             self.idf = data["idf"]
+            self.embeddings = data.get("embeddings")
             self._built = True
             return True
         except Exception:
             return False
 
 
-def _split_paragraphs(text: str) -> list[str]:
-    """Split text into paragraphs. Each becomes a searchable unit."""
+def _split_paragraphs(text: str, is_code: bool = False) -> list[str]:
+    """Split text into searchable units.
+
+    For markdown: paragraphs (text between blank lines).
+    For code: functions/classes (def/fn/class blocks) + module docstring.
+    """
+    if is_code:
+        return _split_code(text)
+
     paragraphs = []
     for block in text.split("\n\n"):
         stripped = block.strip()
@@ -312,6 +355,33 @@ def _split_paragraphs(text: str) -> list[str]:
     if not paragraphs and len(text.strip()) > 30:
         paragraphs.append(text.strip()[:2000])
     return paragraphs
+
+
+def _split_code(text: str) -> list[str]:
+    """Split code into function/class blocks for indexing."""
+    chunks = []
+
+    # Module docstring (first triple-quoted block)
+    doc_match = re.search(r'"""(.*?)"""', text, re.DOTALL)
+    if doc_match and doc_match.start() < 500:
+        chunks.append(doc_match.group(1).strip()[:500])
+
+    # Python: def and class blocks
+    for match in re.finditer(r'^((?:def|class|fn|pub fn|impl)\s+\w+.*?)(?=\n(?:def |class |fn |pub fn |impl |\Z))',
+                              text, re.MULTILINE | re.DOTALL):
+        block = match.group(1).strip()
+        if len(block) > 30:
+            # Keep first 500 chars (signature + docstring + start of body)
+            chunks.append(block[:500])
+
+    # If no functions found, treat as plain text
+    if not chunks:
+        for block in text.split("\n\n"):
+            stripped = block.strip()
+            if len(stripped) > 30:
+                chunks.append(stripped[:500])
+
+    return chunks[:50]  # cap at 50 chunks per file
 
 
 def _tokenize(text: str) -> list[str]:
