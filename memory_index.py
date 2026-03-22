@@ -85,12 +85,24 @@ class MemoryIndex:
         self._built = False
         self._embed_model = None
 
-    def build(self, use_gpu_embeddings: bool = True) -> dict:
-        """Scan all sources, build BM25 index + optional GPU embeddings."""
+    def build(self, use_gpu_embeddings: bool = True, use_gliner: bool = True) -> dict:
+        """Scan all sources, build BM25 index + GPU embeddings + GLiNER entities."""
         t0 = time.monotonic()
         self.documents = []
         self.paragraph_index = []
         self.paragraph_tokens = []
+        self.all_entities: list[dict] = []
+        self.all_relations: list[dict] = []
+
+        # GLiNER model (load once, reuse)
+        gliner_model = None
+        if use_gliner:
+            try:
+                from entity_extractor import extract_entities, extract_relations
+                from entity_extractor import _load_gliner
+                gliner_model = _load_gliner()
+            except Exception:
+                pass
 
         # Scan all sources
         for source_name, source_dir in SOURCES.items():
@@ -108,6 +120,17 @@ class MemoryIndex:
                 all_tokens = set()
                 for p in paragraphs:
                     all_tokens.update(_tokenize(p))
+
+                # Entity extraction
+                doc_entities = []
+                doc_relations = []
+                if gliner_model is not None:
+                    try:
+                        from entity_extractor import extract_entities, extract_relations
+                        doc_entities = extract_entities(text[:3000])
+                        doc_relations = extract_relations(text[:3000], doc_entities)
+                    except Exception:
+                        pass
 
                 doc = Document(
                     name=f.name,
@@ -296,16 +319,63 @@ def _tokenize(text: str) -> list[str]:
     return re.findall(r"[a-z0-9][a-z0-9_]{2,}", text.lower())
 
 
+def needs_rebuild() -> bool:
+    """Check if any source has newer files than the index."""
+    if not INDEX_PATH.exists():
+        return True
+    idx_mtime = INDEX_PATH.stat().st_mtime
+    for source_dir in SOURCES.values():
+        if not source_dir.exists():
+            continue
+        for f in source_dir.rglob("*.md"):
+            if f.stat().st_mtime > idx_mtime:
+                return True
+    return False
+
+
+def auto_rebuild_if_needed(use_gpu: bool = True) -> MemoryIndex:
+    """Load index, rebuild if sources changed."""
+    idx = MemoryIndex()
+    if idx.load() and not needs_rebuild():
+        return idx
+    stats = idx.build(use_gpu_embeddings=use_gpu, use_gliner=False)
+    idx.save()
+    return idx
+
+
 if __name__ == "__main__":
+    import io
     import sys
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+
     idx = MemoryIndex()
 
     if "--build" in sys.argv:
+        use_gpu = "--no-gpu" not in sys.argv
+        use_gliner = "--gliner" in sys.argv
         print("Building index...")
-        stats = idx.build(use_gpu_embeddings="--no-gpu" not in sys.argv)
+        stats = idx.build(use_gpu_embeddings=use_gpu, use_gliner=use_gliner)
         print(json.dumps(stats, indent=2))
         idx.save()
         print(f"Saved to {INDEX_PATH}")
+
+    elif "--watch" in sys.argv:
+        print("Watching for changes... (Ctrl+C to stop)")
+        interval = 60
+        while True:
+            if needs_rebuild():
+                print(f"Changes detected, rebuilding...")
+                stats = idx.build(use_gpu_embeddings=True, use_gliner=False)
+                idx.save()
+                print(f"Rebuilt: {stats['documents']} docs, {stats['paragraphs']} paragraphs")
+            time.sleep(interval)
+
+    elif "--check" in sys.argv:
+        if needs_rebuild():
+            print("Index is STALE — rebuild needed")
+        else:
+            print("Index is CURRENT")
+
     elif len(sys.argv) > 1:
         query = " ".join(a for a in sys.argv[1:] if not a.startswith("--"))
         if not idx.load():
@@ -318,6 +388,9 @@ if __name__ == "__main__":
             print()
     else:
         print("Usage:")
-        print("  python memory_index.py --build          # build index (GPU embeddings)")
-        print("  python memory_index.py --build --no-gpu # build without GPU")
-        print("  python memory_index.py 'query text'     # search")
+        print("  python memory_index.py --build              # build index (GPU embeddings)")
+        print("  python memory_index.py --build --gliner     # build with GLiNER entities")
+        print("  python memory_index.py --build --no-gpu     # build without GPU")
+        print("  python memory_index.py --watch              # auto-rebuild on changes")
+        print("  python memory_index.py --check              # check if rebuild needed")
+        print("  python memory_index.py 'query text'         # search")
