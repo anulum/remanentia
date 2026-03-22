@@ -38,13 +38,37 @@ BASE = Path(__file__).parent
 GRAPH_DIR = BASE / "memory" / "graph"
 
 
-def handle_recall(query: str, top_k: int = 3) -> str:
-    """Memory recall via cached in-memory index. <200ms response time.
+_UNIFIED_INDEX = None
 
-    Uses lightweight token-overlap search over all traces and semantic
-    memories. Does NOT load the 1.6GB SNN checkpoint or embedding model.
+
+def handle_recall(query: str, top_k: int = 5) -> str:
+    """Memory recall via unified BM25 + embedding index.
+
+    Searches 400 documents (10,975 paragraphs) across 12 sources:
+    traces, session logs, handovers, research, semantic memories,
+    Claude memory, disposition. 15-47ms per query.
     """
-    return _lightweight_recall(query, top_k)
+    global _UNIFIED_INDEX
+    try:
+        from memory_index import MemoryIndex
+        if _UNIFIED_INDEX is None:
+            _UNIFIED_INDEX = MemoryIndex()
+            if not _UNIFIED_INDEX.load():
+                # No pre-built index — fall back to lightweight
+                _UNIFIED_INDEX = None
+                return _lightweight_recall(query, top_k)
+
+        results = _UNIFIED_INDEX.search(query, top_k=top_k)
+        if not results:
+            return f"No memories found for: {query}"
+
+        parts = []
+        for r in results:
+            parts.append(f"[{r.source}] {r.name} (score={r.score:.1f})\n{r.snippet}")
+        return "\n\n".join(parts)
+
+    except Exception:
+        return _lightweight_recall(query, top_k)
 
 
 _RECALL_INDEX: dict[str, tuple[set, str]] | None = None
