@@ -43,9 +43,14 @@ all = [
     "fastapi>=0.100",
     "uvicorn>=0.20",
 ]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "httpx>=0.25",
+]
 
 [project.scripts]
-remanentia = "remanentia.cli:main"
+remanentia = "cli:main"
 
 [project.urls]
 Homepage = "https://remanentia.com"
@@ -54,16 +59,27 @@ Documentation = "https://remanentia.com/docs"
 Issues = "https://github.com/anulum/remanentia/issues"
 Author = "https://www.anulum.li"
 
-[tool.setuptools.package-dir]
-remanentia = "."
-
-[tool.setuptools.packages]
-find = {where = [".."], include = ["04_ARCANE_SAPIENCE"]}
+[tool.setuptools]
+py-modules = [
+    "memory_index",
+    "memory_recall",
+    "consolidation_engine",
+    "entity_extractor",
+    "mcp_server",
+    "retrieve",
+    "encoding",
+    "cli",
+    "api",
+    "answer_extractor",
+]
 
 [tool.setuptools.package-data]
-remanentia = [
-    "*.md",
+"*" = [
     "memory/**/*.md",
     "memory/**/*.json",
     "memory/**/*.jsonl",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"

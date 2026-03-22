@@ -7,18 +7,12 @@
 
 """Unified index over all GOTM knowledge sources.
 
-Indexes 400+ documents from reasoning traces, session logs, handovers,
-research documents, semantic memories, Claude memory files, disposition
-files, and the INDEXER catalog.
-
-Search: BM25 first pass + GPU embedding rerank.
-Build: ~30s (scan + paragraph split + BM25 index + GPU embeddings).
-Query: <100ms warm.
+BM25 first pass + optional GPU embedding rerank.
 
 Usage::
     from memory_index import MemoryIndex
     idx = MemoryIndex()
-    idx.build()  # first time, ~30s
+    idx.build()
     results = idx.search("STDP learning rule fix", top_k=5)
 """
 from __future__ import annotations
@@ -105,6 +99,7 @@ class SearchResult:
     score: float
     snippet: str
     paragraph_idx: int = 0
+    answer: str = ""
 
 
 class MemoryIndex:
@@ -290,14 +285,16 @@ class MemoryIndex:
                 if intent.get("recency"):
                     doc_idx = self.paragraph_index[i][0] if i < len(self.paragraph_index) else 0
                     if doc_idx < len(self.documents) and self.documents[doc_idx].date:
-                        # More recent = higher boost
-                        date_str = self.documents[doc_idx].date
-                        if date_str >= "2026-03-20":
-                            score *= 1.8
-                        elif date_str >= "2026-03-18":
+                        score *= _recency_boost(self.documents[doc_idx].date)
+
+                # Temporal queries: boost paragraphs containing dates
+                if intent["type"] == "temporal":
+                    doc_idx = self.paragraph_index[i][0] if i < len(self.paragraph_index) else 0
+                    para_idx = self.paragraph_index[i][1] if i < len(self.paragraph_index) else 0
+                    if doc_idx < len(self.documents):
+                        para_text = self.documents[doc_idx].paragraphs[para_idx] if para_idx < len(self.documents[doc_idx].paragraphs) else ""
+                        if re.search(r"\d{4}-\d{2}-\d{2}", para_text):
                             score *= 1.4
-                        elif date_str >= "2026-03-17":
-                            score *= 1.2
                 scores.append((i, score))
 
         scores.sort(key=lambda x: -x[1])
@@ -318,6 +315,15 @@ class MemoryIndex:
             except Exception:
                 pass
 
+        # Answer extraction (lazy import)
+        _answer_extractor = None
+        if intent["type"] in ("temporal", "metric", "general"):
+            try:
+                from answer_extractor import extract_answer
+                _answer_extractor = extract_answer
+            except ImportError:
+                pass
+
         # Build results, deduplicate by document
         seen_docs = set()
         results = []
@@ -328,12 +334,16 @@ class MemoryIndex:
             seen_docs.add(doc_idx)
             doc = self.documents[doc_idx]
             snippet = doc.paragraphs[p_idx][:300]
+            answer = ""
+            if _answer_extractor:
+                answer = _answer_extractor(query, doc.paragraphs[p_idx]) or ""
             results.append(SearchResult(
                 name=doc.name,
                 source=doc.source,
                 score=round(score, 4),
                 snippet=snippet,
                 paragraph_idx=p_idx,
+                answer=answer,
             ))
             if len(results) >= top_k:
                 break
@@ -397,27 +407,28 @@ def _classify_query(query: str) -> dict:
         "recency": False,
     }
 
+    # Order matters: specific patterns before broad ones.
     if any(w in q for w in ["where is", "find the", "locate", "which file", "what file"]):
         intent["type"] = "location"
         intent["boost_types"] = ["function", "code"]
     elif any(w in q for w in ["what did we decide", "decision", "chose", "rejected", "why did we"]):
         intent["type"] = "decision"
         intent["boost_types"] = ["decision"]
+    elif any(w in q for w in ["what went wrong", "failure", "bug", "error", "fix"]):
+        intent["type"] = "debugging"
+        intent["boost_types"] = ["finding", "decision"]
+    elif any(w in q for w in ["status", "progress", "current", "latest"]):
+        intent["type"] = "status"
+        intent["recency"] = True
+    elif any(w in q for w in ["performance", "benchmark", "accuracy", "score", "percent"]):
+        intent["type"] = "metric"
+        intent["boost_types"] = ["metric"]
     elif any(w in q for w in ["when", "date", "timeline", "before", "after", "first", "last"]):
         intent["type"] = "temporal"
         intent["recency"] = "latest" in q or "recent" in q or "last" in q
     elif any(w in q for w in ["how does", "how to", "explain", "what is"]):
         intent["type"] = "explanation"
         intent["boost_types"] = ["function", "finding"]
-    elif any(w in q for w in ["status", "progress", "current", "latest"]):
-        intent["type"] = "status"
-        intent["recency"] = True
-    elif any(w in q for w in ["what went wrong", "failure", "bug", "error", "fix"]):
-        intent["type"] = "debugging"
-        intent["boost_types"] = ["finding", "decision"]
-    elif any(w in q for w in ["performance", "benchmark", "accuracy", "score", "percent"]):
-        intent["type"] = "metric"
-        intent["boost_types"] = ["metric"]
 
     return intent
 
@@ -493,9 +504,37 @@ def _generate_prospective_queries(text: str, doc_name: str, para_type: str) -> l
     return queries[:10]  # cap
 
 
+def _recency_boost(date_str: str) -> float:
+    """Compute recency boost relative to today. More recent = higher boost."""
+    try:
+        from datetime import datetime, date
+        doc_date = datetime.strptime(date_str[:10], "%Y-%m-%d").date()
+        today = date.today()
+        days_ago = (today - doc_date).days
+        if days_ago <= 2:
+            return 1.8
+        elif days_ago <= 5:
+            return 1.4
+        elif days_ago <= 14:
+            return 1.2
+        return 1.0
+    except (ValueError, TypeError):
+        return 1.0
+
+
+def _extract_date_context(text: str) -> list[tuple[str, str]]:
+    """Extract dates with surrounding context from text."""
+    results = []
+    for m in re.finditer(r"(\d{4}-\d{2}-\d{2})", text):
+        start = max(0, m.start() - 50)
+        end = min(len(text), m.end() + 100)
+        context = text[start:end].strip()
+        results.append((m.group(1), context))
+    return results
+
+
 def _parse_date(text: str, filename: str) -> str:
     """Extract date from filename or text content."""
-    # From filename: 2026-03-20 or 2026-03-20T0415
     m = re.search(r"(\d{4}-\d{2}-\d{2})", filename)
     if m:
         return m.group(1)
