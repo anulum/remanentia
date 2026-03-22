@@ -87,6 +87,15 @@ class Document:
     paragraphs: list[str] = field(default_factory=list)
     tokens: set[str] = field(default_factory=set)
     embedding: np.ndarray | None = None
+    date: str = ""  # parsed date for temporal search
+    doc_type: str = ""  # document type for filtering
+
+
+@dataclass
+class Paragraph:
+    text: str
+    para_type: str = ""  # function, decision, finding, metric, discussion
+    prospective_queries: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -103,6 +112,7 @@ class MemoryIndex:
         self.documents: list[Document] = []
         self.paragraph_index: list[tuple[int, int]] = []  # (doc_idx, para_idx)
         self.paragraph_tokens: list[set[str]] = []
+        self.paragraph_types: list[str] = []  # function, decision, finding, etc.
         self.idf: dict[str, float] = {}
         self.embeddings: np.ndarray | None = None
         self._built = False
@@ -152,33 +162,40 @@ class MemoryIndex:
                 is_code = f.suffix in (".py", ".rs", ".v", ".ts", ".js")
                 paragraphs = _split_paragraphs(text, is_code=is_code)
                 all_tokens = set()
-                for p in paragraphs:
-                    all_tokens.update(_tokenize(p))
 
-                # Entity extraction
-                doc_entities = []
-                doc_relations = []
-                if gliner_model is not None:
-                    try:
-                        from entity_extractor import extract_entities, extract_relations
-                        doc_entities = extract_entities(text[:3000])
-                        doc_relations = extract_relations(text[:3000], doc_entities)
-                    except Exception:
-                        pass
+                # Tag paragraphs + generate prospective queries
+                enriched_paragraphs = []
+                for p in paragraphs:
+                    p_type = _classify_paragraph(p, is_code=is_code)
+                    pq = _generate_prospective_queries(p, f.name, p_type)
+                    enriched_paragraphs.append(p)
+                    # Add prospective queries as extra searchable text
+                    p_with_pq = p + " " + " ".join(pq) if pq else p
+                    all_tokens.update(_tokenize(p_with_pq))
+
+                doc_date = _parse_date(text, f.name)
 
                 doc = Document(
                     name=f.name,
                     source=source_name,
                     path=str(f),
-                    paragraphs=paragraphs,
+                    paragraphs=enriched_paragraphs,
                     tokens=all_tokens,
+                    date=doc_date,
+                    doc_type="code" if is_code else source_name,
                 )
                 doc_idx = len(self.documents)
                 self.documents.append(doc)
 
-                for para_idx, para in enumerate(paragraphs):
+                for para_idx, para in enumerate(enriched_paragraphs):
                     self.paragraph_index.append((doc_idx, para_idx))
-                    self.paragraph_tokens.append(set(_tokenize(para)))
+                    # Include prospective query tokens in the searchable set
+                    p_type = _classify_paragraph(para, is_code=is_code)
+                    pq = _generate_prospective_queries(para, f.name, p_type)
+                    combined_text = para + " " + " ".join(pq)
+                    tokens_with_pq = set(_tokenize(combined_text))
+                    self.paragraph_tokens.append(tokens_with_pq)
+                    self.paragraph_types.append(p_type)
 
         # Build IDF
         n_docs = len(self.paragraph_tokens)
@@ -236,13 +253,17 @@ class MemoryIndex:
         )
 
     def search(self, query: str, top_k: int = 5) -> list[SearchResult]:
-        """Search: BM25 first pass + embedding rerank."""
+        """Search with query intelligence: BM25 + type boost + temporal + embedding rerank."""
         if not self._built:
             self.build()
 
         q_tokens = set(_tokenize(query))
         if not q_tokens:
             return []
+
+        # Query classification
+        intent = _classify_query(query)
+        boost_types = set(intent.get("boost_types", []))
 
         # BM25 scoring over all paragraphs
         k1, b = 1.5, 0.75
@@ -255,10 +276,28 @@ class MemoryIndex:
             for qt in q_tokens:
                 if qt not in p_tokens:
                     continue
-                tf = 1  # binary for simplicity (token is present)
+                tf = 1
                 idf_val = self.idf.get(qt, 0)
                 score += idf_val * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * dl / max(avg_dl, 1)))
+
             if score > 0:
+                # Paragraph type boost (from query classification)
+                if boost_types and i < len(self.paragraph_types):
+                    if self.paragraph_types[i] in boost_types:
+                        score *= 1.5
+
+                # Recency boost (for "latest", "status", "current" queries)
+                if intent.get("recency"):
+                    doc_idx = self.paragraph_index[i][0] if i < len(self.paragraph_index) else 0
+                    if doc_idx < len(self.documents) and self.documents[doc_idx].date:
+                        # More recent = higher boost
+                        date_str = self.documents[doc_idx].date
+                        if date_str >= "2026-03-20":
+                            score *= 1.8
+                        elif date_str >= "2026-03-18":
+                            score *= 1.4
+                        elif date_str >= "2026-03-17":
+                            score *= 1.2
                 scores.append((i, score))
 
         scores.sort(key=lambda x: -x[1])
@@ -306,9 +345,11 @@ class MemoryIndex:
         path = path or INDEX_PATH
         path.parent.mkdir(parents=True, exist_ok=True)
         data = {
-            "documents": [(d.name, d.source, d.path, d.paragraphs) for d in self.documents],
+            "documents": [(d.name, d.source, d.path, d.paragraphs, d.date, d.doc_type)
+                          for d in self.documents],
             "paragraph_index": self.paragraph_index,
             "paragraph_tokens": [list(t) for t in self.paragraph_tokens],
+            "paragraph_types": self.paragraph_types,
             "idf": self.idf,
             "embeddings": self.embeddings,
             "timestamp": time.time(),
@@ -324,18 +365,145 @@ class MemoryIndex:
         try:
             with open(path, "rb") as f:
                 data = pickle.load(f)
-            self.documents = [
-                Document(name=n, source=s, path=p, paragraphs=paras)
-                for n, s, p, paras in data["documents"]
-            ]
+            self.documents = []
+            for entry in data["documents"]:
+                if len(entry) == 6:
+                    n, s, p, paras, date, dtype = entry
+                    self.documents.append(Document(name=n, source=s, path=p,
+                                                    paragraphs=paras, date=date, doc_type=dtype))
+                else:
+                    n, s, p, paras = entry
+                    self.documents.append(Document(name=n, source=s, path=p, paragraphs=paras))
             self.paragraph_index = data["paragraph_index"]
             self.paragraph_tokens = [set(t) for t in data["paragraph_tokens"]]
             self.idf = data["idf"]
+            self.paragraph_types = data.get("paragraph_types", [])
             self.embeddings = data.get("embeddings")
             self._built = True
             return True
         except Exception:
             return False
+
+
+# ── Query intelligence ────────────────────────────────────────────
+
+def _classify_query(query: str) -> dict:
+    """Classify query intent for search routing."""
+    q = query.lower()
+    intent = {
+        "type": "general",
+        "boost_types": [],  # paragraph types to boost
+        "date_filter": None,
+        "recency": False,
+    }
+
+    if any(w in q for w in ["where is", "find the", "locate", "which file", "what file"]):
+        intent["type"] = "location"
+        intent["boost_types"] = ["function", "code"]
+    elif any(w in q for w in ["what did we decide", "decision", "chose", "rejected", "why did we"]):
+        intent["type"] = "decision"
+        intent["boost_types"] = ["decision"]
+    elif any(w in q for w in ["when", "date", "timeline", "before", "after", "first", "last"]):
+        intent["type"] = "temporal"
+        intent["recency"] = "latest" in q or "recent" in q or "last" in q
+    elif any(w in q for w in ["how does", "how to", "explain", "what is"]):
+        intent["type"] = "explanation"
+        intent["boost_types"] = ["function", "finding"]
+    elif any(w in q for w in ["status", "progress", "current", "latest"]):
+        intent["type"] = "status"
+        intent["recency"] = True
+    elif any(w in q for w in ["what went wrong", "failure", "bug", "error", "fix"]):
+        intent["type"] = "debugging"
+        intent["boost_types"] = ["finding", "decision"]
+    elif any(w in q for w in ["performance", "benchmark", "accuracy", "score", "percent"]):
+        intent["type"] = "metric"
+        intent["boost_types"] = ["metric"]
+
+    return intent
+
+
+def _classify_paragraph(text: str, is_code: bool = False) -> str:
+    """Tag paragraph with its semantic type."""
+    t = text.lower()
+
+    if is_code:
+        if re.match(r"\s*(def |fn |pub fn |class |impl )", text):
+            return "function"
+        return "code"
+
+    if any(w in t for w in ["decided", "decision", "chose", "rejected", "we will", "the plan"]):
+        return "decision"
+    if any(w in t for w in ["found", "finding", "result", "measured", "shows that", "proved"]):
+        return "finding"
+    if any(w in t for w in ["P@1", "percent", "accuracy", "precision", "score", "benchmark"]):
+        return "metric"
+    if any(w in t for w in ["version", "v0.", "v1.", "v2.", "v3.", "release", "shipped"]):
+        return "version"
+
+    return "discussion"
+
+
+def _generate_prospective_queries(text: str, doc_name: str, para_type: str) -> list[str]:
+    """Generate hypothetical future queries for this paragraph.
+
+    This is the Kumiho technique (March 2026, 98.5% recall).
+    Pre-answer questions at write time so retrieval becomes lookup.
+    """
+    queries = []
+
+    # Extract key nouns/phrases
+    # Capitalized phrases (likely names, projects, concepts)
+    caps = re.findall(r"[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*", text)
+    for c in caps[:5]:
+        if len(c) > 3:
+            queries.append(f"what is {c}")
+            queries.append(c.lower())
+
+    # Function names
+    funcs = re.findall(r"(?:def |fn |class )\s*(\w+)", text)
+    for f in funcs[:3]:
+        queries.append(f"where is {f}")
+        queries.append(f"how does {f} work")
+        queries.append(f)
+
+    # If it's a decision, generate "why" and "what did we decide" variants
+    if para_type == "decision":
+        # Extract the subject
+        subjects = re.findall(r"(?:decided|chose|rejected|will)\s+(?:to\s+)?(.{10,40}?)(?:\.|,|$)", text, re.I)
+        for s in subjects[:2]:
+            queries.append(f"why did we {s.strip().lower()}")
+            queries.append(f"what did we decide about {s.strip().lower()}")
+
+    # If it's a finding, generate "what did we find" variants
+    if para_type == "finding":
+        queries.append(f"what did we find about {doc_name.replace('.md','').replace('_',' ')}")
+
+    # If it's a metric, generate "what is the score" variants
+    if para_type == "metric":
+        numbers = re.findall(r"\d+\.?\d*%", text)
+        for n in numbers[:2]:
+            queries.append(f"what score {n}")
+
+    # File-based queries
+    if ".py" in doc_name or ".rs" in doc_name:
+        base = doc_name.split(".")[0]
+        queries.append(f"what does {base} do")
+        queries.append(f"where is {base}")
+
+    return queries[:10]  # cap
+
+
+def _parse_date(text: str, filename: str) -> str:
+    """Extract date from filename or text content."""
+    # From filename: 2026-03-20 or 2026-03-20T0415
+    m = re.search(r"(\d{4}-\d{2}-\d{2})", filename)
+    if m:
+        return m.group(1)
+    # From text content
+    m = re.search(r"(\d{4}-\d{2}-\d{2})", text[:500])
+    if m:
+        return m.group(1)
+    return ""
 
 
 def _split_paragraphs(text: str, is_code: bool = False) -> list[str]:
