@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Remanentia — The State of Remaining</title>
-<meta name="description" content="Remanentia: Persistent AI memory with SNN-orchestrated consolidation, entity graphs, and deep contextual recall. 92.9% retrieval precision.">
+<title>Remanentia — Persistent AI Memory</title>
+<meta name="description" content="Remanentia: Filesystem knowledge retrieval for persistent AI agent memory. 74.7% on LOCOMO benchmark. Zero LLM calls. Open source.">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#0a0a0f;color:#e0e0e8}
@@ -43,6 +43,13 @@ h2{font-size:1.3rem;font-weight:400;letter-spacing:0.06em;color:#b0a0d0;margin-b
 .diff-item strong{display:block;font-size:0.88rem;color:#c0b0e0;margin-bottom:0.3rem}
 .diff-item span{font-size:0.75rem;color:#7878a0;line-height:1.4}
 
+/* Benchmark table */
+.bench{margin:1.5rem auto;max-width:420px}
+.bench table{width:100%;border-collapse:collapse;font-size:0.85rem}
+.bench th{text-align:left;padding:0.4rem 0.6rem;color:#8878a8;border-bottom:1px solid #2a2840;font-weight:400}
+.bench td{padding:0.4rem 0.6rem;color:#a0a0b0;border-bottom:1px solid #18182a}
+.bench td:last-child{text-align:right;font-weight:600;color:#c8b8e8}
+
 /* Research honesty */
 .honesty{background:#0c0c18;border:1px solid #1e1e30;border-radius:4px;padding:1.2rem 1.5rem;margin:1.5rem 0;text-align:center}
 .honesty p{font-size:0.9rem;color:#9090b0;margin-bottom:0.5rem}
@@ -56,7 +63,6 @@ h2{font-size:1.3rem;font-weight:400;letter-spacing:0.06em;color:#b0a0d0;margin-b
 .links-row{display:flex;flex-wrap:wrap;justify-content:center;gap:0.8rem;margin:1.2rem 0}
 .link-pill{display:inline-flex;align-items:center;gap:0.3rem;padding:0.35rem 0.9rem;border:1px solid #2a2840;border-radius:3px;font-size:0.8rem;color:#8888b0;text-decoration:none;transition:border-color 0.2s,color 0.2s}
 .link-pill:hover{border-color:#6858a0;color:#c8b8e8}
-.link-pill.coming{opacity:0.5;pointer-events:none}
 
 /* Invest */
 .invest{margin-top:2.5rem;text-align:center}
@@ -96,12 +102,13 @@ footer a:hover{color:#8878b0}
 <h1>Remanentia</h1>
 <div class="latin">remanentem &mdash; the state of remaining</div>
 <div class="divider"></div>
-<p>Persistent AI memory. TF-IDF + paragraph-level embedding retrieval. Consolidation pipeline that compresses episodes into structured knowledge. Entity graph with evidence trails. LLM-free core operations.</p>
+<p>Persistent AI memory via filesystem knowledge retrieval. BM25 search with query intelligence across session logs, code, research, and entity graphs. Zero LLM calls in the retrieval path. Integrates with Claude Code and MCP-compatible tools.</p>
 
 <div class="stats">
-<div class="stat"><div class="stat-val">14/14</div><div class="stat-label">P@1 (internal bench, 20 traces)</div></div>
-<div class="stat"><div class="stat-val">2.1s</div><div class="stat-label">per query</div></div>
-<div class="stat"><div class="stat-val">0</div><div class="stat-label">LLM calls required</div></div>
+<div class="stat"><div class="stat-val">74.7%</div><div class="stat-label">LOCOMO benchmark (1,986 questions)</div></div>
+<div class="stat"><div class="stat-val">&lt;100ms</div><div class="stat-label">query latency (warm)</div></div>
+<div class="stat"><div class="stat-val">225</div><div class="stat-label">tests passing</div></div>
+<div class="stat"><div class="stat-val">0</div><div class="stat-label">LLM calls</div></div>
 </div>
 </section>
 
@@ -109,13 +116,30 @@ footer a:hover{color:#8878b0}
 <section class="content-section">
 <h2>How It Works</h2>
 <div class="pipeline">
-  <div class="pipe-step"><strong>Encode</strong><span>Text, timestamps, project context</span></div>
+  <div class="pipe-step"><strong>Index</strong><span>18 sources, 1,217 docs, 15,938 paragraphs</span></div>
   <div class="pipe-arrow">&rarr;</div>
-  <div class="pipe-step"><strong>Consolidate</strong><span>Cluster, extract facts, build graph</span></div>
+  <div class="pipe-step"><strong>Search</strong><span>BM25 + query intelligence + embedding rerank</span></div>
   <div class="pipe-arrow">&rarr;</div>
-  <div class="pipe-step"><strong>Recall</strong><span>Trace + knowledge + timeline + entities</span></div>
+  <div class="pipe-step"><strong>Recall</strong><span>Answers + entities + timeline + cross-project</span></div>
 </div>
-<p style="text-align:center;font-size:0.9rem">Retrieval uses TF-IDF + best-paragraph embedding (no neural network in the retrieval path). A background daemon accumulates experience for consolidation. Early-stage research — no external benchmark validation yet.</p>
+<p style="text-align:center;font-size:0.9rem">Query classification routes to 8 intent types (location, decision, debugging, status, metric, temporal, explanation, general). Answer extraction pulls dates, numbers, versions, names from retrieved paragraphs. Entity graph tracks 223 entities and 6,434 relations.</p>
+</section>
+
+<!-- BENCHMARK -->
+<section class="content-section">
+<h2>LOCOMO Benchmark</h2>
+<div class="bench">
+<table>
+<tr><th>Category</th><th>Accuracy</th></tr>
+<tr><td>Multi-hop</td><td>82.6%</td></tr>
+<tr><td>Adversarial</td><td>79.5%</td></tr>
+<tr><td>Open-domain</td><td>78.7%</td></tr>
+<tr><td>Single-hop</td><td>55.7%</td></tr>
+<tr><td>Temporal</td><td>42.7%</td></tr>
+<tr><td><strong>Overall</strong></td><td><strong>74.7%</strong></td></tr>
+</table>
+</div>
+<p style="text-align:center;font-size:0.82rem;color:#7878a0">1,986 questions across 10 conversations. BM25 retrieval + answer extraction. No embedding rerank, no LLM. Hindsight (SOTA with GPT-4): 91.4%. The 16pp gap is answer extraction, not retrieval.</p>
 </section>
 
 <!-- WHAT MAKES THIS DIFFERENT -->
@@ -123,19 +147,19 @@ footer a:hover{color:#8878b0}
 <h2>What Makes This Different</h2>
 <div class="diff-grid">
   <div class="diff-item">
-    <div class="icon">&#x1f9e0;</div>
-    <strong>Deep Recall</strong>
-    <span>Returns matched trace + consolidated knowledge + entity graph + temporal timeline. More context than a ranked list.</span>
-  </div>
-  <div class="diff-item">
     <div class="icon">&#x1f50d;</div>
-    <strong>LLM-Free</strong>
-    <span>Core retrieval and consolidation run without LLM API calls. TF-IDF + embeddings + heuristic extraction. Runs on a consumer GPU.</span>
+    <strong>Filesystem-Native</strong>
+    <span>Indexes existing project artifacts &mdash; session logs, code, research docs. No separate memory store. Your files are the memory.</span>
   </div>
   <div class="diff-item">
     <div class="icon">&#x26a1;</div>
-    <strong>Honest Research</strong>
-    <span>70+ experiments documented including failures. We tested 4 SNN learning rules, 8 architectures, and proved what doesn't work before shipping what does.</span>
+    <strong>Zero Infrastructure</strong>
+    <span>No vector database, no cloud service, no API keys. One Python process, numpy required, everything else optional.</span>
+  </div>
+  <div class="diff-item">
+    <div class="icon">&#x1f517;</div>
+    <strong>MCP Integration</strong>
+    <span>Model Context Protocol server for Claude Code, Cursor, and other MCP-compatible AI coding tools. Cross-session memory via stdio.</span>
   </div>
 </div>
 </section>
@@ -144,7 +168,7 @@ footer a:hover{color:#8878b0}
 <section class="content-section">
 <div class="honesty">
   <p><strong>Built on 70+ experiments. We publish what fails.</strong></p>
-  <p>We tested STDP, BCPNN, holographic Kuramoto, complex Hebbian coupling, E/I attractor networks, contrastive learning, and reservoir readouts. None created discriminative features for text retrieval. The root cause: 384-dim embedding compression creates patterns too correlated for any local learning rule. The current system uses off-the-shelf TF-IDF + sentence-transformer embedding because that's what the experiments showed works. The consolidation pipeline and entity graph are early-stage — heuristic extraction that captures 20-30% of content. Work in progress.</p>
+  <p>SNN retrieval via STDP-modified weight matrices provides zero discriminative signal. Tested across 4 learning rules (STDP, BCPNN, Hebbian, E/I balanced), 8 architecture configurations, GPU sweeps. Root cause: 384-dim embeddings hash-encoded into 20K-neuron patterns are too correlated for any local learning rule. The current system uses BM25 + optional embedding rerank because that's what the experiments showed works. A Rust BM25 engine was built but is slower than Python at 15K paragraphs due to FFI overhead.</p>
 </div>
 </section>
 
@@ -152,19 +176,20 @@ footer a:hover{color:#8878b0}
 <section class="content-section">
 <h2>Stack</h2>
 <div class="tech-row">
-  <span class="tech-badge">Python</span>
-  <span class="tech-badge">PyTorch CUDA</span>
-  <span class="tech-badge">Rust / PyO3</span>
+  <span class="tech-badge">Python 3.12</span>
+  <span class="tech-badge">BM25</span>
+  <span class="tech-badge">MCP (stdio)</span>
+  <span class="tech-badge">FastAPI</span>
   <span class="tech-badge">sentence-transformers</span>
-  <span class="tech-badge">NumPy / SciPy</span>
-  <span class="tech-badge">LIF + STDP</span>
-  <span class="tech-badge">BM25 / TF-IDF</span>
+  <span class="tech-badge">GLiNER2</span>
+  <span class="tech-badge">NumPy</span>
+  <span class="tech-badge">Rust / PyO3</span>
+  <span class="tech-badge">AGPL-3.0</span>
 </div>
 
 <div class="links-row">
-  <a href="https://github.com/anulum/remanentia" class="link-pill coming">GitHub (coming soon)</a>
-  <a href="https://doi.org/10.5281/zenodo.19098792" class="link-pill coming">DOI: 10.5281/zenodo.19098792</a>
-  <a href="https://pypi.org/project/remanentia/" class="link-pill coming">PyPI (coming soon)</a>
+  <a href="https://github.com/anulum/remanentia" class="link-pill">GitHub</a>
+  <a href="https://pypi.org/project/remanentia/" class="link-pill" style="opacity:0.5;pointer-events:none">PyPI (coming)</a>
 </div>
 
 <div class="eco">Part of the <a href="https://www.anulum.li">SCPN framework</a> by Anulum</div>
@@ -172,9 +197,9 @@ footer a:hover{color:#8878b0}
 
 <!-- CTA -->
 <section class="content-section" style="text-align:center">
-<div class="status"><span class="dot"></span>Paper &amp; software in preparation</div>
+<div class="status"><span class="dot"></span>Alpha &mdash; 225 tests, LOCOMO 74.7%, MCP verified</div>
 <div class="invest">
-  <p class="invest-line">Early-stage research. Open to strategic partners and investors.</p>
+  <p class="invest-line">Open to strategic partners, research collaborators, and investors.</p>
   <a href="mailto:protoscience@anulum.li" class="invest-cta">protoscience@anulum.li</a>
 </div>
 </section>
