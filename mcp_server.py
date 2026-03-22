@@ -42,12 +42,7 @@ _UNIFIED_INDEX = None
 
 
 def handle_recall(query: str, top_k: int = 5) -> str:
-    """Memory recall via unified BM25 + embedding index.
-
-    Searches 400 documents (10,975 paragraphs) across 12 sources:
-    traces, session logs, handovers, research, semantic memories,
-    Claude memory, disposition. 15-47ms per query.
-    """
+    """Memory recall via unified BM25 + embedding index."""
     global _UNIFIED_INDEX
     try:
         from memory_index import MemoryIndex
@@ -64,7 +59,10 @@ def handle_recall(query: str, top_k: int = 5) -> str:
 
         parts = []
         for r in results:
-            parts.append(f"[{r.source}] {r.name} (score={r.score:.1f})\n{r.snippet}")
+            header = f"[{r.source}] {r.name} (score={r.score:.1f})"
+            if r.answer:
+                header += f"\nAnswer: {r.answer}"
+            parts.append(f"{header}\n{r.snippet}")
         return "\n\n".join(parts)
 
     except Exception:
@@ -131,10 +129,6 @@ def _lightweight_recall(query: str, top_k: int = 3) -> str:
     parts = []
     for name, score, snippet in top:
         parts.append(f"[{name} (score={score:.2f})]\n{snippet}")
-
-    graph_parts = handle_graph(entity="", top=5)
-    if graph_parts and "No relations" not in graph_parts:
-        parts.append(f"\n[Entity graph]\n{graph_parts}")
 
     return "\n\n".join(parts)
 

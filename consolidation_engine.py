@@ -157,12 +157,7 @@ def _extract_entities(text: str) -> list[str]:
 
 
 def _extract_paragraphs(text: str) -> list[str]:
-    """Split text into meaningful paragraphs for indexing.
-
-    Each paragraph becomes a separately searchable unit. This is the
-    mechanism that gives 85.7% P@1 vs 50% for full-document matching.
-    No information loss — every paragraph is preserved.
-    """
+    """Split text into meaningful paragraphs for indexing."""
     paragraphs = []
     for block in text.split("\n\n"):
         stripped = block.strip()
@@ -189,7 +184,7 @@ def _extract_key_lines(text: str) -> list[str]:
         "decided", "decision", "found", "finding", "result",
         "key insight", "conclusion", "fix", "resolved",
         "chose", "rejected", "confirmed", "measured",
-        "P@1", "precision", "accuracy", "because", "therefore",
+        "p@1", "precision", "accuracy", "because", "therefore",
         "root cause", "the reason", "we proved", "this means",
         "critical", "important", "changed", "broke", "works",
         "doesn't work", "failed", "succeeded", "shipped",

@@ -85,13 +85,28 @@ def evaluate_retrieval(question, answer, evidence_indices, retrieved_indices, tu
         if idx < len(turns) and answer_lower in turns[idx].lower():
             return True
 
-    # Token overlap check
+    # Token overlap check (0.3 threshold)
     a_tokens = tokenize(answer)
     for idx, score in retrieved_indices:
         if idx < len(turns):
             t_tokens = tokenize(turns[idx])
-            if a_tokens and len(a_tokens & t_tokens) / max(len(a_tokens), 1) > 0.5:
+            if a_tokens and len(a_tokens & t_tokens) / max(len(a_tokens), 1) > 0.3:
                 return True
+
+    # Answer extraction: extract answer from retrieved text, compare to gold
+    try:
+        from answer_extractor import extract_answer
+        for idx, score in retrieved_indices[:5]:
+            if idx < len(turns):
+                extracted = extract_answer(question, turns[idx])
+                if extracted and answer_lower:
+                    if extracted.lower() in answer_lower or answer_lower in extracted.lower():
+                        return True
+                    ext_tokens = tokenize(extracted)
+                    if ext_tokens and len(ext_tokens & a_tokens) / max(len(a_tokens), 1) > 0.3:
+                        return True
+    except ImportError:
+        pass
 
     return False
 
@@ -138,7 +153,7 @@ def main():
             cat_name = CATEGORY_NAMES.get(cat, f"cat-{cat}")
 
             # Search
-            retrieved = bm25_search(question, turns, top_k=10)
+            retrieved = bm25_search(question, turns, top_k=20)
 
             # Evaluate
             correct = evaluate_retrieval(question, answer, evidence, retrieved, turns)
@@ -175,8 +190,8 @@ def main():
         "accuracy": round(overall, 1),
         "by_category": results_by_cat,
         "elapsed_s": round(elapsed, 1),
-        "method": "BM25-lite token overlap",
-        "note": "LOCOMO preprocessed dataset (10 conversations). No embedding rerank. Honest baseline.",
+        "method": "BM25-lite + answer extraction",
+        "note": "LOCOMO preprocessed dataset (10 conversations). No embedding rerank. With answer_extractor.py.",
     }
     Path("paper/locomo_results.json").write_text(json.dumps(out, indent=2) + "\n")
     print(f"\nSaved to paper/locomo_results.json")

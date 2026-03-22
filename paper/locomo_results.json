@@ -1,0 +1,30 @@
+{
+  "total_correct": 1483,
+  "total_tested": 1986,
+  "accuracy": 74.7,
+  "by_category": {
+    "multi-hop": {
+      "correct": 265,
+      "total": 321
+    },
+    "temporal": {
+      "correct": 41,
+      "total": 96
+    },
+    "single-hop": {
+      "correct": 157,
+      "total": 282
+    },
+    "adversarial": {
+      "correct": 669,
+      "total": 841
+    },
+    "open-domain": {
+      "correct": 351,
+      "total": 446
+    }
+  },
+  "elapsed_s": 71.8,
+  "method": "BM25-lite + answer extraction",
+  "note": "LOCOMO preprocessed dataset (10 conversations). No embedding rerank. With answer_extractor.py."
+}

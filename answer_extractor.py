@@ -1,0 +1,173 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later | Commercial license available
+# © Concepts 1996–2026 Miroslav Sotek. All rights reserved.
+# © Code 2020–2026 Miroslav Sotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Remanentia — Answer Extraction
+
+"""Extract short answers from retrieved paragraphs.
+
+Given a query and a paragraph, attempts to extract the most likely
+answer span using pattern matching. No LLM required.
+
+Handles:
+- Dates: "2026-03-15", "March 15"
+- Numbers/percentages: "66.4%", "1,986", "42"
+- Versions: "v3.9.0", "0.2.0"
+- Names: capitalized multi-word spans near query terms
+- Yes/no: from negation/affirmation patterns
+"""
+from __future__ import annotations
+
+import re
+
+
+def extract_answer(query: str, paragraph: str) -> str | None:
+    """Extract a short answer from a paragraph given a query.
+
+    Returns the best candidate answer string, or None if no answer found.
+    """
+    q = query.lower()
+    p = paragraph
+
+    # Detect question type and dispatch
+    if _is_when_question(q):
+        return _extract_date_answer(p)
+    if _is_how_many_question(q):
+        return _extract_number_answer(p, q)
+    if _is_version_question(q):
+        return _extract_version_answer(p)
+    if _is_who_question(q):
+        return _extract_name_answer(p, q)
+    if _is_yes_no_question(q):
+        return _extract_yes_no(p, q)
+    if _is_what_percent_question(q):
+        return _extract_percentage_answer(p)
+
+    # Generic: try percentage, then version, then date, then number
+    for extractor in [_extract_percentage_answer, _extract_version_answer,
+                      _extract_date_answer, _extract_number_answer_generic]:
+        result = extractor(p)
+        if result:
+            return result
+
+    return None
+
+
+def extract_all_candidates(query: str, paragraph: str) -> list[dict]:
+    """Extract all answer candidates with types and scores."""
+    candidates = []
+    p = paragraph
+
+    for m in re.finditer(r"\d{4}-\d{2}-\d{2}", p):
+        candidates.append({"answer": m.group(), "type": "date", "score": 0.8})
+
+    for m in re.finditer(r"\d+\.?\d*%", p):
+        candidates.append({"answer": m.group(), "type": "percentage", "score": 0.7})
+
+    for m in re.finditer(r"v\d+\.\d+(?:\.\d+)?", p):
+        candidates.append({"answer": m.group(), "type": "version", "score": 0.7})
+
+    for m in re.finditer(r"\b\d[\d,]+(?:\.\d+)?\b", p):
+        val = m.group()
+        if not re.match(r"\d{4}-", val) and len(val) > 1:
+            candidates.append({"answer": val, "type": "number", "score": 0.5})
+
+    for m in re.finditer(r"[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+", p):
+        candidates.append({"answer": m.group(), "type": "name", "score": 0.4})
+
+    # Score boost for candidates near query terms
+    q_tokens = set(re.findall(r"\w{3,}", query.lower()))
+    for c in candidates:
+        pos = p.find(c["answer"])
+        if pos >= 0:
+            window = p[max(0, pos - 80):pos + len(c["answer"]) + 80].lower()
+            overlap = sum(1 for t in q_tokens if t in window)
+            c["score"] += overlap * 0.1
+
+    candidates.sort(key=lambda x: -x["score"])
+    return candidates
+
+
+# ── Question type detection ──────────────────────────────────────
+
+def _is_when_question(q: str) -> bool:
+    return bool(re.search(r"\bwhen\b|\bwhat date\b|\bwhat time\b", q))
+
+def _is_how_many_question(q: str) -> bool:
+    return bool(re.search(r"\bhow many\b|\bhow much\b|\bcount\b|\bnumber of\b", q))
+
+def _is_version_question(q: str) -> bool:
+    return bool(re.search(r"\bversion\b|\brelease\b|\bv\d", q))
+
+def _is_who_question(q: str) -> bool:
+    return bool(re.search(r"\bwho\b|\bwhose\b|\bwhom\b", q))
+
+def _is_yes_no_question(q: str) -> bool:
+    return bool(re.search(r"^(is|are|was|were|did|does|do|has|have|can|will|should)\b", q))
+
+def _is_what_percent_question(q: str) -> bool:
+    return bool(re.search(r"\bpercent\b|\baccuracy\b|\bscore\b|\brate\b|\b%", q))
+
+
+# ── Answer extractors ────────────────────────────────────────────
+
+def _extract_date_answer(text: str) -> str | None:
+    # ISO dates
+    dates = re.findall(r"\d{4}-\d{2}-\d{2}", text)
+    if dates:
+        return dates[0]
+    # English dates: "March 15, 2026"
+    m = re.search(r"(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:,?\s*\d{4})?", text)
+    if m:
+        return m.group()
+    return None
+
+def _extract_number_answer(text: str, query: str) -> str | None:
+    numbers = re.findall(r"\b(\d[\d,]*(?:\.\d+)?)\b", text)
+    # Filter out years and dates
+    numbers = [n for n in numbers if not re.match(r"20\d{2}$", n) and len(n) > 0]
+    if numbers:
+        return numbers[0]
+    return None
+
+def _extract_number_answer_generic(text: str) -> str | None:
+    return _extract_number_answer(text, "")
+
+def _extract_version_answer(text: str) -> str | None:
+    versions = re.findall(r"v\d+\.\d+(?:\.\d+)?", text)
+    if versions:
+        return versions[0]
+    return None
+
+def _extract_percentage_answer(text: str) -> str | None:
+    pcts = re.findall(r"\d+\.?\d*%", text)
+    if pcts:
+        return pcts[0]
+    return None
+
+def _extract_name_answer(text: str, query: str) -> str | None:
+    # Multi-word capitalized names
+    names = re.findall(r"[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+", text)
+    if names:
+        return names[0]
+    # Single capitalized word near query terms
+    q_tokens = set(re.findall(r"\w{3,}", query.lower()))
+    for m in re.finditer(r"\b([A-Z][a-z]{2,})\b", text):
+        pos = m.start()
+        window = text[max(0, pos - 50):pos + 50].lower()
+        if any(t in window for t in q_tokens):
+            return m.group()
+    return None
+
+def _extract_yes_no(text: str, query: str) -> str | None:
+    t = text.lower()
+    # Look for negation near query terms
+    q_tokens = set(re.findall(r"\w{3,}", query))
+    for token in q_tokens:
+        pos = t.find(token)
+        if pos >= 0:
+            window = t[max(0, pos - 30):pos + 30]
+            if any(neg in window for neg in ["not ", "no ", "never ", "doesn't ", "didn't ", "isn't ", "wasn't "]):
+                return "No"
+    return "Yes"

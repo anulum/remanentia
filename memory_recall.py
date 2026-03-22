@@ -5,27 +5,12 @@
 # Contact: www.anulum.li | protoscience@anulum.li
 # Arcane Sapience — Deep Memory Recall
 
-"""Rich memory recall: retrieval + consolidation + graph + temporal context.
-
-Instead of returning a ranked list of traces, returns a structured
-memory response with:
-- The matched trace (episodic)
-- Consolidated knowledge it belongs to (semantic)
-- Related entities and connections (graph)
-- What happened before and after (temporal)
-- Cross-project insights (graph traversal)
-- Novelty assessment (how surprising is this query?)
-
-This is what makes Remanentia different: not just "find the file" but
-"here's everything you know about this, how it connects, and what
-you might also need."
+"""Structured recall: retrieval + consolidation + graph + temporal context.
 
 Usage::
     from memory_recall import recall
     context = recall("Dimits shift convergence")
     print(context.summary)
-    print(context.related_entities)
-    print(context.timeline)
 """
 from __future__ import annotations
 
