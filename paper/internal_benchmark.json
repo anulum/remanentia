@@ -1,0 +1,35 @@
+{
+  "total_correct": 38,
+  "total_tested": 50,
+  "accuracy": 76.0,
+  "by_category": {
+    "decision": {
+      "correct": 8,
+      "total": 10
+    },
+    "metric": {
+      "correct": 9,
+      "total": 10
+    },
+    "location": {
+      "correct": 4,
+      "total": 5
+    },
+    "temporal": {
+      "correct": 4,
+      "total": 4
+    },
+    "debugging": {
+      "correct": 3,
+      "total": 6
+    },
+    "cross_project": {
+      "correct": 2,
+      "total": 3
+    },
+    "factual": {
+      "correct": 8,
+      "total": 12
+    }
+  }
+}

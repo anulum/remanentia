@@ -302,7 +302,7 @@ class MemoryIndex:
 
     def _cross_encoder_rerank(self, query: str, candidates: list[tuple[int, float]]) -> list[tuple[int, float]] | None:
         """Rerank candidates using a cross-encoder for query-paragraph relevance."""
-        if not candidates:
+        if not candidates or self._cross_encoder is False:
             return None
         try:
             from sentence_transformers import CrossEncoder
