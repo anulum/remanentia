@@ -469,6 +469,85 @@ class TestMemoryIndex:
         assert len(results) > 0
 
 
+class TestAddFile:
+    def test_add_file_incremental(self, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "initial.md").write_text(
+            "# Initial\n\nSome initial content about BM25 scoring.",
+            encoding="utf-8",
+        )
+        idx = MemoryIndex()
+        with patch("memory_index.SOURCES", {"test": docs_dir}):
+            with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}):
+                idx.build(use_gpu_embeddings=False, use_gliner=False)
+
+        initial_count = len(idx.documents)
+
+        new_file = docs_dir / "added.md"
+        new_file.write_text(
+            "# New Trace\n\nWe decided to add incremental indexing to Remanentia.",
+            encoding="utf-8",
+        )
+        added = idx.add_file(new_file, source="test")
+        assert added > 0
+        assert len(idx.documents) == initial_count + 1
+        results = idx.search("incremental indexing", top_k=3)
+        assert any("added.md" in r.name for r in results)
+
+    def test_add_file_not_built(self, tmp_path):
+        idx = MemoryIndex()
+        assert idx.add_file(tmp_path / "nope.md") == 0
+
+
+class TestSearchFilters:
+    def test_project_filter(self, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "alpha.md").write_text(
+            "# Alpha\n\nAlpha project content about scoring algorithms.",
+            encoding="utf-8",
+        )
+        (docs_dir / "beta.md").write_text(
+            "# Beta\n\nBeta project content about scoring algorithms.",
+            encoding="utf-8",
+        )
+        idx = MemoryIndex()
+        with patch("memory_index.SOURCES", {"alpha": docs_dir, "beta": docs_dir}):
+            with patch("memory_index.SOURCE_EXTENSIONS", {"alpha": {".md"}, "beta": {".md"}}):
+                idx.build(use_gpu_embeddings=False, use_gliner=False)
+
+        # Without filter: should find both
+        results = idx.search("scoring algorithms", top_k=5)
+        assert len(results) >= 1
+
+        # With project filter: only matching source
+        results_alpha = idx.search("scoring algorithms", top_k=5, project="alpha")
+        for r in results_alpha:
+            assert "alpha" in r.source.lower() or "alpha" in r.name.lower()
+
+    def test_date_filter(self, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "2026-03-10_old.md").write_text(
+            "# Old Trace\n\nOld content about retrieval experiments.",
+            encoding="utf-8",
+        )
+        (docs_dir / "2026-03-20_new.md").write_text(
+            "# New Trace\n\nNew content about retrieval improvements.",
+            encoding="utf-8",
+        )
+        idx = MemoryIndex()
+        with patch("memory_index.SOURCES", {"test": docs_dir}):
+            with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}):
+                idx.build(use_gpu_embeddings=False, use_gliner=False)
+
+        results = idx.search("retrieval", top_k=5, after="2026-03-15")
+        names = [r.name for r in results]
+        assert "2026-03-20_new.md" in names
+        assert "2026-03-10_old.md" not in names
+
+
 class TestNeedsRebuild:
     def test_no_index_needs_rebuild(self, tmp_path):
         with patch("memory_index.INDEX_PATH", tmp_path / "nope.pkl"):
