@@ -112,6 +112,7 @@ class MemoryIndex:
         self.embeddings: np.ndarray | None = None
         self._built = False
         self._embed_model = None
+        self._cross_encoder = None
 
     def build(self, use_gpu_embeddings: bool = True, use_gliner: bool = True) -> dict:
         """Scan all sources, build BM25 index + GPU embeddings + GLiNER entities."""
@@ -247,6 +248,39 @@ class MemoryIndex:
             normalize_embeddings=True,
         )
 
+    def _cross_encoder_rerank(self, query: str, candidates: list[tuple[int, float]]) -> list[tuple[int, float]] | None:
+        """Rerank candidates using a cross-encoder for query-paragraph relevance."""
+        if not candidates:
+            return None
+        try:
+            from sentence_transformers import CrossEncoder
+            import torch
+        except ImportError:
+            return None
+
+        if self._cross_encoder is None:
+            try:
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                self._cross_encoder = CrossEncoder(
+                    "cross-encoder/ms-marco-MiniLM-L-6-v2", device=device)
+            except Exception:
+                return None
+
+        pairs = []
+        for para_idx, _ in candidates:
+            doc_idx, p_idx = self.paragraph_index[para_idx]
+            text = self.documents[doc_idx].paragraphs[p_idx][:512]
+            pairs.append((query, text))
+
+        try:
+            ce_scores = self._cross_encoder.predict(pairs, show_progress_bar=False)
+            reranked = [(candidates[i][0], float(ce_scores[i]))
+                        for i in range(len(candidates))]
+            reranked.sort(key=lambda x: -x[1])
+            return reranked
+        except Exception:
+            return None
+
     def search(self, query: str, top_k: int = 5) -> list[SearchResult]:
         """Search with query intelligence: BM25 + type boost + temporal + embedding rerank."""
         if not self._built:
@@ -287,33 +321,55 @@ class MemoryIndex:
                     if doc_idx < len(self.documents) and self.documents[doc_idx].date:
                         score *= _recency_boost(self.documents[doc_idx].date)
 
-                # Temporal queries: boost paragraphs containing dates
+                # Temporal queries: boost paragraphs containing date expressions
                 if intent["type"] == "temporal":
                     doc_idx = self.paragraph_index[i][0] if i < len(self.paragraph_index) else 0
                     para_idx = self.paragraph_index[i][1] if i < len(self.paragraph_index) else 0
                     if doc_idx < len(self.documents):
                         para_text = self.documents[doc_idx].paragraphs[para_idx] if para_idx < len(self.documents[doc_idx].paragraphs) else ""
-                        if re.search(r"\d{4}-\d{2}-\d{2}", para_text):
+                        if _has_date_expression(para_text):
                             score *= 1.4
                 scores.append((i, score))
 
         scores.sort(key=lambda x: -x[1])
 
-        # Take top candidates for embedding rerank
-        candidates = scores[:top_k * 3] if self.embeddings is not None else scores[:top_k]
+        # Stage 1: Take top candidates for embedding rerank
+        candidates = scores[:top_k * 6] if self.embeddings is not None else scores[:top_k * 3]
 
-        # Embedding rerank if available
+        # Stage 2: Bi-encoder rerank if available
         if self.embeddings is not None and candidates:
             try:
                 q_emb = self._embed_model.encode(
                     query, normalize_embeddings=True, convert_to_numpy=True)
                 for j, (para_idx, bm25_score) in enumerate(candidates):
                     emb_sim = float(np.dot(q_emb, self.embeddings[para_idx]))
-                    # Combined: 0.4 BM25 + 0.6 embedding
                     candidates[j] = (para_idx, 0.4 * bm25_score + 0.6 * emb_sim)
                 candidates.sort(key=lambda x: -x[1])
             except Exception:
                 pass
+
+        # Stage 3: Cross-encoder rerank on top candidates
+        ce_candidates = candidates[:top_k * 3]
+        if ce_candidates:
+            ce_candidates = self._cross_encoder_rerank(query, ce_candidates)
+            if ce_candidates:
+                candidates = ce_candidates
+
+        # Temporal sorting: for temporal queries, sort by document date
+        if intent["type"] == "temporal" and candidates:
+            q = query.lower()
+            newest_first = any(w in q for w in ["recent", "latest", "last", "newest"])
+            oldest_first = any(w in q for w in ["first", "earliest", "oldest", "original"])
+            if newest_first or oldest_first:
+                dated = []
+                for para_idx, score in candidates:
+                    doc_idx = self.paragraph_index[para_idx][0] if para_idx < len(self.paragraph_index) else 0
+                    date = self.documents[doc_idx].date if doc_idx < len(self.documents) else ""
+                    dated.append((para_idx, score, date))
+                dated.sort(key=lambda x: (x[2] if oldest_first else "", -x[1]))
+                if newest_first:
+                    dated.sort(key=lambda x: x[2], reverse=True)
+                candidates = [(p, s) for p, s, _ in dated]
 
         # Answer extraction (lazy import)
         _answer_extractor = None
@@ -502,6 +558,20 @@ def _generate_prospective_queries(text: str, doc_name: str, para_type: str) -> l
         queries.append(f"where is {base}")
 
     return queries[:10]  # cap
+
+
+_DATE_EXPR = re.compile(
+    r"\d{4}-\d{2}-\d{2}"                               # ISO date
+    r"|(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}"  # English date
+    r"|\b(?:yesterday|today|last\s+(?:week|month|year))\b"  # Relative dates
+    r"|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\b",  # Abbreviated
+    re.IGNORECASE,
+)
+
+
+def _has_date_expression(text: str) -> bool:
+    """Check if text contains any date-like expression."""
+    return bool(_DATE_EXPR.search(text))
 
 
 def _recency_boost(date_str: str) -> float:

@@ -159,15 +159,34 @@ def cmd_entities(args):
         print(f"  {e['id']:30s}  type={e.get('type','?'):10s}  traces={e.get('trace_count', 0)}")
 
 
+def cmd_init(args):
+    """Create memory directory structure."""
+    dirs = [
+        BASE / "reasoning_traces",
+        BASE / "memory" / "semantic",
+        BASE / "memory" / "graph",
+        BASE / "consolidation",
+        BASE / "snn_state",
+    ]
+    created = 0
+    for d in dirs:
+        if not d.exists():
+            d.mkdir(parents=True)
+            created += 1
+            print(f"  Created {d.relative_to(BASE)}")
+    if created == 0:
+        print("All directories already exist.")
+    else:
+        print(f"\n{created} directories created. Ready to use.")
+        print("Add reasoning traces to reasoning_traces/ then run: remanentia consolidate")
+
+
 def cmd_daemon(args):
     """Daemon management."""
     if args.action == "start":
         import subprocess
         script = str(BASE / "gpu_daemon.py")
-        python = str(BASE / ".venv312" / "Scripts" / "python.exe")
-        if not Path(python).exists():
-            python = "python"
-        subprocess.Popen([python, script, "--detach"])
+        subprocess.Popen([sys.executable, script, "--detach"])
         print("Daemon start requested")
     elif args.action == "stop":
         lock = STATE_DIR / "daemon.lock"
@@ -194,12 +213,13 @@ def main():
     )
     sub = parser.add_subparsers(dest="command")
 
-    # recall
-    p_recall = sub.add_parser("recall", help="Deep memory recall")
-    p_recall.add_argument("query", help="Query text")
-    p_recall.add_argument("--top", type=int, default=3, help="Number of results")
-    p_recall.add_argument("--format", choices=["summary", "context", "json"], default="summary")
-    p_recall.add_argument("--content", action="store_true", help="Include trace content")
+    # recall / search
+    for name in ("recall", "search"):
+        p_recall = sub.add_parser(name, help="Memory recall / search")
+        p_recall.add_argument("query", help="Query text")
+        p_recall.add_argument("--top", type=int, default=3, help="Number of results")
+        p_recall.add_argument("--format", choices=["summary", "context", "json"], default="summary")
+        p_recall.add_argument("--content", action="store_true", help="Include trace content")
 
     # consolidate
     p_consol = sub.add_parser("consolidate", help="Run memory consolidation")
@@ -219,6 +239,9 @@ def main():
     p_daemon = sub.add_parser("daemon", help="Daemon management")
     p_daemon.add_argument("action", choices=["start", "stop", "status"])
 
+    # init
+    sub.add_parser("init", help="Create memory directory structure")
+
     args = parser.parse_args()
     if not args.command:
         parser.print_help()
@@ -226,11 +249,13 @@ def main():
 
     cmd_map = {
         "recall": cmd_recall,
+        "search": cmd_recall,
         "consolidate": cmd_consolidate,
         "status": cmd_status,
         "graph": cmd_graph,
         "entities": cmd_entities,
         "daemon": cmd_daemon,
+        "init": cmd_init,
     }
     cmd_map[args.command](args)
 

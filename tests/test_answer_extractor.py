@@ -8,6 +8,9 @@ import pytest
 from answer_extractor import (
     extract_all_candidates,
     extract_answer,
+    extract_best_sentence,
+    fuzzy_match,
+    normalize_number,
     _extract_date_answer,
     _extract_name_answer,
     _extract_number_answer,
@@ -211,3 +214,72 @@ class TestExtractAllCandidates:
 
     def test_empty(self):
         assert extract_all_candidates("query", "no extractable answers") == []
+
+
+# ── Fuzzy matching ───────────────────────────────────────────────
+
+
+class TestFuzzyMatch:
+    def test_exact_match(self):
+        assert fuzzy_match("hello", "hello") is True
+
+    def test_substring_match(self):
+        assert fuzzy_match("hello", "hello world") is True
+        assert fuzzy_match("hello world", "hello") is True
+
+    def test_fuzzy_close(self):
+        assert fuzzy_match("Miroslav Sotek", "Miroslav Šotek") is True
+
+    def test_fuzzy_distant(self):
+        assert fuzzy_match("apple", "zebra") is False
+
+    def test_empty(self):
+        assert fuzzy_match("", "hello") is False
+        assert fuzzy_match("hello", "") is False
+
+    def test_case_insensitive(self):
+        assert fuzzy_match("HELLO", "hello") is True
+
+
+# ── Number normalization ─────────────────────────────────────────
+
+
+class TestNormalizeNumber:
+    def test_plain_number(self):
+        assert normalize_number("42") == "42"
+
+    def test_comma_number(self):
+        assert normalize_number("1,986") == "1986"
+
+    def test_percentage(self):
+        assert normalize_number("66.4%") == "66.4"
+
+    def test_word_number(self):
+        assert normalize_number("forty-two") == "42"
+
+    def test_word_teen(self):
+        assert normalize_number("thirteen") == "13"
+
+    def test_word_compound(self):
+        assert normalize_number("twenty one") == "21"
+
+    def test_not_a_number(self):
+        assert normalize_number("hello") is None
+
+
+# ── Sentence extraction ──────────────────────────────────────────
+
+
+class TestExtractBestSentence:
+    def test_finds_relevant(self):
+        para = "The weather is nice. The STDP bug was fixed on March 15. It was a good day."
+        result = extract_best_sentence("STDP bug fix", para)
+        assert result is not None
+        assert "STDP" in result
+
+    def test_empty_paragraph(self):
+        assert extract_best_sentence("query", "") is None
+
+    def test_single_sentence(self):
+        result = extract_best_sentence("test", "This is a test sentence.")
+        assert result == "This is a test sentence."
