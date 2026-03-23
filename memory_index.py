@@ -248,6 +248,58 @@ class MemoryIndex:
             normalize_embeddings=True,
         )
 
+    def add_file(self, path: Path, source: str = "traces") -> int:
+        """Incrementally add a single file to the index. Returns number of paragraphs added."""
+        if not self._built:
+            return 0
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return 0
+        if len(text) < 50:
+            return 0
+
+        is_code = path.suffix in (".py", ".rs", ".v", ".ts", ".js")
+        paragraphs = _split_paragraphs(text, is_code=is_code)
+        if not paragraphs:
+            return 0
+
+        doc_date = _parse_date(text, path.name)
+        doc = Document(
+            name=path.name, source=source, path=str(path),
+            paragraphs=paragraphs, date=doc_date,
+            doc_type="code" if is_code else source,
+        )
+        doc_idx = len(self.documents)
+        self.documents.append(doc)
+
+        n_existing = len(self.paragraph_tokens)
+        for para_idx, para in enumerate(paragraphs):
+            self.paragraph_index.append((doc_idx, para_idx))
+            p_type = _classify_paragraph(para, is_code=is_code)
+            pq = _generate_prospective_queries(para, path.name, p_type)
+            combined = para + " " + " ".join(pq)
+            tokens = set(_tokenize(combined))
+            self.paragraph_tokens.append(tokens)
+            self.paragraph_types.append(p_type)
+            # Update IDF incrementally for new tokens
+            for t in tokens:
+                if t not in self.idf:
+                    self.idf[t] = math.log(1 + len(self.paragraph_tokens) / 2)
+
+        # Compute embeddings for new paragraphs if model is loaded
+        if self._embed_model is not None:
+            new_texts = [paragraphs[i][:512] for i in range(len(paragraphs))]
+            new_embs = self._embed_model.encode(
+                new_texts, batch_size=64, show_progress_bar=False,
+                convert_to_numpy=True, normalize_embeddings=True)
+            if self.embeddings is not None:
+                self.embeddings = np.vstack([self.embeddings, new_embs])
+            else:
+                self.embeddings = new_embs
+
+        return len(paragraphs)
+
     def _cross_encoder_rerank(self, query: str, candidates: list[tuple[int, float]]) -> list[tuple[int, float]] | None:
         """Rerank candidates using a cross-encoder for query-paragraph relevance."""
         if not candidates:
@@ -281,14 +333,40 @@ class MemoryIndex:
         except Exception:
             return None
 
-    def search(self, query: str, top_k: int = 5) -> list[SearchResult]:
-        """Search with query intelligence: BM25 + type boost + temporal + embedding rerank."""
+    def search(self, query: str, top_k: int = 5,
+               project: str = "", after: str = "", before: str = "",
+               doc_type: str = "") -> list[SearchResult]:
+        """Search with query intelligence, optional structured filters.
+
+        Filters (applied before scoring):
+            project: filter by source name containing this string
+            after: only docs with date >= this (YYYY-MM-DD)
+            before: only docs with date <= this (YYYY-MM-DD)
+            doc_type: filter by document type (code, traces, sessions, etc.)
+        """
         if not self._built:
             self.build()
 
         q_tokens = set(_tokenize(query))
         if not q_tokens:
             return []
+
+        # Pre-compute filter sets for paragraph indices
+        _filtered_out = set()
+        if project or after or before or doc_type:
+            for i in range(len(self.paragraph_index)):
+                doc_idx = self.paragraph_index[i][0]
+                if doc_idx >= len(self.documents):
+                    continue
+                doc = self.documents[doc_idx]
+                if project and project.lower() not in doc.source.lower() and project.lower() not in doc.name.lower():
+                    _filtered_out.add(i)
+                if after and doc.date and doc.date < after:
+                    _filtered_out.add(i)
+                if before and doc.date and doc.date > before:
+                    _filtered_out.add(i)
+                if doc_type and doc_type.lower() not in doc.doc_type.lower():
+                    _filtered_out.add(i)
 
         # Query classification
         intent = _classify_query(query)
@@ -300,6 +378,8 @@ class MemoryIndex:
 
         scores = []
         for i, p_tokens in enumerate(self.paragraph_tokens):
+            if i in _filtered_out:
+                continue
             score = 0.0
             dl = len(p_tokens)
             for qt in q_tokens:
@@ -406,10 +486,22 @@ class MemoryIndex:
 
         return results
 
-    def save(self, path: Path | None = None):
-        """Save index to disk including embeddings."""
+    def save(self, path: Path | None = None, quantize: bool = True):
+        """Save index to disk. Quantizes embeddings to int8 by default (~4x smaller)."""
         path = path or INDEX_PATH
         path.parent.mkdir(parents=True, exist_ok=True)
+
+        emb_data = None
+        emb_scale = None
+        if self.embeddings is not None:
+            if quantize:
+                scale = np.max(np.abs(self.embeddings), axis=1, keepdims=True)
+                scale = np.where(scale == 0, 1.0, scale)
+                emb_data = (self.embeddings / scale * 127).astype(np.int8)
+                emb_scale = scale.astype(np.float32)
+            else:
+                emb_data = self.embeddings
+
         data = {
             "documents": [(d.name, d.source, d.path, d.paragraphs, d.date, d.doc_type)
                           for d in self.documents],
@@ -417,7 +509,9 @@ class MemoryIndex:
             "paragraph_tokens": [list(t) for t in self.paragraph_tokens],
             "paragraph_types": self.paragraph_types,
             "idf": self.idf,
-            "embeddings": self.embeddings,
+            "embeddings": emb_data,
+            "emb_scale": emb_scale,
+            "quantized": quantize and self.embeddings is not None,
             "timestamp": time.time(),
         }
         with open(path, "wb") as f:
@@ -444,7 +538,13 @@ class MemoryIndex:
             self.paragraph_tokens = [set(t) for t in data["paragraph_tokens"]]
             self.idf = data["idf"]
             self.paragraph_types = data.get("paragraph_types", [])
-            self.embeddings = data.get("embeddings")
+            # Dequantize embeddings if needed
+            if data.get("quantized") and data.get("emb_scale") is not None:
+                emb_int8 = data["embeddings"]
+                scale = data["emb_scale"]
+                self.embeddings = (emb_int8.astype(np.float32) / 127.0) * scale
+            else:
+                self.embeddings = data.get("embeddings")
             self._built = True
             return True
         except Exception:

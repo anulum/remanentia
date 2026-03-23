@@ -13,6 +13,7 @@ from mcp_server import (
     TOOLS,
     handle_graph,
     handle_recall,
+    handle_remember,
     handle_request,
     handle_status,
 )
@@ -22,12 +23,12 @@ from mcp_server import (
 
 
 class TestToolDefinitions:
-    def test_three_tools_defined(self):
-        assert len(TOOLS) == 3
+    def test_four_tools_defined(self):
+        assert len(TOOLS) == 4
 
     def test_tool_names(self):
         names = {t["name"] for t in TOOLS}
-        assert names == {"remanentia_recall", "remanentia_status", "remanentia_graph"}
+        assert names == {"remanentia_recall", "remanentia_remember", "remanentia_status", "remanentia_graph"}
 
     def test_recall_schema(self):
         recall_tool = next(t for t in TOOLS if t["name"] == "remanentia_recall")
@@ -57,7 +58,7 @@ class TestMCPProtocol:
     def test_tools_list(self):
         req = {"jsonrpc": "2.0", "id": 2, "method": "tools/list"}
         resp = handle_request(req)
-        assert len(resp["result"]["tools"]) == 3
+        assert len(resp["result"]["tools"]) == 4
 
     def test_notifications_initialized(self):
         req = {"jsonrpc": "2.0", "method": "notifications/initialized"}
@@ -126,6 +127,42 @@ class TestHandleRecall:
     def test_empty_query(self):
         result = handle_recall("")
         assert isinstance(result, str)
+
+
+# ── handle_remember ──────────────────────────────────────────
+
+
+class TestHandleRemember:
+    def test_writes_trace_file(self, tmp_path):
+        with patch("mcp_server.BASE", tmp_path), \
+             patch("mcp_server._RECALL_INDEX", None), \
+             patch("mcp_server._UNIFIED_INDEX", None):
+            result = handle_remember("We decided to use BM25.", "decision", "remanentia")
+        assert "Remembered:" in result
+        traces = list((tmp_path / "reasoning_traces").glob("*.md"))
+        assert len(traces) == 1
+        content = traces[0].read_text(encoding="utf-8")
+        assert "We decided to use BM25." in content
+        assert "remanentia" in content
+
+    def test_invalidates_recall_cache(self, tmp_path):
+        import mcp_server
+        mcp_server._RECALL_INDEX = {"old": "data"}
+        with patch("mcp_server.BASE", tmp_path), \
+             patch("mcp_server._UNIFIED_INDEX", None):
+            handle_remember("test content", "context", "")
+        assert mcp_server._RECALL_INDEX is None
+
+    def test_mcp_protocol_remember(self, tmp_path):
+        with patch("mcp_server.BASE", tmp_path), \
+             patch("mcp_server._UNIFIED_INDEX", None):
+            req = {
+                "jsonrpc": "2.0", "id": 10, "method": "tools/call",
+                "params": {"name": "remanentia_remember",
+                           "arguments": {"content": "Test memory", "type": "finding", "project": "test"}},
+            }
+            resp = handle_request(req)
+        assert "Remembered:" in resp["result"]["content"][0]["text"]
 
 
 # ── handle_graph ─────────────────────────────────────────────────

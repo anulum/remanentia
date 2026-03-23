@@ -40,6 +40,25 @@ def _ensure_utf8():
 
 def cmd_recall(args):
     """Deep memory recall."""
+    # Use filtered search if filters are specified
+    has_filters = getattr(args, "project", "") or getattr(args, "after", "") or getattr(args, "before", "")
+    if has_filters:
+        from memory_index import auto_rebuild_if_needed
+        idx = auto_rebuild_if_needed(use_gpu=False)
+        results = idx.search(
+            args.query, top_k=args.top,
+            project=getattr(args, "project", ""),
+            after=getattr(args, "after", ""),
+            before=getattr(args, "before", ""),
+        )
+        for r in results:
+            print(f"[{r.source}] {r.name} (score={r.score:.3f})")
+            if r.answer:
+                print(f"  Answer: {r.answer}")
+            print(f"  {r.snippet[:200]}")
+            print()
+        return
+
     from memory_recall import recall
     ctx = recall(args.query, top_k=args.top, include_content=args.content)
 
@@ -220,6 +239,9 @@ def main():
         p_recall.add_argument("--top", type=int, default=3, help="Number of results")
         p_recall.add_argument("--format", choices=["summary", "context", "json"], default="summary")
         p_recall.add_argument("--content", action="store_true", help="Include trace content")
+        p_recall.add_argument("--project", default="", help="Filter by project/source")
+        p_recall.add_argument("--after", default="", help="Filter: docs after date (YYYY-MM-DD)")
+        p_recall.add_argument("--before", default="", help="Filter: docs before date (YYYY-MM-DD)")
 
     # consolidate
     p_consol = sub.add_parser("consolidate", help="Run memory consolidation")
