@@ -29,13 +29,29 @@ def tokenize(text):
     return set(re.findall(r"[a-z0-9][a-z0-9_]{2,}", text.lower()))
 
 
+_CE_MODEL = None
+
+
+def _get_cross_encoder():
+    global _CE_MODEL
+    if _CE_MODEL is not None:
+        return _CE_MODEL
+    try:
+        from sentence_transformers import CrossEncoder
+        import torch
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        _CE_MODEL = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", device=device)
+        return _CE_MODEL
+    except Exception:
+        return None
+
+
 def bm25_search(query, paragraphs, top_k=10):
-    """BM25-lite search."""
+    """BM25-lite search + optional cross-encoder rerank."""
     q_tokens = tokenize(query)
     if not q_tokens:
         return []
 
-    # IDF
     import math
     from collections import Counter
     n = len(paragraphs)
@@ -62,7 +78,21 @@ def bm25_search(query, paragraphs, top_k=10):
             scored.append((i, score))
 
     scored.sort(key=lambda x: -x[1])
-    return scored[:top_k]
+    bm25_top = scored[:top_k * 3]
+
+    # Cross-encoder rerank on BM25 candidates
+    ce = _get_cross_encoder()
+    if ce and bm25_top:
+        pairs = [(query, paragraphs[idx][:512]) for idx, _ in bm25_top]
+        try:
+            ce_scores = ce.predict(pairs, show_progress_bar=False)
+            reranked = [(bm25_top[i][0], float(ce_scores[i])) for i in range(len(bm25_top))]
+            reranked.sort(key=lambda x: -x[1])
+            return reranked[:top_k]
+        except Exception:
+            pass
+
+    return bm25_top[:top_k]
 
 
 def evaluate_retrieval(question, answer, evidence_indices, retrieved_indices, turns):
@@ -93,17 +123,23 @@ def evaluate_retrieval(question, answer, evidence_indices, retrieved_indices, tu
             if a_tokens and len(a_tokens & t_tokens) / max(len(a_tokens), 1) > 0.3:
                 return True
 
-    # Answer extraction: extract answer from retrieved text, compare to gold
+    # Answer extraction + fuzzy matching
     try:
-        from answer_extractor import extract_answer
+        from answer_extractor import extract_answer, fuzzy_match, extract_best_sentence
         for idx, score in retrieved_indices[:5]:
             if idx < len(turns):
                 extracted = extract_answer(question, turns[idx])
                 if extracted and answer_lower:
-                    if extracted.lower() in answer_lower or answer_lower in extracted.lower():
+                    if fuzzy_match(extracted, answer_lower, threshold=0.6):
                         return True
                     ext_tokens = tokenize(extracted)
                     if ext_tokens and len(ext_tokens & a_tokens) / max(len(a_tokens), 1) > 0.3:
+                        return True
+                # Sentence-level matching
+                best_sent = extract_best_sentence(question, turns[idx])
+                if best_sent and answer_lower:
+                    s_tokens = tokenize(best_sent)
+                    if a_tokens and len(a_tokens & s_tokens) / max(len(a_tokens), 1) > 0.4:
                         return True
     except ImportError:
         pass

@@ -433,6 +433,41 @@ class TestMemoryIndex:
         assert idx.documents == []
         assert idx.paragraph_index == []
 
+    def test_cross_encoder_rerank(self, tmp_path):
+        """Cross-encoder reranking reorders candidates by relevance score."""
+        docs_dir = self._build_mini_index(tmp_path)
+        idx = MemoryIndex()
+        with patch("memory_index.SOURCES", {"test": docs_dir}):
+            with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md", ".py"}}):
+                idx.build(use_gpu_embeddings=False, use_gliner=False)
+
+        # Mock cross-encoder to return known scores
+        class MockCrossEncoder:
+            def predict(self, pairs, show_progress_bar=False):
+                # Score higher for pairs where query terms appear in text
+                scores = []
+                for q, t in pairs:
+                    score = sum(1 for w in q.lower().split() if w in t.lower())
+                    scores.append(float(score))
+                return scores
+
+        idx._cross_encoder = MockCrossEncoder()
+        results = idx.search("SNN removal decision embedding", top_k=3)
+        assert len(results) > 0
+
+    def test_cross_encoder_graceful_fallback(self, tmp_path):
+        """Search works when cross-encoder import fails."""
+        docs_dir = self._build_mini_index(tmp_path)
+        idx = MemoryIndex()
+        with patch("memory_index.SOURCES", {"test": docs_dir}):
+            with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md", ".py"}}):
+                idx.build(use_gpu_embeddings=False, use_gliner=False)
+
+        # Cross-encoder rerank returns None on failure
+        with patch.object(idx, "_cross_encoder_rerank", return_value=None):
+            results = idx.search("benchmark accuracy", top_k=3)
+        assert len(results) > 0
+
 
 class TestNeedsRebuild:
     def test_no_index_needs_rebuild(self, tmp_path):

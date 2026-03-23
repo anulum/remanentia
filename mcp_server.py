@@ -29,12 +29,13 @@ Configure in .mcp.json::
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-BASE = Path(__file__).parent
+BASE = Path(os.environ.get("REMANENTIA_BASE", Path(__file__).parent))
 GRAPH_DIR = BASE / "memory" / "graph"
 
 

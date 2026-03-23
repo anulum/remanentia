@@ -11,7 +11,11 @@ snn_state/
 *.npz
 *.lock
 .env
+.env.*
 credentials*
+*.key
+*.pem
+.coverage
 *.log
 consolidation/pending.json
 consolidation/conflicts.json

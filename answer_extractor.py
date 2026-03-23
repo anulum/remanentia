@@ -20,6 +20,7 @@ Handles:
 from __future__ import annotations
 
 import re
+from difflib import SequenceMatcher
 
 
 def extract_answer(query: str, paragraph: str) -> str | None:
@@ -162,7 +163,6 @@ def _extract_name_answer(text: str, query: str) -> str | None:
 
 def _extract_yes_no(text: str, query: str) -> str | None:
     t = text.lower()
-    # Look for negation near query terms
     q_tokens = set(re.findall(r"\w{3,}", query))
     for token in q_tokens:
         pos = t.find(token)
@@ -171,3 +171,87 @@ def _extract_yes_no(text: str, query: str) -> str | None:
             if any(neg in window for neg in ["not ", "no ", "never ", "doesn't ", "didn't ", "isn't ", "wasn't "]):
                 return "No"
     return "Yes"
+
+
+# ── Fuzzy matching ───────────────────────────────────────────────
+
+def fuzzy_match(candidate: str, gold: str, threshold: float = 0.7) -> bool:
+    """Check if candidate fuzzy-matches gold answer."""
+    if not candidate or not gold:
+        return False
+    c, g = candidate.lower().strip(), gold.lower().strip()
+    if c == g or c in g or g in c:
+        return True
+    ratio = SequenceMatcher(None, c, g).ratio()
+    return ratio >= threshold
+
+
+# ── Number normalization ─────────────────────────────────────────
+
+_WORD_TO_NUM = {
+    "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+    "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15,
+    "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19, "twenty": 20,
+    "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60,
+    "seventy": 70, "eighty": 80, "ninety": 90, "hundred": 100, "thousand": 1000,
+}
+
+
+def normalize_number(text: str) -> str | None:
+    """Normalize number words and formats to digits.
+
+    "forty-two" → "42", "88%" → "88", "1,986" → "1986"
+    """
+    t = text.strip().lower()
+
+    # Already numeric
+    m = re.match(r"^([\d,]+\.?\d*)%?$", t)
+    if m:
+        return m.group(1).replace(",", "")
+
+    # Word numbers: "forty-two", "twenty one"
+    parts = re.split(r"[-\s]+", t)
+    total = 0
+    current = 0
+    found_any = False
+    for part in parts:
+        if part in _WORD_TO_NUM:
+            val = _WORD_TO_NUM[part]
+            if val >= 100:
+                current = max(current, 1) * val
+            else:
+                current += val
+            found_any = True
+        elif part == "and":
+            continue
+        else:
+            break
+
+    if found_any:
+        total += current
+        return str(total)
+
+    return None
+
+
+# ── Sentence extraction ──────────────────────────────────────────
+
+def extract_best_sentence(query: str, paragraph: str) -> str | None:
+    """Return the sentence most relevant to the query."""
+    sentences = re.split(r"(?<=[.!?])\s+", paragraph)
+    if not sentences:
+        return None
+
+    q_tokens = set(re.findall(r"\w{3,}", query.lower()))
+    best_score = 0
+    best_sent = None
+
+    for sent in sentences:
+        s_tokens = set(re.findall(r"\w{3,}", sent.lower()))
+        overlap = len(q_tokens & s_tokens)
+        if overlap > best_score:
+            best_score = overlap
+            best_sent = sent
+
+    return best_sent
