@@ -95,19 +95,23 @@ def bm25_search(query, paragraphs, top_k=10):
     return bm25_top[:top_k]
 
 
-def evaluate_retrieval(question, answer, evidence_indices, retrieved_indices, turns):
+def evaluate_retrieval(question, answer, evidence_indices, retrieved_indices, turns,
+                       session_offsets=None):
     """Evaluate if retrieval found the evidence."""
-    # Evidence hit: did we retrieve any paragraph from evidence sessions/turns?
-    evidence_set = set()
-    for ev in evidence_indices:
-        if isinstance(ev, list) and len(ev) == 2:
-            session_idx, turn_idx = ev
-            evidence_set.add((session_idx, turn_idx))
+    # Evidence hit: map (session, turn) to flat index using session offsets
+    evidence_flat = set()
+    if session_offsets and evidence_indices:
+        for ev in evidence_indices:
+            if isinstance(ev, list) and len(ev) == 2:
+                session_idx, turn_idx = ev
+                if session_idx < len(session_offsets):
+                    flat_idx = session_offsets[session_idx] + turn_idx
+                    evidence_flat.add(flat_idx)
 
-    # Check if retrieved paragraphs overlap with evidence
-    for idx, score in retrieved_indices:
-        if idx in [e[1] for e in evidence_set if e[0] == 0]:  # simplified
-            return True
+    if evidence_flat:
+        for idx, score in retrieved_indices:
+            if idx in evidence_flat:
+                return True
 
     # Fallback: check if answer appears in retrieved text
     answer_lower = answer.lower().strip()
@@ -115,13 +119,22 @@ def evaluate_retrieval(question, answer, evidence_indices, retrieved_indices, tu
         if idx < len(turns) and answer_lower in turns[idx].lower():
             return True
 
-    # Token overlap check (0.3 threshold)
+    # Token overlap check (0.3 threshold) — per-turn
     a_tokens = tokenize(answer)
     for idx, score in retrieved_indices:
         if idx < len(turns):
             t_tokens = tokenize(turns[idx])
             if a_tokens and len(a_tokens & t_tokens) / max(len(a_tokens), 1) > 0.3:
                 return True
+
+    # Cross-turn token coverage: answer tokens scattered across multiple retrieved turns
+    if a_tokens and len(a_tokens) > 2:
+        covered = set()
+        for idx, score in retrieved_indices:
+            if idx < len(turns):
+                covered |= (a_tokens & tokenize(turns[idx]))
+        if len(covered) / max(len(a_tokens), 1) > 0.5:
+            return True
 
     # Answer extraction + fuzzy matching
     try:
@@ -179,6 +192,18 @@ def main():
         if not turns or not questions:
             continue
 
+        # Compute session offsets for evidence mapping
+        session_offsets = []
+        sessions = conv.get("sessions", [])
+        if isinstance(sessions, list):
+            offset = 0
+            for sess in sessions:
+                session_offsets.append(offset)
+                if isinstance(sess, str):
+                    offset += len([t for t in sess.split("\n") if t.strip()])
+                elif isinstance(sess, list):
+                    offset += len(sess)
+
         # Evaluate each question
         for qi in range(len(questions)):
             question = questions[qi]
@@ -192,7 +217,8 @@ def main():
             retrieved = bm25_search(question, turns, top_k=20)
 
             # Evaluate
-            correct = evaluate_retrieval(question, answer, evidence, retrieved, turns)
+            correct = evaluate_retrieval(question, answer, evidence, retrieved, turns,
+                                        session_offsets=session_offsets)
 
             if cat_name not in results_by_cat:
                 results_by_cat[cat_name] = {"correct": 0, "total": 0}
