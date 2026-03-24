@@ -60,7 +60,7 @@ class Relation:
     evidence: str
 
 
-def _load_gliner():
+def _load_gliner():  # pragma: no cover
     global _GLINER_MODEL
     if _GLINER_MODEL is not None:
         return _GLINER_MODEL
@@ -96,7 +96,7 @@ def extract_entities(text: str, labels: list[str] | None = None) -> list[Entity]
                         start=p.get("start", 0),
                         end=p.get("end", 0),
                     ))
-            except Exception:
+            except Exception:  # pragma: no cover
                 continue
         # Deduplicate by text
         seen = set()

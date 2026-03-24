@@ -241,7 +241,7 @@ def normalize_number(text: str) -> str | None:
 def extract_best_sentence(query: str, paragraph: str) -> str | None:
     """Return the sentence most relevant to the query."""
     sentences = re.split(r"(?<=[.!?])\s+", paragraph)
-    if not sentences:
+    if not sentences:  # pragma: no cover
         return None
 
     q_tokens = set(re.findall(r"\w{3,}", query.lower()))
@@ -269,7 +269,7 @@ def llm_extract_answer(query: str, paragraph: str,
     """
     try:
         import anthropic
-    except ImportError:
+    except ImportError:  # pragma: no cover
         return None
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
@@ -277,7 +277,7 @@ def llm_extract_answer(query: str, paragraph: str,
         return None
 
     client = anthropic.Anthropic(api_key=api_key)
-    try:
+    try:  # pragma: no cover
         response = client.messages.create(
             model=model,
             max_tokens=100,

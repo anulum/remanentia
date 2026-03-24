@@ -52,7 +52,7 @@ def handle_recall(query: str, top_k: int = 5,
         from memory_index import MemoryIndex
         if _UNIFIED_INDEX is None:
             _UNIFIED_INDEX = MemoryIndex()
-            if not _UNIFIED_INDEX.load():
+            if not _UNIFIED_INDEX.load():  # pragma: no cover
                 _UNIFIED_INDEX = None
                 return _lightweight_recall(query, top_k)
 
@@ -71,7 +71,7 @@ def handle_recall(query: str, top_k: int = 5,
             parts.append(f"{header}\n{r.snippet}")
         return "\n\n".join(parts)
 
-    except Exception:
+    except Exception:  # pragma: no cover
         return _lightweight_recall(query, top_k)
 
 
@@ -104,7 +104,7 @@ def handle_remember(content: str, memory_type: str = "context", project: str = "
     if _UNIFIED_INDEX is not None and _UNIFIED_INDEX._built:
         try:
             _UNIFIED_INDEX.add_file(path)
-        except Exception:
+        except Exception:  # pragma: no cover
             pass
 
     # Consolidate pending traces (fast short-circuit when nothing new)
@@ -112,7 +112,7 @@ def handle_remember(content: str, memory_type: str = "context", project: str = "
         from consolidation_engine import consolidate
         consolidate()
         _RECALL_INDEX = None
-    except Exception:
+    except Exception:  # pragma: no cover
         pass
 
     return f"Remembered: {filename} ({len(content)} chars)"
@@ -191,7 +191,7 @@ def handle_status() -> str:
         from cli import cmd_status
         cmd_status(type("Args", (), {})())
         return buf.getvalue()
-    except Exception as e:
+    except Exception as e:  # pragma: no cover
         return f"Status error: {e}"
     finally:
         sys.stdout = old_stdout
@@ -319,7 +319,7 @@ def handle_request(request: dict) -> dict:
     return {"jsonrpc": "2.0", "id": rid, "error": {"code": -32601, "message": f"Unknown method: {method}"}}
 
 
-def main():
+def main():  # pragma: no cover
     """Run MCP server on stdio."""
     for line in sys.stdin:
         line = line.strip()

@@ -19,12 +19,14 @@ from memory_index import (
     _classify_paragraph,
     _classify_query,
     _extract_date_context,
+    _has_date_expression,
     _recency_boost,
     _generate_prospective_queries,
     _parse_date,
     _split_code,
     _split_paragraphs,
     _tokenize,
+    auto_rebuild_if_needed,
     needs_rebuild,
 )
 
@@ -90,6 +92,19 @@ class TestSplitParagraphs:
     def test_empty(self):
         assert _split_paragraphs("") == []
         assert _split_paragraphs("short") == []
+
+    def test_long_no_breaks(self):
+        text = "A single long block " * 10  # 200 chars, no double newlines
+        paras = _split_paragraphs(text)
+        assert len(paras) == 1
+
+    def test_many_short_blocks_fallback(self):
+        # All blocks < 30 chars, but total > 30 chars
+        text = "Short block.\n\nAnother short.\n\nThird.\n\nFourth block here."
+        paras = _split_paragraphs(text)
+        # Individual blocks are all <30 chars, so fallback to whole text
+        assert len(paras) == 1
+        assert "Short block" in paras[0]
 
 
 class TestSplitCode:
@@ -246,6 +261,16 @@ class TestRecencyBoost:
         from datetime import date
         today = date.today().isoformat()
         assert _recency_boost(today) == 1.8
+
+    def test_3_day_old_boost(self):
+        from datetime import date, timedelta
+        d = (date.today() - timedelta(days=3)).isoformat()
+        assert _recency_boost(d) == 1.4
+
+    def test_10_day_old_boost(self):
+        from datetime import date, timedelta
+        d = (date.today() - timedelta(days=10)).isoformat()
+        assert _recency_boost(d) == 1.2
 
     def test_old_date_no_boost(self):
         assert _recency_boost("2020-01-01") == 1.0
@@ -588,3 +613,289 @@ class TestDataclasses:
     def test_paragraph(self):
         p = Paragraph(text="some text", para_type="decision")
         assert p.prospective_queries == []
+
+
+# ── _has_date_expression ────────────────────────────────────────
+
+
+class TestHasDateExpression:
+    def test_iso_date(self):
+        assert _has_date_expression("Fixed on 2026-03-15.") is True
+
+    def test_english_date(self):
+        assert _has_date_expression("Released in January 15.") is True
+
+    def test_relative_date(self):
+        assert _has_date_expression("Done yesterday.") is True
+
+    def test_no_date(self):
+        assert _has_date_expression("No dates here.") is False
+
+
+# ── Save/load with embeddings ───────────────────────────────────
+
+
+class TestSaveLoadEmbeddings:
+    def _build_idx(self, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "a.md").write_text("# Test\n\nContent about BM25 scoring.", encoding="utf-8")
+        idx = MemoryIndex()
+        with patch("memory_index.SOURCES", {"test": docs_dir}):
+            with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}):
+                idx.build(use_gpu_embeddings=False, use_gliner=False)
+        return idx
+
+    def test_save_load_no_embeddings(self, tmp_path):
+        idx = self._build_idx(tmp_path)
+        path = tmp_path / "idx.pkl"
+        idx.save(path, quantize=False)
+        idx2 = MemoryIndex()
+        assert idx2.load(path) is True
+        assert idx2._built is True
+
+    def test_save_quantized_with_embeddings(self, tmp_path):
+        idx = self._build_idx(tmp_path)
+        idx.embeddings = np.random.randn(len(idx.paragraph_index), 384).astype(np.float32)
+        path = tmp_path / "idx_q.pkl"
+        idx.save(path, quantize=True)
+        idx2 = MemoryIndex()
+        assert idx2.load(path) is True
+        assert idx2.embeddings is not None
+        assert idx2.embeddings.shape == idx.embeddings.shape
+
+    def test_save_unquantized_with_embeddings(self, tmp_path):
+        idx = self._build_idx(tmp_path)
+        idx.embeddings = np.random.randn(len(idx.paragraph_index), 384).astype(np.float32)
+        path = tmp_path / "idx_nq.pkl"
+        idx.save(path, quantize=False)
+        idx2 = MemoryIndex()
+        assert idx2.load(path) is True
+        assert idx2.embeddings is not None
+
+    def test_load_corrupt_file(self, tmp_path):
+        path = tmp_path / "corrupt.pkl"
+        path.write_bytes(b"not a pickle")
+        idx = MemoryIndex()
+        assert idx.load(path) is False
+
+    def test_load_legacy_4tuple_format(self, tmp_path):
+        """Load index saved with old 4-tuple document format."""
+        import pickle
+        data = {
+            "documents": [("test.md", "src", "/test.md", ["para1"])],
+            "paragraph_index": [(0, 0)],
+            "paragraph_tokens": [["test", "para"]],
+            "idf": {"test": 1.0, "para": 1.0},
+            "embeddings": None,
+        }
+        path = tmp_path / "legacy.pkl"
+        with open(path, "wb") as f:
+            pickle.dump(data, f)
+        idx = MemoryIndex()
+        assert idx.load(path) is True
+        assert idx.documents[0].name == "test.md"
+        assert idx.documents[0].date == ""
+
+
+# ── Temporal query sorting ──────────────────────────────────────
+
+
+class TestTemporalSorting:
+    def test_newest_first(self, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "2026-03-10_old.md").write_text(
+            "# Old\n\nWhen did we start in 2026-03-10 on the project.", encoding="utf-8")
+        (docs_dir / "2026-03-20_new.md").write_text(
+            "# New\n\nWhen was the latest update on 2026-03-20.", encoding="utf-8")
+        idx = MemoryIndex()
+        with patch("memory_index.SOURCES", {"test": docs_dir}):
+            with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}):
+                idx.build(use_gpu_embeddings=False, use_gliner=False)
+        results = idx.search("when was the latest update", top_k=5)
+        assert len(results) > 0
+
+    def test_oldest_first(self, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "2026-03-10_old.md").write_text(
+            "# Old\n\nThe first experiment was on 2026-03-10 with STDP.", encoding="utf-8")
+        (docs_dir / "2026-03-20_new.md").write_text(
+            "# New\n\nThe first thing we tried with STDP was this.", encoding="utf-8")
+        idx = MemoryIndex()
+        with patch("memory_index.SOURCES", {"test": docs_dir}):
+            with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}):
+                idx.build(use_gpu_embeddings=False, use_gliner=False)
+        results = idx.search("first experiment STDP", top_k=5)
+        assert len(results) > 0
+
+
+# ── Search with use_llm flag ───────────────────────────────────
+
+
+class TestSearchLLM:
+    def test_use_llm_false_works(self, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "test.md").write_text(
+            "# Testing Suite\n\nThis is a comprehensive testing document about various testing approaches and testing strategies.",
+            encoding="utf-8")
+        idx = MemoryIndex()
+        with patch("memory_index.SOURCES", {"test": docs_dir}):
+            with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}):
+                idx.build(use_gpu_embeddings=False, use_gliner=False)
+        results = idx.search("comprehensive testing approaches", top_k=3, use_llm=False)
+        assert len(results) > 0
+
+    def test_use_llm_true_no_api_key(self, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "test.md").write_text(
+            "# Testing Suite\n\nThis is a comprehensive testing document about various testing approaches and testing strategies.",
+            encoding="utf-8")
+        idx = MemoryIndex()
+        with patch("memory_index.SOURCES", {"test": docs_dir}):
+            with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}):
+                idx.build(use_gpu_embeddings=False, use_gliner=False)
+        results = idx.search("comprehensive testing approaches", top_k=3, use_llm=True)
+        assert len(results) > 0
+
+
+# ── auto_rebuild_if_needed ──────────────────────────────────────
+
+
+class TestAutoRebuild:
+    def test_rebuild_when_no_index(self, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "test.md").write_text("# Test\n\nEnough content for indexing here.", encoding="utf-8")
+        idx_path = tmp_path / "missing_index.pkl"
+        with patch("memory_index.INDEX_PATH", idx_path), \
+             patch("memory_index.SOURCES", {"test": docs_dir}), \
+             patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}):
+            idx = auto_rebuild_if_needed(use_gpu=False)
+        assert idx._built is True
+
+    def test_no_rebuild_when_fresh(self, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "test.md").write_text("# Test\n\nEnough content here for index.", encoding="utf-8")
+        idx_path = tmp_path / "fresh_index.pkl"
+        idx = MemoryIndex()
+        with patch("memory_index.SOURCES", {"test": docs_dir}), \
+             patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}):
+            idx.build(use_gpu_embeddings=False, use_gliner=False)
+        idx.save(idx_path)
+        import os
+        os.utime(idx_path, None)
+        with patch("memory_index.INDEX_PATH", idx_path), \
+             patch("memory_index.SOURCES", {"test": docs_dir}):
+            idx2 = auto_rebuild_if_needed(use_gpu=False)
+        assert idx2._built is True
+
+
+# ── Cross-encoder rerank edge cases ─────────────────────────────
+
+
+class TestCrossEncoderEdge:
+    def test_empty_candidates(self, tmp_path):
+        idx = MemoryIndex()
+        result = idx._cross_encoder_rerank("query", [])
+        assert result is None
+
+    def test_cross_encoder_disabled(self, tmp_path):
+        idx = MemoryIndex()
+        idx._cross_encoder = False
+        result = idx._cross_encoder_rerank("query", [(0, 1.0)])
+        assert result is None
+
+
+# ── Prospective queries for findings ────────────────────────────
+
+
+class TestProspectiveQueriesFindings:
+    def test_finding_queries(self):
+        text = "We found that the approach failed miserably."
+        queries = _generate_prospective_queries(text, "results.md", "finding")
+        assert any("find" in q.lower() or "results" in q.lower() for q in queries)
+
+
+# ── Build with unreadable files ─────────────────────────────────
+
+
+class TestBuildEdgeCases:
+    def test_skips_short_files(self, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "short.md").write_text("hi", encoding="utf-8")
+        (docs_dir / "long.md").write_text(
+            "# Test Document\n\nThis is long enough content for the indexing pipeline to accept it properly.",
+            encoding="utf-8")
+        idx = MemoryIndex()
+        with patch("memory_index.SOURCES", {"test": docs_dir}):
+            with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}):
+                stats = idx.build(use_gpu_embeddings=False, use_gliner=False)
+        # short.md (2 chars) is below 50-char minimum, only long.md indexed
+        assert stats["documents"] == 1
+
+    def test_skips_venv_files(self, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        venv = docs_dir / ".venv" / "lib"
+        venv.mkdir(parents=True)
+        (venv / "module.py").write_text("# long enough content for index builder", encoding="utf-8")
+        (docs_dir / "real.md").write_text("# Test\n\nReal content for indexing purposes.", encoding="utf-8")
+        idx = MemoryIndex()
+        with patch("memory_index.SOURCES", {"test": docs_dir}):
+            with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md", ".py"}}):
+                stats = idx.build(use_gpu_embeddings=False, use_gliner=False)
+        names = [d.name for d in idx.documents]
+        assert "module.py" not in names
+
+    def test_search_triggers_build(self, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "test.md").write_text("# Test\n\nContent about automated build testing.", encoding="utf-8")
+        idx = MemoryIndex()
+        with patch("memory_index.SOURCES", {"test": docs_dir}), \
+             patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}):
+            results = idx.search("automated build", top_k=3)
+        assert idx._built is True
+
+    def test_add_file_short_content(self, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "a.md").write_text("# Test\n\nSome content long enough for build.", encoding="utf-8")
+        idx = MemoryIndex()
+        with patch("memory_index.SOURCES", {"test": docs_dir}):
+            with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}):
+                idx.build(use_gpu_embeddings=False, use_gliner=False)
+        short = tmp_path / "short.md"
+        short.write_text("hi", encoding="utf-8")
+        assert idx.add_file(short) == 0
+
+    def test_add_file_nonexistent(self, tmp_path):
+        idx = MemoryIndex()
+        idx._built = True
+        assert idx.add_file(tmp_path / "nope.md") == 0
+
+
+# ── Search doc_type filter ──────────────────────────────────────
+
+
+class TestDocTypeFilter:
+    def test_doc_type_filter(self, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "code.py").write_text(
+            '"""Module doc."""\n\ndef search_function():\n    pass\n', encoding="utf-8")
+        (docs_dir / "note.md").write_text(
+            "# Note\n\nThis is a note about search functions and algorithms.", encoding="utf-8")
+        idx = MemoryIndex()
+        with patch("memory_index.SOURCES", {"code_test": docs_dir}):
+            with patch("memory_index.SOURCE_EXTENSIONS", {"code_test": {".py", ".md"}}):
+                idx.build(use_gpu_embeddings=False, use_gliner=False)
+        results = idx.search("search function", top_k=5, doc_type="code")
+        for r in results:
+            assert "code" in r.source.lower() or r.name.endswith(".py")

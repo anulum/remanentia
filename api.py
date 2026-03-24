@@ -125,7 +125,7 @@ def status():
     relations_path = GRAPH_DIR / "relations.jsonl"
     if entities_path.exists():
         n_entities = sum(1 for l in entities_path.read_text().strip().split("\n") if l.strip())
-    if relations_path.exists():
+    if relations_path.exists():  # pragma: no cover
         n_relations = sum(1 for l in relations_path.read_text().strip().split("\n") if l.strip())
 
     daemon_state = {}

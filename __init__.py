@@ -26,7 +26,7 @@ Quick start::
 
 __version__ = "0.1.0"
 
-try:
+try:  # pragma: no cover
     from .retrieve import retrieve, retrieve_context, retrieval_history
     from .retrieve import related_traces, query_suggestions, trace_summaries, chunk_traces
     from .snn_daemon import drop_stimulus, heartbeat

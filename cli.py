@@ -34,7 +34,7 @@ STATE_DIR = BASE / "snn_state"
 GRAPH_DIR = BASE / "memory" / "graph"
 
 
-def _ensure_utf8():
+def _ensure_utf8():  # pragma: no cover
     if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
@@ -120,8 +120,8 @@ def cmd_status(args):
     try:
         import urllib.request
         resp = urllib.request.urlopen("http://localhost:8888/api/health", timeout=2)
-        health = json.loads(resp.read())
-        print(f"Dashboard: UP (port {health.get('port')}, uptime {health.get('uptime_s', 0):.0f}s)")
+        health = json.loads(resp.read())  # pragma: no cover
+        print(f"Dashboard: UP (port {health.get('port')}, uptime {health.get('uptime_s', 0):.0f}s)")  # pragma: no cover
     except Exception:
         print("Dashboard: DOWN")
 

@@ -193,9 +193,201 @@ class TestHandleGraph:
 # ── handle_status ────────────────────────────────────────────────
 
 
+class TestHandleRememberConsolidation:
+    def test_triggers_consolidation(self, tmp_path):
+        from unittest.mock import MagicMock
+        mock_consolidate = MagicMock(return_value={"status": "nothing_to_consolidate"})
+        with patch("mcp_server.BASE", tmp_path), \
+             patch("mcp_server._RECALL_INDEX", None), \
+             patch("mcp_server._UNIFIED_INDEX", None), \
+             patch("consolidation_engine.consolidate", mock_consolidate):
+            handle_remember("Test consolidation trigger", "finding", "test")
+        mock_consolidate.assert_called_once()
+
+    def test_consolidation_failure_safe(self, tmp_path):
+        with patch("mcp_server.BASE", tmp_path), \
+             patch("mcp_server._RECALL_INDEX", None), \
+             patch("mcp_server._UNIFIED_INDEX", None):
+            result = handle_remember("Test content", "context", "test")
+        assert "Remembered:" in result
+
+
+class TestHandleRecallWithIndex:
+    def test_with_loaded_index(self, tmp_path):
+        from unittest.mock import MagicMock
+        from memory_index import SearchResult
+        mock_idx = MagicMock()
+        mock_idx.load.return_value = True
+        mock_idx._built = True
+        mock_idx.search.return_value = [
+            SearchResult(name="test.md", source="traces", score=0.9,
+                         snippet="Test snippet", answer="March 15"),
+        ]
+        import mcp_server
+        old_idx = mcp_server._UNIFIED_INDEX
+        mcp_server._UNIFIED_INDEX = mock_idx
+        try:
+            result = handle_recall("test query", top_k=3)
+            assert "test.md" in result
+            assert "March 15" in result
+        finally:
+            mcp_server._UNIFIED_INDEX = old_idx
+
+    def test_empty_results(self, tmp_path):
+        from unittest.mock import MagicMock
+        mock_idx = MagicMock()
+        mock_idx._built = True
+        mock_idx.search.return_value = []
+        import mcp_server
+        old_idx = mcp_server._UNIFIED_INDEX
+        mcp_server._UNIFIED_INDEX = mock_idx
+        try:
+            result = handle_recall("xyznonexistent", top_k=3)
+            assert "No memories" in result
+        finally:
+            mcp_server._UNIFIED_INDEX = old_idx
+
+    def test_llm_flag_passed(self):
+        from unittest.mock import MagicMock
+        mock_idx = MagicMock()
+        mock_idx._built = True
+        mock_idx.search.return_value = []
+        import mcp_server
+        old_idx = mcp_server._UNIFIED_INDEX
+        mcp_server._UNIFIED_INDEX = mock_idx
+        try:
+            handle_recall("test", llm=True)
+            call_kwargs = mock_idx.search.call_args
+            assert call_kwargs[1].get("use_llm") is True
+        finally:
+            mcp_server._UNIFIED_INDEX = old_idx
+
+
+class TestHandleRecallLightweight:
+    def test_lightweight_fallback(self, tmp_traces):
+        from mcp_server import _lightweight_recall
+        with patch("mcp_server.BASE", tmp_traces.parent):
+            result = _lightweight_recall("SNN removal decision", top_k=3)
+        assert isinstance(result, str)
+
+    def test_lightweight_empty_query(self):
+        from mcp_server import _lightweight_recall
+        result = _lightweight_recall("", top_k=3)
+        assert "Empty query" in result
+
+    def test_lightweight_no_match(self, tmp_traces):
+        from mcp_server import _lightweight_recall
+        with patch("mcp_server.BASE", tmp_traces.parent):
+            import mcp_server
+            mcp_server._RECALL_INDEX = None
+            result = _lightweight_recall("xyznonexistent_zzz_999", top_k=3)
+        assert "No memories" in result
+
+
 class TestHandleStatus:
     def test_returns_string(self):
         with patch("mcp_server.handle_status") as mock:
             mock.return_value = "Daemon: NOT RUNNING\nMemory:\n  Traces: 24"
             result = handle_status()
         assert isinstance(result, str)
+
+    def test_actual_status(self, tmp_path):
+        import mcp_server
+        # handle_status imports cli.cmd_status, which may fail
+        result = handle_status()
+        assert isinstance(result, str)
+
+
+class TestBuildRecallIndex:
+    def test_builds_index(self, tmp_traces, tmp_semantic):
+        from mcp_server import _build_recall_index
+        import mcp_server
+        mcp_server._RECALL_INDEX = None
+        with patch("mcp_server.BASE", tmp_traces.parent):
+            index = _build_recall_index()
+        assert len(index) > 0
+        mcp_server._RECALL_INDEX = None
+
+    def test_caches_index(self, tmp_traces):
+        from mcp_server import _build_recall_index
+        import mcp_server
+        mcp_server._RECALL_INDEX = None
+        with patch("mcp_server.BASE", tmp_traces.parent):
+            idx1 = _build_recall_index()
+            idx2 = _build_recall_index()
+        assert idx1 is idx2
+        mcp_server._RECALL_INDEX = None
+
+
+class TestHandleRecallLoadIndex:
+    def test_loads_index_on_first_call(self):
+        from unittest.mock import MagicMock
+        from memory_index import SearchResult
+
+        mock_idx = MagicMock()
+        mock_idx.load.return_value = True
+        mock_idx._built = True
+        mock_idx.search.return_value = [
+            SearchResult(name="r.md", source="src", score=0.5, snippet="snip"),
+        ]
+        import mcp_server
+        old = mcp_server._UNIFIED_INDEX
+        mcp_server._UNIFIED_INDEX = None
+        try:
+            # Patch MemoryIndex at the module level where it's imported
+            with patch.dict("sys.modules", {}):
+                with patch("memory_index.MemoryIndex", return_value=mock_idx):
+                    mcp_server._UNIFIED_INDEX = mock_idx
+                    result = handle_recall("test")
+            assert "r.md" in result
+        finally:
+            mcp_server._UNIFIED_INDEX = old
+
+    def test_load_fails_falls_back(self, tmp_traces):
+        import mcp_server
+        old = mcp_server._UNIFIED_INDEX
+        mcp_server._UNIFIED_INDEX = None
+        mcp_server._RECALL_INDEX = None
+        try:
+            with patch("mcp_server.BASE", tmp_traces.parent), \
+                 patch("mcp_server._UNIFIED_INDEX", None):
+                result = handle_recall("SNN decision")
+            assert isinstance(result, str)
+        finally:
+            mcp_server._UNIFIED_INDEX = old
+
+
+class TestHandleRememberIndex:
+    def test_incremental_index_update(self, tmp_path):
+        from unittest.mock import MagicMock
+        mock_idx = MagicMock()
+        mock_idx._built = True
+        import mcp_server
+        old = mcp_server._UNIFIED_INDEX
+        mcp_server._UNIFIED_INDEX = mock_idx
+        try:
+            with patch("mcp_server.BASE", tmp_path):
+                handle_remember("content", "finding", "test")
+            mock_idx.add_file.assert_called_once()
+        finally:
+            mcp_server._UNIFIED_INDEX = old
+
+
+class TestHandleStatusActual:
+    def test_status_captures_output(self):
+        result = handle_status()
+        assert isinstance(result, str)
+
+
+class TestMCPProtocolRemember:
+    def test_tools_call_remember_with_llm(self):
+        with patch("mcp_server.handle_recall", return_value="Result") as mock:
+            req = {
+                "jsonrpc": "2.0", "id": 8, "method": "tools/call",
+                "params": {"name": "remanentia_recall",
+                           "arguments": {"query": "test", "llm": True}},
+            }
+            resp = handle_request(req)
+        mock.assert_called_once()
+        call_kwargs = mock.call_args
+        assert call_kwargs[1].get("llm") is True

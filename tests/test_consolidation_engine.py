@@ -390,3 +390,44 @@ class TestConsolidate:
             result = consolidate(force=False)
 
         assert result["status"] == "nothing_to_consolidate"
+
+
+# ── Edge cases ──────────────────────────────────────────────────
+
+
+class TestConsolidationEdge:
+    def test_zero_norm_novelty(self):
+        import consolidation_engine
+        consolidation_engine._running_mean = None
+        consolidation_engine._running_count = 0
+        pattern = np.array([1.0, 0.0, 1.0])
+        compute_novelty(pattern)
+        zero = np.array([0.0, 0.0, 0.0])
+        novelty = compute_novelty(zero)
+        assert novelty == 1.0
+
+    def test_get_pending_traces_empty(self, tmp_path):
+        traces_dir = tmp_path / "reasoning_traces"
+        traces_dir.mkdir()
+        consol_dir = tmp_path / "consolidation"
+        with patch("consolidation_engine.TRACES_DIR", traces_dir), \
+             patch("consolidation_engine.CONSOLIDATION_DIR", consol_dir), \
+             patch("consolidation_engine.PENDING_PATH", consol_dir / "pending.json"):
+            pending = get_pending_traces()
+        assert pending == []
+
+    def test_cluster_missing_date(self):
+        traces = {
+            "a.md": {"project": "test", "date": ""},
+            "b.md": {"project": "test", "date": ""},
+        }
+        clusters = _cluster_traces(traces)
+        assert len(clusters) == 1
+
+    def test_extract_paragraphs_empty(self):
+        assert _extract_paragraphs("") == []
+
+    def test_extract_entities_short_file(self):
+        entities = _extract_entities("The a.py file is short.")
+        file_names = [e for e in entities if e.endswith(".py")]
+        assert not any(len(e) <= 3 for e in file_names)
