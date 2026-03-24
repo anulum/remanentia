@@ -113,8 +113,10 @@ class MemoryIndex:
         self._built = False
         self._embed_model = None
         self._cross_encoder = None
+        self._temporal_graph = None
 
-    def build(self, use_gpu_embeddings: bool = True, use_gliner: bool = True) -> dict:
+    def build(self, use_gpu_embeddings: bool = True, use_gliner: bool = True,
+              use_llm_indexing: bool = False) -> dict:
         """Scan all sources, build BM25 index + GPU embeddings + GLiNER entities."""
         t0 = time.monotonic()
         self.documents = []
@@ -161,9 +163,19 @@ class MemoryIndex:
 
                 # Tag paragraphs + generate prospective queries
                 enriched_paragraphs = []
+                _llm_pq = None
+                if use_llm_indexing:  # pragma: no cover
+                    try:
+                        from answer_extractor import llm_generate_prospective_queries
+                        _llm_pq = llm_generate_prospective_queries
+                    except ImportError:
+                        pass
                 for p in paragraphs:
                     p_type = _classify_paragraph(p, is_code=is_code)
                     pq = _generate_prospective_queries(p, f.name, p_type)
+                    if _llm_pq:  # pragma: no cover
+                        pq_llm = _llm_pq(p, f.name)
+                        pq = pq + pq_llm
                     enriched_paragraphs.append(p)
                     # Add prospective queries as extra searchable text
                     p_with_pq = p + " " + " ".join(pq) if pq else p
@@ -209,6 +221,15 @@ class MemoryIndex:
             except Exception:
                 pass
 
+        # Build temporal graph from all indexed documents
+        try:
+            from temporal_graph import TemporalGraph
+            self._temporal_graph = TemporalGraph()
+            doc_texts = [(d.name, "\n\n".join(d.paragraphs)) for d in self.documents]
+            self._temporal_graph.build_from_documents(doc_texts)
+        except Exception:  # pragma: no cover
+            self._temporal_graph = None
+
         self._built = True
         elapsed = time.monotonic() - t0
 
@@ -217,6 +238,7 @@ class MemoryIndex:
             "paragraphs": len(self.paragraph_index),
             "unique_tokens": len(self.idf),
             "has_embeddings": self.embeddings is not None,
+            "temporal_events": self._temporal_graph.stats["events"] if self._temporal_graph else 0,
             "build_time_s": round(elapsed, 1),
             "sources": {s: sum(1 for d in self.documents if d.source == s)
                         for s in SOURCES if any(d.source == s for d in self.documents)},
@@ -451,6 +473,29 @@ class MemoryIndex:
                     dated.sort(key=lambda x: x[2], reverse=True)
                 candidates = [(p, s) for p, s, _ in dated]
 
+        # Temporal graph augmentation: inject events from temporal graph into results
+        if intent["type"] == "temporal" and self._temporal_graph:
+            try:
+                t_events = self._temporal_graph.query_temporal(query, top_k=3)
+                for ev in t_events:
+                    # Find the document index for this event's source
+                    for di, doc in enumerate(self.documents):
+                        if doc.name == ev.source:
+                            # Check if this doc is already in candidates
+                            already_in = any(
+                                self.paragraph_index[pi][0] == di
+                                for pi, _ in candidates[:top_k]
+                            )
+                            if not already_in:  # pragma: no cover
+                                # Find a paragraph index for this document
+                                for pi, (d_idx, _) in enumerate(self.paragraph_index):
+                                    if d_idx == di:
+                                        candidates.insert(0, (pi, 2.0))
+                                        break
+                            break
+            except Exception:  # pragma: no cover
+                pass
+
         # Answer extraction (lazy import)
         _answer_extractor = None
         if intent["type"] in ("temporal", "metric", "general"):
@@ -493,6 +538,22 @@ class MemoryIndex:
             ))
             if len(results) >= top_k:
                 break
+
+        # Multi-paragraph synthesis: combine top results into a grounded answer
+        if use_llm and results and not results[0].answer:  # pragma: no cover
+            try:
+                from answer_extractor import llm_synthesize_answer
+                paras = [r.snippet for r in results[:3]]
+                synthesized = llm_synthesize_answer(query, paras)
+                if synthesized:
+                    results[0] = SearchResult(
+                        name=results[0].name, source=results[0].source,
+                        score=results[0].score, snippet=results[0].snippet,
+                        paragraph_idx=results[0].paragraph_idx,
+                        answer=synthesized,
+                    )
+            except ImportError:  # pragma: no cover
+                pass
 
         return results
 
@@ -810,8 +871,10 @@ if __name__ == "__main__":
     if "--build" in sys.argv:
         use_gpu = "--no-gpu" not in sys.argv
         use_gliner = "--gliner" in sys.argv
+        use_llm_idx = "--llm-index" in sys.argv
         print("Building index...")
-        stats = idx.build(use_gpu_embeddings=use_gpu, use_gliner=use_gliner)
+        stats = idx.build(use_gpu_embeddings=use_gpu, use_gliner=use_gliner,
+                          use_llm_indexing=use_llm_idx)
         print(json.dumps(stats, indent=2))
         idx.save()
         print(f"Saved to {INDEX_PATH}")

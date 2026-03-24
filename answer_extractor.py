@@ -297,3 +297,91 @@ def llm_extract_answer(query: str, paragraph: str,
         return answer
     except Exception:
         return None
+
+
+_ANTHROPIC_CLIENT = None
+
+
+def _get_client():
+    """Cached Anthropic client."""
+    global _ANTHROPIC_CLIENT
+    if _ANTHROPIC_CLIENT is not None:
+        return _ANTHROPIC_CLIENT
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return None
+    try:
+        import anthropic
+        _ANTHROPIC_CLIENT = anthropic.Anthropic(api_key=api_key)
+        return _ANTHROPIC_CLIENT
+    except ImportError:  # pragma: no cover
+        return None
+
+
+def llm_generate_prospective_queries(paragraph: str, doc_name: str,
+                                     model: str = "claude-haiku-4-5-20251001") -> list[str]:
+    """Generate hypothetical future queries for a paragraph via LLM.
+
+    Kumiho technique: index by "what queries will need this" rather than
+    "what does this say". Measured at 98.5% recall in Kumiho (2026).
+    """
+    client = _get_client()
+    if not client:
+        return []
+    try:  # pragma: no cover
+        response = client.messages.create(
+            model=model,
+            max_tokens=200,
+            messages=[{
+                "role": "user",
+                "content": (
+                    "Generate 5 short search queries someone might use to find this information. "
+                    "Include: factual questions, decision lookups, metric requests, temporal questions. "
+                    "One query per line, no numbering.\n\n"
+                    f"Source: {doc_name}\n"
+                    f"Content: {paragraph[:800]}"
+                ),
+            }],
+        )
+        text = response.content[0].text.strip()
+        queries = [q.strip() for q in text.split("\n") if q.strip() and len(q.strip()) > 5]
+        return queries[:8]
+    except Exception:  # pragma: no cover
+        return []
+
+
+def llm_synthesize_answer(query: str, paragraphs: list[str],
+                          model: str = "claude-haiku-4-5-20251001") -> str | None:
+    """Synthesize an answer from multiple retrieved paragraphs.
+
+    Unlike llm_extract_answer (single paragraph), this reasons across
+    multiple sources to produce a grounded, cited answer.
+    """
+    client = _get_client()
+    if not client:
+        return None
+    context = "\n\n---\n\n".join(  # pragma: no cover
+        f"[Source {i+1}]: {p[:600]}" for i, p in enumerate(paragraphs[:5])
+    )
+    try:  # pragma: no cover
+        response = client.messages.create(
+            model=model,
+            max_tokens=200,
+            messages=[{
+                "role": "user",
+                "content": (
+                    "Answer the question using ONLY the provided sources. "
+                    "Cite sources as [1], [2], etc. "
+                    "If sources don't contain the answer, say 'unknown'. "
+                    "Be concise (1-3 sentences).\n\n"
+                    f"{context}\n\n"
+                    f"Question: {query}"
+                ),
+            }],
+        )
+        answer = response.content[0].text.strip()
+        if answer.lower() in ("unknown", "i don't know", "not mentioned"):
+            return None
+        return answer
+    except Exception:  # pragma: no cover
+        return None

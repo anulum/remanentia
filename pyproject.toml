@@ -73,6 +73,7 @@ py-modules = [
     "cli",
     "api",
     "answer_extractor",
+    "temporal_graph",
 ]
 
 [tool.setuptools.package-data]
