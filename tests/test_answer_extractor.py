@@ -415,3 +415,73 @@ class TestLLMExtractAnswer:
              p.dict("sys.modules", {"anthropic": mock_module}):
             result = llm_extract_answer("question", "paragraph")
         assert result is None or isinstance(result, str)
+
+
+# ── Cached client ──────────────────────────────────────────────
+
+
+class TestGetClient:
+    def test_no_api_key(self):
+        import os
+        from unittest.mock import patch as p
+        from answer_extractor import _get_client
+        import answer_extractor
+        answer_extractor._ANTHROPIC_CLIENT = None
+        with p.dict(os.environ, {}, clear=True):
+            assert _get_client() is None
+        answer_extractor._ANTHROPIC_CLIENT = None
+
+    def test_with_api_key(self):
+        import os
+        from unittest.mock import patch as p
+        from answer_extractor import _get_client
+        import answer_extractor
+        answer_extractor._ANTHROPIC_CLIENT = None
+        with p.dict(os.environ, {"ANTHROPIC_API_KEY": "test"}):
+            client = _get_client()
+        assert client is not None
+        answer_extractor._ANTHROPIC_CLIENT = None
+
+    def test_caches(self):
+        import os
+        from unittest.mock import patch as p
+        from answer_extractor import _get_client
+        import answer_extractor
+        answer_extractor._ANTHROPIC_CLIENT = None
+        with p.dict(os.environ, {"ANTHROPIC_API_KEY": "test"}):
+            c1 = _get_client()
+            c2 = _get_client()
+        assert c1 is c2
+        answer_extractor._ANTHROPIC_CLIENT = None
+
+
+# ── LLM prospective queries ───────────────────────────────────
+
+
+class TestLLMProspectiveQueries:
+    def test_no_client_returns_empty(self):
+        import os
+        from unittest.mock import patch as p
+        from answer_extractor import llm_generate_prospective_queries
+        import answer_extractor
+        answer_extractor._ANTHROPIC_CLIENT = None
+        with p.dict(os.environ, {}, clear=True):
+            result = llm_generate_prospective_queries("paragraph text", "doc.md")
+        assert result == []
+        answer_extractor._ANTHROPIC_CLIENT = None
+
+
+# ── LLM synthesis ──────────────────────────────────────────────
+
+
+class TestLLMSynthesizeAnswer:
+    def test_no_client_returns_none(self):
+        import os
+        from unittest.mock import patch as p
+        from answer_extractor import llm_synthesize_answer
+        import answer_extractor
+        answer_extractor._ANTHROPIC_CLIENT = None
+        with p.dict(os.environ, {}, clear=True):
+            result = llm_synthesize_answer("query", ["para1", "para2"])
+        assert result is None
+        answer_extractor._ANTHROPIC_CLIENT = None
