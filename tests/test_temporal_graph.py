@@ -12,6 +12,7 @@ from temporal_graph import (
     TemporalEvent,
     TemporalGraph,
     parse_dates,
+    temporal_code_execute,
 )
 
 
@@ -220,3 +221,66 @@ class TestTemporalGraph:
         results = tg.query_temporal("data between 2026-03-10 and 2026-03-20", top_k=5)
         assert len(results) == 1
         assert results[0].date == "2026-03-15"
+
+
+# ── Feature 3: Temporal code execution ──────────────────────────
+
+
+class TestTemporalCodeExecute:
+    def _make_events(self):
+        return [
+            TemporalEvent(date="2026-03-10", text="Started project", source="a.md"),
+            TemporalEvent(date="2026-03-15", text="Released v1.0", source="b.md"),
+            TemporalEvent(date="2026-03-20", text="Bug report filed", source="c.md"),
+        ]
+
+    def test_how_long_between(self):
+        result = temporal_code_execute("how many days between events", self._make_events())
+        assert result is not None
+        assert "10 days" in result
+
+    def test_most_recent(self):
+        result = temporal_code_execute("what was the most recent event", self._make_events())
+        assert result is not None
+        assert "2026-03-20" in result
+        assert "Bug report" in result
+
+    def test_earliest(self):
+        result = temporal_code_execute("what was the first event", self._make_events())
+        assert result is not None
+        assert "2026-03-10" in result
+        assert "Started" in result
+
+    def test_before_after_comparison(self):
+        events = [
+            TemporalEvent(date="2026-03-10", text="Event A occurred", source="a.md"),
+            TemporalEvent(date="2026-03-20", text="Event B occurred", source="b.md"),
+        ]
+        result = temporal_code_execute("did A happen before or after B", events)
+        assert result is not None
+        assert "before" in result.lower() or "after" in result.lower()
+
+    def test_no_events(self):
+        assert temporal_code_execute("anything", []) is None
+
+    def test_no_dates(self):
+        events = [TemporalEvent(date="", text="No date", source="a.md")]
+        assert temporal_code_execute("when", events) is None
+
+    def test_invalid_date_format(self):
+        events = [TemporalEvent(date="not-a-date", text="Bad", source="a.md")]
+        assert temporal_code_execute("when", events) is None
+
+    def test_how_long_ago(self):
+        events = [TemporalEvent(date="2026-03-20", text="Event happened", source="a.md")]
+        result = temporal_code_execute("how long since the event", events)
+        assert result is not None
+        assert "days since" in result
+
+    def test_single_event_how_long(self):
+        events = [TemporalEvent(date="2026-03-15", text="Only event", source="a.md")]
+        # "how many days" with only 1 event — no pair to compare
+        result = temporal_code_execute("how many days between events", events)
+        # Should still return None or a sensible result
+        # With only 1 dated event, can't compute a range
+        assert result is None or "0 days" in result

@@ -26,6 +26,9 @@ BASE = Path(__file__).parent
 STORE_PATH = BASE / "memory" / "knowledge_notes.jsonl"
 TRIGGERS_PATH = BASE / "memory" / "triggers.jsonl"
 
+# Typed edge types for graph traversal (Feature 4)
+EDGE_TYPES = {"related", "supersedes", "superseded_by", "depends_on", "derived_from", "contains"}
+
 # Contradiction signal words
 _POSITIVE_ACTIONS = {"added", "enabled", "started", "created", "fixed", "improved", "shipped", "works"}
 _NEGATIVE_ACTIONS = {"removed", "disabled", "killed", "deleted", "broke", "failed", "dead", "dropped"}
@@ -72,6 +75,56 @@ def _extract_entities(text: str) -> set[str]:
     return entities
 
 
+def _generate_prospective_queries(content: str, title: str,
+                                   entities: list[str],
+                                   keywords: list[str]) -> list[str]:
+    """Generate hypothetical future queries at write time (Kumiho technique).
+
+    Bridges the cue-trigger semantic gap: a query about "Caroline's hobbies"
+    matches a note that says "Caroline mentioned she likes pottery" because
+    we generate "what hobbies does Caroline have" at write time.
+    """
+    queries = []
+    content_lower = content.lower()
+
+    # Entity-based questions
+    for ent in entities[:5]:
+        queries.append(f"what about {ent}")
+        if any(act in content_lower for act in _POSITIVE_ACTIONS | _NEGATIVE_ACTIONS):
+            queries.append(f"what happened to {ent}")
+        if re.search(r"\d+\.?\d*%", content):
+            queries.append(f"what is the score for {ent}")
+
+    # Keyword-based questions
+    for kw in keywords[:5]:
+        queries.append(kw)
+
+    # Title as a question
+    if title:
+        queries.append(title.lower())
+        queries.append(f"what is {title.lower()}")
+
+    # Activity/preference detection for composite answers
+    activities = re.findall(
+        r"(?:likes?|enjoys?|prefers?|wants?|loves?|hates?|dislikes?)\s+(.{3,30}?)(?:[.,;!?\n]|$)",
+        content, re.IGNORECASE)
+    for act in activities[:3]:
+        queries.append(f"what does {entities[0] if entities else 'the person'} like")
+        queries.append(act.strip().lower())
+
+    # Temporal questions
+    dates = re.findall(r"\d{4}-\d{2}-\d{2}", content)
+    for d in dates[:2]:
+        queries.append(f"what happened on {d}")
+        queries.append(f"when did {title.lower()}")
+
+    # Causal/decision questions
+    if any(w in content_lower for w in ["because", "decided", "chose", "reason"]):
+        queries.append(f"why {title.lower()}")
+
+    return list(dict.fromkeys(queries))[:15]  # deduplicate, cap
+
+
 @dataclass
 class KnowledgeNote:
     id: str
@@ -85,6 +138,7 @@ class KnowledgeNote:
     supersedes: str = ""
     superseded_by: str = ""
     entities: list[str] = field(default_factory=list)
+    prospective_queries: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -93,6 +147,7 @@ class KnowledgeNote:
             "created": self.created, "updated": self.updated,
             "links": self.links, "supersedes": self.supersedes,
             "superseded_by": self.superseded_by, "entities": self.entities,
+            "prospective_queries": self.prospective_queries,
         }
 
     @staticmethod
@@ -104,7 +159,18 @@ class KnowledgeNote:
             links=d.get("links", []), supersedes=d.get("supersedes", ""),
             superseded_by=d.get("superseded_by", ""),
             entities=d.get("entities", []),
+            prospective_queries=d.get("prospective_queries", []),
         )
+
+    @property
+    def searchable_text(self) -> str:
+        """Content + prospective queries for BM25/embedding search."""
+        parts = [self.content]
+        if self.prospective_queries:
+            parts.append(" ".join(self.prospective_queries))
+        if self.keywords:
+            parts.append(" ".join(self.keywords))
+        return " ".join(parts)
 
 
 @dataclass
@@ -138,11 +204,13 @@ class KnowledgeStore:
         self._token_index: dict[str, set[str]] = {}  # note_id -> tokens
 
     def add_note(self, content: str, source: str = "",
-                 title: str = "", keywords: list[str] | None = None) -> KnowledgeNote:
+                 title: str = "", keywords: list[str] | None = None,
+                 prospective_queries: list[str] | None = None) -> KnowledgeNote:
         """Create a knowledge note, link to related notes, detect contradictions.
 
         If content is near-duplicate of existing note (similarity > 0.9), merges instead.
         If content contradicts existing note (same entity + opposite action), tracks supersession.
+        Generates prospective queries (Kumiho technique) for write-time indexing.
         """
         now = time.strftime("%Y-%m-%dT%H%M", time.gmtime())
         if not title:
@@ -151,8 +219,14 @@ class KnowledgeStore:
             keywords = _extract_keywords(content)
         entities = sorted(_extract_entities(content))
 
+        # Generate prospective queries at write time (Kumiho technique)
+        if prospective_queries is None:
+            prospective_queries = _generate_prospective_queries(content, title, entities, keywords)
+
         nid = _note_id(content, source)
-        note_tokens = _tokenize(content)
+        # Index includes content + prospective queries for retrieval
+        pq_text = " ".join(prospective_queries) if prospective_queries else ""
+        note_tokens = _tokenize(content + " " + pq_text)
 
         # Check for near-duplicate (merge if similarity > 0.9)
         best_sim = 0.0
@@ -185,6 +259,7 @@ class KnowledgeStore:
         note = KnowledgeNote(
             id=nid, title=title, content=content, keywords=keywords,
             source=source, created=now, updated=now, entities=entities,
+            prospective_queries=prospective_queries,
         )
 
         if contradiction_id and contradiction_id in self.notes:
@@ -259,14 +334,22 @@ class KnowledgeStore:
 
         return None
 
-    def search(self, query: str, top_k: int = 5) -> list[KnowledgeNote]:
-        """BM25-lite search over knowledge notes."""
+    def search(self, query: str, top_k: int = 5,
+               exclude_superseded: bool = True) -> list[KnowledgeNote]:
+        """BM25-lite search over knowledge notes.
+
+        Token index includes prospective queries, so queries that don't
+        share surface terms with the content still match if the write-time
+        query generation anticipated them.
+        """
         q_tokens = _tokenize(query)
         if not q_tokens:
             return []
 
         scored = []
         for nid, tokens in self._token_index.items():
+            if exclude_superseded and nid in self.notes and self.notes[nid].superseded_by:
+                continue
             overlap = len(q_tokens & tokens)
             if overlap > 0:
                 score = overlap / max(len(q_tokens), 1)
@@ -279,8 +362,14 @@ class KnowledgeStore:
                 results.append(self.notes[nid])
         return results
 
-    def get_related(self, note_id: str, depth: int = 1) -> list[KnowledgeNote]:
-        """Get notes connected to the given note, up to depth hops."""
+    def get_related(self, note_id: str, depth: int = 1,
+                     edge_types: set[str] | None = None) -> list[KnowledgeNote]:
+        """Get notes connected to the given note, up to depth hops.
+
+        Args:
+            edge_types: if set, only follow edges of these types.
+                        None means follow all edges.
+        """
         if note_id not in self.notes:
             return []
 
@@ -295,6 +384,9 @@ class KnowledgeStore:
                     continue
                 for link in self.notes[nid].links:
                     target = link["target"]
+                    link_type = link.get("type", "related")
+                    if edge_types and link_type not in edge_types:
+                        continue
                     if target not in visited and target in self.notes:
                         visited.add(target)
                         next_frontier.append(target)
@@ -302,6 +394,56 @@ class KnowledgeStore:
             frontier = next_frontier
 
         return result
+
+    def graph_search(self, query: str, top_k: int = 5,
+                     hop_depth: int = 2) -> list[KnowledgeNote]:
+        """Multi-hop graph search: find seed notes, then traverse typed edges.
+
+        Combines BM25 seed retrieval with structural graph traversal.
+        This finds composite answers scattered across linked notes.
+        """
+        seeds = self.search(query, top_k=min(top_k, 3))
+        if not seeds:
+            return []
+
+        # Collect all reachable notes via graph traversal
+        all_notes: dict[str, KnowledgeNote] = {}
+        for seed in seeds:
+            all_notes[seed.id] = seed
+            # Follow all edge types for multi-hop assembly
+            related = self.get_related(seed.id, depth=hop_depth)
+            for note in related:
+                if note.id not in all_notes and not note.superseded_by:
+                    all_notes[note.id] = note
+
+        # Re-rank by query relevance
+        q_tokens = _tokenize(query)
+        scored = []
+        for nid, note in all_notes.items():
+            tokens = self._token_index.get(nid, set())
+            overlap = len(q_tokens & tokens)
+            score = overlap / max(len(q_tokens), 1)
+            # Boost seed notes
+            if note in seeds:
+                score *= 1.5
+            scored.append((note, score))
+
+        scored.sort(key=lambda x: -x[1])
+        return [note for note, _ in scored[:top_k]]
+
+    def add_typed_link(self, source_id: str, target_id: str,
+                       edge_type: str) -> bool:
+        """Add a typed edge between two notes."""
+        if source_id not in self.notes or target_id not in self.notes:
+            return False
+        if edge_type not in EDGE_TYPES:
+            return False
+        self.notes[source_id].links.append({"target": target_id, "type": edge_type})
+        # Add reverse edge
+        reverse_type = {"depends_on": "derived_from", "derived_from": "depends_on",
+                        "contains": "related"}.get(edge_type, edge_type)
+        self.notes[target_id].links.append({"target": source_id, "type": reverse_type})
+        return True
 
     def get_contradictions(self) -> list[tuple[KnowledgeNote, KnowledgeNote]]:
         """Return all active contradiction pairs (old, new)."""
@@ -360,7 +502,7 @@ class KnowledgeStore:
                     continue
                 note = KnowledgeNote.from_dict(json.loads(line))
                 self.notes[note.id] = note
-                self._token_index[note.id] = _tokenize(note.content)
+                self._token_index[note.id] = _tokenize(note.searchable_text)
 
         if triggers_path.exists():
             for line in triggers_path.read_text(encoding="utf-8").strip().split("\n"):

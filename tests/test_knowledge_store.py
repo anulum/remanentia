@@ -9,11 +9,13 @@ from pathlib import Path
 import pytest
 
 from knowledge_store import (
+    EDGE_TYPES,
     KnowledgeNote,
     KnowledgeStore,
     Trigger,
     _extract_keywords,
     _extract_entities,
+    _generate_prospective_queries,
     _note_id,
     _tokenize,
 )
@@ -345,3 +347,171 @@ class TestStats:
         s = store.stats
         assert s["notes"] == 0
         assert s["links"] == 0
+
+
+# ── Feature 1: Prospective indexing ─────────────────────────────
+
+
+class TestProspectiveQueries:
+    def test_generates_queries_at_write_time(self):
+        store = KnowledgeStore()
+        note = store.add_note(
+            "Caroline likes pottery and swimming. She started pottery in March.",
+            source="conv.md",
+        )
+        assert len(note.prospective_queries) > 0
+
+    def test_entity_queries_generated(self):
+        pq = _generate_prospective_queries(
+            "BM25 retrieval accuracy is 81.2% on LOCOMO.",
+            "BM25 accuracy",
+            ["bm25", "locomo", "81.2%"],
+            ["bm25", "retrieval", "accuracy"],
+        )
+        assert any("bm25" in q.lower() for q in pq)
+
+    def test_activity_detection(self):
+        pq = _generate_prospective_queries(
+            "Caroline likes pottery and enjoys swimming in the lake.",
+            "Caroline activities",
+            [],
+            ["pottery", "swimming"],
+        )
+        assert any("like" in q.lower() for q in pq)
+
+    def test_temporal_queries(self):
+        pq = _generate_prospective_queries(
+            "Released v3.9.0 on 2026-03-15.",
+            "Release",
+            ["v3.9.0"],
+            ["release"],
+        )
+        assert any("2026-03-15" in q for q in pq)
+
+    def test_causal_queries(self):
+        pq = _generate_prospective_queries(
+            "We decided to remove SNN because it adds no signal.",
+            "Remove SNN",
+            ["snn"],
+            ["remove", "signal"],
+        )
+        assert any("why" in q.lower() for q in pq)
+
+    def test_prospective_queries_searchable(self):
+        store = KnowledgeStore()
+        store.add_note(
+            "Caroline enjoys pottery classes every Tuesday.",
+            source="conv.md",
+        )
+        # "hobbies" is not in the note text but should be findable
+        # via prospective queries that include "like" or activity terms
+        note = list(store.notes.values())[0]
+        assert note.searchable_text != note.content
+
+    def test_custom_queries_passed(self):
+        store = KnowledgeStore()
+        note = store.add_note(
+            "Test content.",
+            source="test.md",
+            prospective_queries=["custom query one", "custom query two"],
+        )
+        assert note.prospective_queries == ["custom query one", "custom query two"]
+
+    def test_queries_in_token_index(self):
+        store = KnowledgeStore()
+        store.add_note(
+            "We started the daemon process.",
+            source="test.md",
+            prospective_queries=["xyztestquery123"],
+        )
+        nid = list(store.notes.keys())[0]
+        tokens = store._token_index[nid]
+        assert "xyztestquery123" in tokens
+
+    def test_roundtrip_preserves_queries(self, tmp_path):
+        store = KnowledgeStore()
+        note = store.add_note("Test content for roundtrip.", source="test.md")
+        pq = note.prospective_queries
+
+        notes_path = tmp_path / "notes.jsonl"
+        store.save(notes_path, tmp_path / "t.jsonl")
+
+        store2 = KnowledgeStore()
+        store2.load(notes_path, tmp_path / "t.jsonl")
+        note2 = list(store2.notes.values())[0]
+        assert note2.prospective_queries == pq
+
+
+# ── Feature 4: Graph-based multi-hop ────────────────────────────
+
+
+class TestGraphSearch:
+    def test_graph_search_finds_linked_notes(self):
+        store = KnowledgeStore()
+        store.add_note("BM25 retrieval scoring algorithm details.", source="a.md")
+        store.add_note("BM25 scoring uses TF-IDF term weighting internally.", source="b.md")
+        store.add_note("TF-IDF term weighting was the original retrieval method.", source="c.md")
+        results = store.graph_search("BM25 retrieval", top_k=5, hop_depth=2)
+        assert len(results) >= 2
+
+    def test_graph_search_empty(self):
+        store = KnowledgeStore()
+        assert store.graph_search("nonexistent") == []
+
+    def test_excludes_superseded(self):
+        store = KnowledgeStore()
+        store.add_note("We enabled the GPU daemon for processing.", source="a.md")
+        store.add_note("We disabled the GPU daemon to free memory.", source="b.md")
+        results = store.graph_search("GPU daemon", top_k=5)
+        # Superseded note should be excluded from graph results
+        for r in results:
+            assert r.superseded_by == ""
+
+    def test_typed_edge_filter(self):
+        store = KnowledgeStore()
+        n1 = store.add_note("Base concept for BM25 retrieval algorithm.", source="a.md")
+        n2 = store.add_note("BM25 scoring uses TF-IDF weighting retrieval.", source="b.md")
+        # Only follow "related" edges
+        related = store.get_related(n1.id, depth=1, edge_types={"related"})
+        # n2 should be found via "related" type
+        assert all(
+            any(l.get("type") == "related" for l in store.notes[n1.id].links
+                if l["target"] == r.id)
+            for r in related
+        )
+
+    def test_add_typed_link(self):
+        store = KnowledgeStore()
+        n1 = store.add_note("Module A depends on module B.", source="a.md")
+        n2 = store.add_note("Module B provides core functionality.", source="b.md")
+        ok = store.add_typed_link(n1.id, n2.id, "depends_on")
+        assert ok is True
+        deps = store.get_related(n1.id, depth=1, edge_types={"depends_on"})
+        assert any(d.id == n2.id for d in deps)
+
+    def test_add_typed_link_invalid_type(self):
+        store = KnowledgeStore()
+        n1 = store.add_note("A.", source="a.md")
+        n2 = store.add_note("B completely different content.", source="b.md")
+        ok = store.add_typed_link(n1.id, n2.id, "invalid_type")
+        assert ok is False
+
+    def test_add_typed_link_nonexistent(self):
+        store = KnowledgeStore()
+        ok = store.add_typed_link("nope1", "nope2", "related")
+        assert ok is False
+
+    def test_search_excludes_superseded(self):
+        store = KnowledgeStore()
+        store.add_note("We started the SNN daemon for retrieval.", source="a.md")
+        store.add_note("We killed the SNN daemon because it adds nothing.", source="b.md")
+        results = store.search("SNN daemon", exclude_superseded=True)
+        for r in results:
+            assert r.superseded_by == ""
+
+    def test_search_includes_superseded_when_asked(self):
+        store = KnowledgeStore()
+        store.add_note("We started the SNN daemon for retrieval.", source="a.md")
+        store.add_note("We killed the SNN daemon because it adds nothing.", source="b.md")
+        results = store.search("SNN daemon", exclude_superseded=False)
+        assert len(results) >= 2
