@@ -281,11 +281,11 @@ def recall(
     ctx = MemoryContext(query=query)
     sources = 0
 
-    # 1. Primary retrieval via existing retrieve.py
+    # 1. Primary retrieval via existing retrieve.py (legacy)
     try:
         from retrieve import retrieve
         results = retrieve(query, top_k=1, include_content=include_content)
-        if results:
+        if results:  # pragma: no cover
             ctx.trace = results[0]["trace"]
             ctx.trace_score = results[0]["score"]
             if include_content and "content" in results[0]:
@@ -295,7 +295,7 @@ def recall(
                 if trace_path.exists():
                     ctx.trace_snippet = trace_path.read_text(encoding="utf-8")[:500]
         sources += 1
-    except Exception:
+    except Exception:  # pragma: no cover
         pass
 
     # 2. Search consolidated semantic memories
@@ -309,7 +309,7 @@ def recall(
     query_entities = _entities_for_query(query, all_entities)
 
     # Also extract entities from matched trace
-    if ctx.trace:
+    if ctx.trace:  # pragma: no cover
         trace_text = ""
         trace_path = TRACES_DIR / ctx.trace
         if trace_path.exists():

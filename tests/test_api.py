@@ -192,9 +192,62 @@ class TestRecall:
                 # Test the endpoint format
                 pass
 
+    def test_recall_summary_format(self, client, tmp_traces, tmp_path):
+        from unittest.mock import MagicMock
+        mock_ctx = MagicMock()
+        mock_ctx.query = "test"
+        mock_ctx.trace = "trace.md"
+        mock_ctx.trace_score = 0.8
+        mock_ctx.trace_snippet = "Some snippet"
+        mock_ctx.semantic_memories = []
+        mock_ctx.entities = ["stdp"]
+        mock_ctx.related_entities = []
+        mock_ctx.before = []
+        mock_ctx.after = []
+        mock_ctx.cross_project = []
+        mock_ctx.novelty_score = 0.3
+        mock_ctx.elapsed_ms = 15.0
+        with patch("memory_recall.recall", return_value=mock_ctx):
+            resp = client.post("/recall", json={"query": "test", "format": "summary"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["query"] == "test"
+        assert data["trace"] == "trace.md"
+
+    def test_recall_context_format(self, client):
+        from unittest.mock import MagicMock
+        mock_ctx = MagicMock()
+        mock_ctx.to_llm_context.return_value = "LLM context here"
+        mock_ctx.elapsed_ms = 10.0
+        with patch("memory_recall.recall", return_value=mock_ctx):
+            resp = client.post("/recall", json={"query": "test", "format": "context"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "context" in data
+        assert data["context"] == "LLM context here"
+
     def test_consolidate_endpoint(self, client):
         mock_result = {"status": "ok", "traces_processed": 5}
         with patch("consolidation_engine.consolidate", return_value=mock_result):
             resp = client.post("/consolidate", json={"force": False})
         assert resp.status_code == 200
         assert resp.json()["status"] == "ok"
+
+    def test_status_with_daemon_state(self, client, tmp_path):
+        import time
+        state_dir = tmp_path / "snn_state"
+        state_dir.mkdir()
+        state = {"timestamp": time.time(), "cycle": 5, "n_neurons": 200,
+                 "vram_mb": 100, "live_retrieval_available": True}
+        (state_dir / "current_state.json").write_text(json.dumps(state), encoding="utf-8")
+        graph_dir = tmp_path / "memory" / "graph"
+        graph_dir.mkdir(parents=True)
+        (tmp_path / "reasoning_traces").mkdir()
+        (tmp_path / "memory" / "semantic").mkdir(parents=True)
+        with patch("api.BASE", tmp_path), \
+             patch("api.STATE_DIR", state_dir), \
+             patch("api.GRAPH_DIR", graph_dir):
+            resp = client.get("/status")
+        data = resp.json()
+        assert "daemon" in data
+        assert data["daemon"]["cycle"] == 5

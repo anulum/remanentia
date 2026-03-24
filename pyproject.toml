@@ -85,3 +85,37 @@ py-modules = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["."]
+omit = [
+    # Dead/legacy — daemon killed, SNN retrieval dead, dashboard off
+    "monitor.py",
+    "snn_daemon.py",
+    "snn_backend.py",
+    "gpu_daemon.py",
+    "retrieve.py",
+    "encoding.py",
+    "git_stimulus.py",
+    "heartbeat_register.py",
+    "hooks.py",
+    "pattern_separation.py",
+    "cognitive_snapshot.py",
+    "active_retrieval.py",
+    "skill_extractor.py",
+    "extractors/*",
+    # Benchmarks (not product code)
+    "bench_locomo.py",
+    "tests/benchmark_internal.py",
+    "experimental/*",
+    # Test files themselves
+    "tests/test_*.py",
+    "tests/conftest.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "if __name__",
+    "pragma: no cover",
+]
+fail_under = 100

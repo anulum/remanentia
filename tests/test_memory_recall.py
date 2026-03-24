@@ -12,10 +12,14 @@ import pytest
 from memory_recall import (
     MemoryContext,
     _assess_novelty,
+    _cross_project_insights,
     _entities_for_query,
     _find_related,
+    _load_entities,
+    _load_relations,
     _search_semantic,
     _temporal_context,
+    recall,
 )
 
 
@@ -243,3 +247,128 @@ class TestAssessNovelty:
         }
         novelty = _assess_novelty("stdp quantum fidelity", entities)
         assert 0.0 < novelty < 1.0
+
+
+# ── Cross-project insights ──────────────────────────────────────
+
+
+class TestCrossProjectInsights:
+    def test_finds_cross_project(self):
+        entities = {
+            "remanentia": {"id": "remanentia", "type": "project", "label": "Remanentia"},
+            "director-ai": {"id": "director-ai", "type": "project", "label": "Director-AI"},
+            "stdp": {"id": "stdp", "type": "concept", "label": "STDP"},
+        }
+        relations = [
+            {"source": "stdp", "target": "remanentia", "type": "co_occurs", "weight": 5, "evidence": []},
+            {"source": "stdp", "target": "director-ai", "type": "co_occurs", "weight": 3, "evidence": []},
+        ]
+        insights = _cross_project_insights(["stdp"], "remanentia", entities, relations)
+        projects = [i["project"] for i in insights]
+        assert "director-ai" in projects
+
+    def test_no_cross_project(self):
+        entities = {"stdp": {"id": "stdp", "type": "concept"}}
+        relations = []
+        insights = _cross_project_insights(["stdp"], "remanentia", entities, relations)
+        assert insights == []
+
+
+# ── Load entities/relations ─────────────────────────────────────
+
+
+class TestLoadEntities:
+    def test_load_entities(self, tmp_graph):
+        with patch("memory_recall.GRAPH_DIR", tmp_graph):
+            entities = _load_entities()
+        assert "stdp" in entities
+        assert "bm25" in entities
+
+    def test_load_entities_no_file(self, tmp_path):
+        with patch("memory_recall.GRAPH_DIR", tmp_path):
+            assert _load_entities() == {}
+
+    def test_load_relations(self, tmp_graph):
+        with patch("memory_recall.GRAPH_DIR", tmp_graph):
+            relations = _load_relations()
+        assert len(relations) == 4
+
+    def test_load_relations_no_file(self, tmp_path):
+        with patch("memory_recall.GRAPH_DIR", tmp_path):
+            assert _load_relations() == []
+
+
+# ── Full recall function ────────────────────────────────────────
+
+
+class TestRecall:
+    def test_recall_basic(self, tmp_traces, tmp_graph, tmp_semantic):
+        with patch("memory_recall.TRACES_DIR", tmp_traces), \
+             patch("memory_recall.SEMANTIC_DIR", tmp_semantic), \
+             patch("memory_recall.GRAPH_DIR", tmp_graph), \
+             patch("memory_recall.BASE", tmp_traces.parent):
+            ctx = recall("SNN removal decision", top_k=3, include_content=False)
+        assert ctx.query == "SNN removal decision"
+        assert isinstance(ctx.elapsed_ms, float)
+        assert isinstance(ctx.entities, list)
+
+    def test_recall_with_semantic(self, tmp_traces, tmp_graph, tmp_semantic):
+        with patch("memory_recall.TRACES_DIR", tmp_traces), \
+             patch("memory_recall.SEMANTIC_DIR", tmp_semantic), \
+             patch("memory_recall.GRAPH_DIR", tmp_graph), \
+             patch("memory_recall.BASE", tmp_semantic.parent):
+            ctx = recall("remanentia decision SNN", top_k=3)
+        assert len(ctx.semantic_memories) > 0
+
+    def test_recall_novelty(self, tmp_traces, tmp_graph, tmp_semantic):
+        with patch("memory_recall.TRACES_DIR", tmp_traces), \
+             patch("memory_recall.SEMANTIC_DIR", tmp_semantic), \
+             patch("memory_recall.GRAPH_DIR", tmp_graph), \
+             patch("memory_recall.BASE", tmp_traces.parent):
+            ctx = recall("completely unknown topic xyzfoo", top_k=1)
+        assert ctx.novelty_score > 0
+
+
+# ── MemoryContext summary/llm with cross-project ────────────────
+
+
+class TestMemoryContextExtended:
+    def test_summary_with_semantic_memories(self):
+        ctx = MemoryContext(
+            query="test",
+            semantic_memories=[
+                {"path": "memory/decision.md", "key_point": "Important finding"},
+            ],
+        )
+        s = ctx.summary
+        assert "1 memories" in s or "Consolidated" in s
+
+    def test_summary_with_cross_project(self):
+        ctx = MemoryContext(
+            query="test",
+            cross_project=[{"project": "director-ai", "insight": "shared concept"}],
+        )
+        s = ctx.summary
+        assert "Cross-project" in s
+
+    def test_to_llm_context_with_timeline(self):
+        ctx = MemoryContext(
+            query="test",
+            trace="t.md",
+            trace_snippet="snip",
+            before=["a.md"],
+            after=["b.md"],
+        )
+        llm = ctx.to_llm_context()
+        assert "Before:" in llm
+        assert "After:" in llm
+
+    def test_to_llm_context_cross_project(self):
+        ctx = MemoryContext(
+            query="test",
+            trace="t.md",
+            trace_snippet="snip",
+            cross_project=[{"project": "foo", "insight": "bar stuff"}],
+        )
+        llm = ctx.to_llm_context()
+        assert "Cross-project" in llm
