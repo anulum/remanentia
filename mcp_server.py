@@ -44,7 +44,8 @@ _UNIFIED_INDEX = None
 
 
 def handle_recall(query: str, top_k: int = 5,
-                  project: str = "", after: str = "", before: str = "") -> str:
+                  project: str = "", after: str = "", before: str = "",
+                  llm: bool = False) -> str:
     """Memory recall via unified BM25 + embedding index."""
     global _UNIFIED_INDEX
     try:
@@ -55,8 +56,10 @@ def handle_recall(query: str, top_k: int = 5,
                 _UNIFIED_INDEX = None
                 return _lightweight_recall(query, top_k)
 
+        use_llm = llm or bool(os.environ.get("REMANENTIA_LLM_ANSWERS"))
         results = _UNIFIED_INDEX.search(
-            query, top_k=top_k, project=project, after=after, before=before)
+            query, top_k=top_k, project=project, after=after, before=before,
+            use_llm=use_llm)
         if not results:
             return f"No memories found for: {query}"
 
@@ -103,6 +106,14 @@ def handle_remember(content: str, memory_type: str = "context", project: str = "
             _UNIFIED_INDEX.add_file(path)
         except Exception:
             pass
+
+    # Consolidate pending traces (fast short-circuit when nothing new)
+    try:
+        from consolidation_engine import consolidate
+        consolidate()
+        _RECALL_INDEX = None
+    except Exception:
+        pass
 
     return f"Remembered: {filename} ({len(content)} chars)"
 
@@ -224,6 +235,7 @@ TOOLS = [
                 "project": {"type": "string", "description": "Filter by project/source name", "default": ""},
                 "after": {"type": "string", "description": "Only docs after date (YYYY-MM-DD)", "default": ""},
                 "before": {"type": "string", "description": "Only docs before date (YYYY-MM-DD)", "default": ""},
+                "llm": {"type": "boolean", "description": "Use LLM for answer extraction (costs API credits)", "default": False},
             },
             "required": ["query"],
         },
@@ -285,7 +297,8 @@ def handle_request(request: dict) -> dict:
         if tool_name == "remanentia_recall":
             text = handle_recall(args.get("query", ""), args.get("top_k", 3),
                                  project=args.get("project", ""), after=args.get("after", ""),
-                                 before=args.get("before", ""))
+                                 before=args.get("before", ""),
+                                 llm=args.get("llm", False))
         elif tool_name == "remanentia_remember":
             text = handle_remember(args.get("content", ""), args.get("type", "context"), args.get("project", ""))
         elif tool_name == "remanentia_status":

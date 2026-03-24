@@ -36,12 +36,14 @@ embedding = ["sentence-transformers>=2.0"]
 gpu = ["torch>=2.0"]
 sparse = ["scipy>=1.11"]
 api = ["fastapi>=0.100", "uvicorn>=0.20"]
+llm = ["anthropic>=0.40"]
 all = [
     "scikit-learn>=1.3",
     "sentence-transformers>=2.0",
     "scipy>=1.11",
     "fastapi>=0.100",
     "uvicorn>=0.20",
+    "anthropic>=0.40",
 ]
 dev = [
     "pytest>=8.0",
