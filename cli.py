@@ -227,6 +227,54 @@ def cmd_daemon(args):
         cmd_status(args)
 
 
+def cmd_observe(args):  # pragma: no cover
+    """Watch filesystem for changes, auto-create knowledge notes."""
+    from observer import ObserverState, observe_once, observe_loop
+    if args.once:
+        state = ObserverState()
+        state.load()
+        result = observe_once(state)
+        print(json.dumps(result, indent=2))
+        state.save()
+    else:
+        observe_loop(interval=args.interval)
+
+
+def cmd_reflect(args):  # pragma: no cover
+    """Run deep consolidation via reflector."""
+    from reflector import reflect_once
+    print(f"Reflecting on last {args.days} days...")
+    result = reflect_once(days=args.days, use_llm=args.llm)
+    if result.get("digest"):
+        print(result["digest"])
+    else:
+        print(json.dumps(result, indent=2))
+
+
+def cmd_notes(args):  # pragma: no cover
+    """Show knowledge notes."""
+    from knowledge_store import KnowledgeStore
+    store = KnowledgeStore()
+    if not store.load():
+        print("No knowledge notes. Run: remanentia observe --once")
+        return
+    s = store.stats
+    print(f"Knowledge Store: {s['notes']} notes, {s['links']} links, "
+          f"{s['contradictions']} contradictions, {s['triggers_active']} active triggers\n")
+    notes = sorted(store.notes.values(), key=lambda n: n.updated, reverse=True)
+    for n in notes[:args.top]:
+        status = ""
+        if n.superseded_by:
+            status = " [SUPERSEDED]"
+        elif n.supersedes:
+            status = " [SUPERSEDES older]"
+        print(f"  [{n.id}] {n.title}{status}")
+        print(f"    Source: {n.source} | Updated: {n.updated} | Links: {len(n.links)}")
+        if n.entities:
+            print(f"    Entities: {', '.join(n.entities[:8])}")
+        print()
+
+
 def main():
     _ensure_utf8()
     parser = argparse.ArgumentParser(
@@ -268,6 +316,20 @@ def main():
     # init
     sub.add_parser("init", help="Create memory directory structure")
 
+    # observe
+    p_observe = sub.add_parser("observe", help="Watch filesystem for changes, auto-create knowledge notes")
+    p_observe.add_argument("--once", action="store_true", help="Run once and exit")
+    p_observe.add_argument("--interval", type=int, default=30, help="Poll interval in seconds")
+
+    # reflect
+    p_reflect = sub.add_parser("reflect", help="Run deep consolidation (LLM-powered reflection)")
+    p_reflect.add_argument("--days", type=int, default=7, help="Process notes from last N days")
+    p_reflect.add_argument("--llm", action="store_true", help="Use LLM for summaries and prospective queries")
+
+    # notes
+    p_notes = sub.add_parser("notes", help="Show knowledge notes")
+    p_notes.add_argument("--top", type=int, default=10, help="Number of notes to show")
+
     args = parser.parse_args()
     if not args.command:
         parser.print_help()
@@ -282,6 +344,9 @@ def main():
         "entities": cmd_entities,
         "daemon": cmd_daemon,
         "init": cmd_init,
+        "observe": cmd_observe,
+        "reflect": cmd_reflect,
+        "notes": cmd_notes,
     }
     cmd_map[args.command](args)
 

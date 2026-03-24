@@ -75,6 +75,8 @@ py-modules = [
     "answer_extractor",
     "temporal_graph",
     "knowledge_store",
+    "observer",
+    "reflector",
 ]
 
 [tool.setuptools.package-data]
