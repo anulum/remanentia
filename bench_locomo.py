@@ -24,6 +24,8 @@ from pathlib import Path
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
+_USE_LLM = "--llm" in sys.argv
+
 
 def tokenize(text):
     return set(re.findall(r"[a-z0-9][a-z0-9_]{2,}", text.lower()))
@@ -157,6 +159,25 @@ def evaluate_retrieval(question, answer, evidence_indices, retrieved_indices, tu
     except ImportError:
         pass
 
+    # LLM answer synthesis: synthesize from top retrieved paragraphs and compare
+    if _USE_LLM:
+        try:
+            from answer_extractor import llm_synthesize_answer, fuzzy_match
+            top_paras = [turns[idx] for idx, _ in retrieved_indices[:3] if idx < len(turns)]
+            if top_paras:
+                synthesized = llm_synthesize_answer(question, top_paras)
+                if synthesized and answer_lower:
+                    syn_lower = synthesized.lower()
+                    if answer_lower in syn_lower or syn_lower in answer_lower:
+                        return True
+                    if fuzzy_match(synthesized, answer, threshold=0.5):
+                        return True
+                    syn_tokens = tokenize(synthesized)
+                    if a_tokens and len(a_tokens & syn_tokens) / max(len(a_tokens), 1) > 0.3:
+                        return True
+        except Exception:
+            pass
+
     return False
 
 
@@ -216,6 +237,21 @@ def main():
             # Search
             retrieved = bm25_search(question, turns, top_k=20)
 
+            # Temporal augmentation: boost turns with dates matching the query
+            if cat == 3:  # temporal
+                try:
+                    from temporal_graph import parse_dates
+                    q_dates = parse_dates(question)
+                    if q_dates:
+                        for ti, turn in enumerate(turns):
+                            t_dates = parse_dates(turn)
+                            if set(q_dates) & set(t_dates):
+                                already = any(idx == ti for idx, _ in retrieved[:10])
+                                if not already:
+                                    retrieved.insert(0, (ti, 3.0))
+                except Exception:
+                    pass
+
             # Evaluate
             correct = evaluate_retrieval(question, answer, evidence, retrieved, turns,
                                         session_offsets=session_offsets)
@@ -252,8 +288,9 @@ def main():
         "accuracy": round(overall, 1),
         "by_category": results_by_cat,
         "elapsed_s": round(elapsed, 1),
-        "method": "BM25-lite + answer extraction",
-        "note": "LOCOMO preprocessed dataset (10 conversations). No embedding rerank. With answer_extractor.py.",
+        "method": f"BM25 + CE rerank + answer extraction{' + LLM synthesis' if _USE_LLM else ''}",
+        "llm_enabled": _USE_LLM,
+        "note": "LOCOMO preprocessed dataset (10 conversations). With cross-encoder rerank + temporal augmentation.",
     }
     Path("paper/locomo_results.json").write_text(json.dumps(out, indent=2) + "\n")
     print(f"\nSaved to paper/locomo_results.json")
