@@ -43,11 +43,38 @@ GRAPH_DIR = BASE / "memory" / "graph"
 _UNIFIED_INDEX = None
 
 
+_KNOWLEDGE_STORE = None
+
+
+def _get_knowledge_store():
+    global _KNOWLEDGE_STORE
+    if _KNOWLEDGE_STORE is not None:
+        return _KNOWLEDGE_STORE
+    try:
+        from knowledge_store import KnowledgeStore
+        _KNOWLEDGE_STORE = KnowledgeStore()
+        _KNOWLEDGE_STORE.load()
+    except Exception:  # pragma: no cover
+        _KNOWLEDGE_STORE = KnowledgeStore() if _KNOWLEDGE_STORE is None else _KNOWLEDGE_STORE
+    return _KNOWLEDGE_STORE
+
+
 def handle_recall(query: str, top_k: int = 5,
                   project: str = "", after: str = "", before: str = "",
                   llm: bool = False) -> str:
-    """Memory recall via unified BM25 + embedding index."""
+    """Memory recall via unified BM25 + embedding index + knowledge notes."""
     global _UNIFIED_INDEX
+
+    # Check prospective triggers
+    trigger_lines = []
+    try:
+        ks = _get_knowledge_store()
+        matched_triggers = ks.check_triggers(query)
+        for t in matched_triggers:  # pragma: no cover
+            trigger_lines.append(f"[TRIGGER] {t.action}")
+    except Exception:  # pragma: no cover
+        pass
+
     try:
         from memory_index import MemoryIndex
         if _UNIFIED_INDEX is None:
@@ -60,10 +87,10 @@ def handle_recall(query: str, top_k: int = 5,
         results = _UNIFIED_INDEX.search(
             query, top_k=top_k, project=project, after=after, before=before,
             use_llm=use_llm)
-        if not results:
+        if not results and not trigger_lines:
             return f"No memories found for: {query}"
 
-        parts = []
+        parts = list(trigger_lines)
         for r in results:
             header = f"[{r.source}] {r.name} (score={r.score:.1f})"
             if r.answer:
@@ -75,7 +102,8 @@ def handle_recall(query: str, top_k: int = 5,
         return _lightweight_recall(query, top_k)
 
 
-def handle_remember(content: str, memory_type: str = "context", project: str = "") -> str:
+def handle_remember(content: str, memory_type: str = "context", project: str = "",
+                    trigger: str = "") -> str:
     """Persist a memory as a reasoning trace and update the index."""
     from datetime import datetime
 
@@ -106,6 +134,16 @@ def handle_remember(content: str, memory_type: str = "context", project: str = "
             _UNIFIED_INDEX.add_file(path)
         except Exception:  # pragma: no cover
             pass
+
+    # Create knowledge note
+    try:
+        ks = _get_knowledge_store()
+        ks.add_note(content, source=filename)
+        if trigger:  # pragma: no cover
+            ks.add_trigger(trigger, content)
+        ks.save()
+    except Exception:  # pragma: no cover
+        pass
 
     # Consolidate pending traces (fast short-circuit when nothing new)
     try:
@@ -242,13 +280,14 @@ TOOLS = [
     },
     {
         "name": "remanentia_remember",
-        "description": "Persist a memory for future recall. Use for decisions, findings, metrics, or any context worth remembering across sessions.",
+        "description": "Persist a memory for future recall. Optionally set a trigger condition for prospective memory — the memory will be surfaced automatically when a future query matches the trigger.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "content": {"type": "string", "description": "What to remember"},
                 "type": {"type": "string", "description": "Memory type: decision, finding, metric, context", "default": "context"},
                 "project": {"type": "string", "description": "Project name (optional)", "default": ""},
+                "trigger": {"type": "string", "description": "Prospective trigger: when future queries match this condition, surface this memory automatically", "default": ""},
             },
             "required": ["content"],
         },
@@ -300,7 +339,8 @@ def handle_request(request: dict) -> dict:
                                  before=args.get("before", ""),
                                  llm=args.get("llm", False))
         elif tool_name == "remanentia_remember":
-            text = handle_remember(args.get("content", ""), args.get("type", "context"), args.get("project", ""))
+            text = handle_remember(args.get("content", ""), args.get("type", "context"),
+                                   args.get("project", ""), args.get("trigger", ""))
         elif tool_name == "remanentia_status":
             text = handle_status()
         elif tool_name == "remanentia_graph":
