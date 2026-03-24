@@ -335,7 +335,7 @@ class MemoryIndex:
 
     def search(self, query: str, top_k: int = 5,
                project: str = "", after: str = "", before: str = "",
-               doc_type: str = "") -> list[SearchResult]:
+               doc_type: str = "", use_llm: bool = False) -> list[SearchResult]:
         """Search with query intelligence, optional structured filters.
 
         Filters (applied before scoring):
@@ -460,6 +460,14 @@ class MemoryIndex:
             except ImportError:
                 pass
 
+        _llm_extractor = None
+        if use_llm:
+            try:
+                from answer_extractor import llm_extract_answer
+                _llm_extractor = llm_extract_answer
+            except ImportError:
+                pass
+
         # Build results, deduplicate by document
         seen_docs = set()
         results = []
@@ -473,6 +481,8 @@ class MemoryIndex:
             answer = ""
             if _answer_extractor:
                 answer = _answer_extractor(query, doc.paragraphs[p_idx]) or ""
+            if not answer and _llm_extractor:
+                answer = _llm_extractor(query, doc.paragraphs[p_idx]) or ""
             results.append(SearchResult(
                 name=doc.name,
                 source=doc.source,
@@ -811,7 +821,16 @@ if __name__ == "__main__":
         interval = 60
         while True:
             if needs_rebuild():
-                print(f"Changes detected, rebuilding...")
+                # Consolidate first so new semantic memories are indexed in the same pass
+                try:
+                    from consolidation_engine import consolidate
+                    result = consolidate()
+                    if result.get("memories_written", 0) > 0:
+                        print(f"Consolidated: {result['memories_written']} memories, "
+                              f"{result['entities_found']} entities")
+                except Exception as e:
+                    print(f"Consolidation error: {e}")
+                print("Changes detected, rebuilding...")
                 stats = idx.build(use_gpu_embeddings=True, use_gliner=False)
                 idx.save()
                 print(f"Rebuilt: {stats['documents']} docs, {stats['paragraphs']} paragraphs")

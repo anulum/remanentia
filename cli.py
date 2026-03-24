@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -45,11 +46,13 @@ def cmd_recall(args):
     if has_filters:
         from memory_index import auto_rebuild_if_needed
         idx = auto_rebuild_if_needed(use_gpu=False)
+        use_llm = getattr(args, "llm", False) or bool(os.environ.get("REMANENTIA_LLM_ANSWERS"))
         results = idx.search(
             args.query, top_k=args.top,
             project=getattr(args, "project", ""),
             after=getattr(args, "after", ""),
             before=getattr(args, "before", ""),
+            use_llm=use_llm,
         )
         for r in results:
             print(f"[{r.source}] {r.name} (score={r.score:.3f})")
@@ -242,6 +245,7 @@ def main():
         p_recall.add_argument("--project", default="", help="Filter by project/source")
         p_recall.add_argument("--after", default="", help="Filter: docs after date (YYYY-MM-DD)")
         p_recall.add_argument("--before", default="", help="Filter: docs before date (YYYY-MM-DD)")
+        p_recall.add_argument("--llm", action="store_true", help="Use LLM for answer extraction (costs API credits)")
 
     # consolidate
     p_consol = sub.add_parser("consolidate", help="Run memory consolidation")

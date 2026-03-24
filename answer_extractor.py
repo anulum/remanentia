@@ -19,6 +19,7 @@ Handles:
 """
 from __future__ import annotations
 
+import os
 import re
 from difflib import SequenceMatcher
 
@@ -255,3 +256,44 @@ def extract_best_sentence(query: str, paragraph: str) -> str | None:
             best_sent = sent
 
     return best_sent
+
+
+# ── LLM-powered extraction ─────────────────────────────────────
+
+def llm_extract_answer(query: str, paragraph: str,
+                       model: str = "claude-haiku-4-5-20251001") -> str | None:
+    """Extract answer via Anthropic API. Fallback when regex returns None.
+
+    Requires ANTHROPIC_API_KEY env var and `pip install anthropic`.
+    Returns 1-2 sentence answer or None.
+    """
+    try:
+        import anthropic
+    except ImportError:
+        return None
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return None
+
+    client = anthropic.Anthropic(api_key=api_key)
+    try:
+        response = client.messages.create(
+            model=model,
+            max_tokens=100,
+            messages=[{
+                "role": "user",
+                "content": (
+                    "Given this context, answer the question in 1-2 sentences. "
+                    "If the context doesn't contain the answer, say 'unknown'.\n\n"
+                    f"Context: {paragraph[:1000]}\n\n"
+                    f"Question: {query}"
+                ),
+            }],
+        )
+        answer = response.content[0].text.strip()
+        if answer.lower() in ("unknown", "i don't know", "not mentioned"):
+            return None
+        return answer
+    except Exception:
+        return None
