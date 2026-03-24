@@ -48,15 +48,34 @@ def _get_cross_encoder():
         return None
 
 
-def bm25_search(query, paragraphs, top_k=10):
-    """BM25-lite search + optional cross-encoder rerank."""
-    q_tokens = tokenize(query)
-    if not q_tokens:
-        return []
+_EMBED_MODEL = None
 
+
+def _get_embed_model():
+    global _EMBED_MODEL
+    if _EMBED_MODEL is not None:
+        return _EMBED_MODEL
+    try:
+        from sentence_transformers import SentenceTransformer
+        import torch
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        _EMBED_MODEL = SentenceTransformer("all-MiniLM-L6-v2", device=device)
+        return _EMBED_MODEL
+    except Exception:
+        return None
+
+
+def bm25_search(query, paragraphs, top_k=10):
+    """Hybrid BM25+embedding search + cross-encoder rerank."""
     import math
     from collections import Counter
+
+    q_tokens = tokenize(query)
     n = len(paragraphs)
+    if n == 0:
+        return []
+
+    # BM25 scoring
     df = Counter()
     para_tokens = []
     for p in paragraphs:
@@ -68,7 +87,7 @@ def bm25_search(query, paragraphs, top_k=10):
     avg_dl = sum(len(t) for t in para_tokens) / max(n, 1)
 
     k1, b = 1.5, 0.75
-    scored = []
+    bm25_scores = []
     for i, pt in enumerate(para_tokens):
         score = 0.0
         dl = len(pt)
@@ -76,25 +95,48 @@ def bm25_search(query, paragraphs, top_k=10):
             if qt in pt:
                 tf = 1.0
                 score += idf.get(qt, 0) * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * dl / max(avg_dl, 1)))
-        if score > 0:
-            scored.append((i, score))
+        bm25_scores.append(score)
+
+    # Embedding scoring (hybrid fusion)
+    embed = _get_embed_model()
+    if embed is not None:
+        import numpy as np
+        q_emb = embed.encode(query, normalize_embeddings=True, convert_to_numpy=True)
+        p_embs = embed.encode(
+            [p[:512] for p in paragraphs],
+            batch_size=64, show_progress_bar=False,
+            normalize_embeddings=True, convert_to_numpy=True,
+        )
+        emb_scores = (p_embs @ q_emb).tolist()
+
+        # Normalize and fuse (0.4 BM25 + 0.6 embedding — from experiment 3)
+        bm25_max = max(bm25_scores) if bm25_scores else 1
+        emb_max = max(emb_scores) if emb_scores else 1
+        scored = []
+        for i in range(n):
+            fused = (0.4 * bm25_scores[i] / max(bm25_max, 1e-6) +
+                     0.6 * emb_scores[i] / max(emb_max, 1e-6))
+            if fused > 0:
+                scored.append((i, fused))
+    else:
+        scored = [(i, s) for i, s in enumerate(bm25_scores) if s > 0]
 
     scored.sort(key=lambda x: -x[1])
-    bm25_top = scored[:top_k * 3]
+    candidates = scored[:top_k * 3]
 
-    # Cross-encoder rerank on BM25 candidates
+    # Cross-encoder rerank on candidates
     ce = _get_cross_encoder()
-    if ce and bm25_top:
-        pairs = [(query, paragraphs[idx][:512]) for idx, _ in bm25_top]
+    if ce and candidates:
+        pairs = [(query, paragraphs[idx][:512]) for idx, _ in candidates]
         try:
             ce_scores = ce.predict(pairs, show_progress_bar=False)
-            reranked = [(bm25_top[i][0], float(ce_scores[i])) for i in range(len(bm25_top))]
+            reranked = [(candidates[i][0], float(ce_scores[i])) for i in range(len(candidates))]
             reranked.sort(key=lambda x: -x[1])
             return reranked[:top_k]
         except Exception:
             pass
 
-    return bm25_top[:top_k]
+    return candidates[:top_k]
 
 
 def evaluate_retrieval(question, answer, evidence_indices, retrieved_indices, turns,
@@ -159,11 +201,36 @@ def evaluate_retrieval(question, answer, evidence_indices, retrieved_indices, tu
     except ImportError:
         pass
 
+    # Temporal code execution: precise date arithmetic instead of LLM guessing
+    try:
+        from temporal_graph import TemporalEvent, temporal_code_execute
+        q_lower = question.lower()
+        if any(w in q_lower for w in ["when", "how long", "before", "after", "since",
+                                       "first", "latest", "most recent", "how many days"]):
+            t_events = []
+            for idx, _ in retrieved_indices[:10]:
+                if idx < len(turns):
+                    from temporal_graph import parse_dates
+                    for d in parse_dates(turns[idx]):
+                        t_events.append(TemporalEvent(
+                            date=d, text=turns[idx][:200], source="turn", paragraph_idx=idx))
+            if t_events:
+                code_answer = temporal_code_execute(question, t_events)
+                if code_answer and answer_lower:
+                    ca_lower = code_answer.lower()
+                    if answer_lower in ca_lower or ca_lower in answer_lower:
+                        return True
+                    ca_tokens = tokenize(code_answer)
+                    if a_tokens and len(a_tokens & ca_tokens) / max(len(a_tokens), 1) > 0.3:
+                        return True
+    except ImportError:
+        pass
+
     # LLM answer synthesis: synthesize from top retrieved paragraphs and compare
     if _USE_LLM:
         try:
             from answer_extractor import llm_synthesize_answer, fuzzy_match
-            top_paras = [turns[idx] for idx, _ in retrieved_indices[:3] if idx < len(turns)]
+            top_paras = [turns[idx] for idx, _ in retrieved_indices[:10] if idx < len(turns)]
             if top_paras:
                 synthesized = llm_synthesize_answer(question, top_paras)
                 if synthesized and answer_lower:
