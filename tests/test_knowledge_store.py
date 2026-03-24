@@ -1,0 +1,347 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later | Commercial license available
+# Remanentia — Tests for knowledge_store.py
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from knowledge_store import (
+    KnowledgeNote,
+    KnowledgeStore,
+    Trigger,
+    _extract_keywords,
+    _extract_entities,
+    _note_id,
+    _tokenize,
+)
+
+
+# ── Utilities ───────────────────────────────────────────────────
+
+
+class TestTokenize:
+    def test_basic(self):
+        tokens = _tokenize("Hello World STDP BM25")
+        assert "hello" in tokens
+        assert "world" in tokens
+        assert "stdp" in tokens
+        assert "bm25" in tokens
+
+    def test_short_filtered(self):
+        tokens = _tokenize("a to is big cat")
+        assert "a" not in tokens
+        assert "big" in tokens
+
+    def test_empty(self):
+        assert _tokenize("") == set()
+
+
+class TestExtractKeywords:
+    def test_frequency_based(self):
+        text = "BM25 retrieval uses BM25 scoring for retrieval."
+        kw = _extract_keywords(text)
+        assert "bm25" in kw
+        assert "retrieval" in kw
+
+    def test_capitalized_terms(self):
+        kw = _extract_keywords("The ArcaneNeuron class handles encoding.")
+        assert "arcaneneuron" in kw
+
+    def test_versions(self):
+        kw = _extract_keywords("Released v3.9.0 to PyPI.")
+        assert "v3.9.0" in kw
+
+    def test_cap_at_20(self):
+        text = " ".join(f"Word{i} Word{i}" for i in range(30))
+        kw = _extract_keywords(text)
+        assert len(kw) <= 20
+
+
+class TestExtractEntities:
+    def test_known_entities(self):
+        ents = _extract_entities("We used STDP with BM25 on GPU.")
+        assert "stdp" in ents
+        assert "bm25" in ents
+        assert "gpu" in ents
+
+    def test_versions(self):
+        ents = _extract_entities("Released v3.9.0.")
+        assert "v3.9.0" in ents
+
+    def test_percentages(self):
+        ents = _extract_entities("Accuracy was 81.2%.")
+        assert "81.2%" in ents
+
+
+class TestNoteId:
+    def test_deterministic(self):
+        assert _note_id("content", "source") == _note_id("content", "source")
+
+    def test_different_content(self):
+        assert _note_id("aaa", "src") != _note_id("bbb", "src")
+
+    def test_length(self):
+        assert len(_note_id("x", "y")) == 12
+
+
+# ── KnowledgeNote ───────────────────────────────────────────────
+
+
+class TestKnowledgeNote:
+    def test_to_dict_roundtrip(self):
+        note = KnowledgeNote(
+            id="abc", title="Test", content="Content here",
+            keywords=["test"], source="test.md",
+            created="2026-03-24", updated="2026-03-24",
+            entities=["stdp"],
+        )
+        d = note.to_dict()
+        note2 = KnowledgeNote.from_dict(d)
+        assert note2.id == "abc"
+        assert note2.title == "Test"
+        assert note2.entities == ["stdp"]
+
+    def test_defaults(self):
+        note = KnowledgeNote(
+            id="x", title="T", content="C", keywords=[],
+            source="", created="", updated="",
+        )
+        assert note.links == []
+        assert note.supersedes == ""
+        assert note.superseded_by == ""
+
+
+# ── Trigger ─────────────────────────────────────────────────────
+
+
+class TestTrigger:
+    def test_to_dict_roundtrip(self):
+        t = Trigger(id="t1", condition="scpn-control", action="check weights file",
+                    created="2026-03-24")
+        d = t.to_dict()
+        t2 = Trigger.from_dict(d)
+        assert t2.condition == "scpn-control"
+        assert t2.active is True
+
+    def test_defaults(self):
+        t = Trigger(id="t", condition="c", action="a", created="now")
+        assert t.fired == []
+        assert t.active is True
+
+
+# ── KnowledgeStore: add_note ────────────────────────────────────
+
+
+class TestAddNote:
+    def test_creates_note(self):
+        store = KnowledgeStore()
+        note = store.add_note("We decided to remove SNN from retrieval scoring.", source="decision.md")
+        assert note.id in store.notes
+        assert "snn" in note.entities or "retrieval" in note.entities
+        assert note.created != ""
+
+    def test_auto_title(self):
+        store = KnowledgeStore()
+        note = store.add_note("We decided to use BM25 for all queries.\nMore details here.")
+        assert "BM25" in note.title or "decided" in note.title
+
+    def test_links_to_related(self):
+        store = KnowledgeStore()
+        store.add_note("BM25 scoring improved retrieval accuracy to 81.2%.", source="a.md")
+        note2 = store.add_note("BM25 retrieval accuracy measured at 83.1% after LLM synthesis.", source="b.md")
+        assert len(note2.links) > 0
+
+    def test_merges_near_duplicate(self):
+        store = KnowledgeStore()
+        n1 = store.add_note("The STDP learning rule was broken in both CPU and GPU backends.", source="a.md")
+        n2 = store.add_note("The STDP learning rule was broken in both CPU and GPU backends.", source="b.md")
+        # Near-duplicate should merge, not create new
+        assert len(store.notes) == 1
+        assert n2.id == n1.id
+
+    def test_does_not_merge_different(self):
+        store = KnowledgeStore()
+        store.add_note("BM25 scoring is fast and accurate.", source="a.md")
+        store.add_note("The SNN daemon was killed because it adds no signal.", source="b.md")
+        assert len(store.notes) == 2
+
+
+# ── Contradiction detection ─────────────────────────────────────
+
+
+class TestContradictionDetection:
+    def test_detects_opposite_actions(self):
+        store = KnowledgeStore()
+        n1 = store.add_note("We started the SNN daemon for retrieval.", source="a.md")
+        n2 = store.add_note("We killed the SNN daemon because it adds nothing.", source="b.md")
+        assert n2.supersedes != ""
+        assert n1.superseded_by != ""
+
+    def test_no_false_positive(self):
+        store = KnowledgeStore()
+        store.add_note("BM25 scoring works well for retrieval.", source="a.md")
+        n2 = store.add_note("Cross-encoder reranking improves retrieval further.", source="b.md")
+        assert n2.supersedes == ""
+
+    def test_contradiction_tracked_in_links(self):
+        store = KnowledgeStore()
+        n1 = store.add_note("We enabled the GPU daemon for faster processing.", source="a.md")
+        n2 = store.add_note("We disabled the GPU daemon to free memory.", source="b.md")
+        supersedes_links = [l for l in n2.links if l["type"] == "supersedes"]
+        assert len(supersedes_links) >= 1
+
+    def test_get_contradictions(self):
+        store = KnowledgeStore()
+        store.add_note("We added SNN scoring with weight 0.3.", source="a.md")
+        store.add_note("We removed SNN scoring. Weight set to 0.0.", source="b.md")
+        contradictions = store.get_contradictions()
+        assert len(contradictions) >= 1
+        old, new = contradictions[0]
+        assert old.superseded_by != ""
+
+
+# ── Search ──────────────────────────────────────────────────────
+
+
+class TestSearch:
+    def test_finds_relevant(self):
+        store = KnowledgeStore()
+        store.add_note("BM25 retrieval accuracy reached 81.2% on LOCOMO.", source="bench.md")
+        store.add_note("The SNN daemon was killed.", source="daemon.md")
+        results = store.search("BM25 LOCOMO accuracy", top_k=3)
+        assert len(results) > 0
+        assert any("bm25" in n.content.lower() for n in results)
+
+    def test_empty_query(self):
+        store = KnowledgeStore()
+        assert store.search("") == []
+
+    def test_no_match(self):
+        store = KnowledgeStore()
+        store.add_note("BM25 scoring works.", source="a.md")
+        assert store.search("xyznonexistent_zzz") == []
+
+
+# ── Graph traversal ─────────────────────────────────────────────
+
+
+class TestGetRelated:
+    def test_finds_linked(self):
+        store = KnowledgeStore()
+        n1 = store.add_note("BM25 retrieval scoring improved accuracy on LOCOMO benchmark.", source="a.md")
+        n2 = store.add_note("BM25 LOCOMO benchmark accuracy reached 83.1% with LLM synthesis.", source="b.md")
+        related = store.get_related(n1.id, depth=1)
+        assert len(related) > 0
+
+    def test_nonexistent_note(self):
+        store = KnowledgeStore()
+        assert store.get_related("nonexistent") == []
+
+    def test_depth_2(self):
+        store = KnowledgeStore()
+        n1 = store.add_note("BM25 retrieval is the core scoring algorithm.", source="a.md")
+        n2 = store.add_note("BM25 scoring uses TF-IDF term weighting internally.", source="b.md")
+        n3 = store.add_note("TF-IDF term weighting was the original retrieval method.", source="c.md")
+        related = store.get_related(n1.id, depth=2)
+        # Should find n2 (depth 1) and potentially n3 (depth 2)
+        assert len(related) >= 1
+
+
+# ── Triggers ────────────────────────────────────────────────────
+
+
+class TestTriggers:
+    def test_add_trigger(self):
+        store = KnowledgeStore()
+        t = store.add_trigger("scpn-control", "Check weights file changes with Python version")
+        assert t.condition == "scpn-control"
+        assert len(store.triggers) == 1
+
+    def test_check_triggers_match(self):
+        store = KnowledgeStore()
+        store.add_trigger("scpn-control weights", "Weights file changes with Python version")
+        matched = store.check_triggers("working on scpn-control weights file")
+        assert len(matched) == 1
+        assert len(matched[0].fired) == 1
+
+    def test_check_triggers_no_match(self):
+        store = KnowledgeStore()
+        store.add_trigger("scpn-control", "Check weights")
+        matched = store.check_triggers("director-ai release")
+        assert len(matched) == 0
+
+    def test_inactive_trigger_skipped(self):
+        store = KnowledgeStore()
+        t = store.add_trigger("scpn-control", "Check weights")
+        t.active = False
+        matched = store.check_triggers("scpn-control work")
+        assert len(matched) == 0
+
+
+# ── Save/Load ───────────────────────────────────────────────────
+
+
+class TestSaveLoad:
+    def test_save_and_load_notes(self, tmp_path):
+        store = KnowledgeStore()
+        store.add_note("BM25 retrieval accuracy reached 81.2% on LOCOMO.", source="bench.md")
+        store.add_note("SNN daemon was killed because it adds nothing.", source="daemon.md")
+        notes_path = tmp_path / "notes.jsonl"
+        triggers_path = tmp_path / "triggers.jsonl"
+        store.save(notes_path, triggers_path)
+        assert notes_path.exists()
+
+        store2 = KnowledgeStore()
+        assert store2.load(notes_path, triggers_path) is True
+        assert len(store2.notes) == len(store.notes)
+
+    def test_save_and_load_triggers(self, tmp_path):
+        store = KnowledgeStore()
+        store.add_trigger("scpn-control", "Check weights")
+        notes_path = tmp_path / "notes.jsonl"
+        triggers_path = tmp_path / "triggers.jsonl"
+        store.save(notes_path, triggers_path)
+
+        store2 = KnowledgeStore()
+        store2.load(notes_path, triggers_path)
+        assert len(store2.triggers) == 1
+
+    def test_load_nonexistent(self, tmp_path):
+        store = KnowledgeStore()
+        assert store.load(tmp_path / "nope.jsonl") is False
+
+    def test_search_after_load(self, tmp_path):
+        store = KnowledgeStore()
+        store.add_note("BM25 retrieval scoring algorithm details.", source="a.md")
+        notes_path = tmp_path / "notes.jsonl"
+        store.save(notes_path, tmp_path / "t.jsonl")
+
+        store2 = KnowledgeStore()
+        store2.load(notes_path, tmp_path / "t.jsonl")
+        results = store2.search("BM25 retrieval", top_k=3)
+        assert len(results) > 0
+
+
+# ── Stats ───────────────────────────────────────────────────────
+
+
+class TestStats:
+    def test_stats(self):
+        store = KnowledgeStore()
+        store.add_note("BM25 scoring works for retrieval on LOCOMO.", source="a.md")
+        store.add_note("BM25 LOCOMO retrieval accuracy improved with cross-encoder.", source="b.md")
+        store.add_trigger("scpn-control", "check weights")
+        s = store.stats
+        assert s["notes"] == 2
+        assert s["links"] > 0
+        assert s["triggers_total"] == 1
+        assert s["triggers_active"] == 1
+
+    def test_empty_stats(self):
+        store = KnowledgeStore()
+        s = store.stats
+        assert s["notes"] == 0
+        assert s["links"] == 0
