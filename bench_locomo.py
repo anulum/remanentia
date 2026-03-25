@@ -65,8 +65,20 @@ def _get_embed_model():
         return None
 
 
+def _extract_query_names(query):
+    """Extract person names from a question."""
+    names = set()
+    for m in re.finditer(r"\b([A-Z][a-z]{2,})\b", query):
+        word = m.group(1).lower()
+        if word not in {"what", "when", "where", "who", "how", "why", "would",
+                        "could", "does", "did", "has", "have", "the", "which",
+                        "likely", "yes", "not"}:
+            names.add(word)
+    return names
+
+
 def bm25_search(query, paragraphs, top_k=10):
-    """Hybrid BM25+embedding search + cross-encoder rerank."""
+    """Hybrid BM25+embedding search + cross-encoder rerank + entity boost."""
     import math
     from collections import Counter
 
@@ -74,6 +86,9 @@ def bm25_search(query, paragraphs, top_k=10):
     n = len(paragraphs)
     if n == 0:
         return []
+
+    # Extract person names from query for entity-centric boosting
+    query_names = _extract_query_names(query)
 
     # BM25 scoring
     df = Counter()
@@ -116,10 +131,23 @@ def bm25_search(query, paragraphs, top_k=10):
         for i in range(n):
             fused = (0.4 * bm25_scores[i] / max(bm25_max, 1e-6) +
                      0.6 * emb_scores[i] / max(emb_max, 1e-6))
+            # Entity-centric boost: turns mentioning query's person get 1.3x
+            if query_names and fused > 0:
+                p_lower = paragraphs[i].lower()
+                if any(name in p_lower for name in query_names):
+                    fused *= 1.3
             if fused > 0:
                 scored.append((i, fused))
     else:
-        scored = [(i, s) for i, s in enumerate(bm25_scores) if s > 0]
+        scored = []
+        for i, s in enumerate(bm25_scores):
+            if s > 0:
+                # Entity boost for BM25-only path too
+                if query_names:
+                    p_lower = paragraphs[i].lower()
+                    if any(name in p_lower for name in query_names):
+                        s *= 1.3
+                scored.append((i, s))
 
     scored.sort(key=lambda x: -x[1])
     candidates = scored[:top_k * 3]

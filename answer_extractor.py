@@ -356,27 +356,42 @@ def llm_synthesize_answer(query: str, paragraphs: list[str],
 
     Unlike llm_extract_answer (single paragraph), this reasons across
     multiple sources to produce a grounded, cited answer.
+    Uses question-type-specific prompts for better accuracy.
     """
     client = _get_client()
     if not client:
         return None
     context = "\n\n---\n\n".join(  # pragma: no cover
-        f"[Source {i+1}]: {p[:600]}" for i, p in enumerate(paragraphs[:5])
+        f"[Source {i+1}]: {p[:600]}" for i, p in enumerate(paragraphs[:10])
     )
+
+    # Question-type-specific prompt (improves counterfactual/temporal)
+    q_lower = query.lower()
+    if any(w in q_lower for w in ["would", "could", "might", "likely"]):  # pragma: no cover
+        system_prompt = (
+            "Answer the hypothetical question by reasoning about the person's "
+            "stated preferences, personality, and past actions from the sources. "
+            "Answer with 'Yes' or 'No' followed by a brief reason. "
+            "If insufficient information, say 'unknown'.")
+    elif any(w in q_lower for w in ["what are", "what does", "list", "hobbies",
+                                     "interests", "activities"]):  # pragma: no cover
+        system_prompt = (
+            "List ALL relevant items mentioned across ALL sources. "
+            "Combine information from different sources into one complete answer. "
+            "If the answer isn't in the sources, say 'unknown'.")
+    else:  # pragma: no cover
+        system_prompt = (
+            "Answer the question using ONLY the provided sources. "
+            "Be concise (1-3 sentences). "
+            "If sources don't contain the answer, say 'unknown'.")
+
     try:  # pragma: no cover
         response = client.messages.create(
             model=model,
             max_tokens=200,
             messages=[{
                 "role": "user",
-                "content": (
-                    "Answer the question using ONLY the provided sources. "
-                    "Cite sources as [1], [2], etc. "
-                    "If sources don't contain the answer, say 'unknown'. "
-                    "Be concise (1-3 sentences).\n\n"
-                    f"{context}\n\n"
-                    f"Question: {query}"
-                ),
+                "content": f"{system_prompt}\n\n{context}\n\nQuestion: {query}",
             }],
         )
         answer = response.content[0].text.strip()

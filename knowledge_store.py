@@ -72,7 +72,26 @@ def _extract_entities(text: str) -> set[str]:
         entities.add(m.group())
     for m in re.finditer(r"\d+\.?\d*%", text):
         entities.add(m.group())
+    # Person names (capitalized words not at sentence start)
+    for m in re.finditer(r"(?<=[.!?\n] |\: )[A-Z][a-z]{2,}", text):
+        entities.add(m.group().lower())
     return entities
+
+
+def extract_person_names(text: str) -> set[str]:
+    """Extract person names from text (capitalized words in conversational context)."""
+    names = set()
+    # "Person:" pattern (common in chat transcripts)
+    for m in re.finditer(r"^([A-Z][a-z]{2,}):", text, re.MULTILINE):
+        names.add(m.group(1).lower())
+    # Standalone capitalized names after common prefixes
+    for m in re.finditer(r"(?:^|\.\s+|!\s+|\?\s+|\n\s*)([A-Z][a-z]{2,})\b", text):
+        word = m.group(1).lower()
+        if word not in {"the", "this", "that", "what", "when", "where", "who",
+                        "how", "why", "yes", "yeah", "wow", "hey", "thanks",
+                        "congrats", "glad", "great", "sure", "gonna"}:
+            names.add(word)
+    return names
 
 
 def _generate_prospective_queries(content: str, title: str,
@@ -294,6 +313,24 @@ class KnowledgeStore:
 
         self.notes[nid] = note
         self._token_index[nid] = note_tokens
+
+        # Auto entity linking: create edges between notes sharing entities
+        if entities:
+            note_ent_set = set(entities)
+            for eid, existing in self.notes.items():
+                if eid == nid:
+                    continue
+                existing_ent_set = set(existing.entities)
+                shared = note_ent_set & existing_ent_set
+                if len(shared) >= 2:
+                    # Strong entity overlap → depends_on edge
+                    already_linked = any(l["target"] == eid for l in note.links)
+                    if not already_linked:
+                        note.links.append({"target": eid, "type": "related",
+                                           "shared_entities": sorted(shared)[:5]})
+                        existing.links.append({"target": nid, "type": "related",
+                                               "shared_entities": sorted(shared)[:5]})
+
         return note
 
     def _detect_contradiction(self, content: str, entities: list[str]) -> str | None:
