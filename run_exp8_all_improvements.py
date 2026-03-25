@@ -247,12 +247,8 @@ for ci, conv in enumerate(ds):
             if len(covered) / max(len(a_tokens), 1) > 0.5:
                 hit = True
 
-        # Confidence-based routing: check if retrieval is trustworthy
-        top_ce_score = retrieved[0][1] if retrieved else 0.0
-        low_confidence = top_ce_score < CE_LOW_CONFIDENCE
-
-        # Stage 2: Answer extraction + sentence matching (skip if low confidence → go to LLM)
-        if not hit and not low_confidence:
+        # Stage 2: Answer extraction + sentence matching (always run)
+        if not hit:
             for idx, sc in retrieved[:5]:
                 if idx < len(turns):
                     extracted = extract_answer(q, turns[idx])
@@ -272,7 +268,7 @@ for ci, conv in enumerate(ds):
                             break
 
         # Stage 3: Temporal code execution
-        if not hit and not low_confidence:
+        if not hit:
             q_lower = q.lower()
             if any(w in q_lower for w in ["when", "how long", "before", "after", "since",
                                            "first", "latest", "most recent", "how many days"]):
@@ -313,7 +309,7 @@ for ci, conv in enumerate(ds):
                     # Semantic similarity fallback for paraphrase mismatches
                     elif len(a) > 3 and len(llm_ans) > 3:
                         sim = semantic_similarity(llm_ans, a)
-                        if sim > 0.7:
+                        if sim > 0.8:
                             hit = True
 
         if cat_name not in results:
@@ -333,7 +329,7 @@ elapsed = time.monotonic() - t0
 overall = correct / max(tested, 1) * 100
 
 out = {
-    "experiment": "Full pipeline v3: +normalizer+gated_boost+confidence_routing+dedup+semantic",
+    "experiment": "Full pipeline v3b: +normalizer+gated_boost+dedup+semantic(0.8)",
     "accuracy": round(overall, 1),
     "elapsed_s": round(elapsed, 1),
     "llm_calls": llm_calls,
