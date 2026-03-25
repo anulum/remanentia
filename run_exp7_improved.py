@@ -135,12 +135,36 @@ def hybrid_search(query, turns, para_tokens, idf, avg_dl, turn_embs, top_k=20):
 CE_LOW_CONFIDENCE = 3.0
 
 
+def _dedup_turn_indices(indices, turns, threshold=0.8):
+    """Remove near-duplicate retrieved turns."""
+    kept = []
+    kept_token_sets = []
+    for idx, score in indices:
+        if idx >= len(turns):
+            continue
+        t_tokens = tokenize(turns[idx])
+        is_dup = False
+        for prev_tokens in kept_token_sets:
+            if not t_tokens or not prev_tokens:
+                continue
+            overlap = len(t_tokens & prev_tokens) / max(min(len(t_tokens), len(prev_tokens)), 1)
+            if overlap > threshold:
+                is_dup = True
+                break
+        if not is_dup:
+            kept.append((idx, score))
+            kept_token_sets.append(t_tokens)
+    return kept
+
+
 def llm_answer(question, turns, retrieved_indices):
     if not client:
         return None
+    # Dedup + expand context to 15 turns
+    deduped = _dedup_turn_indices(retrieved_indices, turns)
     context = "\n\n".join(
         f"[Turn {idx}]: {turns[idx][:500]}"
-        for idx, _ in retrieved_indices[:10]
+        for idx, _ in deduped[:15]
         if idx < len(turns))
 
     # Question-type-specific prompts
