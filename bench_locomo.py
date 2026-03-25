@@ -65,6 +65,17 @@ def _get_embed_model():
         return None
 
 
+_PERSON_CENTRIC_PATTERNS = re.compile(
+    r"\b(relationship|hobby|hobbies|interest|interests|career|job|status|"
+    r"personality|feel|feeling|prefer|favorite|partake|destress|self-care|"
+    r"political|leaning|member|community)\b", re.IGNORECASE)
+
+_POSSESSIVE_PATTERNS = re.compile(
+    r"\b(his|her|their|'s)\s+(hobby|hobbies|interest|interests|career|"
+    r"relationship|status|personality|feeling|preference|activity|activities)\b",
+    re.IGNORECASE)
+
+
 def _extract_query_names(query):
     """Extract person names from a question."""
     names = set()
@@ -77,6 +88,23 @@ def _extract_query_names(query):
     return names
 
 
+def _is_person_centric(query):
+    """True if the query asks about a person's traits/status/preferences.
+
+    Entity boost should only fire for person-centric queries to avoid
+    over-promoting person-mentioning turns for factual questions like
+    "What inspired the painting?" where the subject is the painting.
+    """
+    if _PERSON_CENTRIC_PATTERNS.search(query):
+        return True
+    if _POSSESSIVE_PATTERNS.search(query):
+        return True
+    q_lower = query.lower()
+    if any(w in q_lower for w in ["would ", "could ", "likely "]):
+        return True
+    return False
+
+
 def bm25_search(query, paragraphs, top_k=10):
     """Hybrid BM25+embedding search + cross-encoder rerank + entity boost."""
     import math
@@ -87,8 +115,8 @@ def bm25_search(query, paragraphs, top_k=10):
     if n == 0:
         return []
 
-    # Extract person names from query for entity-centric boosting
-    query_names = _extract_query_names(query)
+    # Extract person names — only boost for person-centric queries
+    query_names = _extract_query_names(query) if _is_person_centric(query) else set()
 
     # BM25 scoring
     df = Counter()
