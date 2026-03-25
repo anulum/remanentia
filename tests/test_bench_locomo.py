@@ -104,6 +104,65 @@ class TestIsPersonCentric:
         assert _is_person_centric("Would Melanie be considered a member of the LGBTQ community?")
 
 
+def tokenize(text):
+    return set(re.findall(r"[a-z0-9][a-z0-9_]{2,}", text.lower()))
+
+
+def _dedup_turn_indices(indices, turns, threshold=0.8):
+    """Mirror of the function in run_exp7_improved.py."""
+    kept = []
+    kept_token_sets = []
+    for idx, score in indices:
+        if idx >= len(turns):
+            continue
+        t_tokens = tokenize(turns[idx])
+        is_dup = False
+        for prev_tokens in kept_token_sets:
+            if not t_tokens or not prev_tokens:
+                continue
+            overlap = len(t_tokens & prev_tokens) / max(min(len(t_tokens), len(prev_tokens)), 1)
+            if overlap > threshold:
+                is_dup = True
+                break
+        if not is_dup:
+            kept.append((idx, score))
+            kept_token_sets.append(t_tokens)
+    return kept
+
+
+class TestDedupTurnIndices:
+    def test_no_duplicates(self):
+        turns = ["I love pottery and painting", "The weather is great today", "Let's go camping"]
+        indices = [(0, 5.0), (1, 4.0), (2, 3.0)]
+        result = _dedup_turn_indices(indices, turns)
+        assert len(result) == 3
+
+    def test_removes_near_duplicates(self):
+        turns = [
+            "I love pottery and painting and swimming every day",
+            "I love pottery and painting and swimming each day",  # near-dup of 0
+            "The weather is completely different from everything else",
+        ]
+        indices = [(0, 5.0), (1, 4.0), (2, 3.0)]
+        result = _dedup_turn_indices(indices, turns)
+        assert len(result) == 2
+        assert result[0][0] == 0  # keeps higher-ranked
+        assert result[1][0] == 2  # unique turn
+
+    def test_empty_indices(self):
+        assert _dedup_turn_indices([], ["some turn"]) == []
+
+    def test_out_of_range_index(self):
+        result = _dedup_turn_indices([(5, 1.0)], ["only one turn"])
+        assert result == []
+
+    def test_keeps_order(self):
+        turns = ["alpha beta gamma", "delta epsilon zeta", "eta theta iota"]
+        indices = [(2, 1.0), (0, 2.0), (1, 3.0)]
+        result = _dedup_turn_indices(indices, turns)
+        assert [idx for idx, _ in result] == [2, 0, 1]
+
+
 class TestEntityBoostGating:
     """Verify that entity boost is gated by person-centricity."""
 
