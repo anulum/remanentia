@@ -18,6 +18,7 @@ from knowledge_store import (
     _generate_prospective_queries,
     _note_id,
     _tokenize,
+    extract_person_names,
 )
 
 
@@ -515,3 +516,48 @@ class TestGraphSearch:
         store.add_note("We killed the SNN daemon because it adds nothing.", source="b.md")
         results = store.search("SNN daemon", exclude_superseded=False)
         assert len(results) >= 2
+
+
+# ── Person name extraction ───────────────────────────────────────
+
+
+class TestExtractPersonNames:
+    def test_chat_format(self):
+        names = extract_person_names("Caroline: I love pottery!\nMelanie: That's great!")
+        assert "caroline" in names
+        assert "melanie" in names
+
+    def test_ignores_common_words(self):
+        names = extract_person_names("The weather is great. Thanks for asking.")
+        assert "the" not in names
+        assert "thanks" not in names
+
+    def test_sentence_start_names(self):
+        names = extract_person_names("John went to the store. Maria called him.")
+        assert "john" in names
+        assert "maria" in names
+
+    def test_empty(self):
+        assert extract_person_names("no names here at all") == set()
+
+
+# ── Auto entity linking ─────────────────────────────────────────
+
+
+class TestAutoEntityLinking:
+    def test_shared_entities_create_links(self):
+        store = KnowledgeStore()
+        n1 = store.add_note("BM25 retrieval accuracy is 81.2% on LOCOMO benchmark.", source="a.md")
+        n2 = store.add_note("LOCOMO benchmark result: BM25 achieved 83.1% accuracy.", source="b.md")
+        # Both share bm25 and locomo entities — should auto-link
+        all_links = n1.links + n2.links
+        assert len(all_links) >= 2  # at least the similarity links
+
+    def test_no_link_without_shared_entities(self):
+        store = KnowledgeStore()
+        n1 = store.add_note("PyTorch CUDA acceleration for training models.", source="a.md")
+        n2 = store.add_note("The weather in Prague was surprisingly warm today.", source="b.md")
+        # No shared entities — auto entity linking shouldn't fire
+        # (may still have similarity links if tokens overlap)
+        n2_entity_links = [l for l in n2.links if "shared_entities" in l]
+        assert len(n2_entity_links) == 0
