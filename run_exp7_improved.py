@@ -31,7 +31,7 @@ ds = load_dataset("KhangPTT373/locomo_preprocess", split="test")
 
 from temporal_graph import TemporalEvent, temporal_code_execute, parse_dates
 from answer_extractor import extract_answer, fuzzy_match, extract_best_sentence
-from answer_normalizer import answers_match as normalized_match
+from answer_normalizer import answers_match as normalized_match, semantic_similarity
 
 
 def precompute_conv(turns):
@@ -310,6 +310,11 @@ for ci, conv in enumerate(ds):
                     la_tokens = tokenize(llm_ans)
                     if a_tokens and len(a_tokens & la_tokens) / max(len(a_tokens), 1) > 0.3:
                         hit = True
+                    # Semantic similarity fallback for paraphrase mismatches
+                    elif len(a) > 3 and len(llm_ans) > 3:
+                        sim = semantic_similarity(llm_ans, a)
+                        if sim > 0.7:
+                            hit = True
 
         if cat_name not in results:
             results[cat_name] = {"correct": 0, "total": 0}

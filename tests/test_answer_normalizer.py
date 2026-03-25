@@ -6,6 +6,7 @@ from answer_normalizer import (
     answers_match,
     extract_answer_items,
     normalize_answer,
+    semantic_similarity,
 )
 
 
@@ -124,3 +125,26 @@ class TestAnswersMatch:
             "Likely no, because she never said so",
             "Likely no"
         )
+
+
+class TestSemanticSimilarity:
+    def test_similar_texts(self):
+        sim = semantic_similarity("I enjoy painting and pottery", "I like art and ceramics")
+        assert sim > 0.3  # should be somewhat similar
+
+    def test_dissimilar_texts(self):
+        sim = semantic_similarity("quantum computing algorithms", "chocolate cake recipe")
+        assert sim < 0.3
+
+    def test_identical(self):
+        sim = semantic_similarity("hello world", "hello world")
+        assert sim > 0.95
+
+    def test_range(self):
+        sim = semantic_similarity("some text", "other text")
+        assert -1.0 <= sim <= 1.0
+
+    def test_empty_strings(self):
+        sim = semantic_similarity("", "hello")
+        # Should not crash — returns some value
+        assert isinstance(sim, float)
