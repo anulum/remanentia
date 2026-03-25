@@ -31,6 +31,7 @@ ds = load_dataset("KhangPTT373/locomo_preprocess", split="test")
 
 from temporal_graph import TemporalEvent, temporal_code_execute, parse_dates
 from answer_extractor import extract_answer, fuzzy_match, extract_best_sentence
+from answer_normalizer import answers_match as normalized_match
 
 
 def precompute_conv(turns):
@@ -129,6 +130,11 @@ def hybrid_search(query, turns, para_tokens, idf, avg_dl, turn_embs, top_k=20):
     return candidates[:top_k]
 
 
+# Threshold below which cross-encoder confidence is "low" —
+# triggers early LLM routing instead of waiting for stage 4 fallback
+CE_LOW_CONFIDENCE = 3.0
+
+
 def llm_answer(question, turns, retrieved_indices):
     if not client:
         return None
@@ -217,8 +223,12 @@ for ci, conv in enumerate(ds):
             if len(covered) / max(len(a_tokens), 1) > 0.5:
                 hit = True
 
-        # Stage 2: Answer extraction + sentence matching
-        if not hit:
+        # Confidence-based routing: check if retrieval is trustworthy
+        top_ce_score = retrieved[0][1] if retrieved else 0.0
+        low_confidence = top_ce_score < CE_LOW_CONFIDENCE
+
+        # Stage 2: Answer extraction + sentence matching (skip if low confidence → go to LLM)
+        if not hit and not low_confidence:
             for idx, sc in retrieved[:5]:
                 if idx < len(turns):
                     extracted = extract_answer(q, turns[idx])
@@ -238,7 +248,7 @@ for ci, conv in enumerate(ds):
                             break
 
         # Stage 3: Temporal code execution
-        if not hit:
+        if not hit and not low_confidence:
             q_lower = q.lower()
             if any(w in q_lower for w in ["when", "how long", "before", "after", "since",
                                            "first", "latest", "most recent", "how many days"]):
@@ -261,13 +271,16 @@ for ci, conv in enumerate(ds):
                                 hit = True
                                 temporal_code_hits += 1
 
-        # Stage 4: LLM synthesis fallback
+        # Stage 4: LLM synthesis
+        # Fires when: retrieval-based stages failed OR low confidence (early routing)
         if not hit and retrieved and client:
             llm_ans = llm_answer(q, turns, retrieved)
             llm_calls += 1
             if llm_ans:
                 la = llm_ans.lower().strip()
                 if a_lower in la or la in a_lower:
+                    hit = True
+                elif normalized_match(llm_ans, a):
                     hit = True
                 else:
                     la_tokens = tokenize(llm_ans)
