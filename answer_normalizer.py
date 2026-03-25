@@ -123,3 +123,33 @@ def answers_match(predicted: str, ground_truth: str, threshold: float = 0.25) ->
             return True
 
     return False
+
+
+_embed_model = None
+
+
+def _get_embed_model():
+    global _embed_model
+    if _embed_model is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+            _embed_model = SentenceTransformer("all-MiniLM-L6-v2")
+        except Exception:
+            _embed_model = False
+    return _embed_model if _embed_model else None
+
+
+def semantic_similarity(text_a: str, text_b: str) -> float:
+    """Cosine similarity between two texts using MiniLM embeddings.
+
+    Returns 0.0 if embeddings unavailable.
+
+    >>> 0.0 <= semantic_similarity("I am single", "finding acceptance") <= 1.0
+    True
+    """
+    model = _get_embed_model()
+    if not model:
+        return 0.0
+    import numpy as np
+    embs = model.encode([text_a, text_b], normalize_embeddings=True, convert_to_numpy=True)
+    return float(np.dot(embs[0], embs[1]))
