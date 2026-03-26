@@ -109,11 +109,15 @@ class MemoryIndex:
         self.paragraph_tokens: list[set[str]] = []
         self.paragraph_types: list[str] = []  # function, decision, finding, etc.
         self.idf: dict[str, float] = {}
+        self._inverted_index: dict[str, list[int]] = {}  # token → paragraph indices
         self.embeddings: np.ndarray | None = None
         self._built = False
         self._embed_model = None
         self._cross_encoder = None
+        self._ce_loading = False
+        self._embed_loading = False
         self._temporal_graph = None
+        self._avg_dl: float = 1.0
 
     def build(self, use_gpu_embeddings: bool = True, use_gliner: bool = True,
               use_llm_indexing: bool = False) -> dict:
@@ -205,14 +209,21 @@ class MemoryIndex:
                     self.paragraph_tokens.append(tokens_with_pq)
                     self.paragraph_types.append(p_type)
 
-        # Build IDF
+        # Build inverted index + IDF
         n_docs = len(self.paragraph_tokens)
         df: Counter = Counter()
-        for tokens in self.paragraph_tokens:
+        inv: dict[str, list[int]] = {}
+        for i, tokens in enumerate(self.paragraph_tokens):
             for t in tokens:
                 df[t] += 1
+                if t not in inv:
+                    inv[t] = []
+                inv[t].append(i)
+        self._inverted_index = inv
         self.idf = {t: math.log(1 + n_docs / (1 + count))
                      for t, count in df.items()}
+        self._para_lengths = np.array([len(t) for t in self.paragraph_tokens], dtype=np.float32)
+        self._avg_dl = float(np.mean(self._para_lengths)) if len(self._para_lengths) > 0 else 1.0
 
         # GPU embeddings if available
         if use_gpu_embeddings:  # pragma: no cover
@@ -297,6 +308,7 @@ class MemoryIndex:
 
         n_existing = len(self.paragraph_tokens)
         for para_idx, para in enumerate(paragraphs):
+            p_idx = len(self.paragraph_tokens)
             self.paragraph_index.append((doc_idx, para_idx))
             p_type = _classify_paragraph(para, is_code=is_code)
             pq = _generate_prospective_queries(para, path.name, p_type)
@@ -304,10 +316,12 @@ class MemoryIndex:
             tokens = set(_tokenize(combined))
             self.paragraph_tokens.append(tokens)
             self.paragraph_types.append(p_type)
-            # Update IDF incrementally for new tokens
             for t in tokens:
                 if t not in self.idf:
                     self.idf[t] = math.log(1 + len(self.paragraph_tokens) / 2)
+                if t not in self._inverted_index:
+                    self._inverted_index[t] = []
+                self._inverted_index[t].append(p_idx)
 
         # Compute embeddings for new paragraphs if model is loaded
         if self._embed_model is not None:  # pragma: no cover
@@ -322,43 +336,46 @@ class MemoryIndex:
 
         return len(paragraphs)
 
-    def _cross_encoder_rerank(self, query: str, candidates: list[tuple[int, float]],
-                              timeout: float = 5.0) -> list[tuple[int, float]] | None:
-        """Rerank candidates using a cross-encoder for query-paragraph relevance.
+    def _start_model_warmup(self):
+        """Start loading embedding + cross-encoder models in background."""
+        import threading
+        if self._embed_model is None and not self._embed_loading and self.embeddings is not None:
+            self._embed_loading = True
+            def _load_embed():
+                try:
+                    from sentence_transformers import SentenceTransformer
+                    import torch
+                    device = "cuda" if torch.cuda.is_available() else "cpu"
+                    self._embed_model = SentenceTransformer("all-MiniLM-L6-v2", device=device)
+                except Exception:
+                    pass
+                self._embed_loading = False
+            threading.Thread(target=_load_embed, daemon=True).start()
 
-        Fail-closed: if model doesn't load within timeout, disables
-        cross-encoder for the rest of this process. BM25 at 0.1s beats
-        cross-encoder at 5.9s when the model can't warm up.
-        """
-        if not candidates or self._cross_encoder is False:
-            return None
-
-        if self._cross_encoder is None:
-            import threading
-            result_holder = [None]
-
-            def _load():
+        if self._cross_encoder is None and not self._ce_loading:
+            self._ce_loading = True
+            def _load_ce():
                 try:
                     from sentence_transformers import CrossEncoder
                     import torch
                     device = "cuda" if torch.cuda.is_available() else "cpu"
-                    result_holder[0] = CrossEncoder(
+                    self._cross_encoder = CrossEncoder(
                         "cross-encoder/ms-marco-MiniLM-L-6-v2", device=device)
                 except Exception:
-                    result_holder[0] = False
+                    self._cross_encoder = False
+                self._ce_loading = False
+            threading.Thread(target=_load_ce, daemon=True).start()
 
-            loader = threading.Thread(target=_load, daemon=True)
-            loader.start()
-            loader.join(timeout=timeout)
+    def _cross_encoder_rerank(self, query: str, candidates: list[tuple[int, float]]) -> list[tuple[int, float]] | None:
+        """Rerank candidates using cross-encoder if loaded.
 
-            if loader.is_alive():
-                # Fail closed — don't retry, don't wait in background
-                self._cross_encoder = False
-                return None
-
-            self._cross_encoder = result_holder[0] if result_holder[0] is not None else False
-            if self._cross_encoder is False:
-                return None
+        Non-blocking: if model is still loading, returns None (BM25 results
+        used). Model loads in background — next query benefits.
+        """
+        if not candidates or self._cross_encoder is False:
+            return None
+        if self._cross_encoder is None or self._ce_loading:
+            return None
 
         pairs = []
         for para_idx, _ in candidates:
@@ -389,6 +406,8 @@ class MemoryIndex:
         if not self._built:
             self.build()
 
+        self._start_model_warmup()
+
         q_tokens = set(_tokenize(query))
         if not q_tokens:
             return []
@@ -414,44 +433,58 @@ class MemoryIndex:
         intent = _classify_query(query)
         boost_types = set(intent.get("boost_types", []))
 
-        # BM25 scoring over all paragraphs
+        # BM25 scoring via inverted index (only visit paragraphs containing query tokens)
         k1, b = 1.5, 0.75
-        avg_dl = np.mean([len(t) for t in self.paragraph_tokens]) if self.paragraph_tokens else 1
+        avg_dl = self._avg_dl if self._avg_dl > 0 else 1.0
 
-        scores = []
-        for i, p_tokens in enumerate(self.paragraph_tokens):
-            if i in _filtered_out:
+        candidate_scores: dict[int, float] = {}
+        para_lengths = self._para_lengths
+        for qt in q_tokens:
+            posting = self._inverted_index.get(qt)
+            if not posting:
                 continue
-            score = 0.0
-            dl = len(p_tokens)
-            for qt in q_tokens:
-                if qt not in p_tokens:
+            idf_val = self.idf.get(qt, 0)
+            if idf_val == 0:
+                continue
+            for i in posting:
+                if i in _filtered_out:
                     continue
-                tf = 1
-                idf_val = self.idf.get(qt, 0)
-                score += idf_val * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * dl / max(avg_dl, 1)))
+                dl_ratio = para_lengths[i] / avg_dl
+                candidate_scores[i] = candidate_scores.get(i, 0.0) + (
+                    idf_val * (k1 + 1) / (1 + k1 * (1 - b + b * dl_ratio)))
 
-            if score > 0:
-                # Paragraph type boost (from query classification)
-                if boost_types and i < len(self.paragraph_types):
-                    if self.paragraph_types[i] in boost_types:
-                        score *= 1.5
+        # Entity-centric person-name boost (bench_locomo: +3-5pp)
+        query_names = _extract_query_names(query) if _is_person_centric(query) else set()
 
-                # Recency boost (for "latest", "status", "current" queries)
-                if intent.get("recency"):
-                    doc_idx = self.paragraph_index[i][0] if i < len(self.paragraph_index) else 0
-                    if doc_idx < len(self.documents) and self.documents[doc_idx].date:
-                        score *= _recency_boost(self.documents[doc_idx].date)
+        # Apply boosts to candidates with score > 0
+        scores = []
+        for i, score in candidate_scores.items():
+            if boost_types and i < len(self.paragraph_types):
+                if self.paragraph_types[i] in boost_types:
+                    score *= 1.5
 
-                # Temporal queries: boost paragraphs containing date expressions
-                if intent["type"] == "temporal":
-                    doc_idx = self.paragraph_index[i][0] if i < len(self.paragraph_index) else 0
-                    para_idx = self.paragraph_index[i][1] if i < len(self.paragraph_index) else 0
-                    if doc_idx < len(self.documents):
-                        para_text = self.documents[doc_idx].paragraphs[para_idx] if para_idx < len(self.documents[doc_idx].paragraphs) else ""
-                        if _has_date_expression(para_text):
-                            score *= 1.4
-                scores.append((i, score))
+            if intent.get("recency"):
+                doc_idx = self.paragraph_index[i][0] if i < len(self.paragraph_index) else 0
+                if doc_idx < len(self.documents) and self.documents[doc_idx].date:
+                    score *= _recency_boost(self.documents[doc_idx].date)
+
+            if intent["type"] == "temporal":
+                doc_idx = self.paragraph_index[i][0] if i < len(self.paragraph_index) else 0
+                para_idx = self.paragraph_index[i][1] if i < len(self.paragraph_index) else 0
+                if doc_idx < len(self.documents):
+                    para_text = self.documents[doc_idx].paragraphs[para_idx] if para_idx < len(self.documents[doc_idx].paragraphs) else ""
+                    if _has_date_expression(para_text):
+                        score *= 1.4
+
+            if query_names:
+                doc_idx = self.paragraph_index[i][0] if i < len(self.paragraph_index) else 0
+                para_idx = self.paragraph_index[i][1] if i < len(self.paragraph_index) else 0
+                if doc_idx < len(self.documents):
+                    para_text = self.documents[doc_idx].paragraphs[para_idx].lower() if para_idx < len(self.documents[doc_idx].paragraphs) else ""
+                    if any(name in para_text for name in query_names):
+                        score *= 1.3
+
+            scores.append((i, score))
 
         scores.sort(key=lambda x: -x[1])
 
@@ -516,14 +549,13 @@ class MemoryIndex:
             except Exception:  # pragma: no cover
                 pass
 
-        # Answer extraction (lazy import)
+        # Answer extraction — always on (bench_locomo: +16pp)
         _answer_extractor = None
-        if intent["type"] in ("temporal", "metric", "general"):
-            try:
-                from answer_extractor import extract_answer
-                _answer_extractor = extract_answer
-            except ImportError:  # pragma: no cover
-                pass
+        try:
+            from answer_extractor import extract_answer
+            _answer_extractor = extract_answer
+        except ImportError:  # pragma: no cover
+            pass
 
         _llm_extractor = None
         if use_llm:
@@ -629,6 +661,16 @@ class MemoryIndex:
             self.paragraph_tokens = [set(t) for t in data["paragraph_tokens"]]
             self.idf = data["idf"]
             self.paragraph_types = data.get("paragraph_types", [])
+            # Rebuild inverted index from paragraph tokens
+            inv: dict[str, list[int]] = {}
+            for i, tokens in enumerate(self.paragraph_tokens):
+                for t in tokens:
+                    if t not in inv:
+                        inv[t] = []
+                    inv[t].append(i)
+            self._inverted_index = inv
+            self._para_lengths = np.array([len(t) for t in self.paragraph_tokens], dtype=np.float32)
+            self._avg_dl = float(np.mean(self._para_lengths)) if len(self._para_lengths) > 0 else 1.0
             # Dequantize embeddings if needed
             if data.get("quantized") and data.get("emb_scale") is not None:
                 emb_int8 = data["embeddings"]
@@ -640,6 +682,39 @@ class MemoryIndex:
             return True
         except Exception:
             return False
+
+
+# ── Entity-centric boosting (ported from bench_locomo.py) ────────
+
+_PERSON_CENTRIC_RE = re.compile(
+    r"\b(relationship|hobby|hobbies|interest|interests|career|job|status|"
+    r"personality|feel|feeling|prefer|favorite|partake|destress|self-care|"
+    r"political|leaning|member|community)\b", re.IGNORECASE)
+
+_POSSESSIVE_RE = re.compile(
+    r"\b(his|her|their|'s)\s+(hobby|hobbies|interest|interests|career|"
+    r"relationship|status|personality|feeling|preference|activity|activities)\b",
+    re.IGNORECASE)
+
+
+def _extract_query_names(query: str) -> set[str]:
+    names = set()
+    for m in re.finditer(r"\b([A-Z][a-z]{2,})\b", query):
+        word = m.group(1).lower()
+        if word not in {"what", "when", "where", "who", "how", "why", "would",
+                        "could", "does", "did", "has", "have", "the", "which",
+                        "likely", "yes", "not"}:
+            names.add(word)
+    return names
+
+
+def _is_person_centric(query: str) -> bool:
+    if _PERSON_CENTRIC_RE.search(query):
+        return True
+    if _POSSESSIVE_RE.search(query):
+        return True
+    q_lower = query.lower()
+    return any(w in q_lower for w in ["would ", "could ", "likely "])
 
 
 # ── Query intelligence ────────────────────────────────────────────
