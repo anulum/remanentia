@@ -637,8 +637,11 @@ class MemoryIndex:
             "quantized": quantize and self.embeddings is not None,
             "timestamp": time.time(),
         }
-        with open(path, "wb") as f:
+        # Atomic write: temp file + rename
+        tmp = path.with_suffix(".pkl.tmp")
+        with open(tmp, "wb") as f:
             pickle.dump(data, f)
+        tmp.replace(path)
 
     def load(self, path: Path | None = None) -> bool:
         """Load index from disk."""
