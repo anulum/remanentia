@@ -132,6 +132,7 @@ def observe_once(state: ObserverState,
     except Exception:  # pragma: no cover
         return {"files_scanned": 0, "files_new": 0, "notes_created": 0, "error": "store load failed"}
 
+    new_files: list[tuple[Path, str]] = []
     for source_name, source_dir in dirs.items():
         if not source_dir.exists():
             continue
@@ -144,10 +145,21 @@ def observe_once(state: ObserverState,
             for nd in note_dicts:
                 store.add_note(nd["content"], source=nd["source"])
                 notes_created += 1
+            new_files.append((f, source_name))
             state.mark_processed(f)
 
     if notes_created > 0:
         store.save()
+
+    # Incrementally update the unified index for new files
+    if new_files:
+        try:
+            from mcp_server import _UNIFIED_INDEX
+            if _UNIFIED_INDEX is not None and _UNIFIED_INDEX._built:
+                for f, source_name in new_files:
+                    _UNIFIED_INDEX.add_file(f, source=source_name)
+        except Exception:  # pragma: no cover
+            pass
 
     return {
         "files_scanned": files_scanned,
