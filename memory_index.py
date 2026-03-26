@@ -117,6 +117,7 @@ class MemoryIndex:
         self._ce_loading = False
         self._embed_loading = False
         self._temporal_graph = None
+        self._para_lengths: np.ndarray = np.array([], dtype=np.float32)
         self._avg_dl: float = 1.0
 
     def build(self, use_gpu_embeddings: bool = True, use_gliner: bool = True,
@@ -322,6 +323,12 @@ class MemoryIndex:
                 if t not in self._inverted_index:
                     self._inverted_index[t] = []
                 self._inverted_index[t].append(p_idx)
+
+        # Update para_lengths array
+        new_lengths = np.array([len(self.paragraph_tokens[n_existing + i])
+                                for i in range(len(paragraphs))], dtype=np.float32)
+        self._para_lengths = np.concatenate([self._para_lengths, new_lengths]) if len(self._para_lengths) > 0 else new_lengths
+        self._avg_dl = float(np.mean(self._para_lengths)) if len(self._para_lengths) > 0 else 1.0
 
         # Compute embeddings for new paragraphs if model is loaded
         if self._embed_model is not None:  # pragma: no cover
@@ -590,6 +597,28 @@ class MemoryIndex:
             ))
             if len(results) >= top_k:
                 break
+
+        # Temporal code execution for date arithmetic queries
+        if intent["type"] == "temporal" and results:
+            try:
+                from temporal_graph import TemporalEvent, temporal_code_execute, parse_dates
+                t_events = []
+                for r in results[:5]:
+                    doc_idx = next((di for di, d in enumerate(self.documents) if d.name == r.name), None)
+                    if doc_idx is not None:
+                        p_text = self.documents[doc_idx].paragraphs[r.paragraph_idx] if r.paragraph_idx < len(self.documents[doc_idx].paragraphs) else ""
+                        for d in parse_dates(p_text):
+                            t_events.append(TemporalEvent(date=d, text=p_text[:200], source=r.name, paragraph_idx=r.paragraph_idx))
+                if t_events:
+                    code_answer = temporal_code_execute(query, t_events)
+                    if code_answer and not results[0].answer:
+                        results[0] = SearchResult(
+                            name=results[0].name, source=results[0].source,
+                            score=results[0].score, snippet=results[0].snippet,
+                            paragraph_idx=results[0].paragraph_idx,
+                            answer=code_answer)
+            except Exception:  # pragma: no cover
+                pass
 
         # Multi-paragraph synthesis: combine top results into a grounded answer
         if use_llm and results and not results[0].answer:  # pragma: no cover
