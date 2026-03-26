@@ -3,7 +3,9 @@
 # © Code 2020–2026 Miroslav Šotek. All rights reserved.
 # ORCID: 0009-0009-3560-0851
 # Contact: www.anulum.li | protoscience@anulum.li
-# Arcane Sapience — SNN Associative Memory Retrieval
+# Arcane Sapience — SNN Associative Memory Retrieval (DEPRECATED)
+# Active retrieval stack: memory_index.py (BM25 + embedding + CE)
+# This file kept for reference (70+ experiments in experimental/)
 
 """Query-probe retrieval system for the persistent SNN.
 

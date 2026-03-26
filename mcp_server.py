@@ -96,6 +96,20 @@ def handle_recall(query: str, top_k: int = 5,
             if r.answer:
                 header += f"\nAnswer: {r.answer}"
             parts.append(f"{header}\n{r.snippet}")
+
+        # Knowledge store graph search — multi-hop traversal via prospective queries
+        try:
+            ks = _get_knowledge_store()
+            seen_snippets = {r.snippet[:100] for r in results}
+            ks_notes = ks.graph_search(query, top_k=top_k, hop_depth=2)
+            for note in ks_notes:
+                snippet = note.content[:300]
+                if snippet[:100] not in seen_snippets:
+                    seen_snippets.add(snippet[:100])
+                    parts.append(f"[knowledge] {note.title} (type={note.note_type})\n{snippet}")
+        except Exception:  # pragma: no cover
+            pass
+
         return "\n\n".join(parts)
 
     except Exception:  # pragma: no cover
