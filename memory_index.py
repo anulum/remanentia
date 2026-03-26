@@ -154,7 +154,7 @@ class MemoryIndex:
                     text = f.read_text(encoding="utf-8")
                 except (OSError, UnicodeDecodeError):  # pragma: no cover
                     continue
-                if len(text) < 50:
+                if len(text) < 50 or len(text) > 1_000_000:
                     continue
 
                 is_code = f.suffix in (".py", ".rs", ".v", ".ts", ".js")
@@ -326,9 +326,9 @@ class MemoryIndex:
                               timeout: float = 5.0) -> list[tuple[int, float]] | None:
         """Rerank candidates using a cross-encoder for query-paragraph relevance.
 
-        On cold start, loads the model in a background thread. If loading
-        takes longer than `timeout`, returns None (BM25 results used instead).
-        The model keeps loading in background — next query gets reranking.
+        Fail-closed: if model doesn't load within timeout, disables
+        cross-encoder for the rest of this process. BM25 at 0.1s beats
+        cross-encoder at 5.9s when the model can't warm up.
         """
         if not candidates or self._cross_encoder is False:
             return None
@@ -344,8 +344,6 @@ class MemoryIndex:
                     device = "cuda" if torch.cuda.is_available() else "cpu"
                     result_holder[0] = CrossEncoder(
                         "cross-encoder/ms-marco-MiniLM-L-6-v2", device=device)
-                except ImportError:
-                    result_holder[0] = False
                 except Exception:
                     result_holder[0] = False
 
@@ -354,10 +352,8 @@ class MemoryIndex:
             loader.join(timeout=timeout)
 
             if loader.is_alive():
-                def _finish():
-                    loader.join()
-                    self._cross_encoder = result_holder[0] if result_holder[0] is not None else False
-                threading.Thread(target=_finish, daemon=True).start()
+                # Fail closed — don't retry, don't wait in background
+                self._cross_encoder = False
                 return None
 
             self._cross_encoder = result_holder[0] if result_holder[0] is not None else False
@@ -823,7 +819,7 @@ def _split_paragraphs(text: str, is_code: bool = False) -> list[str]:
     for block in text.split("\n\n"):
         stripped = block.strip()
         if len(stripped) > 30:
-            paragraphs.append(stripped)
+            paragraphs.append(stripped[:10_000])
     if not paragraphs and len(text.strip()) > 30:
         paragraphs.append(text.strip()[:2000])
     return paragraphs
