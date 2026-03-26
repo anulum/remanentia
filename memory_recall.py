@@ -281,19 +281,17 @@ def recall(
     ctx = MemoryContext(query=query)
     sources = 0
 
-    # 1. Primary retrieval via existing retrieve.py (legacy)
+    # 1. Primary retrieval via MemoryIndex (unified stack)
     try:
-        from retrieve import retrieve
-        results = retrieve(query, top_k=1, include_content=include_content)
-        if results:  # pragma: no cover
-            ctx.trace = results[0]["trace"]
-            ctx.trace_score = results[0]["score"]
-            if include_content and "content" in results[0]:
-                ctx.trace_snippet = results[0]["content"][:500]
-            elif ctx.trace:
-                trace_path = TRACES_DIR / ctx.trace
-                if trace_path.exists():
-                    ctx.trace_snippet = trace_path.read_text(encoding="utf-8")[:500]
+        from memory_index import MemoryIndex
+        idx = MemoryIndex()
+        if not idx.load():
+            idx.build(use_gpu_embeddings=False, use_gliner=False)
+        results = idx.search(query, top_k=1)
+        if results:
+            ctx.trace = results[0].name
+            ctx.trace_score = results[0].score
+            ctx.trace_snippet = results[0].snippet
         sources += 1
     except Exception:  # pragma: no cover
         pass
