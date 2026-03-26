@@ -6,6 +6,7 @@ and answer-core extraction to improve fuzzy match accuracy.
 """
 from __future__ import annotations
 
+from difflib import SequenceMatcher
 import re
 
 
@@ -133,23 +134,48 @@ def _get_embed_model():
     if _embed_model is None:
         try:
             from sentence_transformers import SentenceTransformer
-            _embed_model = SentenceTransformer("all-MiniLM-L6-v2")
+            try:
+                _embed_model = SentenceTransformer(
+                    "all-MiniLM-L6-v2",
+                    device="cpu",
+                    local_files_only=True,
+                )
+            except TypeError:
+                try:
+                    _embed_model = SentenceTransformer(
+                        "all-MiniLM-L6-v2",
+                        local_files_only=True,
+                    )
+                except TypeError:
+                    _embed_model = SentenceTransformer("all-MiniLM-L6-v2")
+                try:
+                    _embed_model = _embed_model.to("cpu")
+                except Exception:
+                    pass
         except Exception:
             _embed_model = False
     return _embed_model if _embed_model else None
 
 
+def _lexical_similarity(text_a: str, text_b: str) -> float:
+    a_norm = normalize_answer(text_a)
+    b_norm = normalize_answer(text_b)
+    if not a_norm or not b_norm:
+        return 0.0
+    return float(SequenceMatcher(None, a_norm, b_norm).ratio())
+
+
 def semantic_similarity(text_a: str, text_b: str) -> float:
     """Cosine similarity between two texts using MiniLM embeddings.
 
-    Returns 0.0 if embeddings unavailable.
+    Falls back to lexical similarity if embeddings are unavailable.
 
     >>> 0.0 <= semantic_similarity("I am single", "finding acceptance") <= 1.0
     True
     """
     model = _get_embed_model()
     if not model:
-        return 0.0
+        return _lexical_similarity(text_a, text_b)
     import numpy as np
     embs = model.encode([text_a, text_b], normalize_embeddings=True, convert_to_numpy=True)
     return float(np.dot(embs[0], embs[1]))

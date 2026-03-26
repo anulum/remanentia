@@ -322,22 +322,46 @@ class MemoryIndex:
 
         return len(paragraphs)
 
-    def _cross_encoder_rerank(self, query: str, candidates: list[tuple[int, float]]) -> list[tuple[int, float]] | None:
-        """Rerank candidates using a cross-encoder for query-paragraph relevance."""
+    def _cross_encoder_rerank(self, query: str, candidates: list[tuple[int, float]],
+                              timeout: float = 5.0) -> list[tuple[int, float]] | None:
+        """Rerank candidates using a cross-encoder for query-paragraph relevance.
+
+        On cold start, loads the model in a background thread. If loading
+        takes longer than `timeout`, returns None (BM25 results used instead).
+        The model keeps loading in background — next query gets reranking.
+        """
         if not candidates or self._cross_encoder is False:
             return None
-        try:
-            from sentence_transformers import CrossEncoder
-            import torch
-        except ImportError:  # pragma: no cover
-            return None
 
-        if self._cross_encoder is None:  # pragma: no cover
-            try:
-                device = "cuda" if torch.cuda.is_available() else "cpu"
-                self._cross_encoder = CrossEncoder(
-                    "cross-encoder/ms-marco-MiniLM-L-6-v2", device=device)
-            except Exception:
+        if self._cross_encoder is None:
+            import threading
+            result_holder = [None]
+
+            def _load():
+                try:
+                    from sentence_transformers import CrossEncoder
+                    import torch
+                    device = "cuda" if torch.cuda.is_available() else "cpu"
+                    result_holder[0] = CrossEncoder(
+                        "cross-encoder/ms-marco-MiniLM-L-6-v2", device=device)
+                except ImportError:
+                    result_holder[0] = False
+                except Exception:
+                    result_holder[0] = False
+
+            loader = threading.Thread(target=_load, daemon=True)
+            loader.start()
+            loader.join(timeout=timeout)
+
+            if loader.is_alive():
+                def _finish():
+                    loader.join()
+                    self._cross_encoder = result_holder[0] if result_holder[0] is not None else False
+                threading.Thread(target=_finish, daemon=True).start()
+                return None
+
+            self._cross_encoder = result_holder[0] if result_holder[0] is not None else False
+            if self._cross_encoder is False:
                 return None
 
         pairs = []
@@ -438,8 +462,8 @@ class MemoryIndex:
         # Stage 1: Take top candidates for embedding rerank
         candidates = scores[:top_k * 6] if self.embeddings is not None else scores[:top_k * 3]
 
-        # Stage 2: Bi-encoder rerank if available
-        if self.embeddings is not None and candidates:  # pragma: no cover
+        # Stage 2: Bi-encoder rerank if model already loaded
+        if self.embeddings is not None and self._embed_model is not None and candidates:  # pragma: no cover
             try:
                 q_emb = self._embed_model.encode(
                     query, normalize_embeddings=True, convert_to_numpy=True)
