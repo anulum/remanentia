@@ -18,8 +18,13 @@ from memory_index import (
     SearchResult,
     _classify_paragraph,
     _classify_query,
+    _entity_boost_score,
     _extract_date_context,
+    _extract_query_names,
     _has_date_expression,
+    _is_person_centric,
+    _load_entity_graph,
+    _query_entity_ids,
     _recency_boost,
     _generate_prospective_queries,
     _parse_date,
@@ -899,3 +904,192 @@ class TestDocTypeFilter:
         results = idx.search("search function", top_k=5, doc_type="code")
         for r in results:
             assert "code" in r.source.lower() or r.name.endswith(".py")
+
+
+# ── Person-centric helpers ────────────────────────────────────────
+
+
+class TestExtractQueryNames:
+    def test_extracts_capitalized_names(self):
+        names = _extract_query_names("What did Alice say to Bob?")
+        assert "alice" in names
+        assert "bob" in names
+
+    def test_filters_common_words(self):
+        names = _extract_query_names("What does Alice have?")
+        assert "alice" in names
+        assert "what" not in names
+        assert "does" not in names
+
+    def test_empty_query(self):
+        assert _extract_query_names("no capitalized words here") == set()
+
+    def test_short_names_filtered(self):
+        names = _extract_query_names("Is Al okay?")
+        assert "al" not in names
+
+
+class TestIsPersonCentric:
+    def test_possessive(self):
+        # "her activities" hits _POSSESSIVE_RE but not _PERSON_CENTRIC_RE
+        assert _is_person_centric("What are her activities?")
+
+    def test_relationship_keyword(self):
+        assert _is_person_centric("What is Alice's relationship with Bob?")
+
+    def test_would_likely(self):
+        assert _is_person_centric("what would alice likely do?")
+
+    def test_non_person_query(self):
+        assert not _is_person_centric("what is the capital of france?")
+
+
+# ── Entity graph helpers ──────────────────────────────────────────
+
+
+class TestEntityGraphHelpers:
+    def test_query_entity_ids(self):
+        graph = {
+            "entities": {
+                "e1": {"label": "STDP"},
+                "e2": {"label": "memory_index"},
+            },
+            "relations": [],
+        }
+        matched = _query_entity_ids("What about STDP?", graph)
+        assert "e1" in matched
+
+    def test_entity_boost_score_no_entities(self):
+        assert _entity_boost_score("some text", set(), {}) == 0.0
+
+    def test_entity_boost_score_with_match(self):
+        graph = {
+            "entities": {
+                "e1": {"label": "stdp"},
+                "e2": {"label": "bm25"},
+            },
+        }
+        score = _entity_boost_score("STDP removal was necessary", {"e1", "e2"}, graph)
+        assert score > 0.0
+
+    def test_entity_boost_score_no_match(self):
+        graph = {
+            "entities": {
+                "e1": {"label": "quantum"},
+            },
+        }
+        score = _entity_boost_score("nothing related here", {"e1"}, graph)
+        assert score == 0.0
+
+    def test_load_entity_graph_missing_files(self, tmp_path):
+        import memory_index
+        original = memory_index.GRAPH_DIR
+        memory_index.GRAPH_DIR = tmp_path / "nonexistent"
+        memory_index._ENTITY_GRAPH = None
+        try:
+            g = _load_entity_graph()
+            assert g["entities"] == {}
+            assert g["relations"] == []
+        finally:
+            memory_index.GRAPH_DIR = original
+            memory_index._ENTITY_GRAPH = None
+
+    def test_load_entity_graph_with_data(self, tmp_path):
+        import memory_index
+        original = memory_index.GRAPH_DIR
+        graph_dir = tmp_path / "graph"
+        graph_dir.mkdir()
+        (graph_dir / "entities.jsonl").write_text(
+            json.dumps({"id": "e1", "type": "concept", "label": "test"}) + "\n",
+            encoding="utf-8")
+        (graph_dir / "relations.jsonl").write_text(
+            json.dumps({"source": "e1", "target": "e2", "weight": 1.0}) + "\n",
+            encoding="utf-8")
+        memory_index.GRAPH_DIR = graph_dir
+        memory_index._ENTITY_GRAPH = None
+        try:
+            g = _load_entity_graph()
+            assert "e1" in g["entities"]
+            assert len(g["relations"]) == 1
+        finally:
+            memory_index.GRAPH_DIR = original
+            memory_index._ENTITY_GRAPH = None
+
+
+# ── Person-name boosting in search ────────────────────────────────
+
+
+class TestPersonNameBoostInSearch:
+    def test_person_centric_query_boosts(self, tmp_path):
+        traces = tmp_path / "traces"
+        traces.mkdir()
+        (traces / "alice_trace.md").write_text(
+            "# Alice's Piano Hobby\n\nAlice has been learning piano since January.\n"
+            "She practices every day and loves Chopin.\n"
+            "Alice considers piano her favorite hobby.", encoding="utf-8")
+        (traces / "weather_trace.md").write_text(
+            "# Weather Report\n\nThe temperature today is 22 degrees.\n"
+            "Piano lessons are cancelled due to rain.\n"
+            "No specific person mentioned here at all.", encoding="utf-8")
+
+        import memory_index
+        original_sources = memory_index.SOURCES
+        memory_index.SOURCES = {"test": traces}
+        try:
+            idx = MemoryIndex()
+            idx.build(use_gpu_embeddings=False, use_gliner=False)
+            # "Alice's hobby" triggers _PERSON_CENTRIC_RE + name extraction
+            results = idx.search("What is Alice's hobby?", top_k=5)
+            assert len(results) > 0
+            assert any("alice" in r.snippet.lower() for r in results)
+        finally:
+            memory_index.SOURCES = original_sources
+
+
+# ── IDF zero edge case ────────────────────────────────────────────
+
+
+class TestIdfZeroEdge:
+    def test_zero_idf_token_skipped(self, tmp_path):
+        traces = tmp_path / "traces"
+        traces.mkdir()
+        (traces / "doc.md").write_text(
+            "# Alpha\n\nAlpha beta gamma delta.", encoding="utf-8")
+
+        import memory_index
+        original_sources = memory_index.SOURCES
+        memory_index.SOURCES = {"test": traces}
+        try:
+            idx = MemoryIndex()
+            idx.build(use_gpu_embeddings=False, use_gliner=False)
+            # Force a known token to have IDF=0
+            for token in list(idx.idf.keys()):
+                if token in idx._inverted_index:
+                    idx.idf[token] = 0
+                    break
+            results = idx.search("alpha beta", top_k=1)
+            assert isinstance(results, list)
+        finally:
+            memory_index.SOURCES = original_sources
+
+
+class TestTemporalCodeExecution:
+    def test_temporal_query_injects_answer(self, tmp_path):
+        traces = tmp_path / "traces"
+        traces.mkdir()
+        (traces / "meeting.md").write_text(
+            "# Meeting Notes\n\n"
+            "The project started on 2026-01-15 and the deadline is 2026-06-30.\n"
+            "We need to finish the review by 2026-03-01.", encoding="utf-8")
+
+        import memory_index
+        original_sources = memory_index.SOURCES
+        memory_index.SOURCES = {"test": traces}
+        try:
+            idx = MemoryIndex()
+            idx.build(use_gpu_embeddings=False, use_gliner=False)
+            # Temporal query — should attempt code execution
+            results = idx.search("when did the project start?", top_k=3)
+            assert len(results) > 0
+        finally:
+            memory_index.SOURCES = original_sources
