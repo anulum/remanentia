@@ -4,18 +4,18 @@
 
 ```bash
 # Core (numpy only)
-pip install -e .
+pip install remanentia
 
 # With embedding rerank
-pip install -e ".[embedding]"
+pip install "remanentia[embedding]"
 
 # With REST API
-pip install -e ".[api]"
+pip install "remanentia[api]"
 
 # Everything
-pip install -e ".[all]"
+pip install "remanentia[all]"
 
-# Development
+# Development (from source)
 pip install -e ".[dev]"
 ```
 
