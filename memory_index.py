@@ -32,6 +32,7 @@ import numpy as np
 BASE = Path(__file__).parent
 GOTM_ROOT = BASE.parent
 INDEX_PATH = BASE / "snn_state" / "memory_index.pkl"
+GRAPH_DIR = BASE / "memory" / "graph"
 
 # All knowledge sources to index
 SOURCES = {
@@ -493,6 +494,23 @@ class MemoryIndex:
 
             scores.append((i, score))
 
+        # Entity graph boost: paragraphs mentioning query-related entities
+        try:
+            graph = _load_entity_graph()
+            q_entities = _query_entity_ids(query, graph)
+            if q_entities:
+                for idx_s in range(len(scores)):
+                    i, score = scores[idx_s]
+                    doc_idx = self.paragraph_index[i][0] if i < len(self.paragraph_index) else 0
+                    p_idx = self.paragraph_index[i][1] if i < len(self.paragraph_index) else 0
+                    if doc_idx < len(self.documents):
+                        para_text = self.documents[doc_idx].paragraphs[p_idx] if p_idx < len(self.documents[doc_idx].paragraphs) else ""
+                        eb = _entity_boost_score(para_text, q_entities, graph)
+                        if eb > 0:
+                            scores[idx_s] = (i, score * (1.0 + eb))
+        except Exception:  # pragma: no cover
+            pass
+
         scores.sort(key=lambda x: -x[1])
 
         # Stage 1: Take top candidates for embedding rerank
@@ -714,6 +732,55 @@ class MemoryIndex:
             return True
         except Exception:
             return False
+
+
+# ── Entity graph for retrieval boosting ──────────────────────────
+
+_ENTITY_GRAPH: dict | None = None
+
+
+def _load_entity_graph() -> dict:
+    """Load entities + relations from JSONL. Cached after first call."""
+    global _ENTITY_GRAPH
+    if _ENTITY_GRAPH is not None:
+        return _ENTITY_GRAPH
+    entities_path = GRAPH_DIR / "entities.jsonl"
+    relations_path = GRAPH_DIR / "relations.jsonl"
+    entities: dict[str, dict] = {}
+    relations: list[dict] = []
+    if entities_path.exists():
+        for line in entities_path.read_text(encoding="utf-8").strip().split("\n"):
+            if line.strip():
+                e = json.loads(line)
+                entities[e["id"]] = e
+    if relations_path.exists():
+        for line in relations_path.read_text(encoding="utf-8").strip().split("\n"):
+            if line.strip():
+                relations.append(json.loads(line))
+    _ENTITY_GRAPH = {"entities": entities, "relations": relations}
+    return _ENTITY_GRAPH
+
+
+def _query_entity_ids(query: str, graph: dict) -> set[str]:
+    """Find entity IDs mentioned in query text."""
+    q_lower = query.lower()
+    q_tokens = set(re.findall(r"[a-z0-9][a-z0-9_-]{2,}", q_lower))
+    matched = set()
+    for eid, e in graph["entities"].items():
+        label = e.get("label", eid).lower()
+        if label in q_lower or label in q_tokens:
+            matched.add(eid)
+    return matched
+
+
+def _entity_boost_score(para_text: str, query_entities: set[str], graph: dict) -> float:
+    """Score how many query-related entities appear in paragraph text."""
+    if not query_entities:
+        return 0.0
+    p_lower = para_text.lower()
+    shared = sum(1 for eid in query_entities
+                 if graph["entities"].get(eid, {}).get("label", eid).lower() in p_lower)
+    return shared * 0.1
 
 
 # ── Entity-centric boosting (ported from bench_locomo.py) ────────
