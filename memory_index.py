@@ -17,9 +17,11 @@ Usage::
 """
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import math
+import os
 import pickle
 import re
 import time
@@ -73,6 +75,33 @@ SOURCE_EXTENSIONS = {
     "indexer": {".md", ".yaml"},
 }
 
+SKIP_PATH_PARTS = (
+    ".venv",
+    "venv",
+    "node_modules",
+    "__pycache__",
+    ".git",
+    "target",
+    "dist",
+    ".egg",
+)
+MIN_FILE_CHARS = 50
+MAX_FILE_CHARS = 1_000_000
+MAX_TEXT_PARAGRAPH_CHARS = 10_000
+MAX_FALLBACK_TEXT_CHARS = 2_000
+MAX_CODE_CHUNK_CHARS = 500
+MAX_CODE_CHUNKS = 50
+GRAPH_BOOST_QUERY_TYPES = {"general", "decision", "debugging", "explanation"}
+RUST_BM25_MIN_PARAGRAPHS = 50_000
+LOCATION_STOPWORDS = {
+    "where", "what", "which", "file", "find", "locate", "defined", "definition",
+    "implemented", "implementation", "method", "function", "class", "module",
+    "work", "works", "does", "code", "source", "path", "show",
+}
+
+_RUST_BM25_CLASS = None
+_RUST_BM25_IMPORT_ATTEMPTED = False
+
 
 @dataclass
 class Document:
@@ -120,6 +149,10 @@ class MemoryIndex:
         self._temporal_graph = None
         self._para_lengths: np.ndarray = np.array([], dtype=np.float32)
         self._avg_dl: float = 1.0
+        self._answer_extractor = None
+        self._llm_answer_extractor = None
+        self._rust_bm25 = None
+        self._rust_bm25_dirty = False
 
     def build(self, use_gpu_embeddings: bool = True, use_gliner: bool = True,
               use_llm_indexing: bool = False) -> dict:
@@ -145,22 +178,12 @@ class MemoryIndex:
         for source_name, source_dir in SOURCES.items():
             if not source_dir.exists():  # pragma: no cover
                 continue
-            # Determine which extensions to index
-            exts = SOURCE_EXTENSIONS.get(source_name, {".md"})
-            files = []
-            for ext in exts:
-                files.extend(source_dir.rglob(f"*{ext}"))
-            # Skip venvs, node_modules, __pycache__, .git
-            files = [f for f in sorted(set(files))
-                     if not any(skip in str(f) for skip in
-                                [".venv", "venv", "node_modules", "__pycache__",
-                                 ".git", "target", "dist", ".egg"])]
-            for f in files:
+            for f in _iter_source_files(source_name, source_dir):
                 try:
                     text = f.read_text(encoding="utf-8")
                 except (OSError, UnicodeDecodeError):  # pragma: no cover
                     continue
-                if len(text) < 50 or len(text) > 1_000_000:
+                if not _should_index_text(text):
                     continue
 
                 is_code = f.suffix in (".py", ".rs", ".v", ".ts", ".js")
@@ -226,6 +249,7 @@ class MemoryIndex:
                      for t, count in df.items()}
         self._para_lengths = np.array([len(t) for t in self.paragraph_tokens], dtype=np.float32)
         self._avg_dl = float(np.mean(self._para_lengths)) if len(self._para_lengths) > 0 else 1.0
+        self._rust_bm25_dirty = True
 
         # GPU embeddings if available
         if use_gpu_embeddings:  # pragma: no cover
@@ -341,8 +365,13 @@ class MemoryIndex:
                 self.embeddings = np.vstack([self.embeddings, new_embs])
             else:
                 self.embeddings = new_embs
+        self._rust_bm25_dirty = True
 
         return len(paragraphs)
+
+    def warm_models(self):
+        """Opt-in model warmup for embedding and cross-encoder rerankers."""
+        self._start_model_warmup()
 
     def _start_model_warmup(self):
         """Start loading embedding + cross-encoder models in background."""
@@ -414,8 +443,6 @@ class MemoryIndex:
         if not self._built:
             self.build()
 
-        self._start_model_warmup()
-
         q_tokens = set(_tokenize(query))
         if not q_tokens:
             return []
@@ -440,26 +467,18 @@ class MemoryIndex:
         # Query classification
         intent = _classify_query(query)
         boost_types = set(intent.get("boost_types", []))
+        lookup_terms = _extract_lookup_terms(query) if intent["type"] == "location" else set()
+        recency_cache: dict[str, float] = {}
 
         # BM25 scoring via inverted index (only visit paragraphs containing query tokens)
-        k1, b = 1.5, 0.75
-        avg_dl = self._avg_dl if self._avg_dl > 0 else 1.0
-
-        candidate_scores: dict[int, float] = {}
-        para_lengths = self._para_lengths
-        for qt in q_tokens:
-            posting = self._inverted_index.get(qt)
-            if not posting:
-                continue
-            idf_val = self.idf.get(qt, 0)
-            if idf_val == 0:
-                continue
-            for i in posting:
-                if i in _filtered_out:
-                    continue
-                dl_ratio = para_lengths[i] / avg_dl
-                candidate_scores[i] = candidate_scores.get(i, 0.0) + (
-                    idf_val * (k1 + 1) / (1 + k1 * (1 - b + b * dl_ratio)))
+        candidate_scores = None
+        if not (project or after or before or doc_type) and self._should_use_rust_bm25():
+            candidate_scores = self._search_rust_bm25(
+                q_tokens,
+                top_k=max(top_k * 80, 256),
+            )
+        if candidate_scores is None:
+            candidate_scores = self._search_python_bm25(q_tokens, _filtered_out)
 
         # Entity-centric person-name boost (bench_locomo: +3-5pp)
         query_names = _extract_query_names(query) if _is_person_centric(query) else set()
@@ -467,51 +486,72 @@ class MemoryIndex:
         # Apply boosts to candidates with score > 0
         scores = []
         for i, score in candidate_scores.items():
+            doc_idx = self.paragraph_index[i][0] if i < len(self.paragraph_index) else 0
+            para_idx = self.paragraph_index[i][1] if i < len(self.paragraph_index) else 0
+            doc = self.documents[doc_idx] if doc_idx < len(self.documents) else None
+            para_text = ""
+            if doc is not None and para_idx < len(doc.paragraphs):
+                para_text = doc.paragraphs[para_idx]
+
             if boost_types and i < len(self.paragraph_types):
                 if self.paragraph_types[i] in boost_types:
                     score *= 1.5
 
-            if intent.get("recency"):
-                doc_idx = self.paragraph_index[i][0] if i < len(self.paragraph_index) else 0
-                if doc_idx < len(self.documents) and self.documents[doc_idx].date:
-                    score *= _recency_boost(self.documents[doc_idx].date)
+            if intent["type"] == "location" and doc is not None:
+                if doc.doc_type == "code":
+                    score *= 2.0
+                    if lookup_terms:
+                        para_lower = para_text.lower()
+                        doc_name_lower = doc.name.lower()
+                        doc_path_lower = doc.path.lower()
+                        match_count = sum(
+                            1 for term in lookup_terms
+                            if term in para_lower or term in doc_name_lower or term in doc_path_lower
+                        )
+                        if match_count:
+                            score *= 1.0 + 0.4 * min(match_count, 3)
+                else:
+                    score *= 0.6
+
+            if intent.get("recency") and doc is not None and doc.date:
+                boost = recency_cache.get(doc.date)
+                if boost is None:
+                    boost = _recency_boost(doc.date)
+                    recency_cache[doc.date] = boost
+                score *= boost
 
             if intent["type"] == "temporal":
-                doc_idx = self.paragraph_index[i][0] if i < len(self.paragraph_index) else 0
-                para_idx = self.paragraph_index[i][1] if i < len(self.paragraph_index) else 0
-                if doc_idx < len(self.documents):
-                    para_text = self.documents[doc_idx].paragraphs[para_idx] if para_idx < len(self.documents[doc_idx].paragraphs) else ""
-                    if _has_date_expression(para_text):
-                        score *= 1.4
+                if para_text and _has_date_expression(para_text):
+                    score *= 1.4
 
             if query_names:
-                doc_idx = self.paragraph_index[i][0] if i < len(self.paragraph_index) else 0
-                para_idx = self.paragraph_index[i][1] if i < len(self.paragraph_index) else 0
-                if doc_idx < len(self.documents):
-                    para_text = self.documents[doc_idx].paragraphs[para_idx].lower() if para_idx < len(self.documents[doc_idx].paragraphs) else ""
-                    if any(name in para_text for name in query_names):
+                if para_text:
+                    para_lower = para_text.lower()
+                    if any(name in para_lower for name in query_names):
                         score *= 1.3
 
             scores.append((i, score))
 
         # Entity graph boost: paragraphs mentioning query-related entities
-        try:
-            graph = _load_entity_graph()
-            q_entities = _query_entity_ids(query, graph)
-            if q_entities:
-                for idx_s in range(len(scores)):
-                    i, score = scores[idx_s]
-                    doc_idx = self.paragraph_index[i][0] if i < len(self.paragraph_index) else 0
-                    p_idx = self.paragraph_index[i][1] if i < len(self.paragraph_index) else 0
-                    if doc_idx < len(self.documents):
-                        para_text = self.documents[doc_idx].paragraphs[p_idx] if p_idx < len(self.documents[doc_idx].paragraphs) else ""
-                        eb = _entity_boost_score(para_text, q_entities, graph)
-                        if eb > 0:
-                            scores[idx_s] = (i, score * (1.0 + eb))
-        except Exception:  # pragma: no cover
-            pass
-
         scores.sort(key=lambda x: -x[1])
+        if intent["type"] in GRAPH_BOOST_QUERY_TYPES and scores:
+            try:
+                graph = _load_entity_graph()
+                q_entities = _query_entity_ids(query, graph)
+                if q_entities:
+                    graph_window = min(len(scores), max(top_k * 20, 64))
+                    for idx_s in range(graph_window):
+                        i, score = scores[idx_s]
+                        doc_idx = self.paragraph_index[i][0] if i < len(self.paragraph_index) else 0
+                        p_idx = self.paragraph_index[i][1] if i < len(self.paragraph_index) else 0
+                        if doc_idx < len(self.documents):
+                            para_text = self.documents[doc_idx].paragraphs[p_idx] if p_idx < len(self.documents[doc_idx].paragraphs) else ""
+                            eb = _entity_boost_score(para_text, q_entities, graph)
+                            if eb > 0:
+                                scores[idx_s] = (i, score * (1.0 + eb))
+                    scores.sort(key=lambda x: -x[1])
+            except Exception:  # pragma: no cover
+                pass
 
         # Stage 1: Take top candidates for embedding rerank
         candidates = scores[:top_k * 6] if self.embeddings is not None else scores[:top_k * 3]
@@ -575,20 +615,8 @@ class MemoryIndex:
                 pass
 
         # Answer extraction — always on (bench_locomo: +16pp)
-        _answer_extractor = None
-        try:
-            from answer_extractor import extract_answer
-            _answer_extractor = extract_answer
-        except ImportError:  # pragma: no cover
-            pass
-
-        _llm_extractor = None
-        if use_llm:
-            try:
-                from answer_extractor import llm_extract_answer
-                _llm_extractor = llm_extract_answer
-            except ImportError:  # pragma: no cover
-                pass
+        _answer_extractor = self._get_answer_extractor()
+        _llm_extractor = self._get_llm_answer_extractor() if use_llm else None
 
         # Build results, deduplicate by document
         seen_docs = set()
@@ -656,6 +684,89 @@ class MemoryIndex:
 
         return results
 
+    def _search_python_bm25(self, q_tokens: set[str], filtered_out: set[int]) -> dict[int, float]:
+        k1, b = 1.5, 0.75
+        avg_dl = self._avg_dl if self._avg_dl > 0 else 1.0
+        candidate_scores: dict[int, float] = {}
+        para_lengths = self._para_lengths
+        for qt in q_tokens:
+            posting = self._inverted_index.get(qt)
+            if not posting:
+                continue
+            idf_val = self.idf.get(qt, 0)
+            if idf_val == 0:
+                continue
+            for i in posting:
+                if i in filtered_out:
+                    continue
+                dl_ratio = para_lengths[i] / avg_dl
+                candidate_scores[i] = candidate_scores.get(i, 0.0) + (
+                    idf_val * (k1 + 1) / (1 + k1 * (1 - b + b * dl_ratio))
+                )
+        return candidate_scores
+
+    def _search_rust_bm25(self, q_tokens: set[str], top_k: int) -> dict[int, float] | None:
+        bm25 = self._ensure_rust_bm25()
+        if bm25 is None:
+            return None
+        try:
+            results = bm25.search(list(q_tokens), top_k)
+            return {int(para_idx): float(score) for para_idx, score in results}
+        except Exception:
+            self._rust_bm25 = False
+            self._rust_bm25_dirty = False
+            return None
+
+    def _should_use_rust_bm25(self) -> bool:
+        force = os.environ.get("REMANENTIA_USE_RUST_BM25", "").strip().lower()
+        if force:
+            return force not in {"0", "false", "no", "off"}
+        return len(self.paragraph_index) >= RUST_BM25_MIN_PARAGRAPHS
+
+    def _ensure_rust_bm25(self):
+        if self._rust_bm25 is False:
+            return None
+        if self._rust_bm25 is not None and not self._rust_bm25_dirty:
+            return self._rust_bm25
+
+        rust_cls = _get_rust_bm25_class()
+        if rust_cls is None:
+            self._rust_bm25 = False
+            self._rust_bm25_dirty = False
+            return None
+
+        try:
+            rust_bm25 = rust_cls()
+            rust_bm25.build(
+                [list(tokens) for tokens in self.paragraph_tokens],
+                [(int(doc_idx), int(para_idx)) for doc_idx, para_idx in self.paragraph_index],
+            )
+            self._rust_bm25 = rust_bm25
+            self._rust_bm25_dirty = False
+            return rust_bm25
+        except Exception:
+            self._rust_bm25 = False
+            self._rust_bm25_dirty = False
+            return None
+
+    def _get_answer_extractor(self):
+        if self._answer_extractor is None:
+            try:
+                from answer_extractor import extract_answer
+                self._answer_extractor = extract_answer
+            except ImportError:  # pragma: no cover
+                self._answer_extractor = False
+        return self._answer_extractor if self._answer_extractor else None
+
+    def _get_llm_answer_extractor(self):
+        if self._llm_answer_extractor is None:
+            try:
+                from answer_extractor import llm_extract_answer
+                self._llm_answer_extractor = llm_extract_answer
+            except ImportError:  # pragma: no cover
+                self._llm_answer_extractor = False
+        return self._llm_answer_extractor if self._llm_answer_extractor else None
+
     def save(self, path: Path | None = None, quantize: bool = True):
         """Save index to disk. Quantizes embeddings to int8 by default (~4x smaller)."""
         path = path or INDEX_PATH
@@ -721,6 +832,8 @@ class MemoryIndex:
             self._inverted_index = inv
             self._para_lengths = np.array([len(t) for t in self.paragraph_tokens], dtype=np.float32)
             self._avg_dl = float(np.mean(self._para_lengths)) if len(self._para_lengths) > 0 else 1.0
+            self._rust_bm25_dirty = True
+            self._rust_bm25 = None
             # Dequantize embeddings if needed
             if data.get("quantized") and data.get("emb_scale") is not None:
                 emb_int8 = data["embeddings"]
@@ -993,20 +1106,24 @@ def _split_paragraphs(text: str, is_code: bool = False) -> list[str]:
     for block in text.split("\n\n"):
         stripped = block.strip()
         if len(stripped) > 30:
-            paragraphs.append(stripped[:10_000])
+            paragraphs.append(stripped[:MAX_TEXT_PARAGRAPH_CHARS])
     if not paragraphs and len(text.strip()) > 30:
-        paragraphs.append(text.strip()[:2000])
+        paragraphs.append(text.strip()[:MAX_FALLBACK_TEXT_CHARS])
     return paragraphs
 
 
 def _split_code(text: str) -> list[str]:
     """Split code into function/class blocks for indexing."""
+    py_chunks = _split_python_code(text)
+    if py_chunks:
+        return py_chunks[:MAX_CODE_CHUNKS]
+
     chunks = []
 
     # Module docstring (first triple-quoted block)
     doc_match = re.search(r'"""(.*?)"""', text, re.DOTALL)
     if doc_match and doc_match.start() < 500:
-        chunks.append(doc_match.group(1).strip()[:500])
+        chunks.append(doc_match.group(1).strip()[:MAX_CODE_CHUNK_CHARS])
 
     # Python: def and class blocks
     for match in re.finditer(r'^((?:def|class|fn|pub fn|impl)\s+\w+.*?)(?=\n(?:def |class |fn |pub fn |impl |\Z))',
@@ -1014,16 +1131,60 @@ def _split_code(text: str) -> list[str]:
         block = match.group(1).strip()
         if len(block) > 30:
             # Keep first 500 chars (signature + docstring + start of body)
-            chunks.append(block[:500])
+            chunks.append(block[:MAX_CODE_CHUNK_CHARS])
 
     # If no functions found, treat as plain text
     if not chunks:
         for block in text.split("\n\n"):
             stripped = block.strip()
             if len(stripped) > 30:
-                chunks.append(stripped[:500])
+                chunks.append(stripped[:MAX_CODE_CHUNK_CHARS])
 
-    return chunks[:50]  # cap at 50 chunks per file
+    return chunks[:MAX_CODE_CHUNKS]  # cap at 50 chunks per file
+
+
+def _split_python_code(text: str) -> list[str]:
+    """Split Python into module docstring, classes, functions, and class methods."""
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return []
+
+    lines = text.splitlines()
+    chunks = []
+
+    module_doc = ast.get_docstring(tree)
+    if module_doc:
+        chunks.append(module_doc.strip()[:MAX_CODE_CHUNK_CHARS])
+
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            block = _extract_python_block(lines, node)
+            if len(block) > 30:
+                chunks.append(block[:MAX_CODE_CHUNK_CHARS])
+        elif isinstance(node, ast.ClassDef):
+            class_header = f"class {node.name}:"
+            class_doc = ast.get_docstring(node)
+            if class_doc:
+                chunks.append(f'{class_header}\n"""{class_doc.strip()}"""'[:MAX_CODE_CHUNK_CHARS])
+            else:
+                class_block = _extract_python_block(lines, node)
+                if len(class_block) > 30:
+                    chunks.append(class_block[:MAX_CODE_CHUNK_CHARS])
+
+            for child in node.body:
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    method_block = _extract_python_block(lines, child)
+                    if len(method_block) > 30:
+                        chunks.append(f"{class_header}\n{method_block}"[:MAX_CODE_CHUNK_CHARS])
+
+    return chunks[:MAX_CODE_CHUNKS]
+
+
+def _extract_python_block(lines: list[str], node: ast.AST) -> str:
+    start = max(getattr(node, "lineno", 1) - 1, 0)
+    end = max(getattr(node, "end_lineno", start + 1), start + 1)
+    return "\n".join(lines[start:end]).strip()
 
 
 def _tokenize(text: str) -> list[str]:
@@ -1031,15 +1192,49 @@ def _tokenize(text: str) -> list[str]:
     return re.findall(r"[a-z0-9][a-z0-9_]{2,}", text.lower())
 
 
+def _extract_lookup_terms(query: str) -> set[str]:
+    return {
+        token for token in _tokenize(query)
+        if token not in LOCATION_STOPWORDS and not token.isdigit()
+    }
+
+
+def _get_rust_bm25_class():
+    global _RUST_BM25_CLASS, _RUST_BM25_IMPORT_ATTEMPTED
+    if not _RUST_BM25_IMPORT_ATTEMPTED:
+        _RUST_BM25_IMPORT_ATTEMPTED = True
+        try:
+            from remanentia_search import BM25Index
+            _RUST_BM25_CLASS = BM25Index
+        except Exception:
+            _RUST_BM25_CLASS = False
+    return _RUST_BM25_CLASS if _RUST_BM25_CLASS else None
+
+
+def _iter_source_files(source_name: str, source_dir: Path):
+    exts = SOURCE_EXTENSIONS.get(source_name, {".md"})
+    files = []
+    for ext in exts:
+        files.extend(source_dir.rglob(f"*{ext}"))
+    for f in sorted(set(files)):
+        if any(skip in str(f) for skip in SKIP_PATH_PARTS):
+            continue
+        yield f
+
+
+def _should_index_text(text: str) -> bool:
+    return MIN_FILE_CHARS <= len(text) <= MAX_FILE_CHARS
+
+
 def needs_rebuild() -> bool:
     """Check if any source has newer files than the index."""
     if not INDEX_PATH.exists():
         return True
     idx_mtime = INDEX_PATH.stat().st_mtime
-    for source_dir in SOURCES.values():
+    for source_name, source_dir in SOURCES.items():
         if not source_dir.exists():  # pragma: no cover
             continue
-        for f in source_dir.rglob("*.md"):
+        for f in _iter_source_files(source_name, source_dir):
             if f.stat().st_mtime > idx_mtime:  # pragma: no cover
                 return True
     return False

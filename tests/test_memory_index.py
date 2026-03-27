@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import math
+import shutil
 from pathlib import Path
 from unittest.mock import patch
 
@@ -34,6 +35,17 @@ from memory_index import (
     auto_rebuild_if_needed,
     needs_rebuild,
 )
+
+
+SCRATCH_ROOT = Path(__file__).resolve().parent.parent / ".codex_scratch" / "test_memory_index"
+
+
+def _scratch_case_dir(name: str) -> Path:
+    path = SCRATCH_ROOT / name
+    if path.exists():
+        shutil.rmtree(path, ignore_errors=True)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 # ── Tokenizer ────────────────────────────────────────────────────
@@ -118,6 +130,11 @@ class TestSplitCode:
         assert len(chunks) >= 2  # docstring + at least def + class
         func_chunks = [c for c in chunks if "compute_score" in c]
         assert len(func_chunks) >= 1
+
+    def test_method_extraction(self, sample_code_text):
+        chunks = _split_code(sample_code_text)
+        method_chunks = [c for c in chunks if "class SearchEngine" in c and "def search" in c]
+        assert len(method_chunks) >= 1
 
     def test_class_extraction(self, sample_code_text):
         chunks = _split_code(sample_code_text)
@@ -388,6 +405,29 @@ class TestMemoryIndex:
         names = [r.name for r in results]
         assert "code.py" in names
 
+    def test_location_query_prefers_code_over_notes(self):
+        docs_dir = _scratch_case_dir("location_query_prefers_code") / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "code.py").write_text(
+            '"""Memory index module."""\n\n'
+            "class MemoryIndex:\n"
+            "    def search(self, query):\n"
+            "        return []\n",
+            encoding="utf-8",
+        )
+        (docs_dir / "note.md").write_text(
+            "# Discussion\n\nWe discussed where MemoryIndex.search is implemented in code.py.",
+            encoding="utf-8",
+        )
+        idx = MemoryIndex()
+        with patch("memory_index.SOURCES", {"test": docs_dir}):
+            with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md", ".py"}}):
+                idx.build(use_gpu_embeddings=False, use_gliner=False)
+
+        results = idx.search("where is MemoryIndex.search implemented", top_k=3)
+        assert len(results) > 0
+        assert results[0].name == "code.py"
+
     def test_search_empty_query(self, tmp_path):
         idx = MemoryIndex()
         with patch("memory_index.SOURCES", {}):
@@ -597,6 +637,42 @@ class TestNeedsRebuild:
         with patch("memory_index.INDEX_PATH", idx_path):
             with patch("memory_index.SOURCES", {"test": source_dir}):
                 assert needs_rebuild() is False
+
+    def test_newer_python_file_needs_rebuild(self):
+        case_dir = _scratch_case_dir("needs_rebuild_python_file")
+        idx_path = case_dir / "index.pkl"
+        idx_path.write_bytes(b"data")
+
+        source_dir = case_dir / "src"
+        source_dir.mkdir()
+        py_file = source_dir / "memory_index.py"
+        py_file.write_text("def search(query):\n    return []\n", encoding="utf-8")
+
+        import os
+        old_time = idx_path.stat().st_mtime - 100
+        os.utime(idx_path, (old_time, old_time))
+
+        with patch("memory_index.INDEX_PATH", idx_path):
+            with patch("memory_index.SOURCES", {"test": source_dir}):
+                with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".py"}}):
+                    assert needs_rebuild() is True
+
+
+class TestRustBm25Gate:
+    def test_rust_bm25_disabled_below_threshold(self):
+        idx = MemoryIndex()
+        idx.paragraph_index = [(0, 0)] * 100
+        assert idx._should_use_rust_bm25() is False
+
+    def test_rust_bm25_env_override(self, monkeypatch):
+        idx = MemoryIndex()
+        idx.paragraph_index = [(0, 0)] * 10
+
+        monkeypatch.setenv("REMANENTIA_USE_RUST_BM25", "1")
+        assert idx._should_use_rust_bm25() is True
+
+        monkeypatch.setenv("REMANENTIA_USE_RUST_BM25", "0")
+        assert idx._should_use_rust_bm25() is False
 
 
 # ── Dataclass sanity ─────────────────────────────────────────────
