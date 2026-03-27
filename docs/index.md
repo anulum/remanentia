@@ -4,6 +4,8 @@
 
 BM25+embedding hybrid retrieval with RRF | 11 typed entity relation types | temporal reasoning | async consolidation | thread-safe MCP server
 
+Part of the [ANULUM](https://www.anulum.li) scientific computing ecosystem — the memory layer connecting SC-NeuroCore, Director-AI, SCPN-Fusion-Core, and other projects via cross-project retrieval.
+
 ## Quick Start
 
 ```bash
