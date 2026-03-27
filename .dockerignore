@@ -1,0 +1,14 @@
+.git
+tests/
+docs/
+.github/
+*.egg-info
+__pycache__
+.coverage
+.venv*
+venv*
+snn_state/
+*.pkl
+*.npz
+.codex_scratch/
+docs/internal/
