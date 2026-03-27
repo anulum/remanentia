@@ -17,7 +17,7 @@ Remanentia is licensed under the GNU Affero General Public License v3.0 or later
 ## Commercial License
 
 For use cases that cannot comply with AGPL-3.0, a commercial license is
-available. Contact: [protoscience@anulum.li](mailto:protoscience@anulum.li)
+available. Contact: [remanentia@anulum.li](mailto:remanentia@anulum.li) | [protoscience@anulum.li](mailto:protoscience@anulum.li)
 
 ## Third-Party Attribution
 

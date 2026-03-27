@@ -4,7 +4,7 @@
 
 **Miroslav Šotek** ([ORCID: 0009-0009-3560-0851](https://orcid.org/0009-0009-3560-0851))
 - Final authority on architecture, roadmap, and releases
-- Contact: [protoscience@anulum.li](mailto:protoscience@anulum.li)
+- Contact: [remanentia@anulum.li](mailto:remanentia@anulum.li) | [protoscience@anulum.li](mailto:protoscience@anulum.li)
 
 ## Decision Making
 

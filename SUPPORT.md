@@ -5,7 +5,8 @@
 - **Documentation:** [remanentia.com/docs](https://remanentia.com/docs)
 - **GitHub Issues:** [github.com/anulum/remanentia/issues](https://github.com/anulum/remanentia/issues)
 - **GitHub Discussions:** [github.com/anulum/remanentia/discussions](https://github.com/anulum/remanentia/discussions)
-- **Email:** [protoscience@anulum.li](mailto:protoscience@anulum.li)
+- **Email:** [remanentia@anulum.li](mailto:remanentia@anulum.li) | [protoscience@anulum.li](mailto:protoscience@anulum.li)
+- **Website:** [www.remanentia.com](https://www.remanentia.com)
 
 ## Security Vulnerabilities
 

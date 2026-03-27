@@ -16,7 +16,7 @@ responsibly:
 
 1. **GitHub Security Advisories** (preferred):
    [Report a vulnerability](https://github.com/anulum/remanentia/security/advisories/new)
-2. **Email:** protoscience@anulum.li — Subject: `[SECURITY] Remanentia — <brief description>`
+2. **Email:** remanentia@anulum.li or protoscience@anulum.li — Subject: `[SECURITY] Remanentia — <brief description>`
 3. **Do not** open a public GitHub issue for security vulnerabilities.
 
 We will acknowledge receipt within 48 hours and aim to provide a fix within
