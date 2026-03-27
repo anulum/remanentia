@@ -3,3 +3,5 @@
 BA = "BA"
 # regex pattern fragments
 ure = "ure"
+# variable name (note dict)
+nd = "nd"
