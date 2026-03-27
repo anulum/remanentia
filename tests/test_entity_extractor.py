@@ -77,6 +77,7 @@ class TestExtractEntities:
 
     def test_gliner_path(self):
         """Test that GLiNER model is called when available."""
+
         class MockModel:
             def predict_entities(self, text, labels, threshold=0.4):
                 return [
@@ -183,6 +184,8 @@ class TestDataclasses:
         assert e.label == "algorithm"
 
     def test_relation(self):
-        r = Relation(source="A", target="B", relation_type="caused_by", evidence="because A broke B")
+        r = Relation(
+            source="A", target="B", relation_type="caused_by", evidence="because A broke B"
+        )
         assert r.source == "A"
         assert r.relation_type == "caused_by"

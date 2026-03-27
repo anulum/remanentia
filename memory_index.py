@@ -15,6 +15,7 @@ Usage::
     idx.build()
     results = idx.search("STDP learning rule fix", top_k=5)
 """
+
 from __future__ import annotations
 
 import ast
@@ -52,7 +53,11 @@ SOURCES = {
     "po_research": GOTM_ROOT / ".coordination" / "handovers" / "scpn-phase-orchestrator",
     "nc_research": GOTM_ROOT / "03_CODE" / "sc-neurocore" / "docs" / "internal",
     # Claude memory
-    "claude_memory": Path.home() / ".claude" / "projects" / "C--aaa-God-of-the-Math-Collection" / "memory",
+    "claude_memory": Path.home()
+    / ".claude"
+    / "projects"
+    / "C--aaa-God-of-the-Math-Collection"
+    / "memory",
     # INDEXER catalog
     "indexer": GOTM_ROOT / "INDEXER",
     # Code: Remanentia
@@ -93,9 +98,27 @@ MAX_CODE_CHUNKS = 200
 GRAPH_BOOST_QUERY_TYPES = {"general", "decision", "debugging", "explanation"}
 RUST_BM25_MIN_PARAGRAPHS = 50_000
 LOCATION_STOPWORDS = {
-    "where", "what", "which", "file", "find", "locate", "defined", "definition",
-    "implemented", "implementation", "method", "function", "class", "module",
-    "work", "works", "does", "code", "source", "path", "show",
+    "where",
+    "what",
+    "which",
+    "file",
+    "find",
+    "locate",
+    "defined",
+    "definition",
+    "implemented",
+    "implementation",
+    "method",
+    "function",
+    "class",
+    "module",
+    "work",
+    "works",
+    "does",
+    "code",
+    "source",
+    "path",
+    "show",
 }
 
 _RUST_BM25_CLASS = None
@@ -156,8 +179,12 @@ class MemoryIndex:
         self._rust_bm25 = None
         self._rust_bm25_dirty = False
 
-    def build(self, use_gpu_embeddings: bool = True, use_gliner: bool = True,
-              use_llm_indexing: bool = False) -> dict:
+    def build(
+        self,
+        use_gpu_embeddings: bool = True,
+        use_gliner: bool = True,
+        use_llm_indexing: bool = False,
+    ) -> dict:
         """Scan all sources, build BM25 index + GPU embeddings + GLiNER entities."""
         t0 = time.monotonic()
         self.documents = []
@@ -171,6 +198,7 @@ class MemoryIndex:
         if use_gliner:  # pragma: no cover
             try:
                 from entity_extractor import _load_gliner
+
                 gliner_model = _load_gliner()
             except Exception:
                 pass
@@ -197,6 +225,7 @@ class MemoryIndex:
                 if use_llm_indexing:  # pragma: no cover
                     try:
                         from answer_extractor import llm_generate_prospective_queries
+
                         _llm_pq = llm_generate_prospective_queries
                     except ImportError:
                         pass
@@ -249,8 +278,7 @@ class MemoryIndex:
                 inv[t].append(i)
         self._inverted_index = inv
         self._df = dict(df)
-        self.idf = {t: math.log(1 + n_docs / (1 + count))
-                     for t, count in df.items()}
+        self.idf = {t: math.log(1 + n_docs / (1 + count)) for t, count in df.items()}
         self._para_lengths = np.array([len(t) for t in self.paragraph_tokens], dtype=np.float32)
         self._avg_dl = float(np.mean(self._para_lengths)) if len(self._para_lengths) > 0 else 1.0
         self._rust_bm25_dirty = True
@@ -265,6 +293,7 @@ class MemoryIndex:
         # Build temporal graph from all indexed documents
         try:
             from temporal_graph import TemporalGraph
+
             self._temporal_graph = TemporalGraph()
             doc_texts = [(d.name, "\n\n".join(d.paragraphs)) for d in self.documents]
             self._temporal_graph.build_from_documents(doc_texts)
@@ -281,8 +310,11 @@ class MemoryIndex:
             "has_embeddings": self.embeddings is not None,
             "temporal_events": self._temporal_graph.stats["events"] if self._temporal_graph else 0,
             "build_time_s": round(elapsed, 1),
-            "sources": {s: sum(1 for d in self.documents if d.source == s)
-                        for s in SOURCES if any(d.source == s for d in self.documents)},
+            "sources": {
+                s: sum(1 for d in self.documents if d.source == s)
+                for s in SOURCES
+                if any(d.source == s for d in self.documents)
+            },
         }
         return stats
 
@@ -329,8 +361,11 @@ class MemoryIndex:
 
         doc_date = _parse_date(text, path.name)
         doc = Document(
-            name=path.name, source=source, path=str(path),
-            paragraphs=paragraphs, date=doc_date,
+            name=path.name,
+            source=source,
+            path=str(path),
+            paragraphs=paragraphs,
+            date=doc_date,
             doc_type="code" if is_code else source,
         )
         doc_idx = len(self.documents)
@@ -358,17 +393,27 @@ class MemoryIndex:
                 self._inverted_index[t].append(p_idx)
 
         # Update para_lengths array
-        new_lengths = np.array([len(self.paragraph_tokens[n_existing + i])
-                                for i in range(len(paragraphs))], dtype=np.float32)
-        self._para_lengths = np.concatenate([self._para_lengths, new_lengths]) if len(self._para_lengths) > 0 else new_lengths
+        new_lengths = np.array(
+            [len(self.paragraph_tokens[n_existing + i]) for i in range(len(paragraphs))],
+            dtype=np.float32,
+        )
+        self._para_lengths = (
+            np.concatenate([self._para_lengths, new_lengths])
+            if len(self._para_lengths) > 0
+            else new_lengths
+        )
         self._avg_dl = float(np.mean(self._para_lengths)) if len(self._para_lengths) > 0 else 1.0
 
         # Compute embeddings for new paragraphs if model is loaded
         if self._embed_model is not None:  # pragma: no cover
             new_texts = [paragraphs[i][:512] for i in range(len(paragraphs))]
             new_embs = self._embed_model.encode(
-                new_texts, batch_size=64, show_progress_bar=False,
-                convert_to_numpy=True, normalize_embeddings=True)
+                new_texts,
+                batch_size=64,
+                show_progress_bar=False,
+                convert_to_numpy=True,
+                normalize_embeddings=True,
+            )
             if self.embeddings is not None:
                 self.embeddings = np.vstack([self.embeddings, new_embs])
             else:
@@ -384,34 +429,44 @@ class MemoryIndex:
     def _start_model_warmup(self):  # pragma: no cover — requires GPU models
         """Start loading embedding + cross-encoder models in background."""
         import threading
+
         if self._embed_model is None and not self._embed_loading and self.embeddings is not None:
             self._embed_loading = True
+
             def _load_embed():  # pragma: no cover — downloads real model
                 try:
                     from sentence_transformers import SentenceTransformer
                     import torch
+
                     device = "cuda" if torch.cuda.is_available() else "cpu"
                     self._embed_model = SentenceTransformer("all-MiniLM-L6-v2", device=device)
                 except Exception:
                     pass
                 self._embed_loading = False
+
             threading.Thread(target=_load_embed, daemon=True).start()
 
         if self._cross_encoder is None and not self._ce_loading:
             self._ce_loading = True
+
             def _load_ce():  # pragma: no cover — downloads real model
                 try:
                     from sentence_transformers import CrossEncoder
                     import torch
+
                     device = "cuda" if torch.cuda.is_available() else "cpu"
                     self._cross_encoder = CrossEncoder(
-                        "cross-encoder/ms-marco-MiniLM-L-6-v2", device=device)
+                        "cross-encoder/ms-marco-MiniLM-L-6-v2", device=device
+                    )
                 except Exception:
                     self._cross_encoder = False
                 self._ce_loading = False
+
             threading.Thread(target=_load_ce, daemon=True).start()
 
-    def _cross_encoder_rerank(self, query: str, candidates: list[tuple[int, float]]) -> list[tuple[int, float]] | None:
+    def _cross_encoder_rerank(
+        self, query: str, candidates: list[tuple[int, float]]
+    ) -> list[tuple[int, float]] | None:
         """Rerank candidates using cross-encoder if loaded.
 
         Non-blocking: if model is still loading, returns None (BM25 results
@@ -430,16 +485,22 @@ class MemoryIndex:
 
         try:
             ce_scores = self._cross_encoder.predict(pairs, show_progress_bar=False)
-            reranked = [(candidates[i][0], float(ce_scores[i]))
-                        for i in range(len(candidates))]
+            reranked = [(candidates[i][0], float(ce_scores[i])) for i in range(len(candidates))]
             reranked.sort(key=lambda x: -x[1])
             return reranked
         except Exception:  # pragma: no cover
             return None
 
-    def search(self, query: str, top_k: int = 5,
-               project: str = "", after: str = "", before: str = "",
-               doc_type: str = "", use_llm: bool = False) -> list[SearchResult]:
+    def search(
+        self,
+        query: str,
+        top_k: int = 5,
+        project: str = "",
+        after: str = "",
+        before: str = "",
+        doc_type: str = "",
+        use_llm: bool = False,
+    ) -> list[SearchResult]:
         """Search with query intelligence, optional structured filters.
 
         Filters (applied before scoring):
@@ -454,9 +515,16 @@ class MemoryIndex:
         # Query decomposition: break multi-hop queries into sub-queries
         sub_queries = _decompose_query(query)
         if sub_queries:
-            return self._multi_hop_search(query, sub_queries, top_k=top_k,
-                                          project=project, after=after, before=before,
-                                          doc_type=doc_type, use_llm=use_llm)
+            return self._multi_hop_search(
+                query,
+                sub_queries,
+                top_k=top_k,
+                project=project,
+                after=after,
+                before=before,
+                doc_type=doc_type,
+                use_llm=use_llm,
+            )
 
         q_tokens = set(_tokenize(query))
         if not q_tokens:
@@ -470,7 +538,11 @@ class MemoryIndex:
                 if doc_idx >= len(self.documents):  # pragma: no cover
                     continue
                 doc = self.documents[doc_idx]
-                if project and project.lower() not in doc.source.lower() and project.lower() not in doc.name.lower():
+                if (
+                    project
+                    and project.lower() not in doc.source.lower()
+                    and project.lower() not in doc.name.lower()
+                ):
                     _filtered_out.add(i)
                 if after and doc.date and doc.date < after:
                     _filtered_out.add(i)
@@ -520,8 +592,11 @@ class MemoryIndex:
                         doc_name_lower = doc.name.lower()
                         doc_path_lower = doc.path.lower()
                         match_count = sum(
-                            1 for term in lookup_terms
-                            if term in para_lower or term in doc_name_lower or term in doc_path_lower
+                            1
+                            for term in lookup_terms
+                            if term in para_lower
+                            or term in doc_name_lower
+                            or term in doc_path_lower
                         )
                         if match_count:
                             score *= 1.0 + 0.4 * min(match_count, 3)
@@ -560,7 +635,11 @@ class MemoryIndex:
                         doc_idx = self.paragraph_index[i][0] if i < len(self.paragraph_index) else 0
                         p_idx = self.paragraph_index[i][1] if i < len(self.paragraph_index) else 0
                         if doc_idx < len(self.documents):
-                            para_text = self.documents[doc_idx].paragraphs[p_idx] if p_idx < len(self.documents[doc_idx].paragraphs) else ""
+                            para_text = (
+                                self.documents[doc_idx].paragraphs[p_idx]
+                                if p_idx < len(self.documents[doc_idx].paragraphs)
+                                else ""
+                            )
                             eb = _entity_boost_score(para_text, q_entities, graph)
                             if eb > 0:
                                 scores[idx_s] = (i, score * (1.0 + eb))
@@ -569,25 +648,27 @@ class MemoryIndex:
                 pass
 
         # Stage 1: Take top candidates for embedding rerank
-        candidates = scores[:top_k * 6] if self.embeddings is not None else scores[:top_k * 3]
+        candidates = scores[: top_k * 6] if self.embeddings is not None else scores[: top_k * 3]
 
         # Stage 2: Reciprocal Rank Fusion with bi-encoder
-        if self.embeddings is not None and self._embed_model is not None and candidates:  # pragma: no cover
+        if (
+            self.embeddings is not None and self._embed_model is not None and candidates
+        ):  # pragma: no cover
             try:
                 q_emb = self._embed_model.encode(
-                    query, normalize_embeddings=True, convert_to_numpy=True)
+                    query, normalize_embeddings=True, convert_to_numpy=True
+                )
                 emb_scored = []
                 for para_idx, _ in candidates:
                     emb_sim = float(np.dot(q_emb, self.embeddings[para_idx]))
                     emb_scored.append((para_idx, emb_sim))
                 emb_scored.sort(key=lambda x: -x[1])
-                candidates = _reciprocal_rank_fusion(
-                    [candidates, emb_scored], k=60)
+                candidates = _reciprocal_rank_fusion([candidates, emb_scored], k=60)
             except Exception:
                 pass
 
         # Stage 3: Cross-encoder rerank on top candidates
-        ce_candidates = candidates[:top_k * 3]
+        ce_candidates = candidates[: top_k * 3]
         if ce_candidates:
             ce_candidates = self._cross_encoder_rerank(query, ce_candidates)
             if ce_candidates:
@@ -601,7 +682,11 @@ class MemoryIndex:
             if newest_first or oldest_first:
                 dated = []
                 for para_idx, score in candidates:
-                    doc_idx = self.paragraph_index[para_idx][0] if para_idx < len(self.paragraph_index) else 0
+                    doc_idx = (
+                        self.paragraph_index[para_idx][0]
+                        if para_idx < len(self.paragraph_index)
+                        else 0
+                    )
                     date = self.documents[doc_idx].date if doc_idx < len(self.documents) else ""
                     dated.append((para_idx, score, date))
                 dated.sort(key=lambda x: (x[2] if oldest_first else "", -x[1]))
@@ -619,8 +704,7 @@ class MemoryIndex:
                         if doc.name == ev.source:
                             # Check if this doc is already in candidates
                             already_in = any(
-                                self.paragraph_index[pi][0] == di
-                                for pi, _ in candidates[:top_k]
+                                self.paragraph_index[pi][0] == di for pi, _ in candidates[:top_k]
                             )
                             if not already_in:  # pragma: no cover
                                 # Find a paragraph index for this document
@@ -651,14 +735,16 @@ class MemoryIndex:
                 answer = _answer_extractor(query, doc.paragraphs[p_idx]) or ""
             if not answer and _llm_extractor:
                 answer = _llm_extractor(query, doc.paragraphs[p_idx]) or ""
-            results.append(SearchResult(
-                name=doc.name,
-                source=doc.source,
-                score=round(score, 4),
-                snippet=snippet,
-                paragraph_idx=p_idx,
-                answer=answer,
-            ))
+            results.append(
+                SearchResult(
+                    name=doc.name,
+                    source=doc.source,
+                    score=round(score, 4),
+                    snippet=snippet,
+                    paragraph_idx=p_idx,
+                    answer=answer,
+                )
+            )
             if len(results) >= top_k:
                 break
 
@@ -674,9 +760,13 @@ class MemoryIndex:
                 if r.score < 1.0:
                     base_conf *= 0.7
                 results[i] = SearchResult(
-                    name=r.name, source=r.source, score=r.score,
-                    snippet=r.snippet, paragraph_idx=r.paragraph_idx,
-                    answer=r.answer, confidence=round(base_conf, 3),
+                    name=r.name,
+                    source=r.source,
+                    score=r.score,
+                    snippet=r.snippet,
+                    paragraph_idx=r.paragraph_idx,
+                    answer=r.answer,
+                    confidence=round(base_conf, 3),
                 )
 
         # Cross-reference answer verification: boost confidence when answers agree
@@ -687,21 +777,38 @@ class MemoryIndex:
         if intent["type"] == "temporal" and results:
             try:
                 from temporal_graph import TemporalEvent, temporal_code_execute, parse_dates
+
                 t_events = []
                 for r in results[:5]:
-                    doc_idx = next((di for di, d in enumerate(self.documents) if d.name == r.name), None)
+                    doc_idx = next(
+                        (di for di, d in enumerate(self.documents) if d.name == r.name), None
+                    )
                     if doc_idx is not None:
-                        p_text = self.documents[doc_idx].paragraphs[r.paragraph_idx] if r.paragraph_idx < len(self.documents[doc_idx].paragraphs) else ""
+                        p_text = (
+                            self.documents[doc_idx].paragraphs[r.paragraph_idx]
+                            if r.paragraph_idx < len(self.documents[doc_idx].paragraphs)
+                            else ""
+                        )
                         for d in parse_dates(p_text):
-                            t_events.append(TemporalEvent(date=d, text=p_text[:200], source=r.name, paragraph_idx=r.paragraph_idx))
+                            t_events.append(
+                                TemporalEvent(
+                                    date=d,
+                                    text=p_text[:200],
+                                    source=r.name,
+                                    paragraph_idx=r.paragraph_idx,
+                                )
+                            )
                 if t_events:
                     code_answer = temporal_code_execute(query, t_events)
                     if code_answer and not results[0].answer:
                         results[0] = SearchResult(
-                            name=results[0].name, source=results[0].source,
-                            score=results[0].score, snippet=results[0].snippet,
+                            name=results[0].name,
+                            source=results[0].source,
+                            score=results[0].score,
+                            snippet=results[0].snippet,
                             paragraph_idx=results[0].paragraph_idx,
-                            answer=code_answer)
+                            answer=code_answer,
+                        )
             except Exception:  # pragma: no cover
                 pass
 
@@ -709,12 +816,15 @@ class MemoryIndex:
         if use_llm and results and not results[0].answer:  # pragma: no cover
             try:
                 from answer_extractor import llm_synthesize_answer
+
                 paras = [r.snippet for r in results[:3]]
                 synthesized = llm_synthesize_answer(query, paras)
                 if synthesized:
                     results[0] = SearchResult(
-                        name=results[0].name, source=results[0].source,
-                        score=results[0].score, snippet=results[0].snippet,
+                        name=results[0].name,
+                        source=results[0].source,
+                        score=results[0].score,
+                        snippet=results[0].snippet,
                         paragraph_idx=results[0].paragraph_idx,
                         answer=synthesized,
                     )
@@ -723,14 +833,17 @@ class MemoryIndex:
 
         return results
 
-    def _multi_hop_search(self, original_query: str, sub_queries: list[str],
-                          top_k: int = 5, **kwargs) -> list[SearchResult]:
+    def _multi_hop_search(
+        self, original_query: str, sub_queries: list[str], top_k: int = 5, **kwargs
+    ) -> list[SearchResult]:
         """Run sub-queries, combine results, re-rank by original query."""
         all_results: dict[str, SearchResult] = {}
         for sq in sub_queries:
-            results = self.search.__wrapped__(self, sq, top_k=top_k, **kwargs) \
-                if hasattr(self.search, '__wrapped__') else \
-                self._single_query_search(sq, top_k=top_k, **kwargs)
+            results = (
+                self.search.__wrapped__(self, sq, top_k=top_k, **kwargs)
+                if hasattr(self.search, "__wrapped__")
+                else self._single_query_search(sq, top_k=top_k, **kwargs)
+            )
             for r in results:
                 if r.name not in all_results or r.score > all_results[r.name].score:
                     all_results[r.name] = r
@@ -745,9 +858,16 @@ class MemoryIndex:
         scored.sort(key=lambda x: -x[1])
         return [r for r, _ in scored[:top_k]]
 
-    def _single_query_search(self, query: str, top_k: int = 5,
-                             project: str = "", after: str = "", before: str = "",
-                             doc_type: str = "", use_llm: bool = False) -> list[SearchResult]:
+    def _single_query_search(
+        self,
+        query: str,
+        top_k: int = 5,
+        project: str = "",
+        after: str = "",
+        before: str = "",
+        doc_type: str = "",
+        use_llm: bool = False,
+    ) -> list[SearchResult]:
         """Single query search (no decomposition). Used by _multi_hop_search."""
         q_tokens = set(_tokenize(query))
         if not q_tokens:
@@ -760,7 +880,11 @@ class MemoryIndex:
                 if doc_idx >= len(self.documents):
                     continue
                 doc = self.documents[doc_idx]
-                if project and project.lower() not in doc.source.lower() and project.lower() not in doc.name.lower():
+                if (
+                    project
+                    and project.lower() not in doc.source.lower()
+                    and project.lower() not in doc.name.lower()
+                ):
                     _filtered_out.add(i)
                 if after and doc.date and doc.date < after:
                     _filtered_out.add(i)
@@ -770,7 +894,7 @@ class MemoryIndex:
                     _filtered_out.add(i)
 
         candidate_scores = self._search_python_bm25(q_tokens, _filtered_out)
-        scores = sorted(candidate_scores.items(), key=lambda x: -x[1])[:top_k * 3]
+        scores = sorted(candidate_scores.items(), key=lambda x: -x[1])[: top_k * 3]
 
         _answer_extractor = self._get_answer_extractor()
         seen_docs = set()
@@ -785,10 +909,16 @@ class MemoryIndex:
             answer = ""
             if _answer_extractor:
                 answer = _answer_extractor(query, doc.paragraphs[p_idx]) or ""
-            results.append(SearchResult(
-                name=doc.name, source=doc.source, score=round(score, 4),
-                snippet=snippet, paragraph_idx=p_idx, answer=answer,
-            ))
+            results.append(
+                SearchResult(
+                    name=doc.name,
+                    source=doc.source,
+                    score=round(score, 4),
+                    snippet=snippet,
+                    paragraph_idx=p_idx,
+                    answer=answer,
+                )
+            )
             if len(results) >= top_k:
                 break
         return results
@@ -864,6 +994,7 @@ class MemoryIndex:
         if self._answer_extractor is None:
             try:
                 from answer_extractor import extract_answer
+
                 self._answer_extractor = extract_answer
             except ImportError:  # pragma: no cover
                 self._answer_extractor = False
@@ -873,6 +1004,7 @@ class MemoryIndex:
         if self._llm_answer_extractor is None:
             try:
                 from answer_extractor import llm_extract_answer
+
                 self._llm_answer_extractor = llm_extract_answer
             except ImportError:  # pragma: no cover
                 self._llm_answer_extractor = False
@@ -895,8 +1027,9 @@ class MemoryIndex:
                 emb_data = self.embeddings
 
         data = {
-            "documents": [(d.name, d.source, d.path, d.paragraphs, d.date, d.doc_type)
-                          for d in self.documents],
+            "documents": [
+                (d.name, d.source, d.path, d.paragraphs, d.date, d.doc_type) for d in self.documents
+            ],
             "paragraph_index": self.paragraph_index,
             "paragraph_tokens": [list(t) for t in self.paragraph_tokens],
             "paragraph_token_counts": self.paragraph_token_counts,
@@ -926,8 +1059,11 @@ class MemoryIndex:
             for entry in data["documents"]:
                 if len(entry) == 6:
                     n, s, p, paras, date, dtype = entry
-                    self.documents.append(Document(name=n, source=s, path=p,
-                                                    paragraphs=paras, date=date, doc_type=dtype))
+                    self.documents.append(
+                        Document(
+                            name=n, source=s, path=p, paragraphs=paras, date=date, doc_type=dtype
+                        )
+                    )
                 else:
                     n, s, p, paras = entry
                     self.documents.append(Document(name=n, source=s, path=p, paragraphs=paras))
@@ -935,7 +1071,9 @@ class MemoryIndex:
             self.paragraph_tokens = [set(t) for t in data["paragraph_tokens"]]
             self.paragraph_token_counts = data.get("paragraph_token_counts", [])
             if not self.paragraph_token_counts:
-                self.paragraph_token_counts = [{t: 1 for t in tokens} for tokens in self.paragraph_tokens]
+                self.paragraph_token_counts = [
+                    {t: 1 for t in tokens} for tokens in self.paragraph_tokens
+                ]
             self.idf = data["idf"]
             self._df = data.get("_df", {})
             self.paragraph_types = data.get("paragraph_types", [])
@@ -948,7 +1086,9 @@ class MemoryIndex:
                     inv[t].append(i)
             self._inverted_index = inv
             self._para_lengths = np.array([len(t) for t in self.paragraph_tokens], dtype=np.float32)
-            self._avg_dl = float(np.mean(self._para_lengths)) if len(self._para_lengths) > 0 else 1.0
+            self._avg_dl = (
+                float(np.mean(self._para_lengths)) if len(self._para_lengths) > 0 else 1.0
+            )
             self._rust_bm25_dirty = True
             self._rust_bm25 = None
             # Dequantize embeddings if needed
@@ -1021,8 +1161,9 @@ def _entity_boost_score(para_text: str, query_entities: set[str], graph: dict) -
     for rel in graph.get("relations", []):
         src, tgt = rel.get("source", ""), rel.get("target", "")
         if rel.get("type", "co_occurs") != "co_occurs":
-            if (src in query_entities and tgt.lower() in p_lower) or \
-               (tgt in query_entities and src.lower() in p_lower):
+            if (src in query_entities and tgt.lower() in p_lower) or (
+                tgt in query_entities and src.lower() in p_lower
+            ):
                 boost += 0.15
     return boost
 
@@ -1032,21 +1173,40 @@ def _entity_boost_score(para_text: str, query_entities: set[str], graph: dict) -
 _PERSON_CENTRIC_RE = re.compile(
     r"\b(relationship|hobby|hobbies|interest|interests|career|job|status|"
     r"personality|feel|feeling|prefer|favorite|partake|destress|self-care|"
-    r"political|leaning|member|community)\b", re.IGNORECASE)
+    r"political|leaning|member|community)\b",
+    re.IGNORECASE,
+)
 
 _POSSESSIVE_RE = re.compile(
     r"\b(his|her|their|'s)\s+(hobby|hobbies|interest|interests|career|"
     r"relationship|status|personality|feeling|preference|activity|activities)\b",
-    re.IGNORECASE)
+    re.IGNORECASE,
+)
 
 
 def _extract_query_names(query: str) -> set[str]:
     names = set()
     for m in re.finditer(r"\b([A-Z][a-z]{2,})\b", query):
         word = m.group(1).lower()
-        if word not in {"what", "when", "where", "who", "how", "why", "would",
-                        "could", "does", "did", "has", "have", "the", "which",
-                        "likely", "yes", "not"}:
+        if word not in {
+            "what",
+            "when",
+            "where",
+            "who",
+            "how",
+            "why",
+            "would",
+            "could",
+            "does",
+            "did",
+            "has",
+            "have",
+            "the",
+            "which",
+            "likely",
+            "yes",
+            "not",
+        }:
             names.add(word)
     return names
 
@@ -1061,6 +1221,7 @@ def _is_person_centric(query: str) -> bool:
 
 
 # ── Query intelligence ────────────────────────────────────────────
+
 
 def _classify_query(query: str) -> dict:
     """Classify query intent for search routing."""
@@ -1146,7 +1307,8 @@ def _generate_prospective_queries(text: str, doc_name: str, para_type: str) -> l
     for m in re.finditer(
         r"(?:likes?|loves?|enjoys?|prefers?|hates?|dislikes?|"
         r"interested in|passionate about|into)\s+(.{3,40}?)(?:[.,;!?\n]|$)",
-        text, re.I
+        text,
+        re.I,
     ):
         activity = m.group(1).strip().lower()
         queries.append(f"hobbies {activity}")
@@ -1157,7 +1319,8 @@ def _generate_prospective_queries(text: str, doc_name: str, para_type: str) -> l
     # 4. Occupation/role ("works as", "is a", "employed at")
     for m in re.finditer(
         r"(?:works? (?:as|at|for)|employed (?:at|by)|is a |job (?:is|as))\s+(.{3,40}?)(?:[.,;!?\n]|$)",
-        text, re.I
+        text,
+        re.I,
     ):
         role = m.group(1).strip().lower()
         queries.append(f"where does {caps[0].lower() if caps else 'the person'} work")
@@ -1168,7 +1331,8 @@ def _generate_prospective_queries(text: str, doc_name: str, para_type: str) -> l
     # 5. Relationships ("married to", "friends with", "dating")
     for m in re.finditer(
         r"(?:married to|dating|friends? with|partner|spouse|sibling|brother|sister)\s*(.{0,30}?)(?:[.,;!?\n]|$)",
-        text, re.I
+        text,
+        re.I,
     ):
         queries.append(f"relationship status")
         queries.append(f"who is {caps[0].lower() if caps else 'the person'} dating")
@@ -1176,7 +1340,8 @@ def _generate_prospective_queries(text: str, doc_name: str, para_type: str) -> l
     # 6. Allergies, health, restrictions
     for m in re.finditer(
         r"(?:allergic to|allergy|intolerant|sensitive to|cannot eat|vegetarian|vegan)\s*(.{0,30}?)(?:[.,;!?\n]|$)",
-        text, re.I
+        text,
+        re.I,
     ):
         subject = m.group(1).strip().lower()
         queries.append(f"allergic {subject}")
@@ -1185,7 +1350,8 @@ def _generate_prospective_queries(text: str, doc_name: str, para_type: str) -> l
     # 7. Travel/location ("went to", "visited", "lives in", "from")
     for m in re.finditer(
         r"(?:went to|visited|trip to|lives? in|moved to|from|travel(?:led|ed)? to)\s+(.{3,30}?)(?:[.,;!?\n]|$)",
-        text, re.I
+        text,
+        re.I,
     ):
         place = m.group(1).strip().lower()
         queries.append(f"where did {caps[0].lower() if caps else 'the person'} go")
@@ -1195,7 +1361,8 @@ def _generate_prospective_queries(text: str, doc_name: str, para_type: str) -> l
     # 8. Learning/skills ("learning", "studying", "started")
     for m in re.finditer(
         r"(?:learning|studying|started|taking up|practicing)\s+(.{3,30}?)(?:[.,;!?\n]|$)",
-        text, re.I
+        text,
+        re.I,
     ):
         skill = m.group(1).strip().lower()
         queries.append(f"what is {caps[0].lower() if caps else 'the person'} learning")
@@ -1203,26 +1370,23 @@ def _generate_prospective_queries(text: str, doc_name: str, para_type: str) -> l
 
     # 9. Favourites ("favourite", "favorite")
     for m in re.finditer(
-        r"(?:favou?rite)\s+(\w+)\s+(?:is|was)\s+(.{3,40}?)(?:[.,;!?\n]|$)",
-        text, re.I
+        r"(?:favou?rite)\s+(\w+)\s+(?:is|was)\s+(.{3,40}?)(?:[.,;!?\n]|$)", text, re.I
     ):
         queries.append(f"favourite {m.group(1).lower()}")
         queries.append(m.group(2).strip().lower())
-    for m in re.finditer(
-        r"(?:favou?rite)\s+(.{3,40}?)(?:[.,;!?\n]|$)",
-        text, re.I
-    ):
+    for m in re.finditer(r"(?:favou?rite)\s+(.{3,40}?)(?:[.,;!?\n]|$)", text, re.I):
         queries.append(f"favourite {m.group(1).strip().lower()}")
 
     # 10. Decision/finding/metric type-specific (original patterns)
     if para_type == "decision":
         subjects = re.findall(
-            r"(?:decided|chose|rejected|will)\s+(?:to\s+)?(.{10,40}?)(?:\.|,|$)", text, re.I)
+            r"(?:decided|chose|rejected|will)\s+(?:to\s+)?(.{10,40}?)(?:\.|,|$)", text, re.I
+        )
         for s in subjects[:2]:
             queries.append(f"why did we {s.strip().lower()}")
             queries.append(f"what did we decide about {s.strip().lower()}")
     if para_type == "finding":
-        queries.append(f"what did we find about {doc_name.replace('.md','').replace('_',' ')}")
+        queries.append(f"what did we find about {doc_name.replace('.md', '').replace('_', ' ')}")
     if para_type == "metric":
         numbers = re.findall(r"\d+\.?\d*%", text)
         for n in numbers[:2]:
@@ -1254,7 +1418,7 @@ def _generate_prospective_queries(text: str, doc_name: str, para_type: str) -> l
 
 
 _DATE_EXPR = re.compile(
-    r"\d{4}-\d{2}-\d{2}"                               # ISO date
+    r"\d{4}-\d{2}-\d{2}"  # ISO date
     r"|(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}"  # English date
     r"|\b(?:yesterday|today|last\s+(?:week|month|year))\b"  # Relative dates
     r"|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\b",  # Abbreviated
@@ -1271,6 +1435,7 @@ def _recency_boost(date_str: str) -> float:
     """Compute recency boost relative to today. More recent = higher boost."""
     try:
         from datetime import datetime, date
+
         doc_date = datetime.strptime(date_str[:10], "%Y-%m-%d").date()
         today = date.today()
         days_ago = (today - doc_date).days
@@ -1348,7 +1513,7 @@ def _split_paragraphs(text: str, is_code: bool = False) -> list[str]:
 def _split_sentences(text: str) -> list[str]:
     """Split text into sentences. Handles common abbreviations."""
     # Split on sentence boundaries but not on common abbreviations
-    parts = re.split(r'(?<=[.!?])\s+(?=[A-Z])', text)
+    parts = re.split(r"(?<=[.!?])\s+(?=[A-Z])", text)
     sents = []
     for p in parts:
         p = p.strip()
@@ -1371,8 +1536,11 @@ def _split_code(text: str) -> list[str]:
         chunks.append(doc_match.group(1).strip()[:MAX_CODE_CHUNK_CHARS])
 
     # Python: def and class blocks
-    for match in re.finditer(r'^((?:def|class|fn|pub fn|impl)\s+\w+.*?)(?=\n(?:def |class |fn |pub fn |impl |\Z))',
-                              text, re.MULTILINE | re.DOTALL):
+    for match in re.finditer(
+        r"^((?:def|class|fn|pub fn|impl)\s+\w+.*?)(?=\n(?:def |class |fn |pub fn |impl |\Z))",
+        text,
+        re.MULTILINE | re.DOTALL,
+    ):
         block = match.group(1).strip()
         if len(block) > 30:
             # Keep first 500 chars (signature + docstring + start of body)
@@ -1457,6 +1625,7 @@ def _cross_reference_answers(results: list[SearchResult]) -> list[SearchResult]:
 
     # Count answer agreement
     from collections import Counter
+
     answer_counts = Counter(a for _, a in answers_with_idx)
     most_common_answer, count = answer_counts.most_common(1)[0]
 
@@ -1467,9 +1636,13 @@ def _cross_reference_answers(results: list[SearchResult]) -> list[SearchResult]:
                 old = results[i]
                 boosted = min(1.0, old.confidence + 0.1 * (count - 1))
                 results[i] = SearchResult(
-                    name=old.name, source=old.source, score=old.score,
-                    snippet=old.snippet, paragraph_idx=old.paragraph_idx,
-                    answer=old.answer, confidence=round(boosted, 3),
+                    name=old.name,
+                    source=old.source,
+                    score=old.score,
+                    snippet=old.snippet,
+                    paragraph_idx=old.paragraph_idx,
+                    answer=old.answer,
+                    confidence=round(boosted, 3),
                 )
 
     return results
@@ -1486,24 +1659,21 @@ def _decompose_query(query: str) -> list[str] | None:
     # "What X does the person who Y have/do?"
     m = re.match(
         r"what\s+(.+?)\s+(?:does|did|do)\s+the\s+(?:person|one|guy|woman|man)\s+who\s+(.+?)(?:\s+have|\s+do|\s+like|\?|$)",
-        q, re.I
+        q,
+        re.I,
     )
     if m:
         return [f"who {m.group(2).strip()}", f"what {m.group(1).strip()}"]
 
     # "Does the person who X also Y?"
     m = re.match(
-        r"(?:does|did|do)\s+the\s+(?:person|one)\s+who\s+(.+?)\s+(?:also\s+)?(.+?)(?:\?|$)",
-        q, re.I
+        r"(?:does|did|do)\s+the\s+(?:person|one)\s+who\s+(.+?)\s+(?:also\s+)?(.+?)(?:\?|$)", q, re.I
     )
     if m:
         return [f"who {m.group(1).strip()}", m.group(2).strip()]
 
     # "What happened before/after X did Y?"
-    m = re.match(
-        r"what\s+happened\s+(before|after)\s+(.+?)(?:\?|$)",
-        q, re.I
-    )
+    m = re.match(r"what\s+happened\s+(before|after)\s+(.+?)(?:\?|$)", q, re.I)
     if m:
         return [m.group(2).strip(), f"what happened {m.group(1)} {m.group(2).strip()}"]
 
@@ -1512,7 +1682,8 @@ def _decompose_query(query: str) -> list[str] | None:
 
 def _extract_lookup_terms(query: str) -> set[str]:
     return {
-        token for token in _tokenize(query)
+        token
+        for token in _tokenize(query)
         if token not in LOCATION_STOPWORDS and not token.isdigit()
     }
 
@@ -1541,6 +1712,7 @@ def _get_rust_bm25_class():
         _RUST_BM25_IMPORT_ATTEMPTED = True
         try:
             from remanentia_search import BM25Index
+
             _RUST_BM25_CLASS = BM25Index
         except Exception:
             _RUST_BM25_CLASS = False
@@ -1589,6 +1761,7 @@ def auto_rebuild_if_needed(use_gpu: bool = True) -> MemoryIndex:
 if __name__ == "__main__":
     import io
     import sys
+
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
     idx = MemoryIndex()
@@ -1598,8 +1771,9 @@ if __name__ == "__main__":
         use_gliner = "--gliner" in sys.argv
         use_llm_idx = "--llm-index" in sys.argv
         print("Building index...")
-        stats = idx.build(use_gpu_embeddings=use_gpu, use_gliner=use_gliner,
-                          use_llm_indexing=use_llm_idx)
+        stats = idx.build(
+            use_gpu_embeddings=use_gpu, use_gliner=use_gliner, use_llm_indexing=use_llm_idx
+        )
         print(json.dumps(stats, indent=2))
         idx.save()
         print(f"Saved to {INDEX_PATH}")
@@ -1612,10 +1786,13 @@ if __name__ == "__main__":
                 # Consolidate first so new semantic memories are indexed in the same pass
                 try:
                     from consolidation_engine import consolidate
+
                     result = consolidate()
                     if result.get("memories_written", 0) > 0:
-                        print(f"Consolidated: {result['memories_written']} memories, "
-                              f"{result['entities_found']} entities")
+                        print(
+                            f"Consolidated: {result['memories_written']} memories, "
+                            f"{result['entities_found']} entities"
+                        )
                 except Exception as e:
                     print(f"Consolidation error: {e}")
                 print("Changes detected, rebuilding...")

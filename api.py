@@ -22,6 +22,7 @@ Endpoints:
     GET  /graph?top=15
     GET  /graph/entity/{id}
 """
+
 from __future__ import annotations
 
 import json
@@ -81,6 +82,7 @@ def health():
 @app.post("/recall")
 def recall_endpoint(req: RecallRequest):
     from memory_recall import recall
+
     ctx = recall(req.query, top_k=req.top_k, include_content=req.include_content)
 
     if req.format == "context":
@@ -108,6 +110,7 @@ def recall_endpoint(req: RecallRequest):
 @app.post("/consolidate")
 def consolidate_endpoint(req: ConsolidateRequest):
     from consolidation_engine import consolidate
+
     return consolidate(force=req.force)
 
 
@@ -189,10 +192,14 @@ def entity_detail(entity_id: str):
                 r = json.loads(ln)
                 if r["source"] == entity_id or r["target"] == entity_id:
                     other = r["target"] if r["source"] == entity_id else r["source"]
-                    connections.append({
-                        "entity": other, "weight": r["weight"],
-                        "relation": r["type"], "evidence": r.get("evidence", []),
-                    })
+                    connections.append(
+                        {
+                            "entity": other,
+                            "weight": r["weight"],
+                            "relation": r["type"],
+                            "evidence": r.get("evidence", []),
+                        }
+                    )
 
     connections.sort(key=lambda x: -x["weight"])
     return {"entity": entity, "connections": connections}
@@ -200,4 +207,5 @@ def entity_detail(entity_id: str):
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="127.0.0.1", port=8001)

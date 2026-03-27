@@ -15,6 +15,7 @@ Processes recent knowledge notes and:
 4. Identifies unresolved contradictions and knowledge gaps
 5. Produces a human-readable digest
 """
+
 from __future__ import annotations
 
 import time
@@ -75,6 +76,7 @@ def _generate_summary_llm(notes: list, model: str = "claude-haiku-4-5-20251001")
     """Generate a dense summary from a cluster of notes via LLM."""
     try:
         from answer_extractor import _get_client
+
         client = _get_client()
         if not client:
             return None
@@ -86,24 +88,29 @@ def _generate_summary_llm(notes: list, model: str = "claude-haiku-4-5-20251001")
         response = client.messages.create(
             model=model,
             max_tokens=200,
-            messages=[{
-                "role": "user",
-                "content": (
-                    "Summarize these related knowledge notes in 2-3 sentences. "
-                    "Focus on decisions, findings, and metrics. Be precise.\n\n"
-                    f"{content}"
-                ),
-            }],
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        "Summarize these related knowledge notes in 2-3 sentences. "
+                        "Focus on decisions, findings, and metrics. Be precise.\n\n"
+                        f"{content}"
+                    ),
+                }
+            ],
         )
         return response.content[0].text.strip()
     except Exception:  # pragma: no cover
         return None
 
 
-def _generate_prospective_queries_llm(note, model: str = "claude-haiku-4-5-20251001") -> list[str]:  # pragma: no cover
+def _generate_prospective_queries_llm(
+    note, model: str = "claude-haiku-4-5-20251001"
+) -> list[str]:  # pragma: no cover
     """Generate hypothetical future queries for a note via LLM (Kumiho technique)."""
     try:
         from answer_extractor import _get_client
+
         client = _get_client()
         if not client:
             return []
@@ -114,14 +121,16 @@ def _generate_prospective_queries_llm(note, model: str = "claude-haiku-4-5-20251
         response = client.messages.create(
             model=model,
             max_tokens=150,
-            messages=[{
-                "role": "user",
-                "content": (
-                    "Generate 3 short search queries someone might use to find this information. "
-                    "One per line, no numbering.\n\n"
-                    f"{note.content[:500]}"
-                ),
-            }],
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        "Generate 3 short search queries someone might use to find this information. "
+                        "One per line, no numbering.\n\n"
+                        f"{note.content[:500]}"
+                    ),
+                }
+            ],
         )
         text = response.content[0].text.strip()
         return [q.strip() for q in text.split("\n") if q.strip() and len(q.strip()) > 5][:5]
@@ -133,10 +142,12 @@ def _identify_gaps(notes: list) -> list[str]:
     """Identify knowledge gaps — decisions without measured outcomes,
     findings without follow-up, open questions."""
     gaps = []
-    decisions = [n for n in notes if any(w in n.content.lower()
-                 for w in ("decided", "chose", "will"))]
-    findings = [n for n in notes if any(w in n.content.lower()
-                for w in ("found", "measured", "scored"))]
+    decisions = [
+        n for n in notes if any(w in n.content.lower() for w in ("decided", "chose", "will"))
+    ]
+    findings = [
+        n for n in notes if any(w in n.content.lower() for w in ("found", "measured", "scored"))
+    ]
 
     decision_entities = set(e for n in decisions for e in n.entities)
     finding_entities = set(e for n in findings for e in n.entities)
@@ -154,8 +165,7 @@ def _identify_contradictions(notes: list) -> list[str]:
     contradictions = []
     for n in notes:
         if n.supersedes and not n.superseded_by:
-            contradictions.append(
-                f"'{n.title}' supersedes an older note (may need verification)")
+            contradictions.append(f"'{n.title}' supersedes an older note (may need verification)")
     return contradictions
 
 
@@ -166,6 +176,7 @@ def reflect_once(days: int = 7, use_llm: bool = False) -> dict:
     """
     try:
         from knowledge_store import KnowledgeStore
+
         store = KnowledgeStore()
         if not store.load():
             return {"status": "no_notes", "notes": 0}
@@ -174,8 +185,7 @@ def reflect_once(days: int = 7, use_llm: bool = False) -> dict:
 
     # Filter to recent notes
     cutoff = time.strftime("%Y-%m-%d", time.gmtime(time.time() - days * 86400))
-    recent = [n for n in store.notes.values()
-              if n.created >= cutoff or n.updated >= cutoff]
+    recent = [n for n in store.notes.values() if n.created >= cutoff or n.updated >= cutoff]
 
     if not recent:
         return {"status": "nothing_recent", "notes": 0, "days": days}
@@ -193,11 +203,13 @@ def reflect_once(days: int = 7, use_llm: bool = False) -> dict:
                 summary = _generate_summary_heuristic(cluster_notes)
         else:
             summary = _generate_summary_heuristic(cluster_notes)
-        summaries.append({
-            "notes": len(cluster_notes),
-            "entities": sorted(set(e for n in cluster_notes for e in n.entities))[:10],
-            "summary": summary,
-        })
+        summaries.append(
+            {
+                "notes": len(cluster_notes),
+                "entities": sorted(set(e for n in cluster_notes for e in n.entities))[:10],
+                "summary": summary,
+            }
+        )
 
     # Generate prospective queries for un-queried notes
     pq_count = 0
@@ -222,7 +234,7 @@ def reflect_once(days: int = 7, use_llm: bool = False) -> dict:
     if summaries:
         digest_lines.append("\n## Cluster Summaries")
         for i, s in enumerate(summaries):
-            digest_lines.append(f"\n### Cluster {i+1} ({s['notes']} notes)")
+            digest_lines.append(f"\n### Cluster {i + 1} ({s['notes']} notes)")
             if s["entities"]:
                 digest_lines.append(f"Entities: {', '.join(s['entities'])}")
             digest_lines.append(s["summary"])

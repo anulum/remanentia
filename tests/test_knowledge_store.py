@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 
-
 from knowledge_store import (
     KnowledgeNote,
     KnowledgeStore,
@@ -92,9 +91,13 @@ class TestNoteId:
 class TestKnowledgeNote:
     def test_to_dict_roundtrip(self):
         note = KnowledgeNote(
-            id="abc", title="Test", content="Content here",
-            keywords=["test"], source="test.md",
-            created="2026-03-24", updated="2026-03-24",
+            id="abc",
+            title="Test",
+            content="Content here",
+            keywords=["test"],
+            source="test.md",
+            created="2026-03-24",
+            updated="2026-03-24",
             entities=["stdp"],
         )
         d = note.to_dict()
@@ -105,8 +108,13 @@ class TestKnowledgeNote:
 
     def test_defaults(self):
         note = KnowledgeNote(
-            id="x", title="T", content="C", keywords=[],
-            source="", created="", updated="",
+            id="x",
+            title="T",
+            content="C",
+            keywords=[],
+            source="",
+            created="",
+            updated="",
         )
         assert note.links == []
         assert note.supersedes == ""
@@ -118,8 +126,9 @@ class TestKnowledgeNote:
 
 class TestTrigger:
     def test_to_dict_roundtrip(self):
-        t = Trigger(id="t1", condition="scpn-control", action="check weights file",
-                    created="2026-03-24")
+        t = Trigger(
+            id="t1", condition="scpn-control", action="check weights file", created="2026-03-24"
+        )
         d = t.to_dict()
         t2 = Trigger.from_dict(d)
         assert t2.condition == "scpn-control"
@@ -137,7 +146,9 @@ class TestTrigger:
 class TestAddNote:
     def test_creates_note(self):
         store = KnowledgeStore()
-        note = store.add_note("We decided to remove SNN from retrieval scoring.", source="decision.md")
+        note = store.add_note(
+            "We decided to remove SNN from retrieval scoring.", source="decision.md"
+        )
         assert note.id in store.notes
         assert "snn" in note.entities or "retrieval" in note.entities
         assert note.created != ""
@@ -150,13 +161,19 @@ class TestAddNote:
     def test_links_to_related(self):
         store = KnowledgeStore()
         store.add_note("BM25 scoring improved retrieval accuracy to 81.2%.", source="a.md")
-        note2 = store.add_note("BM25 retrieval accuracy measured at 83.1% after LLM synthesis.", source="b.md")
+        note2 = store.add_note(
+            "BM25 retrieval accuracy measured at 83.1% after LLM synthesis.", source="b.md"
+        )
         assert len(note2.links) > 0
 
     def test_merges_near_duplicate(self):
         store = KnowledgeStore()
-        n1 = store.add_note("The STDP learning rule was broken in both CPU and GPU backends.", source="a.md")
-        n2 = store.add_note("The STDP learning rule was broken in both CPU and GPU backends.", source="b.md")
+        n1 = store.add_note(
+            "The STDP learning rule was broken in both CPU and GPU backends.", source="a.md"
+        )
+        n2 = store.add_note(
+            "The STDP learning rule was broken in both CPU and GPU backends.", source="b.md"
+        )
         # Near-duplicate should merge, not create new
         assert len(store.notes) == 1
         assert n2.id == n1.id
@@ -230,8 +247,12 @@ class TestSearch:
 class TestGetRelated:
     def test_finds_linked(self):
         store = KnowledgeStore()
-        n1 = store.add_note("BM25 retrieval scoring improved accuracy on LOCOMO benchmark.", source="a.md")
-        n2 = store.add_note("BM25 LOCOMO benchmark accuracy reached 83.1% with LLM synthesis.", source="b.md")
+        n1 = store.add_note(
+            "BM25 retrieval scoring improved accuracy on LOCOMO benchmark.", source="a.md"
+        )
+        n2 = store.add_note(
+            "BM25 LOCOMO benchmark accuracy reached 83.1% with LLM synthesis.", source="b.md"
+        )
         related = store.get_related(n1.id, depth=1)
         assert len(related) > 0
 
@@ -243,7 +264,9 @@ class TestGetRelated:
         store = KnowledgeStore()
         n1 = store.add_note("BM25 retrieval is the core scoring algorithm.", source="a.md")
         n2 = store.add_note("BM25 scoring uses TF-IDF term weighting internally.", source="b.md")
-        n3 = store.add_note("TF-IDF term weighting was the original retrieval method.", source="c.md")
+        n3 = store.add_note(
+            "TF-IDF term weighting was the original retrieval method.", source="c.md"
+        )
         related = store.get_related(n1.id, depth=2)
         # Should find n2 (depth 1) and potentially n3 (depth 2)
         assert len(related) >= 1
@@ -472,8 +495,7 @@ class TestGraphSearch:
         related = store.get_related(n1.id, depth=1, edge_types={"related"})
         # n2 should be found via "related" type
         assert all(
-            any(l.get("type") == "related" for l in store.notes[n1.id].links
-                if l["target"] == r.id)
+            any(l.get("type") == "related" for l in store.notes[n1.id].links if l["target"] == r.id)
             for r in related
         )
 

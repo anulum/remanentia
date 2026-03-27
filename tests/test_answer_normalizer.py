@@ -14,7 +14,10 @@ class TestNormalizeAnswer:
         assert normalize_answer("Likely yes, because she enjoys reading") == "likely yes"
 
     def test_likely_no(self):
-        assert normalize_answer("Likely no; though she likes reading, she wants to be a counselor") == "likely no"
+        assert (
+            normalize_answer("Likely no; though she likes reading, she wants to be a counselor")
+            == "likely no"
+        )
 
     def test_yes_since(self):
         assert normalize_answer("Yes, since she collects classic children's books") == "yes"
@@ -119,14 +122,11 @@ class TestAnswersMatch:
     def test_yes_with_explanation_matches_yes(self):
         assert answers_match(
             "Yes, since she collects classic children's books",
-            "Yes, since she collects classic children's books"
+            "Yes, since she collects classic children's books",
         )
 
     def test_likely_no_matches_likely_no(self):
-        assert answers_match(
-            "Likely no, because she never said so",
-            "Likely no"
-        )
+        assert answers_match("Likely no, because she never said so", "Likely no")
 
 
 class TestSemanticSimilarity:
@@ -154,6 +154,7 @@ class TestSemanticSimilarity:
     def test_lexical_fallback(self):
         """When embed model is unavailable, falls back to lexical similarity."""
         from answer_normalizer import _lexical_similarity
+
         # Direct test of lexical similarity
         sim = _lexical_similarity("pottery and running", "pottery and camping")
         assert sim > 0.5
@@ -163,6 +164,7 @@ class TestSemanticSimilarity:
     def test_semantic_similarity_no_model(self):
         """semantic_similarity falls back to lexical when model is None."""
         import answer_normalizer
+
         old = answer_normalizer._embed_model
         answer_normalizer._embed_model = False  # force no model
         sim = semantic_similarity("pottery and running", "pottery and camping")

@@ -9,6 +9,7 @@
 Handles hedging ("Likely yes, because..."), explanation stripping,
 and answer-core extraction to improve fuzzy match accuracy.
 """
+
 from __future__ import annotations
 
 from difflib import SequenceMatcher
@@ -23,8 +24,12 @@ _NO_PATTERNS = re.compile(
     r"^(no|likely\s+no|probably\s+no|most\s+likely\s+no|nah|nope|incorrect|false|unlikely)",
     re.IGNORECASE,
 )
-_EXPLANATION_SPLIT = re.compile(r"[,;.!]\s+(?:because|since|as|though|but|however|due|given|considering)")
-_HEDGING_PREFIX = re.compile(r"^(?:I think|I believe|I would say|It seems|Based on)\s+", re.IGNORECASE)
+_EXPLANATION_SPLIT = re.compile(
+    r"[,;.!]\s+(?:because|since|as|though|but|however|due|given|considering)"
+)
+_HEDGING_PREFIX = re.compile(
+    r"^(?:I think|I believe|I would say|It seems|Based on)\s+", re.IGNORECASE
+)
 
 
 def normalize_answer(text: str) -> str:
@@ -139,6 +144,7 @@ def _get_embed_model():
     if _embed_model is None:
         try:
             from sentence_transformers import SentenceTransformer
+
             try:
                 _embed_model = SentenceTransformer(
                     "all-MiniLM-L6-v2",
@@ -182,5 +188,6 @@ def semantic_similarity(text_a: str, text_b: str) -> float:
     if not model:
         return _lexical_similarity(text_a, text_b)
     import numpy as np
+
     embs = model.encode([text_a, text_b], normalize_embeddings=True, convert_to_numpy=True)
     return float(np.dot(embs[0], embs[1]))

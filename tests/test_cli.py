@@ -32,9 +32,11 @@ class TestCmdStatus:
         semantic_dir = tmp_path / "memory" / "semantic"
         semantic_dir.mkdir(parents=True)
 
-        with patch("cli.STATE_DIR", state_dir), \
-             patch("cli.GRAPH_DIR", graph_dir), \
-             patch("cli.BASE", tmp_path):
+        with (
+            patch("cli.STATE_DIR", state_dir),
+            patch("cli.GRAPH_DIR", graph_dir),
+            patch("cli.BASE", tmp_path),
+        ):
             args = type("Args", (), {})()
             cmd_status(args)
 
@@ -45,6 +47,7 @@ class TestCmdStatus:
         state_dir = tmp_path / "snn_state"
         state_dir.mkdir()
         import time
+
         state = {
             "timestamp": time.time(),
             "cycle": 42,
@@ -53,7 +56,8 @@ class TestCmdStatus:
             "live_retrieval_available": True,
         }
         (state_dir / "current_state.json").write_text(
-            json.dumps(state), encoding="utf-8",
+            json.dumps(state),
+            encoding="utf-8",
         )
         graph_dir = tmp_path / "memory" / "graph"
         graph_dir.mkdir(parents=True)
@@ -62,9 +66,11 @@ class TestCmdStatus:
         semantic_dir = tmp_path / "memory" / "semantic"
         semantic_dir.mkdir(parents=True)
 
-        with patch("cli.STATE_DIR", state_dir), \
-             patch("cli.GRAPH_DIR", graph_dir), \
-             patch("cli.BASE", tmp_path):
+        with (
+            patch("cli.STATE_DIR", state_dir),
+            patch("cli.GRAPH_DIR", graph_dir),
+            patch("cli.BASE", tmp_path),
+        ):
             cmd_status(type("Args", (), {})())
 
         out = capsys.readouterr().out
@@ -84,9 +90,11 @@ class TestCmdStatus:
         graph_dir = tmp_path / "memory" / "graph"
         graph_dir.mkdir(parents=True)
 
-        with patch("cli.STATE_DIR", state_dir), \
-             patch("cli.GRAPH_DIR", graph_dir), \
-             patch("cli.BASE", tmp_path):
+        with (
+            patch("cli.STATE_DIR", state_dir),
+            patch("cli.GRAPH_DIR", graph_dir),
+            patch("cli.BASE", tmp_path),
+        ):
             cmd_status(type("Args", (), {})())
 
         out = capsys.readouterr().out
@@ -159,10 +167,12 @@ class TestMain:
         semantic_dir = tmp_path / "memory" / "semantic"
         semantic_dir.mkdir(parents=True)
 
-        with patch("sys.argv", ["remanentia", "status"]), \
-             patch("cli.STATE_DIR", state_dir), \
-             patch("cli.GRAPH_DIR", graph_dir), \
-             patch("cli.BASE", tmp_path):
+        with (
+            patch("sys.argv", ["remanentia", "status"]),
+            patch("cli.STATE_DIR", state_dir),
+            patch("cli.GRAPH_DIR", graph_dir),
+            patch("cli.BASE", tmp_path),
+        ):
             main()
 
         out = capsys.readouterr().out
@@ -175,18 +185,27 @@ class TestMain:
 class TestCmdRecall:
     def test_recall_with_filters(self, tmp_path, capsys):
         from memory_index import SearchResult
+
         mock_idx = MagicMock()
         mock_idx._built = True
         mock_idx.search.return_value = [
-            SearchResult(name="test.md", source="test", score=0.9,
-                         snippet="snippet", answer="42"),
+            SearchResult(name="test.md", source="test", score=0.9, snippet="snippet", answer="42"),
         ]
         with patch("memory_index.auto_rebuild_if_needed", return_value=mock_idx):
-            args = type("Args", (), {
-                "query": "test query", "top": 3, "format": "summary",
-                "content": False, "project": "test", "after": "", "before": "",
-                "llm": False,
-            })()
+            args = type(
+                "Args",
+                (),
+                {
+                    "query": "test query",
+                    "top": 3,
+                    "format": "summary",
+                    "content": False,
+                    "project": "test",
+                    "after": "",
+                    "before": "",
+                    "llm": False,
+                },
+            )()
             cmd_recall(args)
         out = capsys.readouterr().out
         assert "test.md" in out
@@ -197,11 +216,20 @@ class TestCmdRecall:
         mock_idx._built = True
         mock_idx.search.return_value = []
         with patch("memory_index.auto_rebuild_if_needed", return_value=mock_idx):
-            args = type("Args", (), {
-                "query": "test", "top": 3, "format": "summary",
-                "content": False, "project": "p", "after": "", "before": "",
-                "llm": True,
-            })()
+            args = type(
+                "Args",
+                (),
+                {
+                    "query": "test",
+                    "top": 3,
+                    "format": "summary",
+                    "content": False,
+                    "project": "p",
+                    "after": "",
+                    "before": "",
+                    "llm": True,
+                },
+            )()
             cmd_recall(args)
         call_kwargs = mock_idx.search.call_args
         assert call_kwargs[1].get("use_llm") is True
@@ -211,11 +239,20 @@ class TestCmdRecall:
         mock_ctx.summary = "Summary text"
         mock_ctx.to_llm_context.return_value = "LLM context"
         with patch("memory_recall.recall", return_value=mock_ctx):
-            args = type("Args", (), {
-                "query": "test query", "top": 3, "format": "summary",
-                "content": False, "project": "", "after": "", "before": "",
-                "llm": False,
-            })()
+            args = type(
+                "Args",
+                (),
+                {
+                    "query": "test query",
+                    "top": 3,
+                    "format": "summary",
+                    "content": False,
+                    "project": "",
+                    "after": "",
+                    "before": "",
+                    "llm": False,
+                },
+            )()
             cmd_recall(args)
         out = capsys.readouterr().out
         assert "Summary" in out
@@ -224,11 +261,20 @@ class TestCmdRecall:
         mock_ctx = MagicMock()
         mock_ctx.to_llm_context.return_value = "LLM context output"
         with patch("memory_recall.recall", return_value=mock_ctx):
-            args = type("Args", (), {
-                "query": "test", "top": 3, "format": "context",
-                "content": False, "project": "", "after": "", "before": "",
-                "llm": False,
-            })()
+            args = type(
+                "Args",
+                (),
+                {
+                    "query": "test",
+                    "top": 3,
+                    "format": "context",
+                    "content": False,
+                    "project": "",
+                    "after": "",
+                    "before": "",
+                    "llm": False,
+                },
+            )()
             cmd_recall(args)
         out = capsys.readouterr().out
         assert "LLM context" in out
@@ -247,11 +293,20 @@ class TestCmdRecall:
         mock_ctx.novelty_score = 0.5
         mock_ctx.elapsed_ms = 10
         with patch("memory_recall.recall", return_value=mock_ctx):
-            args = type("Args", (), {
-                "query": "test", "top": 3, "format": "json",
-                "content": False, "project": "", "after": "", "before": "",
-                "llm": False,
-            })()
+            args = type(
+                "Args",
+                (),
+                {
+                    "query": "test",
+                    "top": 3,
+                    "format": "json",
+                    "content": False,
+                    "project": "",
+                    "after": "",
+                    "before": "",
+                    "llm": False,
+                },
+            )()
             cmd_recall(args)
         out = capsys.readouterr().out
         data = json.loads(out)
@@ -294,8 +349,13 @@ class TestCmdInit:
         assert (tmp_path / "memory" / "semantic").exists()
 
     def test_already_exists(self, tmp_path, capsys):
-        for d in ["reasoning_traces", "memory/semantic", "memory/graph",
-                   "consolidation", "snn_state"]:
+        for d in [
+            "reasoning_traces",
+            "memory/semantic",
+            "memory/graph",
+            "consolidation",
+            "snn_state",
+        ]:
             (tmp_path / d).mkdir(parents=True, exist_ok=True)
         with patch("cli.BASE", tmp_path):
             cmd_init(type("Args", (), {})())
@@ -309,6 +369,7 @@ class TestCmdInit:
 class TestCmdDaemon:
     def test_daemon_stop_no_lock(self, tmp_path, capsys):
         from cli import cmd_daemon
+
         with patch("cli.STATE_DIR", tmp_path):
             cmd_daemon(type("Args", (), {"action": "stop"})())
         out = capsys.readouterr().out
@@ -316,28 +377,32 @@ class TestCmdDaemon:
 
     def test_daemon_stop_with_lock(self, tmp_path, capsys):
         from cli import cmd_daemon
+
         state_dir = tmp_path / "snn_state"
         state_dir.mkdir()
         (state_dir / "daemon.lock").write_text("99999", encoding="utf-8")
-        with patch("cli.STATE_DIR", state_dir), \
-             patch("os.kill", side_effect=OSError("No such process")):
+        with (
+            patch("cli.STATE_DIR", state_dir),
+            patch("os.kill", side_effect=OSError("No such process")),
+        ):
             cmd_daemon(type("Args", (), {"action": "stop"})())
         out = capsys.readouterr().out
         assert "Failed" in out
 
     def test_daemon_stop_success(self, tmp_path, capsys):
         from cli import cmd_daemon
+
         state_dir = tmp_path / "snn_state"
         state_dir.mkdir()
         (state_dir / "daemon.lock").write_text("12345", encoding="utf-8")
-        with patch("cli.STATE_DIR", state_dir), \
-             patch("os.kill"):
+        with patch("cli.STATE_DIR", state_dir), patch("os.kill"):
             cmd_daemon(type("Args", (), {"action": "stop"})())
         out = capsys.readouterr().out
         assert "SIGTERM" in out
 
     def test_daemon_start(self, capsys):
         from cli import cmd_daemon
+
         with patch("subprocess.Popen") as mock_popen:
             cmd_daemon(type("Args", (), {"action": "start"})())
         out = capsys.readouterr().out
@@ -345,15 +410,18 @@ class TestCmdDaemon:
 
     def test_daemon_status(self, tmp_path, capsys):
         from cli import cmd_daemon
+
         state_dir = tmp_path / "snn_state"
         state_dir.mkdir()
         graph_dir = tmp_path / "memory" / "graph"
         graph_dir.mkdir(parents=True)
         (tmp_path / "reasoning_traces").mkdir()
         (tmp_path / "memory" / "semantic").mkdir(parents=True)
-        with patch("cli.STATE_DIR", state_dir), \
-             patch("cli.GRAPH_DIR", graph_dir), \
-             patch("cli.BASE", tmp_path):
+        with (
+            patch("cli.STATE_DIR", state_dir),
+            patch("cli.GRAPH_DIR", graph_dir),
+            patch("cli.BASE", tmp_path),
+        ):
             cmd_daemon(type("Args", (), {"action": "status"})())
         out = capsys.readouterr().out
         assert "Daemon" in out or "NOT RUNNING" in out
@@ -368,25 +436,32 @@ class TestCmdStatusStale:
         state_dir.mkdir()
         state = {"timestamp": 0, "cycle": 1, "n_neurons": 100, "vram_mb": 0}
         (state_dir / "current_state.json").write_text(
-            json.dumps(state), encoding="utf-8",
+            json.dumps(state),
+            encoding="utf-8",
         )
         graph_dir = tmp_path / "memory" / "graph"
         graph_dir.mkdir(parents=True)
         (tmp_path / "reasoning_traces").mkdir()
         (tmp_path / "memory" / "semantic").mkdir(parents=True)
-        with patch("cli.STATE_DIR", state_dir), \
-             patch("cli.GRAPH_DIR", graph_dir), \
-             patch("cli.BASE", tmp_path):
+        with (
+            patch("cli.STATE_DIR", state_dir),
+            patch("cli.GRAPH_DIR", graph_dir),
+            patch("cli.BASE", tmp_path),
+        ):
             cmd_status(type("Args", (), {})())
         out = capsys.readouterr().out
         assert "STALE" in out
 
     def test_consolidation_in_state(self, tmp_path, capsys):
         import time as t
+
         state_dir = tmp_path / "snn_state"
         state_dir.mkdir()
         state = {
-            "timestamp": t.time(), "cycle": 10, "n_neurons": 500, "vram_mb": 100,
+            "timestamp": t.time(),
+            "cycle": 10,
+            "n_neurons": 500,
+            "vram_mb": 100,
             "live_retrieval_available": False,
             "last_consolidation": {"memories_written": 3, "entities_found": 10},
         }
@@ -395,9 +470,11 @@ class TestCmdStatusStale:
         graph_dir.mkdir(parents=True)
         (tmp_path / "reasoning_traces").mkdir()
         (tmp_path / "memory" / "semantic").mkdir(parents=True)
-        with patch("cli.STATE_DIR", state_dir), \
-             patch("cli.GRAPH_DIR", graph_dir), \
-             patch("cli.BASE", tmp_path):
+        with (
+            patch("cli.STATE_DIR", state_dir),
+            patch("cli.GRAPH_DIR", graph_dir),
+            patch("cli.BASE", tmp_path),
+        ):
             cmd_status(type("Args", (), {})())
         out = capsys.readouterr().out
         assert "3 memories" in out or "consolidation" in out.lower()

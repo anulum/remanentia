@@ -231,6 +231,7 @@ class TestComputeNovelty:
     def test_first_pattern_max_novelty(self):
         # Reset global state
         import consolidation_engine
+
         consolidation_engine._running_mean = None
         consolidation_engine._running_count = 0
 
@@ -240,6 +241,7 @@ class TestComputeNovelty:
 
     def test_identical_pattern_low_novelty(self):
         import consolidation_engine
+
         consolidation_engine._running_mean = None
         consolidation_engine._running_count = 0
 
@@ -250,6 +252,7 @@ class TestComputeNovelty:
 
     def test_orthogonal_pattern_high_novelty(self):
         import consolidation_engine
+
         consolidation_engine._running_mean = None
         consolidation_engine._running_count = 0
 
@@ -290,9 +293,11 @@ class TestUpdateGraph:
     def test_creates_entities(self, tmp_path):
         graph_dir = tmp_path / "graph"
         graph_dir.mkdir()
-        with patch("consolidation_engine.GRAPH_DIR", graph_dir), \
-             patch("consolidation_engine.ENTITIES_PATH", graph_dir / "entities.jsonl"), \
-             patch("consolidation_engine.RELATIONS_PATH", graph_dir / "relations.jsonl"):
+        with (
+            patch("consolidation_engine.GRAPH_DIR", graph_dir),
+            patch("consolidation_engine.ENTITIES_PATH", graph_dir / "entities.jsonl"),
+            patch("consolidation_engine.RELATIONS_PATH", graph_dir / "relations.jsonl"),
+        ):
             _update_graph("trace1.md", ["stdp", "bm25"], "remanentia", "2026-03-15")
 
         entities_text = (graph_dir / "entities.jsonl").read_text(encoding="utf-8")
@@ -302,9 +307,11 @@ class TestUpdateGraph:
     def test_creates_relations(self, tmp_path):
         graph_dir = tmp_path / "graph"
         graph_dir.mkdir()
-        with patch("consolidation_engine.GRAPH_DIR", graph_dir), \
-             patch("consolidation_engine.ENTITIES_PATH", graph_dir / "entities.jsonl"), \
-             patch("consolidation_engine.RELATIONS_PATH", graph_dir / "relations.jsonl"):
+        with (
+            patch("consolidation_engine.GRAPH_DIR", graph_dir),
+            patch("consolidation_engine.ENTITIES_PATH", graph_dir / "entities.jsonl"),
+            patch("consolidation_engine.RELATIONS_PATH", graph_dir / "relations.jsonl"),
+        ):
             _update_graph("trace1.md", ["stdp", "bm25", "embedding"], "remanentia", "2026-03-15")
 
         rels_text = (graph_dir / "relations.jsonl").read_text(encoding="utf-8")
@@ -315,9 +322,11 @@ class TestUpdateGraph:
     def test_increments_weight(self, tmp_path):
         graph_dir = tmp_path / "graph"
         graph_dir.mkdir()
-        with patch("consolidation_engine.GRAPH_DIR", graph_dir), \
-             patch("consolidation_engine.ENTITIES_PATH", graph_dir / "entities.jsonl"), \
-             patch("consolidation_engine.RELATIONS_PATH", graph_dir / "relations.jsonl"):
+        with (
+            patch("consolidation_engine.GRAPH_DIR", graph_dir),
+            patch("consolidation_engine.ENTITIES_PATH", graph_dir / "entities.jsonl"),
+            patch("consolidation_engine.RELATIONS_PATH", graph_dir / "relations.jsonl"),
+        ):
             _update_graph("trace1.md", ["stdp", "bm25"], "remanentia", "2026-03-15")
             _update_graph("trace2.md", ["stdp", "bm25"], "remanentia", "2026-03-16")
 
@@ -337,16 +346,17 @@ class TestConsolidate:
         semantic_dir = tmp_path / "memory" / "semantic"
         graph_dir = tmp_path / "memory" / "graph"
 
-        with patch("consolidation_engine.TRACES_DIR", tmp_traces), \
-             patch("consolidation_engine.CONSOLIDATION_DIR", consol_dir), \
-             patch("consolidation_engine.PENDING_PATH", consol_dir / "pending.json"), \
-             patch("consolidation_engine.LAST_RUN_PATH", consol_dir / "last_consolidation.json"), \
-             patch("consolidation_engine.SEMANTIC_DIR", semantic_dir), \
-             patch("consolidation_engine.GRAPH_DIR", graph_dir), \
-             patch("consolidation_engine.ENTITIES_PATH", graph_dir / "entities.jsonl"), \
-             patch("consolidation_engine.RELATIONS_PATH", graph_dir / "relations.jsonl"), \
-             patch("consolidation_engine.CLUSTERS_PATH", graph_dir / "trace_clusters.json"):
-
+        with (
+            patch("consolidation_engine.TRACES_DIR", tmp_traces),
+            patch("consolidation_engine.CONSOLIDATION_DIR", consol_dir),
+            patch("consolidation_engine.PENDING_PATH", consol_dir / "pending.json"),
+            patch("consolidation_engine.LAST_RUN_PATH", consol_dir / "last_consolidation.json"),
+            patch("consolidation_engine.SEMANTIC_DIR", semantic_dir),
+            patch("consolidation_engine.GRAPH_DIR", graph_dir),
+            patch("consolidation_engine.ENTITIES_PATH", graph_dir / "entities.jsonl"),
+            patch("consolidation_engine.RELATIONS_PATH", graph_dir / "relations.jsonl"),
+            patch("consolidation_engine.CLUSTERS_PATH", graph_dir / "trace_clusters.json"),
+        ):
             result = consolidate(force=True)
 
         assert result["traces_processed"] == 3
@@ -360,9 +370,11 @@ class TestConsolidate:
         traces_dir.mkdir()
         consol_dir = tmp_path / "consolidation"
 
-        with patch("consolidation_engine.TRACES_DIR", traces_dir), \
-             patch("consolidation_engine.CONSOLIDATION_DIR", consol_dir), \
-             patch("consolidation_engine.PENDING_PATH", consol_dir / "pending.json"):
+        with (
+            patch("consolidation_engine.TRACES_DIR", traces_dir),
+            patch("consolidation_engine.CONSOLIDATION_DIR", consol_dir),
+            patch("consolidation_engine.PENDING_PATH", consol_dir / "pending.json"),
+        ):
             result = consolidate(force=False)
 
         assert result["status"] == "nothing_to_consolidate"
@@ -373,16 +385,17 @@ class TestConsolidate:
         semantic_dir = tmp_path / "memory" / "semantic"
         graph_dir = tmp_path / "memory" / "graph"
 
-        with patch("consolidation_engine.TRACES_DIR", tmp_traces), \
-             patch("consolidation_engine.CONSOLIDATION_DIR", consol_dir), \
-             patch("consolidation_engine.PENDING_PATH", consol_dir / "pending.json"), \
-             patch("consolidation_engine.LAST_RUN_PATH", consol_dir / "last_consolidation.json"), \
-             patch("consolidation_engine.SEMANTIC_DIR", semantic_dir), \
-             patch("consolidation_engine.GRAPH_DIR", graph_dir), \
-             patch("consolidation_engine.ENTITIES_PATH", graph_dir / "entities.jsonl"), \
-             patch("consolidation_engine.RELATIONS_PATH", graph_dir / "relations.jsonl"), \
-             patch("consolidation_engine.CLUSTERS_PATH", graph_dir / "trace_clusters.json"):
-
+        with (
+            patch("consolidation_engine.TRACES_DIR", tmp_traces),
+            patch("consolidation_engine.CONSOLIDATION_DIR", consol_dir),
+            patch("consolidation_engine.PENDING_PATH", consol_dir / "pending.json"),
+            patch("consolidation_engine.LAST_RUN_PATH", consol_dir / "last_consolidation.json"),
+            patch("consolidation_engine.SEMANTIC_DIR", semantic_dir),
+            patch("consolidation_engine.GRAPH_DIR", graph_dir),
+            patch("consolidation_engine.ENTITIES_PATH", graph_dir / "entities.jsonl"),
+            patch("consolidation_engine.RELATIONS_PATH", graph_dir / "relations.jsonl"),
+            patch("consolidation_engine.CLUSTERS_PATH", graph_dir / "trace_clusters.json"),
+        ):
             consolidate(force=True)
             # Second run should find nothing pending
             result = consolidate(force=False)
@@ -396,6 +409,7 @@ class TestConsolidate:
 class TestConsolidationEdge:
     def test_zero_norm_novelty(self):
         import consolidation_engine
+
         consolidation_engine._running_mean = None
         consolidation_engine._running_count = 0
         pattern = np.array([1.0, 0.0, 1.0])
@@ -408,9 +422,11 @@ class TestConsolidationEdge:
         traces_dir = tmp_path / "reasoning_traces"
         traces_dir.mkdir()
         consol_dir = tmp_path / "consolidation"
-        with patch("consolidation_engine.TRACES_DIR", traces_dir), \
-             patch("consolidation_engine.CONSOLIDATION_DIR", consol_dir), \
-             patch("consolidation_engine.PENDING_PATH", consol_dir / "pending.json"):
+        with (
+            patch("consolidation_engine.TRACES_DIR", traces_dir),
+            patch("consolidation_engine.CONSOLIDATION_DIR", consol_dir),
+            patch("consolidation_engine.PENDING_PATH", consol_dir / "pending.json"),
+        ):
             pending = get_pending_traces()
         assert pending == []
 

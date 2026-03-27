@@ -216,7 +216,8 @@ class TestExtractAllCandidates:
 
     def test_name_candidates(self):
         candidates = extract_all_candidates(
-            "author", "Written by Miroslav Sotek at Anulum on 2026-03-15.",
+            "author",
+            "Written by Miroslav Sotek at Anulum on 2026-03-15.",
         )
         types = {c["type"] for c in candidates}
         assert "name" in types
@@ -328,6 +329,7 @@ class TestExtractNameSingleWord:
 class TestIsWhatPercentQuestion:
     def test_percent_word(self):
         from answer_extractor import _is_what_percent_question
+
         assert _is_what_percent_question("what percent did we get")
         assert _is_what_percent_question("accuracy on benchmark")
         assert not _is_what_percent_question("where is the file")
@@ -352,6 +354,7 @@ class TestLLMExtractAnswer:
         import os
         from unittest.mock import patch as p
         from answer_extractor import llm_extract_answer
+
         with p.dict(os.environ, {}, clear=True):
             result = llm_extract_answer("when", "context about dates 2026-03-15")
         assert result is None
@@ -371,10 +374,14 @@ class TestLLMExtractAnswer:
         mock_anthropic.Anthropic.return_value = mock_client
 
         import answer_extractor
-        with p.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
-             p.object(answer_extractor, "anthropic", mock_anthropic, create=True):
+
+        with (
+            p.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}),
+            p.object(answer_extractor, "anthropic", mock_anthropic, create=True),
+        ):
             # Need to call directly since import is inside function
             import importlib
+
             importlib.reload(answer_extractor)
             with p.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
                 result = answer_extractor.llm_extract_answer("when", "context")
@@ -396,8 +403,11 @@ class TestLLMExtractAnswer:
         mock_module.Anthropic.return_value = mock_client
 
         from answer_extractor import llm_extract_answer
-        with p.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
-             p.dict("sys.modules", {"anthropic": mock_module}):
+
+        with (
+            p.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}),
+            p.dict("sys.modules", {"anthropic": mock_module}),
+        ):
             result = llm_extract_answer("when did X happen", "some context")
         # anthropic module mock may not intercept internal import; test graceful behavior
         assert result is None or isinstance(result, str)
@@ -410,8 +420,11 @@ class TestLLMExtractAnswer:
         mock_module.Anthropic.return_value.messages.create.side_effect = Exception("API error")
 
         from answer_extractor import llm_extract_answer
-        with p.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
-             p.dict("sys.modules", {"anthropic": mock_module}):
+
+        with (
+            p.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}),
+            p.dict("sys.modules", {"anthropic": mock_module}),
+        ):
             result = llm_extract_answer("question", "paragraph")
         assert result is None or isinstance(result, str)
 
@@ -425,6 +438,7 @@ class TestGetClient:
         from unittest.mock import patch as p
         from answer_extractor import _get_client
         import answer_extractor
+
         answer_extractor._ANTHROPIC_CLIENT = None
         with p.dict(os.environ, {}, clear=True):
             assert _get_client() is None
@@ -436,10 +450,13 @@ class TestGetClient:
         from unittest.mock import patch as p, MagicMock
         from answer_extractor import _get_client
         import answer_extractor
+
         answer_extractor._ANTHROPIC_CLIENT = None
         mock_anthropic = MagicMock()
-        with p.dict(os.environ, {"ANTHROPIC_API_KEY": "test"}), \
-             p.dict(sys.modules, {"anthropic": mock_anthropic}):
+        with (
+            p.dict(os.environ, {"ANTHROPIC_API_KEY": "test"}),
+            p.dict(sys.modules, {"anthropic": mock_anthropic}),
+        ):
             client = _get_client()
         assert client is not None
         answer_extractor._ANTHROPIC_CLIENT = None
@@ -450,10 +467,13 @@ class TestGetClient:
         from unittest.mock import patch as p, MagicMock
         from answer_extractor import _get_client
         import answer_extractor
+
         answer_extractor._ANTHROPIC_CLIENT = None
         mock_anthropic = MagicMock()
-        with p.dict(os.environ, {"ANTHROPIC_API_KEY": "test"}), \
-             p.dict(sys.modules, {"anthropic": mock_anthropic}):
+        with (
+            p.dict(os.environ, {"ANTHROPIC_API_KEY": "test"}),
+            p.dict(sys.modules, {"anthropic": mock_anthropic}),
+        ):
             c1 = _get_client()
             c2 = _get_client()
         assert c1 is c2
@@ -469,6 +489,7 @@ class TestLLMProspectiveQueries:
         from unittest.mock import patch as p
         from answer_extractor import llm_generate_prospective_queries
         import answer_extractor
+
         answer_extractor._ANTHROPIC_CLIENT = None
         with p.dict(os.environ, {}, clear=True):
             result = llm_generate_prospective_queries("paragraph text", "doc.md")
@@ -485,6 +506,7 @@ class TestLLMSynthesizeAnswer:
         from unittest.mock import patch as p
         from answer_extractor import llm_synthesize_answer
         import answer_extractor
+
         answer_extractor._ANTHROPIC_CLIENT = None
         with p.dict(os.environ, {}, clear=True):
             result = llm_synthesize_answer("query", ["para1", "para2"])

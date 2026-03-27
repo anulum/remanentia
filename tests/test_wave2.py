@@ -12,6 +12,7 @@
 - Adaptive retrieval with confidence scoring
 - Cross-reference answer verification
 """
+
 from __future__ import annotations
 
 import math
@@ -209,12 +210,15 @@ class TestConfidenceScoring:
 class TestCrossReferenceAnswers:
     def test_agreeing_answers_boost_confidence(self):
         results = [
-            SearchResult(name="a.md", source="s", score=5.0, snippet="x",
-                         answer="Google", confidence=0.8),
-            SearchResult(name="b.md", source="s", score=4.0, snippet="y",
-                         answer="Google", confidence=0.6),
-            SearchResult(name="c.md", source="s", score=3.0, snippet="z",
-                         answer="Amazon", confidence=0.5),
+            SearchResult(
+                name="a.md", source="s", score=5.0, snippet="x", answer="Google", confidence=0.8
+            ),
+            SearchResult(
+                name="b.md", source="s", score=4.0, snippet="y", answer="Google", confidence=0.6
+            ),
+            SearchResult(
+                name="c.md", source="s", score=3.0, snippet="z", answer="Amazon", confidence=0.5
+            ),
         ]
         verified = _cross_reference_answers(results)
         # The two "Google" results should have boosted confidence
@@ -225,10 +229,12 @@ class TestCrossReferenceAnswers:
 
     def test_no_answers_no_change(self):
         results = [
-            SearchResult(name="a.md", source="s", score=5.0, snippet="x",
-                         answer="", confidence=0.8),
-            SearchResult(name="b.md", source="s", score=4.0, snippet="y",
-                         answer="", confidence=0.6),
+            SearchResult(
+                name="a.md", source="s", score=5.0, snippet="x", answer="", confidence=0.8
+            ),
+            SearchResult(
+                name="b.md", source="s", score=4.0, snippet="y", answer="", confidence=0.6
+            ),
         ]
         verified = _cross_reference_answers(results)
         assert verified[0].confidence == 0.8
@@ -236,8 +242,9 @@ class TestCrossReferenceAnswers:
 
     def test_single_result_no_change(self):
         results = [
-            SearchResult(name="a.md", source="s", score=5.0, snippet="x",
-                         answer="Google", confidence=0.8),
+            SearchResult(
+                name="a.md", source="s", score=5.0, snippet="x", answer="Google", confidence=0.8
+            ),
         ]
         verified = _cross_reference_answers(results)
         assert verified[0].confidence == 0.8
@@ -245,9 +252,11 @@ class TestCrossReferenceAnswers:
 
 # ── Helpers ──────────────────────────────────────────────────────
 
+
 def _build_test_index(tmp_path):
     """Build a test index from synthetic conversations."""
     from memory_index import Document
+
     idx = MemoryIndex()
     turns = [
         "Alice said she loves pottery and hiking on weekends.",
@@ -268,15 +277,16 @@ def _build_test_index(tmp_path):
 
     for i, turn in enumerate(turns):
         doc_idx = len(idx.documents)
-        doc = Document(name=f"turn{i}.md", source="test",
-                       path=str(tmp_path / f"turn{i}.md"),
-                       paragraphs=[turn])
+        doc = Document(
+            name=f"turn{i}.md", source="test", path=str(tmp_path / f"turn{i}.md"), paragraphs=[turn]
+        )
         idx.documents.append(doc)
         p_idx = len(idx.paragraph_tokens)
         idx.paragraph_index.append((doc_idx, 0))
         token_list = _tokenize(turn)
         tokens = set(token_list)
         from memory_index import _token_counts
+
         counts = _token_counts(token_list)
         idx.paragraph_tokens.append(tokens)
         idx.paragraph_token_counts.append(counts)

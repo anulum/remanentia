@@ -27,6 +27,7 @@ Configure in .mcp.json::
       }
     }
 """
+
 from __future__ import annotations
 
 import json
@@ -63,6 +64,7 @@ def _get_knowledge_store():
             return _KNOWLEDGE_STORE
         try:
             from knowledge_store import KnowledgeStore
+
             _KNOWLEDGE_STORE = KnowledgeStore()
             _KNOWLEDGE_STORE.load()
         except Exception:  # pragma: no cover
@@ -70,9 +72,14 @@ def _get_knowledge_store():
     return _KNOWLEDGE_STORE
 
 
-def handle_recall(query: str, top_k: int = 5,
-                  project: str = "", after: str = "", before: str = "",
-                  llm: bool = False) -> str:
+def handle_recall(
+    query: str,
+    top_k: int = 5,
+    project: str = "",
+    after: str = "",
+    before: str = "",
+    llm: bool = False,
+) -> str:
     """Memory recall via unified BM25 + embedding index + knowledge notes."""
     global _UNIFIED_INDEX
 
@@ -88,6 +95,7 @@ def handle_recall(query: str, top_k: int = 5,
 
     try:
         from memory_index import MemoryIndex
+
         if _UNIFIED_INDEX is None:
             with _lock:
                 if _UNIFIED_INDEX is None:
@@ -98,8 +106,8 @@ def handle_recall(query: str, top_k: int = 5,
 
         use_llm = llm or bool(os.environ.get("REMANENTIA_LLM_ANSWERS"))
         results = _UNIFIED_INDEX.search(
-            query, top_k=top_k, project=project, after=after, before=before,
-            use_llm=use_llm)
+            query, top_k=top_k, project=project, after=after, before=before, use_llm=use_llm
+        )
         if not results and not trigger_lines:
             return f"No memories found for: {query}"
 
@@ -129,8 +137,9 @@ def handle_recall(query: str, top_k: int = 5,
         return _lightweight_recall(query, top_k)
 
 
-def handle_remember(content: str, memory_type: str = "context", project: str = "",
-                    trigger: str = "") -> str:
+def handle_remember(
+    content: str, memory_type: str = "context", project: str = "", trigger: str = ""
+) -> str:
     """Persist a memory as a reasoning trace and update the index."""
     from datetime import datetime
 
@@ -143,11 +152,14 @@ def handle_remember(content: str, memory_type: str = "context", project: str = "
     filename = f"{ts}_{safe_project}_{safe_type}.md"
     path = traces_dir / filename
 
-    lines = [f"# {memory_type.title()}: {project or 'general'}",
-             f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
-             f"Project: {project or 'general'}",
-             f"Type: {memory_type}", "",
-             content]
+    lines = [
+        f"# {memory_type.title()}: {project or 'general'}",
+        f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        f"Project: {project or 'general'}",
+        f"Type: {memory_type}",
+        "",
+        content,
+    ]
     path.write_text("\n".join(lines), encoding="utf-8")
 
     # Invalidate lightweight recall cache
@@ -193,6 +205,7 @@ def _schedule_consolidation():
         global _RECALL_INDEX, _consolidation_last
         try:
             from consolidation_engine import consolidate
+
             consolidate()
             _RECALL_INDEX = None
         except Exception:  # pragma: no cover
@@ -211,6 +224,7 @@ def _build_recall_index() -> dict[str, tuple[set, str]]:
     Called once, cached for the process lifetime.
     """
     import re
+
     global _RECALL_INDEX
     if _RECALL_INDEX is not None:
         return _RECALL_INDEX
@@ -242,6 +256,7 @@ def _lightweight_recall(query: str, top_k: int = 3) -> str:
     First call: ~2s (reads files). Subsequent calls: <50ms.
     """
     import re
+
     q_tokens = set(re.findall(r"\w{3,}", query.lower()))
     if not q_tokens:
         return "Empty query."
@@ -269,10 +284,12 @@ def _lightweight_recall(query: str, top_k: int = 3) -> str:
 def handle_status() -> str:
     """System status summary."""
     import io
+
     old_stdout = sys.stdout
     try:
         sys.stdout = buf = io.StringIO()
         from cli import cmd_status
+
         cmd_status(type("Args", (), {})())
         return buf.getvalue()
     except Exception as e:  # pragma: no cover
@@ -295,7 +312,7 @@ def handle_graph(entity: str = "", top: int = 10) -> str:
         lines = [f"Connections for '{entity}':"]
         for r in matches[:top]:
             other = r["target"] if r["source"] == entity else r["source"]
-            lines.append(f"  {other} (weight={r['weight']}, {len(r.get('evidence',[]))} traces)")
+            lines.append(f"  {other} (weight={r['weight']}, {len(r.get('evidence', []))} traces)")
         return "\n".join(lines)
 
     top_rels = sorted(rels, key=lambda r: -r.get("weight", 0))[:top]
@@ -316,10 +333,26 @@ TOOLS = [
             "properties": {
                 "query": {"type": "string", "description": "What to recall"},
                 "top_k": {"type": "integer", "description": "Number of results", "default": 3},
-                "project": {"type": "string", "description": "Filter by project/source name", "default": ""},
-                "after": {"type": "string", "description": "Only docs after date (YYYY-MM-DD)", "default": ""},
-                "before": {"type": "string", "description": "Only docs before date (YYYY-MM-DD)", "default": ""},
-                "llm": {"type": "boolean", "description": "Use LLM for answer extraction (costs API credits)", "default": False},
+                "project": {
+                    "type": "string",
+                    "description": "Filter by project/source name",
+                    "default": "",
+                },
+                "after": {
+                    "type": "string",
+                    "description": "Only docs after date (YYYY-MM-DD)",
+                    "default": "",
+                },
+                "before": {
+                    "type": "string",
+                    "description": "Only docs before date (YYYY-MM-DD)",
+                    "default": "",
+                },
+                "llm": {
+                    "type": "boolean",
+                    "description": "Use LLM for answer extraction (costs API credits)",
+                    "default": False,
+                },
             },
             "required": ["query"],
         },
@@ -331,9 +364,21 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "content": {"type": "string", "description": "What to remember"},
-                "type": {"type": "string", "description": "Memory type: decision, finding, metric, context", "default": "context"},
-                "project": {"type": "string", "description": "Project name (optional)", "default": ""},
-                "trigger": {"type": "string", "description": "Prospective trigger: when future queries match this condition, surface this memory automatically", "default": ""},
+                "type": {
+                    "type": "string",
+                    "description": "Memory type: decision, finding, metric, context",
+                    "default": "context",
+                },
+                "project": {
+                    "type": "string",
+                    "description": "Project name (optional)",
+                    "default": "",
+                },
+                "trigger": {
+                    "type": "string",
+                    "description": "Prospective trigger: when future queries match this condition, surface this memory automatically",
+                    "default": "",
+                },
             },
             "required": ["content"],
         },
@@ -349,7 +394,11 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "entity": {"type": "string", "description": "Entity to query (empty = top relationships)", "default": ""},
+                "entity": {
+                    "type": "string",
+                    "description": "Entity to query (empty = top relationships)",
+                    "default": "",
+                },
                 "top": {"type": "integer", "description": "Number of results", "default": 10},
             },
         },
@@ -363,7 +412,8 @@ def handle_request(request: dict) -> dict:
 
     if method == "initialize":
         return {
-            "jsonrpc": "2.0", "id": rid,
+            "jsonrpc": "2.0",
+            "id": rid,
             "result": {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {"tools": {}},
@@ -380,13 +430,21 @@ def handle_request(request: dict) -> dict:
         args = params.get("arguments", {})
 
         if tool_name == "remanentia_recall":
-            text = handle_recall(args.get("query", ""), args.get("top_k", 3),
-                                 project=args.get("project", ""), after=args.get("after", ""),
-                                 before=args.get("before", ""),
-                                 llm=args.get("llm", False))
+            text = handle_recall(
+                args.get("query", ""),
+                args.get("top_k", 3),
+                project=args.get("project", ""),
+                after=args.get("after", ""),
+                before=args.get("before", ""),
+                llm=args.get("llm", False),
+            )
         elif tool_name == "remanentia_remember":
-            text = handle_remember(args.get("content", ""), args.get("type", "context"),
-                                   args.get("project", ""), args.get("trigger", ""))
+            text = handle_remember(
+                args.get("content", ""),
+                args.get("type", "context"),
+                args.get("project", ""),
+                args.get("trigger", ""),
+            )
         elif tool_name == "remanentia_status":
             text = handle_status()
         elif tool_name == "remanentia_graph":
@@ -395,14 +453,19 @@ def handle_request(request: dict) -> dict:
             text = f"Unknown tool: {tool_name}"
 
         return {
-            "jsonrpc": "2.0", "id": rid,
+            "jsonrpc": "2.0",
+            "id": rid,
             "result": {"content": [{"type": "text", "text": text}]},
         }
 
     if method == "notifications/initialized":
         return None
 
-    return {"jsonrpc": "2.0", "id": rid, "error": {"code": -32601, "message": f"Unknown method: {method}"}}
+    return {
+        "jsonrpc": "2.0",
+        "id": rid,
+        "error": {"code": -32601, "message": f"Unknown method: {method}"},
+    }
 
 
 def main():  # pragma: no cover

@@ -11,6 +11,7 @@ Inspired by Mastra's Observational Memory (94.87% LongMemEval):
 background agents watch conversations and maintain a dense observation log.
 Remanentia's Observer does the same for filesystem artifacts.
 """
+
 from __future__ import annotations
 
 import json
@@ -30,12 +31,37 @@ WATCHED_DIRS = {
 
 # Paragraph must contain one of these to become a knowledge note
 _SIGNAL_WORDS = {
-    "decided", "decision", "found", "finding", "result", "measured",
-    "fixed", "broke", "shipped", "released", "removed", "added",
-    "accuracy", "percent", "score", "benchmark", "p@1",
-    "because", "root cause", "confirmed", "rejected", "chose",
-    "version", "v0.", "v1.", "v2.", "v3.",
-    "critical", "important", "key insight", "conclusion",
+    "decided",
+    "decision",
+    "found",
+    "finding",
+    "result",
+    "measured",
+    "fixed",
+    "broke",
+    "shipped",
+    "released",
+    "removed",
+    "added",
+    "accuracy",
+    "percent",
+    "score",
+    "benchmark",
+    "p@1",
+    "because",
+    "root cause",
+    "confirmed",
+    "rejected",
+    "chose",
+    "version",
+    "v0.",
+    "v1.",
+    "v2.",
+    "v3.",
+    "critical",
+    "important",
+    "key insight",
+    "conclusion",
 }
 
 
@@ -113,8 +139,7 @@ def extract_notes_from_file(path: Path) -> list[dict]:
     return notes
 
 
-def observe_once(state: ObserverState,
-                 watched_dirs: dict[str, Path] | None = None) -> dict:
+def observe_once(state: ObserverState, watched_dirs: dict[str, Path] | None = None) -> dict:
     """Scan all watched directories, create notes for new/changed files.
 
     Returns stats: files_scanned, files_new, notes_created.
@@ -126,10 +151,16 @@ def observe_once(state: ObserverState,
 
     try:
         from knowledge_store import KnowledgeStore
+
         store = KnowledgeStore()
         store.load()
     except Exception:  # pragma: no cover
-        return {"files_scanned": 0, "files_new": 0, "notes_created": 0, "error": "store load failed"}
+        return {
+            "files_scanned": 0,
+            "files_new": 0,
+            "notes_created": 0,
+            "error": "store load failed",
+        }
 
     new_files: list[tuple[Path, str]] = []
     for source_name, source_dir in dirs.items():
@@ -154,6 +185,7 @@ def observe_once(state: ObserverState,
     if new_files:
         try:
             from mcp_server import _UNIFIED_INDEX
+
             if _UNIFIED_INDEX is not None and _UNIFIED_INDEX._built:
                 for f, source_name in new_files:
                     _UNIFIED_INDEX.add_file(f, source=source_name)
@@ -167,22 +199,27 @@ def observe_once(state: ObserverState,
     }
 
 
-def observe_loop(interval: int = 30,
-                 watched_dirs: dict[str, Path] | None = None):  # pragma: no cover
+def observe_loop(
+    interval: int = 30, watched_dirs: dict[str, Path] | None = None
+):  # pragma: no cover
     """Poll watched directories forever, creating notes on changes."""
     state = ObserverState()
     state.load()
-    print(f"Observer started. Watching {len(watched_dirs or WATCHED_DIRS)} directories every {interval}s.")
+    print(
+        f"Observer started. Watching {len(watched_dirs or WATCHED_DIRS)} directories every {interval}s."
+    )
     print("Press Ctrl+C to stop.\n")
 
     try:
         while True:
             result = observe_once(state, watched_dirs)
             if result["files_new"] > 0:
-                print(f"[{time.strftime('%H:%M:%S')}] "
-                      f"Scanned {result['files_scanned']} files, "
-                      f"{result['files_new']} new, "
-                      f"{result['notes_created']} notes created")
+                print(
+                    f"[{time.strftime('%H:%M:%S')}] "
+                    f"Scanned {result['files_scanned']} files, "
+                    f"{result['files_new']} new, "
+                    f"{result['notes_created']} notes created"
+                )
                 state.save()
             time.sleep(interval)
     except KeyboardInterrupt:

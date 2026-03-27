@@ -12,6 +12,7 @@ Each note is an atomic fact/decision/finding with bi-directional links
 to related notes. New notes trigger updates to existing notes.
 Contradictions are detected and tracked, never silently overwritten.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -30,8 +31,26 @@ TRIGGERS_PATH = BASE / "memory" / "triggers.jsonl"
 EDGE_TYPES = {"related", "supersedes", "superseded_by", "depends_on", "derived_from", "contains"}
 
 # Contradiction signal words
-_POSITIVE_ACTIONS = {"added", "enabled", "started", "created", "fixed", "improved", "shipped", "works"}
-_NEGATIVE_ACTIONS = {"removed", "disabled", "killed", "deleted", "broke", "failed", "dead", "dropped"}
+_POSITIVE_ACTIONS = {
+    "added",
+    "enabled",
+    "started",
+    "created",
+    "fixed",
+    "improved",
+    "shipped",
+    "works",
+}
+_NEGATIVE_ACTIONS = {
+    "removed",
+    "disabled",
+    "killed",
+    "deleted",
+    "broke",
+    "failed",
+    "dead",
+    "dropped",
+}
 
 
 def _tokenize(text: str) -> set[str]:
@@ -61,9 +80,24 @@ def _extract_entities(text: str) -> set[str]:
     entities = set()
     text_lower = text.lower()
     known = [
-        "stdp", "bm25", "lif", "snn", "embedding", "pytorch", "cuda", "gpu",
-        "locomo", "remanentia", "director-ai", "sc-neurocore", "scpn",
-        "consolidation", "retrieval", "daemon", "mcp", "fastapi",
+        "stdp",
+        "bm25",
+        "lif",
+        "snn",
+        "embedding",
+        "pytorch",
+        "cuda",
+        "gpu",
+        "locomo",
+        "remanentia",
+        "director-ai",
+        "sc-neurocore",
+        "scpn",
+        "consolidation",
+        "retrieval",
+        "daemon",
+        "mcp",
+        "fastapi",
     ]
     for k in known:
         if k in text_lower:
@@ -87,16 +121,34 @@ def extract_person_names(text: str) -> set[str]:
     # Standalone capitalized names after common prefixes
     for m in re.finditer(r"(?:^|\.\s+|!\s+|\?\s+|\n\s*)([A-Z][a-z]{2,})\b", text):
         word = m.group(1).lower()
-        if word not in {"the", "this", "that", "what", "when", "where", "who",
-                        "how", "why", "yes", "yeah", "wow", "hey", "thanks",
-                        "congrats", "glad", "great", "sure", "gonna"}:
+        if word not in {
+            "the",
+            "this",
+            "that",
+            "what",
+            "when",
+            "where",
+            "who",
+            "how",
+            "why",
+            "yes",
+            "yeah",
+            "wow",
+            "hey",
+            "thanks",
+            "congrats",
+            "glad",
+            "great",
+            "sure",
+            "gonna",
+        }:
             names.add(word)
     return names
 
 
-def _generate_prospective_queries(content: str, title: str,
-                                   entities: list[str],
-                                   keywords: list[str]) -> list[str]:
+def _generate_prospective_queries(
+    content: str, title: str, entities: list[str], keywords: list[str]
+) -> list[str]:
     """Generate hypothetical future queries at write time (Kumiho technique).
 
     Bridges the cue-trigger semantic gap: a query about "Caroline's hobbies"
@@ -127,7 +179,9 @@ def _generate_prospective_queries(content: str, title: str,
     activities = re.findall(
         r"(?:likes?|enjoys?|prefers?|wants?|loves?|hates?|dislikes?|"
         r"interested in|passionate about)\s+(.{3,30}?)(?:[.,;!?\n]|$)",
-        content, re.IGNORECASE)
+        content,
+        re.IGNORECASE,
+    )
     person = entities[0] if entities else "the person"
     for act in activities[:3]:
         queries.append(f"what does {person} like")
@@ -138,7 +192,9 @@ def _generate_prospective_queries(content: str, title: str,
     # Occupation/role patterns
     roles = re.findall(
         r"(?:works? (?:as|at|for)|employed (?:at|by)|job (?:is|as))\s+(.{3,40}?)(?:[.,;!?\n]|$)",
-        content, re.IGNORECASE)
+        content,
+        re.IGNORECASE,
+    )
     for role in roles[:2]:
         queries.append(f"where does {person} work")
         queries.append(f"career {role.strip().lower()}")
@@ -146,8 +202,8 @@ def _generate_prospective_queries(content: str, title: str,
 
     # Allergy/health
     allergies = re.findall(
-        r"(?:allergic to|allergy|intolerant)\s*(.{0,30}?)(?:[.,;!?\n]|$)",
-        content, re.IGNORECASE)
+        r"(?:allergic to|allergy|intolerant)\s*(.{0,30}?)(?:[.,;!?\n]|$)", content, re.IGNORECASE
+    )
     for a in allergies[:2]:
         queries.append(f"allergic {a.strip().lower()}")
         queries.append(f"what is {person} allergic to")
@@ -155,7 +211,9 @@ def _generate_prospective_queries(content: str, title: str,
     # Travel/location
     places = re.findall(
         r"(?:went to|visited|trip to|lives? in|from)\s+(.{3,30}?)(?:[.,;!?\n]|$)",
-        content, re.IGNORECASE)
+        content,
+        re.IGNORECASE,
+    )
     for p in places[:2]:
         queries.append(f"where did {person} go")
         queries.append(p.strip().lower())
@@ -163,15 +221,15 @@ def _generate_prospective_queries(content: str, title: str,
     # Learning/skills
     skills = re.findall(
         r"(?:learning|studying|started|practicing)\s+(.{3,30}?)(?:[.,;!?\n]|$)",
-        content, re.IGNORECASE)
+        content,
+        re.IGNORECASE,
+    )
     for s in skills[:2]:
         queries.append(f"what is {person} learning")
         queries.append(s.strip().lower())
 
     # Favourites
-    favs = re.findall(
-        r"(?:favou?rite)\s+(.{3,40}?)(?:[.,;!?\n]|$)",
-        content, re.IGNORECASE)
+    favs = re.findall(r"(?:favou?rite)\s+(.{3,40}?)(?:[.,;!?\n]|$)", content, re.IGNORECASE)
     for f in favs[:2]:
         queries.append(f"favourite {f.strip().lower()}")
 
@@ -205,21 +263,32 @@ class KnowledgeNote:
 
     def to_dict(self) -> dict:
         return {
-            "id": self.id, "title": self.title, "content": self.content,
-            "keywords": self.keywords, "source": self.source,
-            "created": self.created, "updated": self.updated,
-            "links": self.links, "supersedes": self.supersedes,
-            "superseded_by": self.superseded_by, "entities": self.entities,
+            "id": self.id,
+            "title": self.title,
+            "content": self.content,
+            "keywords": self.keywords,
+            "source": self.source,
+            "created": self.created,
+            "updated": self.updated,
+            "links": self.links,
+            "supersedes": self.supersedes,
+            "superseded_by": self.superseded_by,
+            "entities": self.entities,
             "prospective_queries": self.prospective_queries,
         }
 
     @staticmethod
     def from_dict(d: dict) -> KnowledgeNote:
         return KnowledgeNote(
-            id=d["id"], title=d["title"], content=d["content"],
-            keywords=d.get("keywords", []), source=d.get("source", ""),
-            created=d.get("created", ""), updated=d.get("updated", ""),
-            links=d.get("links", []), supersedes=d.get("supersedes", ""),
+            id=d["id"],
+            title=d["title"],
+            content=d["content"],
+            keywords=d.get("keywords", []),
+            source=d.get("source", ""),
+            created=d.get("created", ""),
+            updated=d.get("updated", ""),
+            links=d.get("links", []),
+            supersedes=d.get("supersedes", ""),
             superseded_by=d.get("superseded_by", ""),
             entities=d.get("entities", []),
             prospective_queries=d.get("prospective_queries", []),
@@ -247,15 +316,22 @@ class Trigger:
 
     def to_dict(self) -> dict:
         return {
-            "id": self.id, "condition": self.condition, "action": self.action,
-            "created": self.created, "fired": self.fired, "active": self.active,
+            "id": self.id,
+            "condition": self.condition,
+            "action": self.action,
+            "created": self.created,
+            "fired": self.fired,
+            "active": self.active,
         }
 
     @staticmethod
     def from_dict(d: dict) -> Trigger:
         return Trigger(
-            id=d["id"], condition=d["condition"], action=d["action"],
-            created=d.get("created", ""), fired=d.get("fired", []),
+            id=d["id"],
+            condition=d["condition"],
+            action=d["action"],
+            created=d.get("created", ""),
+            fired=d.get("fired", []),
             active=d.get("active", True),
         )
 
@@ -266,9 +342,14 @@ class KnowledgeStore:
         self.triggers: list[Trigger] = []
         self._token_index: dict[str, set[str]] = {}  # note_id -> tokens
 
-    def add_note(self, content: str, source: str = "",
-                 title: str = "", keywords: list[str] | None = None,
-                 prospective_queries: list[str] | None = None) -> KnowledgeNote:
+    def add_note(
+        self,
+        content: str,
+        source: str = "",
+        title: str = "",
+        keywords: list[str] | None = None,
+        prospective_queries: list[str] | None = None,
+    ) -> KnowledgeNote:
         """Create a knowledge note, link to related notes, detect contradictions.
 
         If content is near-duplicate of existing note (similarity > 0.9), merges instead.
@@ -313,15 +394,23 @@ class KnowledgeStore:
                 existing.title = title
             existing.keywords = sorted(set(existing.keywords + keywords))[:20]
             existing.entities = sorted(set(existing.entities + entities))
-            self._token_index[best_match_id] = note_tokens | self._token_index.get(best_match_id, set())
+            self._token_index[best_match_id] = note_tokens | self._token_index.get(
+                best_match_id, set()
+            )
             return existing
 
         # Check for contradictions
         contradiction_id = self._detect_contradiction(content, entities)
 
         note = KnowledgeNote(
-            id=nid, title=title, content=content, keywords=keywords,
-            source=source, created=now, updated=now, entities=entities,
+            id=nid,
+            title=title,
+            content=content,
+            keywords=keywords,
+            source=source,
+            created=now,
+            updated=now,
+            entities=entities,
             prospective_queries=prospective_queries,
         )
 
@@ -352,7 +441,8 @@ class KnowledgeStore:
             note.links.append({"target": linked_id, "type": "related", "similarity": round(sim, 3)})
             if linked_id in self.notes:
                 self.notes[linked_id].links.append(
-                    {"target": nid, "type": "related", "similarity": round(sim, 3)})
+                    {"target": nid, "type": "related", "similarity": round(sim, 3)}
+                )
                 self.notes[linked_id].updated = now
 
         self.notes[nid] = note
@@ -370,10 +460,20 @@ class KnowledgeStore:
                     # Strong entity overlap → depends_on edge
                     already_linked = any(l["target"] == eid for l in note.links)
                     if not already_linked:
-                        note.links.append({"target": eid, "type": "related",
-                                           "shared_entities": sorted(shared)[:5]})
-                        existing.links.append({"target": nid, "type": "related",
-                                               "shared_entities": sorted(shared)[:5]})
+                        note.links.append(
+                            {
+                                "target": eid,
+                                "type": "related",
+                                "shared_entities": sorted(shared)[:5],
+                            }
+                        )
+                        existing.links.append(
+                            {
+                                "target": nid,
+                                "type": "related",
+                                "shared_entities": sorted(shared)[:5],
+                            }
+                        )
 
         return note
 
@@ -415,8 +515,9 @@ class KnowledgeStore:
 
         return None
 
-    def search(self, query: str, top_k: int = 5,
-               exclude_superseded: bool = True) -> list[KnowledgeNote]:
+    def search(
+        self, query: str, top_k: int = 5, exclude_superseded: bool = True
+    ) -> list[KnowledgeNote]:
         """BM25-lite search over knowledge notes.
 
         Token index includes prospective queries, so queries that don't
@@ -443,8 +544,9 @@ class KnowledgeStore:
                 results.append(self.notes[nid])
         return results
 
-    def get_related(self, note_id: str, depth: int = 1,
-                     edge_types: set[str] | None = None) -> list[KnowledgeNote]:
+    def get_related(
+        self, note_id: str, depth: int = 1, edge_types: set[str] | None = None
+    ) -> list[KnowledgeNote]:
         """Get notes connected to the given note, up to depth hops.
 
         Args:
@@ -476,8 +578,7 @@ class KnowledgeStore:
 
         return result
 
-    def graph_search(self, query: str, top_k: int = 5,
-                     hop_depth: int = 2) -> list[KnowledgeNote]:
+    def graph_search(self, query: str, top_k: int = 5, hop_depth: int = 2) -> list[KnowledgeNote]:
         """Multi-hop graph search: find seed notes, then traverse typed edges.
 
         Combines BM25 seed retrieval with structural graph traversal.
@@ -512,8 +613,7 @@ class KnowledgeStore:
         scored.sort(key=lambda x: -x[1])
         return [note for note, _ in scored[:top_k]]
 
-    def add_typed_link(self, source_id: str, target_id: str,
-                       edge_type: str) -> bool:
+    def add_typed_link(self, source_id: str, target_id: str, edge_type: str) -> bool:
         """Add a typed edge between two notes."""
         if source_id not in self.notes or target_id not in self.notes:
             return False
@@ -521,8 +621,11 @@ class KnowledgeStore:
             return False
         self.notes[source_id].links.append({"target": target_id, "type": edge_type})
         # Add reverse edge
-        reverse_type = {"depends_on": "derived_from", "derived_from": "depends_on",
-                        "contains": "related"}.get(edge_type, edge_type)
+        reverse_type = {
+            "depends_on": "derived_from",
+            "derived_from": "depends_on",
+            "contains": "related",
+        }.get(edge_type, edge_type)
         self.notes[target_id].links.append({"target": source_id, "type": reverse_type})
         return True
 
@@ -555,7 +658,9 @@ class KnowledgeStore:
         """Add a prospective memory trigger."""
         tid = hashlib.md5(f"{condition}:{action}".encode()).hexdigest()[:12]
         trigger = Trigger(
-            id=tid, condition=condition, action=action,
+            id=tid,
+            condition=condition,
+            action=action,
             created=time.strftime("%Y-%m-%dT%H%M", time.gmtime()),
         )
         self.triggers.append(trigger)
