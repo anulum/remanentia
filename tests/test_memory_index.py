@@ -252,10 +252,10 @@ class TestProspectiveQueries:
         queries = _generate_prospective_queries(text, "memory_index.py", "code")
         assert any("memory_index" in q for q in queries)
 
-    def test_cap_at_10(self):
+    def test_cap_at_20(self):
         text = "def a():\n def b():\n def c():\n def d():\n " + "Foo Bar Baz Qux " * 20
         queries = _generate_prospective_queries(text, "big.py", "function")
-        assert len(queries) <= 10
+        assert len(queries) <= 20
 
 
 # ── Date parsing ─────────────────────────────────────────────────

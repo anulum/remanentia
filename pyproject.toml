@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "remanentia"
-version = "0.3.0"
+version = "0.3.1"
 description = "Persistent AI memory with SNN-orchestrated consolidation, entity graphs, and deep contextual recall"
 readme = "README.md"
 license = "AGPL-3.0-or-later"

@@ -130,6 +130,7 @@ class SearchResult:
     snippet: str
     paragraph_idx: int = 0
     answer: str = ""
+    confidence: float = 0.0  # 0.0-1.0, computed from score distribution
 
 
 class MemoryIndex:
@@ -452,6 +453,13 @@ class MemoryIndex:
         if not self._built:
             self.build()
 
+        # Query decomposition: break multi-hop queries into sub-queries
+        sub_queries = _decompose_query(query)
+        if sub_queries:
+            return self._multi_hop_search(query, sub_queries, top_k=top_k,
+                                          project=project, after=after, before=before,
+                                          doc_type=doc_type, use_llm=use_llm)
+
         q_tokens = set(_tokenize(query))
         if not q_tokens:
             return []
@@ -656,6 +664,27 @@ class MemoryIndex:
             if len(results) >= top_k:
                 break
 
+        # Confidence scoring: normalise scores to [0, 1] with gap analysis
+        if results:
+            max_score = results[0].score if results[0].score > 0 else 1.0
+            for i, r in enumerate(results):
+                base_conf = min(1.0, r.score / max_score) if max_score > 0 else 0.0
+                # Boost confidence if answer was extracted
+                if r.answer:
+                    base_conf = min(1.0, base_conf + 0.15)
+                # Reduce confidence for low absolute scores
+                if r.score < 1.0:
+                    base_conf *= 0.7
+                results[i] = SearchResult(
+                    name=r.name, source=r.source, score=r.score,
+                    snippet=r.snippet, paragraph_idx=r.paragraph_idx,
+                    answer=r.answer, confidence=round(base_conf, 3),
+                )
+
+        # Cross-reference answer verification: boost confidence when answers agree
+        if len(results) >= 2:
+            results = _cross_reference_answers(results)
+
         # Temporal code execution for date arithmetic queries
         if intent["type"] == "temporal" and results:
             try:
@@ -694,6 +723,76 @@ class MemoryIndex:
             except ImportError:  # pragma: no cover
                 pass
 
+        return results
+
+    def _multi_hop_search(self, original_query: str, sub_queries: list[str],
+                          top_k: int = 5, **kwargs) -> list[SearchResult]:
+        """Run sub-queries, combine results, re-rank by original query."""
+        all_results: dict[str, SearchResult] = {}
+        for sq in sub_queries:
+            results = self.search.__wrapped__(self, sq, top_k=top_k, **kwargs) \
+                if hasattr(self.search, '__wrapped__') else \
+                self._single_query_search(sq, top_k=top_k, **kwargs)
+            for r in results:
+                if r.name not in all_results or r.score > all_results[r.name].score:
+                    all_results[r.name] = r
+
+        # Re-rank combined results by relevance to original query
+        q_tokens = set(_tokenize(original_query))
+        scored = []
+        for r in all_results.values():
+            combined_text = (r.snippet + " " + r.answer).lower()
+            overlap = sum(1 for t in q_tokens if t in combined_text)
+            scored.append((r, r.score + overlap * 0.2))
+        scored.sort(key=lambda x: -x[1])
+        return [r for r, _ in scored[:top_k]]
+
+    def _single_query_search(self, query: str, top_k: int = 5,
+                             project: str = "", after: str = "", before: str = "",
+                             doc_type: str = "", use_llm: bool = False) -> list[SearchResult]:
+        """Single query search (no decomposition). Used by _multi_hop_search."""
+        q_tokens = set(_tokenize(query))
+        if not q_tokens:
+            return []
+
+        _filtered_out = set()
+        if project or after or before or doc_type:
+            for i in range(len(self.paragraph_index)):
+                doc_idx = self.paragraph_index[i][0]
+                if doc_idx >= len(self.documents):
+                    continue
+                doc = self.documents[doc_idx]
+                if project and project.lower() not in doc.source.lower() and project.lower() not in doc.name.lower():
+                    _filtered_out.add(i)
+                if after and doc.date and doc.date < after:
+                    _filtered_out.add(i)
+                if before and doc.date and doc.date > before:
+                    _filtered_out.add(i)
+                if doc_type and doc_type.lower() not in doc.doc_type.lower():
+                    _filtered_out.add(i)
+
+        candidate_scores = self._search_python_bm25(q_tokens, _filtered_out)
+        scores = sorted(candidate_scores.items(), key=lambda x: -x[1])[:top_k * 3]
+
+        _answer_extractor = self._get_answer_extractor()
+        seen_docs = set()
+        results = []
+        for para_idx, score in scores:
+            doc_idx, p_idx = self.paragraph_index[para_idx]
+            if doc_idx in seen_docs:
+                continue
+            seen_docs.add(doc_idx)
+            doc = self.documents[doc_idx]
+            snippet = doc.paragraphs[p_idx][:300]
+            answer = ""
+            if _answer_extractor:
+                answer = _answer_extractor(query, doc.paragraphs[p_idx]) or ""
+            results.append(SearchResult(
+                name=doc.name, source=doc.source, score=round(score, 4),
+                snippet=snippet, paragraph_idx=p_idx, answer=answer,
+            ))
+            if len(results) >= top_k:
+                break
         return results
 
     def _search_python_bm25(self, q_tokens: set[str], filtered_out: set[int]) -> dict[int, float]:
@@ -1025,51 +1124,135 @@ def _classify_paragraph(text: str, is_code: bool = False) -> str:
 def _generate_prospective_queries(text: str, doc_name: str, para_type: str) -> list[str]:
     """Generate hypothetical future queries for this paragraph.
 
-    This is the Kumiho technique (March 2026, 98.5% recall).
-    Pre-answer questions at write time so retrieval becomes lookup.
+    Kumiho technique: pre-answer questions at write time so retrieval
+    becomes lookup. Expanded to 12 pattern categories.
     """
     queries = []
+    text_lower = text.lower()
 
-    # Extract key nouns/phrases
-    # Capitalized phrases (likely names, projects, concepts)
+    # 1. Named entities (capitalised phrases)
     caps = re.findall(r"[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*", text)
     for c in caps[:5]:
         if len(c) > 3:
             queries.append(f"what is {c}")
             queries.append(c.lower())
 
-    # Function names
+    # 2. Function/class names
     funcs = re.findall(r"(?:def |fn |class )\s*(\w+)", text)
     for f in funcs[:3]:
         queries.append(f"where is {f}")
         queries.append(f"how does {f} work")
         queries.append(f)
 
-    # If it's a decision, generate "why" and "what did we decide" variants
+    # 3. Activities and preferences ("likes pottery", "enjoys hiking")
+    for m in re.finditer(
+        r"(?:likes?|loves?|enjoys?|prefers?|hates?|dislikes?|"
+        r"interested in|passionate about|into)\s+(.{3,40}?)(?:[.,;!?\n]|$)",
+        text, re.I
+    ):
+        activity = m.group(1).strip().lower()
+        queries.append(f"hobbies {activity}")
+        queries.append(f"interests {activity}")
+        queries.append(f"what does {caps[0].lower() if caps else 'the person'} like")
+        queries.append(activity)
+
+    # 4. Occupation/role ("works as", "is a", "employed at")
+    for m in re.finditer(
+        r"(?:works? (?:as|at|for)|employed (?:at|by)|is a |job (?:is|as))\s+(.{3,40}?)(?:[.,;!?\n]|$)",
+        text, re.I
+    ):
+        role = m.group(1).strip().lower()
+        queries.append(f"where does {caps[0].lower() if caps else 'the person'} work")
+        queries.append(f"job {role}")
+        queries.append(f"career {role}")
+        queries.append(role)
+
+    # 5. Relationships ("married to", "friends with", "dating")
+    for m in re.finditer(
+        r"(?:married to|dating|friends? with|partner|spouse|sibling|brother|sister)\s*(.{0,30}?)(?:[.,;!?\n]|$)",
+        text, re.I
+    ):
+        queries.append(f"relationship status")
+        queries.append(f"who is {caps[0].lower() if caps else 'the person'} dating")
+
+    # 6. Allergies, health, restrictions
+    for m in re.finditer(
+        r"(?:allergic to|allergy|intolerant|sensitive to|cannot eat|vegetarian|vegan)\s*(.{0,30}?)(?:[.,;!?\n]|$)",
+        text, re.I
+    ):
+        subject = m.group(1).strip().lower()
+        queries.append(f"allergic {subject}")
+        queries.append(f"what is {caps[0].lower() if caps else 'the person'} allergic to")
+
+    # 7. Travel/location ("went to", "visited", "lives in", "from")
+    for m in re.finditer(
+        r"(?:went to|visited|trip to|lives? in|moved to|from|travel(?:led|ed)? to)\s+(.{3,30}?)(?:[.,;!?\n]|$)",
+        text, re.I
+    ):
+        place = m.group(1).strip().lower()
+        queries.append(f"where did {caps[0].lower() if caps else 'the person'} go")
+        queries.append(f"trip {place}")
+        queries.append(place)
+
+    # 8. Learning/skills ("learning", "studying", "started")
+    for m in re.finditer(
+        r"(?:learning|studying|started|taking up|practicing)\s+(.{3,30}?)(?:[.,;!?\n]|$)",
+        text, re.I
+    ):
+        skill = m.group(1).strip().lower()
+        queries.append(f"what is {caps[0].lower() if caps else 'the person'} learning")
+        queries.append(skill)
+
+    # 9. Favourites ("favourite", "favorite")
+    for m in re.finditer(
+        r"(?:favou?rite)\s+(\w+)\s+(?:is|was)\s+(.{3,40}?)(?:[.,;!?\n]|$)",
+        text, re.I
+    ):
+        queries.append(f"favourite {m.group(1).lower()}")
+        queries.append(m.group(2).strip().lower())
+    for m in re.finditer(
+        r"(?:favou?rite)\s+(.{3,40}?)(?:[.,;!?\n]|$)",
+        text, re.I
+    ):
+        queries.append(f"favourite {m.group(1).strip().lower()}")
+
+    # 10. Decision/finding/metric type-specific (original patterns)
     if para_type == "decision":
-        # Extract the subject
-        subjects = re.findall(r"(?:decided|chose|rejected|will)\s+(?:to\s+)?(.{10,40}?)(?:\.|,|$)", text, re.I)
+        subjects = re.findall(
+            r"(?:decided|chose|rejected|will)\s+(?:to\s+)?(.{10,40}?)(?:\.|,|$)", text, re.I)
         for s in subjects[:2]:
             queries.append(f"why did we {s.strip().lower()}")
             queries.append(f"what did we decide about {s.strip().lower()}")
-
-    # If it's a finding, generate "what did we find" variants
     if para_type == "finding":
         queries.append(f"what did we find about {doc_name.replace('.md','').replace('_',' ')}")
-
-    # If it's a metric, generate "what is the score" variants
     if para_type == "metric":
         numbers = re.findall(r"\d+\.?\d*%", text)
         for n in numbers[:2]:
             queries.append(f"what score {n}")
 
-    # File-based queries
+    # 11. Version/date-specific queries
+    versions = re.findall(r"v\d+\.\d+(?:\.\d+)?", text)
+    for v in versions[:2]:
+        queries.append(f"what version {v}")
+        queries.append(f"when was {v} released")
+    dates = re.findall(r"\d{4}-\d{2}-\d{2}", text)
+    for d in dates[:2]:
+        queries.append(f"what happened on {d}")
+
+    # 12. File/code-based queries
     if ".py" in doc_name or ".rs" in doc_name:
         base = doc_name.split(".")[0]
         queries.append(f"what does {base} do")
         queries.append(f"where is {base}")
 
-    return queries[:10]  # cap
+    # Deduplicate, preserve order
+    seen = set()
+    unique = []
+    for q in queries:
+        if q not in seen:
+            seen.add(q)
+            unique.append(q)
+    return unique[:20]
 
 
 _DATE_EXPR = re.compile(
@@ -1130,7 +1313,10 @@ def _parse_date(text: str, filename: str) -> str:
 def _split_paragraphs(text: str, is_code: bool = False) -> list[str]:
     """Split text into searchable units.
 
-    For markdown: paragraphs (text between blank lines).
+    For markdown: sentences with context windows (finer granularity than
+    paragraphs for better retrieval precision). Short paragraphs (<200 chars)
+    are kept whole. Longer ones are split into sentences with 1-sentence
+    overlap for context continuity.
     For code: functions/classes (def/fn/class blocks) + module docstring.
     """
     if is_code:
@@ -1139,11 +1325,38 @@ def _split_paragraphs(text: str, is_code: bool = False) -> list[str]:
     paragraphs = []
     for block in text.split("\n\n"):
         stripped = block.strip()
-        if len(stripped) > 30:
+        if len(stripped) < 30:
+            continue
+        if len(stripped) <= 200:
             paragraphs.append(stripped[:MAX_TEXT_PARAGRAPH_CHARS])
+        else:
+            # Sentence-level splitting with context windows
+            sents = _split_sentences(stripped)
+            if len(sents) <= 2:
+                paragraphs.append(stripped[:MAX_TEXT_PARAGRAPH_CHARS])
+            else:
+                for i in range(len(sents)):
+                    # Context window: current sentence + 1 before + 1 after
+                    start = max(0, i - 1)
+                    end = min(len(sents), i + 2)
+                    window = " ".join(sents[start:end])
+                    if len(window) > 30:
+                        paragraphs.append(window[:MAX_TEXT_PARAGRAPH_CHARS])
     if not paragraphs and len(text.strip()) > 30:
         paragraphs.append(text.strip()[:MAX_FALLBACK_TEXT_CHARS])
     return paragraphs
+
+
+def _split_sentences(text: str) -> list[str]:
+    """Split text into sentences. Handles common abbreviations."""
+    # Split on sentence boundaries but not on common abbreviations
+    parts = re.split(r'(?<=[.!?])\s+(?=[A-Z])', text)
+    sents = []
+    for p in parts:
+        p = p.strip()
+        if len(p) > 10:
+            sents.append(p)
+    return sents
 
 
 def _split_code(text: str) -> list[str]:
@@ -1232,6 +1445,71 @@ def _token_counts(token_list: list[str]) -> dict[str, int]:
     for t in token_list:
         counts[t] = counts.get(t, 0) + 1
     return counts
+
+
+def _cross_reference_answers(results: list[SearchResult]) -> list[SearchResult]:
+    """Boost confidence when multiple results corroborate the same answer.
+
+    If results[0] and results[1] both extract the same answer, confidence
+    goes up. If they extract different answers, no change.
+    """
+    answers_with_idx = [(i, r.answer.lower().strip()) for i, r in enumerate(results) if r.answer]
+    if len(answers_with_idx) < 2:
+        return results
+
+    # Count answer agreement
+    from collections import Counter
+    answer_counts = Counter(a for _, a in answers_with_idx)
+    most_common_answer, count = answer_counts.most_common(1)[0]
+
+    if count >= 2:
+        # Multiple results agree — boost confidence for agreeing results
+        for i, answer in answers_with_idx:
+            if answer == most_common_answer:
+                old = results[i]
+                boosted = min(1.0, old.confidence + 0.1 * (count - 1))
+                results[i] = SearchResult(
+                    name=old.name, source=old.source, score=old.score,
+                    snippet=old.snippet, paragraph_idx=old.paragraph_idx,
+                    answer=old.answer, confidence=round(boosted, 3),
+                )
+
+    return results
+
+
+def _decompose_query(query: str) -> list[str] | None:
+    """Decompose a multi-hop query into sub-queries.
+
+    Returns None for simple queries (no decomposition needed).
+    Multi-hop patterns: relative clauses, "the person who", "the one that".
+    """
+    q = query.lower()
+
+    # "What X does the person who Y have/do?"
+    m = re.match(
+        r"what\s+(.+?)\s+(?:does|did|do)\s+the\s+(?:person|one|guy|woman|man)\s+who\s+(.+?)(?:\s+have|\s+do|\s+like|\?|$)",
+        q, re.I
+    )
+    if m:
+        return [f"who {m.group(2).strip()}", f"what {m.group(1).strip()}"]
+
+    # "Does the person who X also Y?"
+    m = re.match(
+        r"(?:does|did|do)\s+the\s+(?:person|one)\s+who\s+(.+?)\s+(?:also\s+)?(.+?)(?:\?|$)",
+        q, re.I
+    )
+    if m:
+        return [f"who {m.group(1).strip()}", m.group(2).strip()]
+
+    # "What happened before/after X did Y?"
+    m = re.match(
+        r"what\s+happened\s+(before|after)\s+(.+?)(?:\?|$)",
+        q, re.I
+    )
+    if m:
+        return [m.group(2).strip(), f"what happened {m.group(1)} {m.group(2).strip()}"]
+
+    return None
 
 
 def _extract_lookup_terms(query: str) -> set[str]:
