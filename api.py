@@ -124,9 +124,9 @@ def status():
     entities_path = GRAPH_DIR / "entities.jsonl"
     relations_path = GRAPH_DIR / "relations.jsonl"
     if entities_path.exists():
-        n_entities = sum(1 for l in entities_path.read_text().strip().split("\n") if l.strip())
+        n_entities = sum(1 for ln in entities_path.read_text().strip().split("\n") if ln.strip())
     if relations_path.exists():  # pragma: no cover
-        n_relations = sum(1 for l in relations_path.read_text().strip().split("\n") if l.strip())
+        n_relations = sum(1 for ln in relations_path.read_text().strip().split("\n") if ln.strip())
 
     daemon_state = {}
     state_path = STATE_DIR / "current_state.json"
@@ -154,7 +154,7 @@ def list_entities():
     entities_path = GRAPH_DIR / "entities.jsonl"
     if not entities_path.exists():
         return []
-    return [json.loads(l) for l in entities_path.read_text().strip().split("\n") if l.strip()]
+    return [json.loads(ln) for ln in entities_path.read_text().strip().split("\n") if ln.strip()]
 
 
 @app.get("/graph")
@@ -162,7 +162,7 @@ def graph(top: int = Query(default=15, le=100)):
     relations_path = GRAPH_DIR / "relations.jsonl"
     if not relations_path.exists():
         return []
-    rels = [json.loads(l) for l in relations_path.read_text().strip().split("\n") if l.strip()]
+    rels = [json.loads(ln) for ln in relations_path.read_text().strip().split("\n") if ln.strip()]
     return sorted(rels, key=lambda r: -r.get("weight", 0))[:top]
 
 
@@ -173,9 +173,9 @@ def entity_detail(entity_id: str):
 
     entity = None
     if entities_path.exists():
-        for l in entities_path.read_text().strip().split("\n"):
-            if l.strip():
-                e = json.loads(l)
+        for ln in entities_path.read_text().strip().split("\n"):
+            if ln.strip():
+                e = json.loads(ln)
                 if e["id"] == entity_id:
                     entity = e
                     break
@@ -184,9 +184,9 @@ def entity_detail(entity_id: str):
 
     connections = []
     if relations_path.exists():
-        for l in relations_path.read_text().strip().split("\n"):
-            if l.strip():
-                r = json.loads(l)
+        for ln in relations_path.read_text().strip().split("\n"):
+            if ln.strip():
+                r = json.loads(ln)
                 if r["source"] == entity_id or r["target"] == entity_id:
                     other = r["target"] if r["source"] == entity_id else r["source"]
                     connections.append({

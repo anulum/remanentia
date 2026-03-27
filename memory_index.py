@@ -18,7 +18,6 @@ Usage::
 from __future__ import annotations
 
 import ast
-import hashlib
 import json
 import math
 import os
@@ -171,7 +170,6 @@ class MemoryIndex:
         gliner_model = None
         if use_gliner:  # pragma: no cover
             try:
-                from entity_extractor import extract_entities, extract_relations
                 from entity_extractor import _load_gliner
                 gliner_model = _load_gliner()
             except Exception:

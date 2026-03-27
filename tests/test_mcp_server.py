@@ -3,11 +3,8 @@
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from unittest.mock import patch
 
-import pytest
 
 from mcp_server import (
     TOOLS,
@@ -299,7 +296,6 @@ class TestHandleStatus:
         assert isinstance(result, str)
 
     def test_actual_status(self, tmp_path):
-        import mcp_server
         # handle_status imports cli.cmd_status, which may fail
         result = handle_status()
         assert isinstance(result, str)

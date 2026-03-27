@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import pytest
 
 from answer_extractor import (
     extract_all_candidates,

@@ -12,18 +12,14 @@ No mocking — exercises the actual code paths.
 """
 from __future__ import annotations
 
-import json
-import math
-from pathlib import Path
 
-import numpy as np
 import pytest
 
 
 @pytest.fixture(scope="module")
 def index_with_data(tmp_path_factory):
     """Build a real MemoryIndex from test data."""
-    from memory_index import MemoryIndex, SOURCES
+    from memory_index import MemoryIndex
 
     tmp = tmp_path_factory.mktemp("integration")
 

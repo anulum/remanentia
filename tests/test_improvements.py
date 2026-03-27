@@ -17,15 +17,12 @@
 """
 from __future__ import annotations
 
-import json
 import time
 import threading
-from datetime import date, timedelta
-from pathlib import Path
+from datetime import date
 from unittest.mock import patch, MagicMock
 
 import numpy as np
-import pytest
 
 
 # ── 1. BM25 improvements ────────────────────────────────────────

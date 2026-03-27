@@ -15,17 +15,12 @@
 from __future__ import annotations
 
 import math
-import re
-from collections import Counter
-from pathlib import Path
 
 import numpy as np
-import pytest
 
 from memory_index import (
     MemoryIndex,
     SearchResult,
-    _classify_paragraph,
     _cross_reference_answers,
     _decompose_query,
     _generate_prospective_queries,

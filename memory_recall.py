@@ -20,7 +20,6 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import numpy as np
 
 BASE = Path(__file__).parent
 TRACES_DIR = BASE / "reasoning_traces"
