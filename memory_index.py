@@ -379,11 +379,11 @@ class MemoryIndex:
 
         return len(paragraphs)
 
-    def warm_models(self):
+    def warm_models(self):  # pragma: no cover — requires GPU models
         """Opt-in model warmup for embedding and cross-encoder rerankers."""
         self._start_model_warmup()
 
-    def _start_model_warmup(self):
+    def _start_model_warmup(self):  # pragma: no cover — requires GPU models
         """Start loading embedding + cross-encoder models in background."""
         import threading
         if self._embed_model is None and not self._embed_loading and self.embeddings is not None:

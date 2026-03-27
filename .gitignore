@@ -20,3 +20,5 @@ credentials*
 consolidation/pending.json
 consolidation/conflicts.json
 memory/graph/*.jsonl
+docs/internal/
+.codex_scratch/

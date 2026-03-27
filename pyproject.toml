@@ -68,11 +68,10 @@ py-modules = [
     "consolidation_engine",
     "entity_extractor",
     "mcp_server",
-    "retrieve",
-    "encoding",
     "cli",
     "api",
     "answer_extractor",
+    "answer_normalizer",
     "temporal_graph",
     "knowledge_store",
     "observer",
@@ -107,9 +106,13 @@ omit = [
     "cognitive_snapshot.py",
     "active_retrieval.py",
     "skill_extractor.py",
+    "__init__.py",
     "extractors/*",
-    # Benchmarks (not product code)
+    # Benchmarks and experiment runners (not product code)
     "bench_locomo.py",
+    "bench_experiments.py",
+    "analyze_failures.py",
+    "run_exp*.py",
     "tests/benchmark_internal.py",
     "experimental/*",
     # Test files themselves

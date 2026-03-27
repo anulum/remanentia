@@ -1,4 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later | Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Remanentia — Answer Normalizer
 """Normalize LLM and ground-truth answers for comparison.
 
 Handles hedging ("Likely yes, because..."), explanation stripping,
@@ -140,7 +145,7 @@ def _get_embed_model():
                     device="cpu",
                     local_files_only=True,
                 )
-            except TypeError:
+            except TypeError:  # pragma: no cover — older sentence-transformers API
                 try:
                     _embed_model = SentenceTransformer(
                         "all-MiniLM-L6-v2",
@@ -152,7 +157,7 @@ def _get_embed_model():
                     _embed_model = _embed_model.to("cpu")
                 except Exception:
                     pass
-        except Exception:
+        except Exception:  # pragma: no cover — sentence-transformers not installed
             _embed_model = False
     return _embed_model if _embed_model else None
 
