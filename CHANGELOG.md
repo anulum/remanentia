@@ -2,6 +2,38 @@
 
 All notable changes to Remanentia are documented here.
 
+## [0.3.1] - 2026-03-26
+
+### Retrieval Quality (Wave 2)
+
+- **Sentence-level indexing**: paragraphs over 200 chars are split into
+  sentences with 1-sentence overlap context windows. Finer granularity means
+  more precise BM25 matching — a sentence about "pottery" no longer competes
+  with a 500-word paragraph where "pottery" appears once.
+
+- **Query decomposition for multi-hop**: complex queries like "What hobbies
+  does the person who works at Google have?" are automatically decomposed into
+  sub-queries ["who works at Google?", "what hobbies?"]. Results are combined
+  and re-ranked by relevance to the original query.
+
+- **Enhanced prospective queries (12 categories)**: expanded from 5 pattern
+  types to 12: named entities, functions, activities/preferences, occupation,
+  relationships, allergies/health, travel/location, learning/skills, favourites,
+  decisions/findings/metrics, versions/dates, file/code. Cap raised to 20
+  queries per paragraph.
+
+- **Confidence scoring**: every SearchResult now includes a `confidence` field
+  (0.0-1.0) computed from score normalisation, answer extraction success, and
+  absolute score thresholds.
+
+- **Cross-reference answer verification**: when multiple results extract the
+  same answer, confidence is boosted proportionally. Disagreements are left
+  at base confidence.
+
+### Testing
+
+- 25 new tests covering all wave 2 features (668 total, up from 643).
+
 ## [0.3.0] - 2026-03-26
 
 ### Retrieval Engine

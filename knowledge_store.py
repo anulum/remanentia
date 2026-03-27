@@ -125,11 +125,55 @@ def _generate_prospective_queries(content: str, title: str,
 
     # Activity/preference detection for composite answers
     activities = re.findall(
-        r"(?:likes?|enjoys?|prefers?|wants?|loves?|hates?|dislikes?)\s+(.{3,30}?)(?:[.,;!?\n]|$)",
+        r"(?:likes?|enjoys?|prefers?|wants?|loves?|hates?|dislikes?|"
+        r"interested in|passionate about)\s+(.{3,30}?)(?:[.,;!?\n]|$)",
         content, re.IGNORECASE)
+    person = entities[0] if entities else "the person"
     for act in activities[:3]:
-        queries.append(f"what does {entities[0] if entities else 'the person'} like")
+        queries.append(f"what does {person} like")
+        queries.append(f"hobbies {act.strip().lower()}")
+        queries.append(f"interests {act.strip().lower()}")
         queries.append(act.strip().lower())
+
+    # Occupation/role patterns
+    roles = re.findall(
+        r"(?:works? (?:as|at|for)|employed (?:at|by)|job (?:is|as))\s+(.{3,40}?)(?:[.,;!?\n]|$)",
+        content, re.IGNORECASE)
+    for role in roles[:2]:
+        queries.append(f"where does {person} work")
+        queries.append(f"career {role.strip().lower()}")
+        queries.append(role.strip().lower())
+
+    # Allergy/health
+    allergies = re.findall(
+        r"(?:allergic to|allergy|intolerant)\s*(.{0,30}?)(?:[.,;!?\n]|$)",
+        content, re.IGNORECASE)
+    for a in allergies[:2]:
+        queries.append(f"allergic {a.strip().lower()}")
+        queries.append(f"what is {person} allergic to")
+
+    # Travel/location
+    places = re.findall(
+        r"(?:went to|visited|trip to|lives? in|from)\s+(.{3,30}?)(?:[.,;!?\n]|$)",
+        content, re.IGNORECASE)
+    for p in places[:2]:
+        queries.append(f"where did {person} go")
+        queries.append(p.strip().lower())
+
+    # Learning/skills
+    skills = re.findall(
+        r"(?:learning|studying|started|practicing)\s+(.{3,30}?)(?:[.,;!?\n]|$)",
+        content, re.IGNORECASE)
+    for s in skills[:2]:
+        queries.append(f"what is {person} learning")
+        queries.append(s.strip().lower())
+
+    # Favourites
+    favs = re.findall(
+        r"(?:favou?rite)\s+(.{3,40}?)(?:[.,;!?\n]|$)",
+        content, re.IGNORECASE)
+    for f in favs[:2]:
+        queries.append(f"favourite {f.strip().lower()}")
 
     # Temporal questions
     dates = re.findall(r"\d{4}-\d{2}-\d{2}", content)
