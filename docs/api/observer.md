@@ -2,7 +2,9 @@
 
 Filesystem watcher for incremental index updates.
 
-::: observer.Observer
+::: observer.ObserverState
     options:
       show_source: true
       members_order: source
+
+::: observer.observe_once
