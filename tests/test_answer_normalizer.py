@@ -86,6 +86,9 @@ class TestAnswersMatch:
     def test_yes_polarity(self):
         assert answers_match("Likely yes, because she loves books", "Yes")
 
+    def test_yes_polarity_both_variants(self):
+        assert answers_match("probably yes", "most likely yes")
+
     def test_no_polarity(self):
         assert answers_match("No", "Likely no")
 
@@ -148,3 +151,22 @@ class TestSemanticSimilarity:
         sim = semantic_similarity("", "hello")
         # Should not crash — returns some value
         assert isinstance(sim, float)
+
+    def test_lexical_fallback(self):
+        """When embed model is unavailable, falls back to lexical similarity."""
+        import answer_normalizer
+        from answer_normalizer import _lexical_similarity
+        # Direct test of lexical similarity
+        sim = _lexical_similarity("pottery and running", "pottery and camping")
+        assert sim > 0.5
+        sim_empty = _lexical_similarity("", "hello")
+        assert sim_empty == 0.0
+
+    def test_semantic_similarity_no_model(self):
+        """semantic_similarity falls back to lexical when model is None."""
+        import answer_normalizer
+        old = answer_normalizer._embed_model
+        answer_normalizer._embed_model = False  # force no model
+        sim = semantic_similarity("pottery and running", "pottery and camping")
+        assert sim > 0.5  # lexical fallback should still return reasonable score
+        answer_normalizer._embed_model = old

@@ -1,6 +1,6 @@
 SPDX-License-Identifier: AGPL-3.0-or-later | Commercial license available
-© Concepts 1996–2026 Miroslav Sotek. All rights reserved.
-© Code 2020–2026 Miroslav Sotek. All rights reserved.
+© Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+© Code 2020–2026 Miroslav Šotek. All rights reserved.
 ORCID: 0009-0009-3560-0851
 Contact: www.anulum.li | protoscience@anulum.li
 
@@ -237,7 +237,7 @@ pip install -e ".[dev]"
 pytest tests/ -q
 ```
 
-243 tests, 77% average coverage on core modules.
+669 tests, 100% coverage gate on product modules.
 
 ## License
 
@@ -245,4 +245,18 @@ AGPL-3.0-or-later | Commercial license available
 
 ## Author
 
-Miroslav Sotek ([Anulum](https://www.anulum.li)) | ORCID: [0009-0009-3560-0851](https://orcid.org/0009-0009-3560-0851)
+Miroslav Šotek ([Anulum](https://www.anulum.li)) | ORCID: [0009-0009-3560-0851](https://orcid.org/0009-0009-3560-0851)
+
+---
+
+<p align="center">
+  <a href="https://www.anulum.li">
+    <img src="docs/assets/anulum_logo_company.jpg" width="180" alt="ANULUM">
+  </a>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://www.anulum.li">
+    <img src="docs/assets/fortis_studio_logo.jpg" width="180" alt="Fortis Studio">
+  </a>
+  <br>
+  <em>Developed by <a href="https://www.anulum.li">ANULUM</a> / Fortis Studio</em>
+</p>
