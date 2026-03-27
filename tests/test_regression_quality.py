@@ -13,7 +13,6 @@ regressions across code changes. Runs without external data or GPU.
 from __future__ import annotations
 
 import math
-import re
 import time
 
 import pytest
@@ -98,7 +97,6 @@ def loaded_index(tmp_path_factory):
     idx.paragraph_types = []
     idx._inverted_index = {}
 
-    from memory_index import _split_paragraphs, _tokenize, _classify_paragraph, _generate_prospective_queries
     from collections import Counter
     import numpy as np
 

@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later | Commercial license available
 from __future__ import annotations
 
-import pytest
 from answer_normalizer import (
     answers_match,
     extract_answer_items,
@@ -154,7 +153,6 @@ class TestSemanticSimilarity:
 
     def test_lexical_fallback(self):
         """When embed model is unavailable, falls back to lexical similarity."""
-        import answer_normalizer
         from answer_normalizer import _lexical_similarity
         # Direct test of lexical similarity
         sim = _lexical_similarity("pottery and running", "pottery and camping")

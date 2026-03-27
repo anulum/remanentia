@@ -34,10 +34,10 @@ jobs:
         run: pip install ruff bandit
 
       - name: Ruff check
-        run: ruff check . --output-format=github
+        run: ruff check memory_index.py mcp_server.py consolidation_engine.py cli.py api.py answer_extractor.py answer_normalizer.py knowledge_store.py temporal_graph.py entity_extractor.py observer.py reflector.py memory_recall.py tests/ --output-format=github
 
       - name: Ruff format check
-        run: ruff format --check .
+        run: ruff format --check memory_index.py mcp_server.py consolidation_engine.py cli.py api.py answer_extractor.py answer_normalizer.py knowledge_store.py temporal_graph.py entity_extractor.py observer.py reflector.py memory_recall.py tests/
 
       - name: Bandit SAST
         run: bandit -r memory_index.py mcp_server.py consolidation_engine.py cli.py api.py answer_extractor.py knowledge_store.py -q

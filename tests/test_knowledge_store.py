@@ -3,13 +3,9 @@
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 
-import pytest
 
 from knowledge_store import (
-    EDGE_TYPES,
     KnowledgeNote,
     KnowledgeStore,
     Trigger,

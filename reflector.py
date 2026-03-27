@@ -17,9 +17,7 @@ Processes recent knowledge notes and:
 """
 from __future__ import annotations
 
-import re
 import time
-from collections import defaultdict
 from pathlib import Path
 
 BASE = Path(__file__).parent
