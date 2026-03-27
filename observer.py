@@ -172,8 +172,8 @@ def observe_once(state: ObserverState, watched_dirs: dict[str, Path] | None = No
                 continue
             files_new += 1
             note_dicts = extract_notes_from_file(f)
-            for and in note_dicts:
-                store.add_note(and["content"], source=and["source"])
+            for nd in note_dicts:
+                store.add_note(nd["content"], source=nd["source"])
                 notes_created += 1
             new_files.append((f, source_name))
             state.mark_processed(f)
