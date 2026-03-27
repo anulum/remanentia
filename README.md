@@ -51,7 +51,10 @@ No vector database. No cloud service. No LLM in the retrieval path.
 ## Quick Start
 
 ```bash
-# Install
+# Install from PyPI
+pip install remanentia
+
+# Or install from source
 pip install -e .
 
 # Create directory structure

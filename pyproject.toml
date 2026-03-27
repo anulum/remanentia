@@ -55,10 +55,12 @@ dev = [
 remanentia = "cli:main"
 
 [project.urls]
-Homepage = "https://remanentia.com"
+Homepage = "https://www.remanentia.com"
 Repository = "https://github.com/anulum/remanentia"
-Documentation = "https://remanentia.com/docs"
+Documentation = "https://www.remanentia.com/docs"
 Issues = "https://github.com/anulum/remanentia/issues"
+Changelog = "https://github.com/anulum/remanentia/blob/main/CHANGELOG.md"
+Discussions = "https://github.com/anulum/remanentia/discussions"
 Author = "https://www.anulum.li"
 
 [tool.setuptools]

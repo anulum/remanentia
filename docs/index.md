@@ -9,7 +9,7 @@ Part of the [ANULUM](https://www.anulum.li) scientific computing ecosystem — t
 ## Quick Start
 
 ```bash
-pip install -e .
+pip install remanentia
 remanentia init
 remanentia consolidate --force
 remanentia search "what did we decide about authentication"
