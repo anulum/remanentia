@@ -195,13 +195,20 @@ class TestHandleGraph:
 
 class TestHandleRememberConsolidation:
     def test_triggers_consolidation(self, tmp_path):
+        import time
         from unittest.mock import MagicMock
         mock_consolidate = MagicMock(return_value={"status": "nothing_to_consolidate"})
         with patch("mcp_server.BASE", tmp_path), \
              patch("mcp_server._RECALL_INDEX", None), \
              patch("mcp_server._UNIFIED_INDEX", None), \
+             patch("mcp_server._consolidation_last", 0.0), \
              patch("consolidation_engine.consolidate", mock_consolidate):
             handle_remember("Test consolidation trigger", "finding", "test")
+            # Consolidation now runs in a background thread
+            for _ in range(20):
+                if mock_consolidate.called:
+                    break
+                time.sleep(0.1)
         mock_consolidate.assert_called_once()
 
     def test_consolidation_failure_safe(self, tmp_path):

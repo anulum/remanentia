@@ -330,8 +330,14 @@ def _save_relations(relations: list[dict]):
     RELATIONS_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _update_graph(trace_name: str, entities: list[str], project: str, date: str):
-    """Add entities and relations from a trace."""
+def _update_graph(trace_name: str, entities: list[str], project: str, date: str,
+                   text: str = ""):
+    """Add entities and relations from a trace.
+
+    Extracts typed relations (caused_by, fixed_by, replaced, etc.) when text
+    is provided. Falls back to co_occurs for entity pairs without a detected
+    typed relation.
+    """
     entity_db = _load_entities()
     relations = _load_relations()
 
@@ -347,22 +353,31 @@ def _update_graph(trace_name: str, entities: list[str], project: str, date: str)
         else:
             entity_db[ent]["trace_count"] = entity_db[ent].get("trace_count", 0) + 1
 
-    # Relations: all entity pairs in this trace are co-occurring
+    # Extract typed relations from text when available
+    typed_pairs: dict[tuple[str, str], str] = {}
+    if text:
+        typed_pairs = _extract_typed_relations(text, entities)
+
+    # Build relation edges
     existing_pairs = {(r["source"], r["target"]) for r in relations}
     for i, e1 in enumerate(entities):
         for e2 in entities[i + 1:]:
             pair = tuple(sorted([e1, e2]))
+            rel_type = typed_pairs.get(pair, typed_pairs.get((pair[1], pair[0]), "co_occurs"))
             if pair in existing_pairs:
                 for r in relations:
                     if (r["source"], r["target"]) == pair or (r["target"], r["source"]) == pair:
                         r["weight"] = r.get("weight", 0) + 1
                         if trace_name not in r.get("evidence", []):
                             r.setdefault("evidence", []).append(trace_name)
+                        # Upgrade co_occurs to typed if we now have a typed relation
+                        if r["type"] == "co_occurs" and rel_type != "co_occurs":
+                            r["type"] = rel_type
                         break
             else:
                 relations.append({
                     "source": pair[0], "target": pair[1],
-                    "type": "co_occurs",
+                    "type": rel_type,
                     "weight": 1,
                     "evidence": [trace_name],
                 })
@@ -370,6 +385,41 @@ def _update_graph(trace_name: str, entities: list[str], project: str, date: str)
 
     _save_entities(entity_db)
     _save_relations(relations)
+
+
+_TYPED_RELATION_PATTERNS = [
+    (re.compile(r"\bbecause\b|\bcaused by\b|\bdue to\b|\broot cause\b", re.I), "caused_by"),
+    (re.compile(r"\bfixed\b|\brepaired\b|\bcorrected\b|\bpatched\b", re.I), "fixed_by"),
+    (re.compile(r"\breplaced\b|\bsuperseded\b|\binstead of\b", re.I), "replaced"),
+    (re.compile(r"\bcontradicts?\b|\binconsistent with\b|\bconflicts? with\b", re.I), "contradicts"),
+    (re.compile(r"\bv\d+\.\d+|\bversion\b", re.I), "version_of"),
+    (re.compile(r"\bdepends on\b|\brequires\b|\bneeds\b", re.I), "depends_on"),
+    (re.compile(r"\bimproved\b|\bfrom .+ to\b|\bincreased\b|\bdecreased\b", re.I), "improved"),
+    (re.compile(r"\bproduced\b|\bcreated\b|\bgenerated\b|\bwrote\b", re.I), "produced"),
+    (re.compile(r"\bused in\b|\bpart of\b|\bcomponent of\b", re.I), "used_in"),
+    (re.compile(r"\btested\b|\bbenchmarked\b|\bevaluated\b|\bmeasured\b", re.I), "tested_with"),
+]
+
+
+def _extract_typed_relations(text: str, entities: list[str]) -> dict[tuple[str, str], str]:
+    """Extract typed relations between entity pairs from their connecting text."""
+    text_lower = text.lower()
+    typed: dict[tuple[str, str], str] = {}
+    for i, e1 in enumerate(entities):
+        for e2 in entities[i + 1:]:
+            pos1 = text_lower.find(e1.lower())
+            pos2 = text_lower.find(e2.lower())
+            if pos1 < 0 or pos2 < 0:
+                continue
+            start = min(pos1, pos2)
+            end = max(pos1 + len(e1), pos2 + len(e2))
+            between = text[start:end]
+            for pattern, rel_type in _TYPED_RELATION_PATTERNS:
+                if pattern.search(between):
+                    pair = tuple(sorted([e1, e2]))
+                    typed[pair] = rel_type
+                    break
+    return typed
 
 
 # ── Novelty detection ────────────────────────────────────────────
@@ -512,7 +562,7 @@ def consolidate(force: bool = False) -> dict:
         )
         memories_written += 1
 
-        # Update entity graph
+        # Update entity graph with typed relations
         for name in cluster:
             if name in trace_data:
                 _update_graph(
@@ -520,6 +570,7 @@ def consolidate(force: bool = False) -> dict:
                     trace_data[name]["entities"],
                     trace_data[name]["project"],
                     trace_data[name].get("date", ""),
+                    text=trace_data[name].get("text", ""),
                 )
 
     # Save clusters

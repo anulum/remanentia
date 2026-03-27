@@ -89,8 +89,8 @@ MIN_FILE_CHARS = 50
 MAX_FILE_CHARS = 1_000_000
 MAX_TEXT_PARAGRAPH_CHARS = 10_000
 MAX_FALLBACK_TEXT_CHARS = 2_000
-MAX_CODE_CHUNK_CHARS = 500
-MAX_CODE_CHUNKS = 50
+MAX_CODE_CHUNK_CHARS = 1000
+MAX_CODE_CHUNKS = 200
 GRAPH_BOOST_QUERY_TYPES = {"general", "decision", "debugging", "explanation"}
 RUST_BM25_MIN_PARAGRAPHS = 50_000
 LOCATION_STOPWORDS = {
@@ -137,8 +137,10 @@ class MemoryIndex:
         self.documents: list[Document] = []
         self.paragraph_index: list[tuple[int, int]] = []  # (doc_idx, para_idx)
         self.paragraph_tokens: list[set[str]] = []
+        self.paragraph_token_counts: list[dict[str, int]] = []  # token → count per paragraph
         self.paragraph_types: list[str] = []  # function, decision, finding, etc.
         self.idf: dict[str, float] = {}
+        self._df: dict[str, int] = {}  # document frequency counts for incremental IDF
         self._inverted_index: dict[str, list[int]] = {}  # token → paragraph indices
         self.embeddings: np.ndarray | None = None
         self._built = False
@@ -226,12 +228,14 @@ class MemoryIndex:
 
                 for para_idx, para in enumerate(enriched_paragraphs):
                     self.paragraph_index.append((doc_idx, para_idx))
-                    # Include prospective query tokens in the searchable set
                     p_type = _classify_paragraph(para, is_code=is_code)
                     pq = _generate_prospective_queries(para, f.name, p_type)
                     combined_text = para + " " + " ".join(pq)
-                    tokens_with_pq = set(_tokenize(combined_text))
+                    token_list = _tokenize(combined_text)
+                    tokens_with_pq = set(token_list)
+                    token_counts = _token_counts(token_list)
                     self.paragraph_tokens.append(tokens_with_pq)
+                    self.paragraph_token_counts.append(token_counts)
                     self.paragraph_types.append(p_type)
 
         # Build inverted index + IDF
@@ -245,6 +249,7 @@ class MemoryIndex:
                     inv[t] = []
                 inv[t].append(i)
         self._inverted_index = inv
+        self._df = dict(df)
         self.idf = {t: math.log(1 + n_docs / (1 + count))
                      for t, count in df.items()}
         self._para_lengths = np.array([len(t) for t in self.paragraph_tokens], dtype=np.float32)
@@ -339,12 +344,16 @@ class MemoryIndex:
             p_type = _classify_paragraph(para, is_code=is_code)
             pq = _generate_prospective_queries(para, path.name, p_type)
             combined = para + " " + " ".join(pq)
-            tokens = set(_tokenize(combined))
+            token_list = _tokenize(combined)
+            tokens = set(token_list)
+            token_counts = _token_counts(token_list)
             self.paragraph_tokens.append(tokens)
+            self.paragraph_token_counts.append(token_counts)
             self.paragraph_types.append(p_type)
+            n_total = len(self.paragraph_tokens)
             for t in tokens:
-                if t not in self.idf:
-                    self.idf[t] = math.log(1 + len(self.paragraph_tokens) / 2)
+                self._df[t] = self._df.get(t, 0) + 1
+                self.idf[t] = math.log(1 + n_total / (1 + self._df[t]))
                 if t not in self._inverted_index:
                     self._inverted_index[t] = []
                 self._inverted_index[t].append(p_idx)
@@ -556,15 +565,18 @@ class MemoryIndex:
         # Stage 1: Take top candidates for embedding rerank
         candidates = scores[:top_k * 6] if self.embeddings is not None else scores[:top_k * 3]
 
-        # Stage 2: Bi-encoder rerank if model already loaded
+        # Stage 2: Reciprocal Rank Fusion with bi-encoder
         if self.embeddings is not None and self._embed_model is not None and candidates:  # pragma: no cover
             try:
                 q_emb = self._embed_model.encode(
                     query, normalize_embeddings=True, convert_to_numpy=True)
-                for j, (para_idx, bm25_score) in enumerate(candidates):
+                emb_scored = []
+                for para_idx, _ in candidates:
                     emb_sim = float(np.dot(q_emb, self.embeddings[para_idx]))
-                    candidates[j] = (para_idx, 0.4 * bm25_score + 0.6 * emb_sim)
-                candidates.sort(key=lambda x: -x[1])
+                    emb_scored.append((para_idx, emb_sim))
+                emb_scored.sort(key=lambda x: -x[1])
+                candidates = _reciprocal_rank_fusion(
+                    [candidates, emb_scored], k=60)
             except Exception:
                 pass
 
@@ -689,6 +701,7 @@ class MemoryIndex:
         avg_dl = self._avg_dl if self._avg_dl > 0 else 1.0
         candidate_scores: dict[int, float] = {}
         para_lengths = self._para_lengths
+        token_counts = self.paragraph_token_counts
         for qt in q_tokens:
             posting = self._inverted_index.get(qt)
             if not posting:
@@ -699,9 +712,10 @@ class MemoryIndex:
             for i in posting:
                 if i in filtered_out:
                     continue
+                tf = token_counts[i].get(qt, 1) if i < len(token_counts) else 1
                 dl_ratio = para_lengths[i] / avg_dl
                 candidate_scores[i] = candidate_scores.get(i, 0.0) + (
-                    idf_val * (k1 + 1) / (1 + k1 * (1 - b + b * dl_ratio))
+                    idf_val * tf * (k1 + 1) / (tf + k1 * (1 - b + b * dl_ratio))
                 )
         return candidate_scores
 
@@ -788,8 +802,10 @@ class MemoryIndex:
                           for d in self.documents],
             "paragraph_index": self.paragraph_index,
             "paragraph_tokens": [list(t) for t in self.paragraph_tokens],
+            "paragraph_token_counts": self.paragraph_token_counts,
             "paragraph_types": self.paragraph_types,
             "idf": self.idf,
+            "_df": self._df,
             "embeddings": emb_data,
             "emb_scale": emb_scale,
             "quantized": quantize and self.embeddings is not None,
@@ -820,7 +836,11 @@ class MemoryIndex:
                     self.documents.append(Document(name=n, source=s, path=p, paragraphs=paras))
             self.paragraph_index = data["paragraph_index"]
             self.paragraph_tokens = [set(t) for t in data["paragraph_tokens"]]
+            self.paragraph_token_counts = data.get("paragraph_token_counts", [])
+            if not self.paragraph_token_counts:
+                self.paragraph_token_counts = [{t: 1 for t in tokens} for tokens in self.paragraph_tokens]
             self.idf = data["idf"]
+            self._df = data.get("_df", {})
             self.paragraph_types = data.get("paragraph_types", [])
             # Rebuild inverted index from paragraph tokens
             inv: dict[str, list[int]] = {}
@@ -887,13 +907,27 @@ def _query_entity_ids(query: str, graph: dict) -> set[str]:
 
 
 def _entity_boost_score(para_text: str, query_entities: set[str], graph: dict) -> float:
-    """Score how many query-related entities appear in paragraph text."""
+    """Score how many query-related entities appear in paragraph text.
+
+    Typed relations (caused_by, fixed_by, etc.) get 2x the boost of co_occurs,
+    since they carry stronger semantic signal.
+    """
     if not query_entities:
         return 0.0
     p_lower = para_text.lower()
-    shared = sum(1 for eid in query_entities
-                 if graph["entities"].get(eid, {}).get("label", eid).lower() in p_lower)
-    return shared * 0.1
+    boost = 0.0
+    for eid in query_entities:
+        label = graph["entities"].get(eid, {}).get("label", eid).lower()
+        if label in p_lower:
+            boost += 0.1
+    # Extra boost for typed relations between query entities and paragraph entities
+    for rel in graph.get("relations", []):
+        src, tgt = rel.get("source", ""), rel.get("target", "")
+        if rel.get("type", "co_occurs") != "co_occurs":
+            if (src in query_entities and tgt.lower() in p_lower) or \
+               (tgt in query_entities and src.lower() in p_lower):
+                boost += 0.15
+    return boost
 
 
 # ── Entity-centric boosting (ported from bench_locomo.py) ────────
@@ -1192,11 +1226,37 @@ def _tokenize(text: str) -> list[str]:
     return re.findall(r"[a-z0-9][a-z0-9_]{2,}", text.lower())
 
 
+def _token_counts(token_list: list[str]) -> dict[str, int]:
+    """Count occurrences of each token for real TF in BM25."""
+    counts: dict[str, int] = {}
+    for t in token_list:
+        counts[t] = counts.get(t, 0) + 1
+    return counts
+
+
 def _extract_lookup_terms(query: str) -> set[str]:
     return {
         token for token in _tokenize(query)
         if token not in LOCATION_STOPWORDS and not token.isdigit()
     }
+
+
+def _reciprocal_rank_fusion(
+    ranked_lists: list[list[tuple[int, float]]],
+    k: int = 60,
+) -> list[tuple[int, float]]:
+    """Reciprocal Rank Fusion across multiple ranked lists.
+
+    RRF score = sum(1 / (k + rank_i)) for each list where the item appears.
+    Scale-invariant — no need to normalise heterogeneous score distributions.
+    k=60 is the standard constant from Cormack et al. (2009).
+    """
+    rrf_scores: dict[int, float] = {}
+    for ranked in ranked_lists:
+        for rank, (para_idx, _score) in enumerate(ranked):
+            rrf_scores[para_idx] = rrf_scores.get(para_idx, 0.0) + 1.0 / (k + rank + 1)
+    result = sorted(rrf_scores.items(), key=lambda x: -x[1])
+    return result
 
 
 def _get_rust_bm25_class():

@@ -17,7 +17,7 @@ import json
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from pathlib import Path
 
 BASE = Path(__file__).parent
@@ -80,34 +80,59 @@ class TemporalGraph:
         return events
 
     def add_events(self, events: list[TemporalEvent]):
-        """Add events and build temporal edges."""
+        """Add events and build temporal edges.
+
+        Uses date-bucketed approach instead of O(N²) pairwise comparison:
+        same_day edges within each date bucket, before/after edges only
+        between adjacent date buckets.
+        """
         start_idx = len(self.events)
+        new_dates: set[str] = set()
         for ev in events:
             idx = len(self.events)
             self.events.append(ev)
             self._by_date[ev.date].append(idx)
+            new_dates.add(ev.date)
 
-        # Build edges between new events and existing events
-        for i in range(start_idx, len(self.events)):
-            ev_i = self.events[i]
-            for j in range(i):
-                ev_j = self.events[j]
-                if ev_i.date == ev_j.date:
+        # same_day edges: within each bucket that received new events
+        for d in new_dates:
+            bucket = self._by_date[d]
+            new_in_bucket = [i for i in bucket if i >= start_idx]
+            old_in_bucket = [i for i in bucket if i < start_idx]
+            for ni in new_in_bucket:
+                for oi in old_in_bucket:
                     self.edges.append(TemporalEdge(
-                        source_event=ev_j.text[:80],
-                        target_event=ev_i.text[:80],
+                        source_event=self.events[oi].text[:80],
+                        target_event=self.events[ni].text[:80],
                         relation="same_day",
-                        source_date=ev_j.date,
-                        target_date=ev_i.date,
+                        source_date=d, target_date=d,
                     ))
-                elif ev_i.date < ev_j.date:
-                    self.edges.append(TemporalEdge(
-                        source_event=ev_i.text[:80],
-                        target_event=ev_j.text[:80],
-                        relation="before",
-                        source_date=ev_i.date,
-                        target_date=ev_j.date,
-                    ))
+                # new-new pairs within same date
+                for nj in new_in_bucket:
+                    if nj > ni:
+                        self.edges.append(TemporalEdge(
+                            source_event=self.events[ni].text[:80],
+                            target_event=self.events[nj].text[:80],
+                            relation="same_day",
+                            source_date=d, target_date=d,
+                        ))
+
+        # before/after edges: only between adjacent dates (sorted)
+        all_dates = sorted(self._by_date.keys())
+        for idx_d, d in enumerate(all_dates):
+            if d not in new_dates:
+                continue
+            if idx_d + 1 < len(all_dates):
+                next_d = all_dates[idx_d + 1]
+                new_here = [i for i in self._by_date[d] if i >= start_idx]
+                for ni in new_here[:3]:  # cap edges per date pair
+                    for nj in self._by_date[next_d][:3]:
+                        self.edges.append(TemporalEdge(
+                            source_event=self.events[ni].text[:80],
+                            target_event=self.events[nj].text[:80],
+                            relation="before",
+                            source_date=d, target_date=next_d,
+                        ))
 
     def build_from_documents(self, documents: list[tuple[str, str]]):
         """Build graph from list of (doc_name, text) pairs."""
@@ -268,8 +293,13 @@ def temporal_code_execute(query: str, events: list[TemporalEvent]) -> str | None
     return None
 
 
-def parse_dates(text: str) -> list[str]:
-    """Extract all dates from text, return as ISO strings."""
+def parse_dates(text: str, reference_date: date | None = None) -> list[str]:
+    """Extract all dates from text, return as ISO strings.
+
+    Resolves relative expressions (yesterday, last week) against reference_date
+    (defaults to today).
+    """
+    ref = reference_date or date.today()
     dates = []
 
     for m in _DATE_ISO.finditer(text):
@@ -279,7 +309,7 @@ def parse_dates(text: str) -> list[str]:
         month_name = m.group(1).lower()
         month = _MONTHS.get(month_name)
         day = int(m.group(2))
-        year = int(m.group(3)) if m.group(3) else date.today().year
+        year = int(m.group(3)) if m.group(3) else ref.year
         if month and 1 <= day <= 31:
             try:
                 d = date(year, month, day)
@@ -287,4 +317,33 @@ def parse_dates(text: str) -> list[str]:
             except ValueError:  # pragma: no cover
                 pass
 
+    for m in _DATE_RELATIVE.finditer(text):
+        expr = m.group(1).lower().strip()
+        resolved = _resolve_relative_date(expr, ref)
+        if resolved:
+            dates.append(resolved)
+
     return sorted(set(dates))
+
+
+def _resolve_relative_date(expr: str, ref: date) -> str | None:
+    """Resolve a relative date expression to ISO string."""
+    if expr == "yesterday":
+        return (ref - timedelta(days=1)).isoformat()
+    if expr == "today":
+        return ref.isoformat()
+    if expr == "last week":
+        return (ref - timedelta(weeks=1)).isoformat()
+    if expr == "last month":
+        m = ref.month - 1 or 12
+        y = ref.year if ref.month > 1 else ref.year - 1
+        return date(y, m, min(ref.day, 28)).isoformat()
+    if expr == "last year":
+        return date(ref.year - 1, ref.month, min(ref.day, 28)).isoformat()
+    if expr == "this week":
+        return (ref - timedelta(days=ref.weekday())).isoformat()
+    if expr == "this month":
+        return date(ref.year, ref.month, 1).isoformat()
+    if expr == "this year":
+        return date(ref.year, 1, 1).isoformat()
+    return None
