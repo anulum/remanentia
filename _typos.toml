@@ -1,0 +1,5 @@
+[default.extend-words]
+# "BA" = Balanced Accuracy (ML metric)
+BA = "BA"
+# regex pattern fragments
+ure = "ure"
