@@ -121,11 +121,11 @@ def cmd_status(args):
         print(f"  Neurons: {s.get('n_neurons', '?')}")
         print(f"  VRAM: {s.get('vram_mb', '?')} MB")
         print(f"  Live retrieval: {s.get('live_retrieval_available', False)}")
-        consol = s.get("last_consolidation")
-        if consol:
+        console = s.get("last_consolidation")
+        if console:
             print(
-                f"  Last consolidation: {consol.get('memories_written', 0)} memories, "
-                f"{consol.get('entities_found', 0)} entities"
+                f"  Last consolidation: {console.get('memories_written', 0)} memories, "
+                f"{console.get('entities_found', 0)} entities"
             )
     else:
         print("Daemon:  NOT RUNNING")
@@ -325,8 +325,8 @@ def main():
         )
 
     # consolidate
-    p_consol = sub.add_parser("consolidate", help="Run memory consolidation")
-    p_consol.add_argument("--force", action="store_true", help="Reconsolidate all traces")
+    p_console = sub.add_parser("consolidate", help="Run memory consolidation")
+    p_console.add_argument("--force", action="store_true", help="Reconsolidate all traces")
 
     # status
     sub.add_parser("status", help="System status")

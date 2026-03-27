@@ -341,16 +341,16 @@ class TestUpdateGraph:
 
 class TestConsolidate:
     def test_full_pipeline(self, tmp_traces, tmp_path):
-        consol_dir = tmp_path / "consolidation"
-        consol_dir.mkdir()
+        console_dir = tmp_path / "consolidation"
+        console_dir.mkdir()
         semantic_dir = tmp_path / "memory" / "semantic"
         graph_dir = tmp_path / "memory" / "graph"
 
         with (
             patch("consolidation_engine.TRACES_DIR", tmp_traces),
-            patch("consolidation_engine.CONSOLIDATION_DIR", consol_dir),
-            patch("consolidation_engine.PENDING_PATH", consol_dir / "pending.json"),
-            patch("consolidation_engine.LAST_RUN_PATH", consol_dir / "last_consolidation.json"),
+            patch("consolidation_engine.CONSOLIDATION_DIR", console_dir),
+            patch("consolidation_engine.PENDING_PATH", console_dir / "pending.json"),
+            patch("consolidation_engine.LAST_RUN_PATH", console_dir / "last_consolidation.json"),
             patch("consolidation_engine.SEMANTIC_DIR", semantic_dir),
             patch("consolidation_engine.GRAPH_DIR", graph_dir),
             patch("consolidation_engine.ENTITIES_PATH", graph_dir / "entities.jsonl"),
@@ -368,28 +368,28 @@ class TestConsolidate:
     def test_nothing_to_consolidate(self, tmp_path):
         traces_dir = tmp_path / "reasoning_traces"
         traces_dir.mkdir()
-        consol_dir = tmp_path / "consolidation"
+        console_dir = tmp_path / "consolidation"
 
         with (
             patch("consolidation_engine.TRACES_DIR", traces_dir),
-            patch("consolidation_engine.CONSOLIDATION_DIR", consol_dir),
-            patch("consolidation_engine.PENDING_PATH", consol_dir / "pending.json"),
+            patch("consolidation_engine.CONSOLIDATION_DIR", console_dir),
+            patch("consolidation_engine.PENDING_PATH", console_dir / "pending.json"),
         ):
             result = consolidate(force=False)
 
         assert result["status"] == "nothing_to_consolidate"
 
     def test_pending_tracks_processed(self, tmp_traces, tmp_path):
-        consol_dir = tmp_path / "consolidation"
-        consol_dir.mkdir()
+        console_dir = tmp_path / "consolidation"
+        console_dir.mkdir()
         semantic_dir = tmp_path / "memory" / "semantic"
         graph_dir = tmp_path / "memory" / "graph"
 
         with (
             patch("consolidation_engine.TRACES_DIR", tmp_traces),
-            patch("consolidation_engine.CONSOLIDATION_DIR", consol_dir),
-            patch("consolidation_engine.PENDING_PATH", consol_dir / "pending.json"),
-            patch("consolidation_engine.LAST_RUN_PATH", consol_dir / "last_consolidation.json"),
+            patch("consolidation_engine.CONSOLIDATION_DIR", console_dir),
+            patch("consolidation_engine.PENDING_PATH", console_dir / "pending.json"),
+            patch("consolidation_engine.LAST_RUN_PATH", console_dir / "last_consolidation.json"),
             patch("consolidation_engine.SEMANTIC_DIR", semantic_dir),
             patch("consolidation_engine.GRAPH_DIR", graph_dir),
             patch("consolidation_engine.ENTITIES_PATH", graph_dir / "entities.jsonl"),
@@ -421,11 +421,11 @@ class TestConsolidationEdge:
     def test_get_pending_traces_empty(self, tmp_path):
         traces_dir = tmp_path / "reasoning_traces"
         traces_dir.mkdir()
-        consol_dir = tmp_path / "consolidation"
+        console_dir = tmp_path / "consolidation"
         with (
             patch("consolidation_engine.TRACES_DIR", traces_dir),
-            patch("consolidation_engine.CONSOLIDATION_DIR", consol_dir),
-            patch("consolidation_engine.PENDING_PATH", consol_dir / "pending.json"),
+            patch("consolidation_engine.CONSOLIDATION_DIR", console_dir),
+            patch("consolidation_engine.PENDING_PATH", console_dir / "pending.json"),
         ):
             pending = get_pending_traces()
         assert pending == []

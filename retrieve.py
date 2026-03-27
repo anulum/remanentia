@@ -120,8 +120,8 @@ def _tokenize(text: str) -> list[str]:
 
 
 _STEM_SUFFIXES = [
-    "ation", "tion", "sion", "ment", "ness", "ity", "ous",
-    "ive", "ing", "ical", "ally", "able", "ible", "ful",
+    "ation", "tion", "sion", "meant", "ness", "ity", "ous",
+    "ive", "ing", "ical", "ally", "able", "ible", "full",
     "less", "ized", "ise", "ize", "ed", "ly", "er", "est",
     "al", "es", "s",
 ]

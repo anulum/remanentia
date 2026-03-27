@@ -233,7 +233,7 @@ def _consolidation_status() -> dict:
     """Get consolidation pipeline status."""
     graph_dir = BASE / "memory" / "graph"
     semantic_dir = BASE / "memory" / "semantic"
-    consol_dir = BASE / "consolidation"
+    console_dir = BASE / "consolidation"
 
     n_semantic = len(list(semantic_dir.rglob("*.md"))) if semantic_dir.exists() else 0
     n_entities = 0
@@ -250,7 +250,7 @@ def _consolidation_status() -> dict:
         top_relations = sorted(rels, key=lambda r: -r.get("weight", 0))[:10]
 
     last_run = {}
-    last_path = consol_dir / "last_consolidation.json"
+    last_path = console_dir / "last_consolidation.json"
     if last_path.exists():
         try:
             last_run = json.loads(last_path.read_text())

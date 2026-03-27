@@ -70,7 +70,7 @@ def _char_ngrams(word: str, n: int = _NGRAM_SIZE) -> list[str]:
 
     Words sharing a root produce overlapping n-gram sets:
     "transport"      -> {tra, ran, ans, nsp, spo, por, ort}
-    "transportation" -> {tra, ran, ans, nsp, spo, por, ort, rta, tat, ati, tio, ion}
+    "transportation" -> {tra, ran, ans, nsp, spo, por, ort, rta, tat, ati, to, ion}
     Overlap: 7/12 = 58%
     """
     padded = f"<{word}>"
