@@ -71,9 +71,9 @@ Tools: `remanentia_recall`, `remanentia_remember`, `remanentia_status`, `remanen
 
 AGPL-3.0-or-later | Commercial license available
 
-**Contact:** [protoscience@anulum.li](mailto:protoscience@anulum.li) |
+**Contact:** [remanentia@anulum.li](mailto:remanentia@anulum.li) | [protoscience@anulum.li](mailto:protoscience@anulum.li) |
 [GitHub Discussions](https://github.com/anulum/remanentia/discussions) |
-[www.anulum.li](https://www.anulum.li)
+[www.remanentia.com](https://www.remanentia.com) | [www.anulum.li](https://www.anulum.li)
 
 ---
 
