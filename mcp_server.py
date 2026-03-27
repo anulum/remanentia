@@ -32,6 +32,8 @@ from __future__ import annotations
 import json
 import os
 import sys
+import threading
+import time as _time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -39,23 +41,32 @@ sys.path.insert(0, str(Path(__file__).parent))
 BASE = Path(os.environ.get("REMANENTIA_BASE", Path(__file__).parent))
 GRAPH_DIR = BASE / "memory" / "graph"
 
+_lock = threading.Lock()
 
 _UNIFIED_INDEX = None
 
 
 _KNOWLEDGE_STORE = None
 
+# Async consolidation: debounce to at most once per 10 seconds
+_consolidation_pending = False
+_consolidation_last = 0.0
+_CONSOLIDATION_DEBOUNCE_S = 10
+
 
 def _get_knowledge_store():
     global _KNOWLEDGE_STORE
     if _KNOWLEDGE_STORE is not None:
         return _KNOWLEDGE_STORE
-    try:
-        from knowledge_store import KnowledgeStore
-        _KNOWLEDGE_STORE = KnowledgeStore()
-        _KNOWLEDGE_STORE.load()
-    except Exception:  # pragma: no cover
-        _KNOWLEDGE_STORE = KnowledgeStore() if _KNOWLEDGE_STORE is None else _KNOWLEDGE_STORE
+    with _lock:
+        if _KNOWLEDGE_STORE is not None:
+            return _KNOWLEDGE_STORE
+        try:
+            from knowledge_store import KnowledgeStore
+            _KNOWLEDGE_STORE = KnowledgeStore()
+            _KNOWLEDGE_STORE.load()
+        except Exception:  # pragma: no cover
+            _KNOWLEDGE_STORE = KnowledgeStore() if _KNOWLEDGE_STORE is None else _KNOWLEDGE_STORE
     return _KNOWLEDGE_STORE
 
 
@@ -78,10 +89,12 @@ def handle_recall(query: str, top_k: int = 5,
     try:
         from memory_index import MemoryIndex
         if _UNIFIED_INDEX is None:
-            _UNIFIED_INDEX = MemoryIndex()
-            if not _UNIFIED_INDEX.load():  # pragma: no cover
-                _UNIFIED_INDEX = None
-                return _lightweight_recall(query, top_k)
+            with _lock:
+                if _UNIFIED_INDEX is None:
+                    idx = MemoryIndex()
+                    if not idx.load():  # pragma: no cover
+                        return _lightweight_recall(query, top_k)
+                    _UNIFIED_INDEX = idx
 
         use_llm = llm or bool(os.environ.get("REMANENTIA_LLM_ANSWERS"))
         results = _UNIFIED_INDEX.search(
@@ -144,10 +157,11 @@ def handle_remember(content: str, memory_type: str = "context", project: str = "
     # Incremental index update if unified index is loaded
     global _UNIFIED_INDEX
     if _UNIFIED_INDEX is not None and _UNIFIED_INDEX._built:
-        try:
-            _UNIFIED_INDEX.add_file(path)
-        except Exception:  # pragma: no cover
-            pass
+        with _lock:
+            try:
+                _UNIFIED_INDEX.add_file(path)
+            except Exception:  # pragma: no cover
+                pass
 
     # Create knowledge note
     try:
@@ -159,15 +173,33 @@ def handle_remember(content: str, memory_type: str = "context", project: str = "
     except Exception:  # pragma: no cover
         pass
 
-    # Consolidate pending traces (fast short-circuit when nothing new)
-    try:
-        from consolidation_engine import consolidate
-        consolidate()
-        _RECALL_INDEX = None
-    except Exception:  # pragma: no cover
-        pass
+    # Async consolidation with debounce
+    _schedule_consolidation()
 
     return f"Remembered: {filename} ({len(content)} chars)"
+
+
+def _schedule_consolidation():
+    """Run consolidation in a background thread, debounced."""
+    global _consolidation_pending, _consolidation_last, _RECALL_INDEX
+    now = _time.monotonic()
+    if now - _consolidation_last < _CONSOLIDATION_DEBOUNCE_S:
+        _consolidation_pending = True
+        return
+    _consolidation_last = now
+    _consolidation_pending = False
+
+    def _run():
+        global _RECALL_INDEX, _consolidation_last
+        try:
+            from consolidation_engine import consolidate
+            consolidate()
+            _RECALL_INDEX = None
+        except Exception:  # pragma: no cover
+            pass
+        _consolidation_last = _time.monotonic()
+
+    threading.Thread(target=_run, daemon=True).start()
 
 
 _RECALL_INDEX: dict[str, tuple[set, str]] | None = None
@@ -335,7 +367,7 @@ def handle_request(request: dict) -> dict:
             "result": {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "remanentia", "version": "0.2.0"},
+                "serverInfo": {"name": "remanentia", "version": "0.3.0"},
             },
         }
 

@@ -34,7 +34,7 @@ def extract_answer(query: str, paragraph: str) -> str | None:
 
     # Detect question type and dispatch
     if _is_when_question(q):
-        return _extract_date_answer(p)
+        return _extract_date_answer(p, query=query)
     if _is_how_many_question(q):
         return _extract_number_answer(p, q)
     if _is_version_question(q):
@@ -114,24 +114,46 @@ def _is_what_percent_question(q: str) -> bool:
 
 # ── Answer extractors ────────────────────────────────────────────
 
-def _extract_date_answer(text: str) -> str | None:
-    # ISO dates
-    dates = re.findall(r"\d{4}-\d{2}-\d{2}", text)
-    if dates:
-        return dates[0]
-    # English dates: "March 15, 2026"
-    m = re.search(r"(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:,?\s*\d{4})?", text)
-    if m:
-        return m.group()
-    return None
+def _extract_date_answer(text: str, query: str = "") -> str | None:
+    """Extract the most query-relevant date from text.
+
+    When multiple dates exist, scores each by proximity to query terms
+    rather than returning the first match.
+    """
+    candidates = []
+    for m in re.finditer(r"\d{4}-\d{2}-\d{2}", text):
+        candidates.append((m.group(), m.start()))
+    for m in re.finditer(
+        r"((?:January|February|March|April|May|June|July|August|September|"
+        r"October|November|December)\s+\d{1,2}(?:,?\s*\d{4})?)", text
+    ):
+        candidates.append((m.group(), m.start()))
+    if not candidates:
+        return None
+    if len(candidates) == 1 or not query:
+        return candidates[0][0]
+    q_tokens = set(re.findall(r"\w{3,}", query.lower()))
+    best_score, best_date = -1, candidates[0][0]
+    for date_str, pos in candidates:
+        window = text[max(0, pos - 80):pos + len(date_str) + 80].lower()
+        overlap = sum(1 for t in q_tokens if t in window)
+        if overlap > best_score:
+            best_score = overlap
+            best_date = date_str
+    return best_date
 
 def _extract_number_answer(text: str, query: str) -> str | None:
-    numbers = re.findall(r"\b(\d[\d,]*(?:\.\d+)?)\b", text)
-    # Filter out years and dates
-    numbers = [n for n in numbers if not re.match(r"20\d{2}$", n) and len(n) > 0]
-    if numbers:
-        return numbers[0]
-    return None
+    candidates = []
+    for m in re.finditer(r"\b(\d[\d,]*(?:\.\d+)?)\b", text):
+        val = m.group(1)
+        if re.match(r"20\d{2}$", val) or len(val) == 0:
+            continue
+        candidates.append((val, m.start()))
+    if not candidates:
+        return None
+    if len(candidates) == 1 or not query:
+        return candidates[0][0]
+    return _best_by_proximity(candidates, text, query)
 
 def _extract_number_answer_generic(text: str) -> str | None:
     return _extract_number_answer(text, "")
@@ -149,29 +171,61 @@ def _extract_percentage_answer(text: str) -> str | None:
     return None
 
 def _extract_name_answer(text: str, query: str) -> str | None:
-    # Multi-word capitalized names
-    names = re.findall(r"[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+", text)
-    if names:
-        return names[0]
-    # Single capitalized word near query terms
-    q_tokens = set(re.findall(r"\w{3,}", query.lower()))
-    for m in re.finditer(r"\b([A-Z][a-z]{2,})\b", text):
-        pos = m.start()
-        window = text[max(0, pos - 50):pos + 50].lower()
-        if any(t in window for t in q_tokens):
-            return m.group()
-    return None
+    candidates = []
+    for m in re.finditer(r"[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+", text):
+        candidates.append((m.group(), m.start()))
+    if not candidates:
+        q_tokens = set(re.findall(r"\w{3,}", query.lower()))
+        for m in re.finditer(r"\b([A-Z][a-z]{2,})\b", text):
+            pos = m.start()
+            window = text[max(0, pos - 50):pos + 50].lower()
+            if any(t in window for t in q_tokens):
+                candidates.append((m.group(), m.start()))
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0][0]
+    return _best_by_proximity(candidates, text, query)
 
 def _extract_yes_no(text: str, query: str) -> str | None:
     t = text.lower()
+    _negation_markers = [
+        "not ", "no ", "never ", "doesn't ", "didn't ", "isn't ", "wasn't ",
+        "weren't ", "won't ", "wouldn't ", "couldn't ", "shouldn't ",
+        "haven't ", "hasn't ", "can't ", "cannot ", "unable ", "failed to ",
+        "stopped ", "quit ", "gave up ",
+    ]
     q_tokens = set(re.findall(r"\w{3,}", query))
+    neg_hits = 0
+    pos_hits = 0
     for token in q_tokens:
         pos = t.find(token)
         if pos >= 0:
-            window = t[max(0, pos - 30):pos + 30]
-            if any(neg in window for neg in ["not ", "no ", "never ", "doesn't ", "didn't ", "isn't ", "wasn't "]):
-                return "No"
+            window = t[max(0, pos - 40):pos + 40]
+            if any(neg in window for neg in _negation_markers):
+                neg_hits += 1
+            else:
+                pos_hits += 1
+    if neg_hits > pos_hits:
+        return "No"
     return "Yes"
+
+
+# ── Query-proximity scoring ──────────────────────────────────────
+
+def _best_by_proximity(
+    candidates: list[tuple[str, int]], text: str, query: str,
+) -> str:
+    """Return the candidate closest to query terms in the text."""
+    q_tokens = set(re.findall(r"\w{3,}", query.lower()))
+    best_score, best_val = -1, candidates[0][0]
+    for val, pos in candidates:
+        window = text[max(0, pos - 80):pos + len(val) + 80].lower()
+        overlap = sum(1 for t in q_tokens if t in window)
+        if overlap > best_score:
+            best_score = overlap
+            best_val = val
+    return best_val
 
 
 # ── Fuzzy matching ───────────────────────────────────────────────

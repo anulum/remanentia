@@ -8,7 +8,7 @@ Contact: www.anulum.li | protoscience@anulum.li
 
 **Filesystem knowledge retrieval for persistent AI agent memory.**
 
-74.7% LOCOMO (1,986 questions) | <100ms queries | 243 tests | zero LLM calls
+BM25+embedding hybrid retrieval with RRF | 11 typed entity relation types | temporal reasoning with date arithmetic | async consolidation | thread-safe MCP server
 
 [remanentia.com](https://remanentia.com) | [GitHub](https://github.com/anulum/remanentia)
 
@@ -43,9 +43,67 @@ remanentia status
 
 ## Prerequisites
 
+```
+Query
+  |
+  v
+BM25 (real TF + inverted index) .............. first-pass retrieval
+  |
+  v
+Bi-encoder rerank (MiniLM-L6-v2) ............. semantic similarity
+  |
+  v
+Reciprocal Rank Fusion ........................ scale-invariant score fusion
+  |
+  v
+Cross-encoder rerank (MiniLM-L-6-v2) ......... fine-grained re-scoring
+  |
+  v
+Entity graph boost ............................ 11 typed relation types
+  |
+  v
+Temporal graph + date arithmetic .............. TReMu code execution
+  |
+  v
+Answer extraction ............................. query-proximity scoring
+  |
+  v
+Knowledge store (multi-hop graph search) ...... Zettelkasten + prospective queries
+```
+
+### Memory Types
+
+| Type | Storage | Example |
+|------|---------|---------|
+| Episodic | `reasoning_traces/*.md` | Raw session decisions |
+| Semantic | `memory/semantic/**/*.md` | Consolidated facts with YAML frontmatter |
+| Procedural | `skills/*.json` | Extracted skills and workflows |
+| Graph | `memory/graph/*.jsonl` | Entity-entity relations with evidence |
+
+### Components
+
+| File | Role |
+|------|------|
+| `memory_index.py` | Unified BM25 + embedding index, all scoring and ranking |
+| `memory_recall.py` | Deep recall: retrieval + graph + temporal context |
+| `mcp_server.py` | Thread-safe MCP server (stdio JSON-RPC), async consolidation |
+| `consolidation_engine.py` | Episodic -> semantic compression, typed relation extraction |
+| `knowledge_store.py` | Zettelkasten atomic notes, prospective triggers, graph search |
+| `temporal_graph.py` | Temporal event graph, relative date resolution, TReMu |
+| `entity_extractor.py` | GLiNER2 NER + regex fallback, 11 typed relation types |
+| `answer_extractor.py` | Query-proximity answer extraction, LLM fallback |
+| `observer.py` | Filesystem watcher -> incremental index updates |
+| `reflector.py` | Periodic cluster summarisation + gap detection |
+| `cli.py` | Command-line interface |
+| `api.py` | FastAPI REST server |
+
+### Prerequisites
+
 - Python 3.10+
 - numpy (required)
 - Optional: sentence-transformers (embedding rerank), torch (GPU), fastapi (REST API)
+
+## CLI
 
 ```bash
 pip install -e ".[all]"     # everything
