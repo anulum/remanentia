@@ -433,22 +433,28 @@ class TestGetClient:
 
     def test_with_api_key(self):
         import os
-        from unittest.mock import patch as p
+        import sys
+        from unittest.mock import patch as p, MagicMock
         from answer_extractor import _get_client
         import answer_extractor
         answer_extractor._ANTHROPIC_CLIENT = None
-        with p.dict(os.environ, {"ANTHROPIC_API_KEY": "test"}):
+        mock_anthropic = MagicMock()
+        with p.dict(os.environ, {"ANTHROPIC_API_KEY": "test"}), \
+             p.dict(sys.modules, {"anthropic": mock_anthropic}):
             client = _get_client()
         assert client is not None
         answer_extractor._ANTHROPIC_CLIENT = None
 
     def test_caches(self):
         import os
-        from unittest.mock import patch as p
+        import sys
+        from unittest.mock import patch as p, MagicMock
         from answer_extractor import _get_client
         import answer_extractor
         answer_extractor._ANTHROPIC_CLIENT = None
-        with p.dict(os.environ, {"ANTHROPIC_API_KEY": "test"}):
+        mock_anthropic = MagicMock()
+        with p.dict(os.environ, {"ANTHROPIC_API_KEY": "test"}), \
+             p.dict(sys.modules, {"anthropic": mock_anthropic}):
             c1 = _get_client()
             c2 = _get_client()
         assert c1 is c2
