@@ -1,6 +1,21 @@
 # Changelog
 
 All notable changes to Remanentia are documented here.
+Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+
+## [Unreleased]
+
+### Added
+- Rust STDP/LIF acceleration (arcane_stdp) — 2–3x speedup, bit-exact with numpy
+- Enterprise hardening: ARCHITECTURE, CONTRIBUTING, SECURITY, GOVERNANCE, ROADMAP, VALIDATION, NOTICE, CITATION.cff
+- MkDocs documentation site with 4 guides, 9 API refs, benchmarks, research
+- GitHub issue/PR templates, dependabot, CodeQL, Scorecard, stale bot workflows
+- README badges, header image, branding footer
+
+### Fixed
+- CI: PEP 639 license classifier conflict
+- CI: mock anthropic import in _get_client tests
+- SPDX headers: Sotek → Šotek across all source files
 
 ## [0.3.1] - 2026-03-26
 

@@ -1,0 +1,23 @@
+# Normalise line endings
+* text=auto
+
+# Python
+*.py text diff=python
+
+# Rust
+*.rs text diff=rust
+
+# Docs
+*.md text diff=markdown
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pkl binary
+*.npz binary
+*.whl binary
+
+# Linguist overrides
+docs/internal/** linguist-documentation
+*.md linguist-documentation

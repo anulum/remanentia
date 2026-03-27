@@ -1,0 +1,3 @@
+# Canonical source: pyproject.toml
+# This file provides pinned runtime deps for reproducible environments.
+numpy>=1.24

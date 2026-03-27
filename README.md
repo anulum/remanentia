@@ -6,7 +6,17 @@ Contact: www.anulum.li | protoscience@anulum.li
 
 # Remanentia
 
-**Filesystem knowledge retrieval for persistent AI agent memory.**
+[![CI](https://github.com/anulum/remanentia/actions/workflows/ci.yml/badge.svg)](https://github.com/anulum/remanentia/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/badge/version-0.3.1-blue)](https://github.com/anulum/remanentia)
+[![Coverage](https://img.shields.io/badge/coverage-96%25-brightgreen)](VALIDATION.md)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
+[![Rust](https://img.shields.io/badge/engine-Rust-orange)](docs/guides/PERFORMANCE_TUNING.md)
+[![REUSE](https://img.shields.io/badge/REUSE-compliant-green)](REUSE.toml)
+
+![Remanentia](docs/assets/remanentia_repo_header.png)
+
+**Persistent AI memory with SNN-orchestrated consolidation, entity graphs, and deep contextual recall.**
 
 BM25+embedding hybrid retrieval with RRF | 11 typed entity relation types | temporal reasoning with date arithmetic | async consolidation | thread-safe MCP server
 

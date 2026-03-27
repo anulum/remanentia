@@ -1,23 +1,59 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later | Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
 name: CI
 
 on:
   push:
     branches: [main]
+    paths: ["*.py", "tests/**", "pyproject.toml"]
   pull_request:
     branches: [main]
 
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.12"
+
+      - name: Install lint tools
+        run: pip install ruff bandit
+
+      - name: Ruff check
+        run: ruff check . --output-format=github
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: Bandit SAST
+        run: bandit -r memory_index.py mcp_server.py consolidation_engine.py cli.py api.py answer_extractor.py knowledge_store.py -q
+
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.12"]
-
+        python-version: ["3.10", "3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -27,9 +63,9 @@ jobs:
           pip install -e ".[dev,api]"
 
       - name: Run tests
-        run: |
-          python -m pytest tests/ -q --tb=short
+        run: python -m pytest tests/ -q --tb=short
 
       - name: Run tests with coverage
+        if: matrix.python-version == '3.12'
         run: |
-          python -m pytest tests/ --cov=memory_index --cov=consolidation_engine --cov=entity_extractor --cov=answer_extractor --cov=mcp_server --cov=memory_recall --cov=cli --cov=api --cov-report=term-missing --cov-fail-under=70 -q --tb=short
+          python -m pytest tests/ --cov=. --cov-config=pyproject.toml --cov-report=term-missing --cov-fail-under=70 -q --tb=short

@@ -1,0 +1,28 @@
+{
+  "title": "Remanentia: Persistent AI Memory with SNN-Orchestrated Consolidation",
+  "version": "0.3.1",
+  "description": "Filesystem knowledge retrieval for persistent AI agent memory. BM25+embedding hybrid retrieval with SNN-orchestrated consolidation, entity graphs, and deep contextual recall.",
+  "creators": [
+    {
+      "name": "Šotek, Miroslav",
+      "orcid": "0009-0009-3560-0851",
+      "affiliation": "ANULUM"
+    }
+  ],
+  "license": "AGPL-3.0-or-later",
+  "keywords": [
+    "memory",
+    "ai-agents",
+    "spiking-neural-network",
+    "consolidation",
+    "retrieval",
+    "neuromorphic"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/anulum/remanentia",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Support
+    url: https://github.com/anulum/remanentia/blob/main/SUPPORT.md
+    about: Get help with Remanentia
+  - name: Discussions
+    url: https://github.com/anulum/remanentia/discussions
+    about: Ask questions and share ideas

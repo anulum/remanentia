@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+title: Remanentia
+message: "If you use this software, please cite it as below."
+type: software
+version: 0.3.1
+date-released: "2026-03-27"
+license: AGPL-3.0-or-later
+repository-code: "https://github.com/anulum/remanentia"
+url: "https://remanentia.com"
+authors:
+  - family-names: Šotek
+    given-names: Miroslav
+    orcid: "https://orcid.org/0009-0009-3560-0851"
+    affiliation: ANULUM
+keywords:
+  - memory
+  - ai-agents
+  - spiking-neural-network
+  - consolidation
+  - retrieval
+  - neuromorphic
+  - stdp
+  - entity-graph
+  - mcp
