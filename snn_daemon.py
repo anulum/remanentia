@@ -47,6 +47,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger("ArcSap.SNN")
 
+# Rust STDP/LIF acceleration (optional)
+_RUST_STDP = None
+_RUST_LIF = None
+try:
+    from arcane_stdp import stdp_batch as _RUST_STDP, lif_step as _RUST_LIF
+    logger.info("Rust STDP/LIF loaded (arcane_stdp)")
+except ImportError:
+    pass
+
 BASE_DIR = Path(__file__).parent
 STATE_DIR = BASE_DIR / "snn_state"
 STIMULUS_DIR = BASE_DIR / "snn_stimuli"
@@ -119,7 +128,7 @@ class SimpleLIFNetwork:
         self.dt = dt
         self.rng = np.random.default_rng(seed)
 
-        self.v = self.rng.uniform(-70.0, -55.0, n_neurons)
+        self.v = self.rng.uniform(-70.0, -55.0, n_neurons).astype(np.float32)
 
         self.v_rest = -65.0
         self.v_thresh = -55.0
@@ -152,13 +161,14 @@ class SimpleLIFNetwork:
                 targets = self.rng.choice(n_neurons, n_connections, replace=False)
                 self.w[i, targets] = self.rng.uniform(0.1, 0.6, n_connections)
         np.fill_diagonal(self.w, 0)
+        self.w = self.w.astype(np.float32)
 
         # Spike history for STDP
-        self.last_spike = np.full(n_neurons, -1000.0)
+        self.last_spike = np.full(n_neurons, -1000.0, dtype=np.float32)
         self.t = 0.0
 
         # Input current (tonic baseline keeps network alive)
-        self.i_ext = np.full(n_neurons, 0.3)
+        self.i_ext = np.full(n_neurons, 0.3, dtype=np.float32)
 
     def run(self, duration: float, arcane_neurons=None):
         """Run the network for `duration` seconds.
@@ -173,26 +183,39 @@ class SimpleLIFNetwork:
         # Each ArcaneNeuron maps to a contiguous group of LIF neurons
         group_size = self.n // n_arcane if n_arcane > 0 else 0
 
+        use_rust_lif = _RUST_LIF is not None
+
         for _ in range(steps):
             self.t += self.dt
 
-            # Synaptic input from connected neurons
-            fired = self.v >= self.v_thresh
-            i_syn = self.w @ fired.astype(float)
+            if use_rust_lif:
+                spike_idx = _RUST_LIF(
+                    self.v, self.w, self.i_ext,
+                    np.float32(self.v_rest), np.float32(self.v_thresh),
+                    np.float32(self.v_reset), np.float32(self.tau_m),
+                    np.float32(self.dt_ms),
+                )
+                n_spiked = len(spike_idx)
+                if n_spiked > 0:
+                    spikes_total += n_spiked
+                    spiked = np.zeros(self.n, dtype=bool)
+                    spiked[spike_idx.astype(np.intp)] = True
+                    self._apply_stdp(spiked)
+                    self.last_spike[spiked] = self.t
+                else:
+                    spiked = np.zeros(self.n, dtype=bool)
+            else:
+                fired = self.v >= self.v_thresh
+                i_syn = self.w @ fired.astype(np.float32)
+                dv = (-(self.v - self.v_rest) / self.tau_m + self.i_ext + i_syn * 0.5) * self.dt_ms
+                self.v += dv
+                spiked = self.v >= self.v_thresh
+                if spiked.any():
+                    spikes_total += spiked.sum()
+                    self._apply_stdp(spiked)
+                    self.v[spiked] = self.v_reset
+                    self.last_spike[spiked] = self.t
 
-            # LIF dynamics: dv/dt = -(v - v_rest)/tau_m + I (all in ms)
-            dv = (-(self.v - self.v_rest) / self.tau_m + self.i_ext + i_syn * 0.5) * self.dt_ms
-            self.v += dv
-
-            # Spike and reset
-            spiked = self.v >= self.v_thresh
-            if spiked.any():
-                spikes_total += spiked.sum()
-                self._apply_stdp(spiked)
-                self.v[spiked] = self.v_reset
-                self.last_spike[spiked] = self.t
-
-            # Drive ArcaneNeurons from LIF group spike rates
             if n_arcane > 0:
                 for i, an in enumerate(arcane_neurons):
                     start = i * group_size
@@ -203,24 +226,27 @@ class SimpleLIFNetwork:
         return spikes_total
 
     def _apply_stdp(self, spiked):
-        """Spike-timing-dependent plasticity."""
-        tau_plus = 20.0
-        tau_minus = 20.0
-        a_plus = 0.005
-        a_minus = 0.005
+        """Spike-timing-dependent plasticity.
+
+        Uses Rust arcane_stdp when available, falls back to numpy.
+        """
+        if _RUST_STDP is not None:
+            spike_f = spiked.astype(np.float32)
+            mask = (self.w > 0).astype(np.float32)
+            _RUST_STDP(
+                self.w, spike_f, self.last_spike,
+                float(self.t), mask,
+                0.005, 0.005, 20.0, 2.0,
+            )
+            return
 
         spike_idx = np.where(spiked)[0]
-        dt_pre = self.t - self.last_spike  # hoist outside loop
+        dt_pre = self.t - self.last_spike
         for i in spike_idx:
-            # LTP: neuron i fired (post). Strengthen from pre neurons
-            # that fired recently before i (dt > 0 = causal)
             mask_ltp = (dt_pre > 0) & (dt_pre < 100)
-            dw = a_plus * np.exp(-dt_pre / tau_plus) * mask_ltp
+            dw = 0.005 * np.exp(-dt_pre / 20.0) * mask_ltp
             self.w[i, :] = np.clip(self.w[i, :] + dw, 0, 2)
-
-            # LTD: neuron i fired (pre). Weaken connections TO neurons
-            # that fired before i (anti-causal direction)
-            dw_neg = a_minus * np.exp(-dt_pre / tau_minus) * mask_ltp
+            dw_neg = 0.005 * np.exp(-dt_pre / 20.0) * mask_ltp
             self.w[:, i] = np.clip(self.w[:, i] - dw_neg, 0, 2)
 
     def inject_stimulus(self, pattern: np.ndarray):

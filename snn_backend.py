@@ -39,6 +39,15 @@ import numpy as np
 
 logger = logging.getLogger("ArcSap.Backend")
 
+# Rust STDP/LIF acceleration (optional, ~10-50x speedup on CPU)
+_RUST_STDP = None
+_RUST_LIF = None
+try:
+    from arcane_stdp import stdp_batch as _RUST_STDP, lif_step as _RUST_LIF
+    logger.info("Rust STDP/LIF loaded (arcane_stdp)")
+except ImportError:
+    pass
+
 _HASH_PRIMES = [7919, 104729, 15485863, 32452843, 49979687, 67867967, 86028121]
 
 # LIF parameters (shared across backends)
@@ -309,24 +318,39 @@ class DenseCPULIFNetwork(_BaseLIFNetwork):
         spikes_total = 0
         n_arcane = len(arcane_neurons) if arcane_neurons else 0
         group_size = self.n // n_arcane if n_arcane > 0 else 0
+        use_rust_lif = _RUST_LIF is not None
 
         for step in range(steps):
             self.t += self.dt
-            fired = (self.v >= V_THRESH).astype(np.float32)
-            i_syn = self.w @ fired  # BLAS GEMV — the fast path
 
-            dv = (-(self.v - V_REST) / TAU_M + self.i_ext + i_syn * 0.5) * self.dt_ms
-            self.v += dv
-
-            spiked = self.v >= V_THRESH
-            if spiked.any():
-                n_spiked = int(spiked.sum())
-                spikes_total += n_spiked
-                # Vectorized STDP every 10 steps (amortize cost)
-                if step % 10 == 0:
-                    self._apply_stdp_batch(spiked)
-                self.v[spiked] = V_RESET
-                self.last_spike[spiked] = self.t
+            if use_rust_lif:
+                spike_idx = _RUST_LIF(
+                    self.v, self.w, self.i_ext,
+                    V_REST, V_THRESH, V_RESET, TAU_M, self.dt_ms,
+                )
+                n_spiked = len(spike_idx)
+                if n_spiked > 0:
+                    spikes_total += n_spiked
+                    spiked = np.zeros(self.n, dtype=bool)
+                    spiked[spike_idx.astype(np.intp)] = True
+                    if step % 10 == 0:
+                        self._apply_stdp_batch(spiked)
+                    self.last_spike[spiked] = self.t
+                else:
+                    spiked = np.zeros(self.n, dtype=bool)
+            else:
+                fired = (self.v >= V_THRESH).astype(np.float32)
+                i_syn = self.w @ fired
+                dv = (-(self.v - V_REST) / TAU_M + self.i_ext + i_syn * 0.5) * self.dt_ms
+                self.v += dv
+                spiked = self.v >= V_THRESH
+                if spiked.any():
+                    n_spiked = int(spiked.sum())
+                    spikes_total += n_spiked
+                    if step % 10 == 0:
+                        self._apply_stdp_batch(spiked)
+                    self.v[spiked] = V_RESET
+                    self.last_spike[spiked] = self.t
 
             if n_arcane > 0:
                 for i, an in enumerate(arcane_neurons):
@@ -340,24 +364,24 @@ class DenseCPULIFNetwork(_BaseLIFNetwork):
     def _apply_stdp_batch(self, spiked: np.ndarray) -> None:
         """Fully vectorized STDP via masked outer product.
 
-        dW = A+ × spike_post ⊗ exp(-dt/τ) × mask   (LTP)
-           - A- × exp(-dt/τ) ⊗ spike_post × mask   (LTD)
-
-        Single numpy operation, no Python loops.
+        Uses Rust arcane_stdp when available (~10-50x speedup).
+        Falls back to numpy outer product.
         """
+        if _RUST_STDP is not None:
+            spike_f = spiked.astype(np.float32)
+            _RUST_STDP(
+                self.w, spike_f, self.last_spike.astype(np.float32),
+                float(self.t), self.mask,
+                STDP_A_PLUS, STDP_A_MINUS, STDP_TAU, STDP_W_MAX,
+            )
+            return
+
         dt_pre = (self.t - self.last_spike).astype(np.float32)
         valid = (dt_pre > 0) & (dt_pre < 100)
-        trace = np.exp(-dt_pre / STDP_TAU) * valid  # (N,)
-        spike_f = spiked.astype(np.float32)  # (N,)
-
-        # LTP: rows of spiked post-synaptic neurons strengthened
-        # dW[post, pre] += A+ × spike_post[post] × trace[pre]
+        trace = np.exp(-dt_pre / STDP_TAU) * valid
+        spike_f = spiked.astype(np.float32)
         dw_ltp = STDP_A_PLUS * np.outer(spike_f, trace)
-
-        # LTD: columns of spiked pre-synaptic neurons weakened
-        # dW[post, pre] -= A- × trace[post] × spike_post[pre]
         dw_ltd = STDP_A_MINUS * np.outer(trace, spike_f)
-
         self.w += (dw_ltp - dw_ltd) * self.mask
         np.clip(self.w, 0, STDP_W_MAX, out=self.w)
 
