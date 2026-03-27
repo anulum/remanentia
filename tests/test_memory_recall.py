@@ -105,8 +105,20 @@ class TestMemoryContext:
 class TestFindRelated:
     def test_finds_connected(self):
         relations = [
-            {"source": "stdp", "target": "remanentia", "type": "co_occurs", "weight": 6, "evidence": []},
-            {"source": "bm25", "target": "remanentia", "type": "used_in", "weight": 5, "evidence": []},
+            {
+                "source": "stdp",
+                "target": "remanentia",
+                "type": "co_occurs",
+                "weight": 6,
+                "evidence": [],
+            },
+            {
+                "source": "bm25",
+                "target": "remanentia",
+                "type": "used_in",
+                "weight": 5,
+                "evidence": [],
+            },
         ]
         result = _find_related("remanentia", relations, top_k=5)
         assert len(result) == 2
@@ -161,15 +173,19 @@ class TestEntitiesForQuery:
 
 class TestSearchSemantic:
     def test_finds_matching(self, tmp_semantic):
-        with patch("memory_recall.SEMANTIC_DIR", tmp_semantic), \
-             patch("memory_recall.BASE", tmp_semantic.parent):
+        with (
+            patch("memory_recall.SEMANTIC_DIR", tmp_semantic),
+            patch("memory_recall.BASE", tmp_semantic.parent),
+        ):
             results = _search_semantic("SNN removal decision", top_k=5)
         assert len(results) > 0
         assert any("decision" in r["path"].lower() for r in results)
 
     def test_no_match(self, tmp_semantic):
-        with patch("memory_recall.SEMANTIC_DIR", tmp_semantic), \
-             patch("memory_recall.BASE", tmp_semantic.parent):
+        with (
+            patch("memory_recall.SEMANTIC_DIR", tmp_semantic),
+            patch("memory_recall.BASE", tmp_semantic.parent),
+        ):
             results = _search_semantic("xyznonexistent_zzz", top_k=5)
         assert results == []
 
@@ -179,8 +195,10 @@ class TestSearchSemantic:
         assert results == []
 
     def test_parses_frontmatter(self, tmp_semantic):
-        with patch("memory_recall.SEMANTIC_DIR", tmp_semantic), \
-             patch("memory_recall.BASE", tmp_semantic.parent):
+        with (
+            patch("memory_recall.SEMANTIC_DIR", tmp_semantic),
+            patch("memory_recall.BASE", tmp_semantic.parent),
+        ):
             results = _search_semantic("remanentia decision", top_k=5)
         if results:
             assert results[0]["project"] == "remanentia"
@@ -257,8 +275,20 @@ class TestCrossProjectInsights:
             "stdp": {"id": "stdp", "type": "concept", "label": "STDP"},
         }
         relations = [
-            {"source": "stdp", "target": "remanentia", "type": "co_occurs", "weight": 5, "evidence": []},
-            {"source": "stdp", "target": "director-ai", "type": "co_occurs", "weight": 3, "evidence": []},
+            {
+                "source": "stdp",
+                "target": "remanentia",
+                "type": "co_occurs",
+                "weight": 5,
+                "evidence": [],
+            },
+            {
+                "source": "stdp",
+                "target": "director-ai",
+                "type": "co_occurs",
+                "weight": 3,
+                "evidence": [],
+            },
         ]
         insights = _cross_project_insights(["stdp"], "remanentia", entities, relations)
         projects = [i["project"] for i in insights]
@@ -300,28 +330,34 @@ class TestLoadEntities:
 
 class TestRecall:
     def test_recall_basic(self, tmp_traces, tmp_graph, tmp_semantic):
-        with patch("memory_recall.TRACES_DIR", tmp_traces), \
-             patch("memory_recall.SEMANTIC_DIR", tmp_semantic), \
-             patch("memory_recall.GRAPH_DIR", tmp_graph), \
-             patch("memory_recall.BASE", tmp_traces.parent):
+        with (
+            patch("memory_recall.TRACES_DIR", tmp_traces),
+            patch("memory_recall.SEMANTIC_DIR", tmp_semantic),
+            patch("memory_recall.GRAPH_DIR", tmp_graph),
+            patch("memory_recall.BASE", tmp_traces.parent),
+        ):
             ctx = recall("SNN removal decision", top_k=3, include_content=False)
         assert ctx.query == "SNN removal decision"
         assert isinstance(ctx.elapsed_ms, float)
         assert isinstance(ctx.entities, list)
 
     def test_recall_with_semantic(self, tmp_traces, tmp_graph, tmp_semantic):
-        with patch("memory_recall.TRACES_DIR", tmp_traces), \
-             patch("memory_recall.SEMANTIC_DIR", tmp_semantic), \
-             patch("memory_recall.GRAPH_DIR", tmp_graph), \
-             patch("memory_recall.BASE", tmp_semantic.parent):
+        with (
+            patch("memory_recall.TRACES_DIR", tmp_traces),
+            patch("memory_recall.SEMANTIC_DIR", tmp_semantic),
+            patch("memory_recall.GRAPH_DIR", tmp_graph),
+            patch("memory_recall.BASE", tmp_semantic.parent),
+        ):
             ctx = recall("remanentia decision SNN", top_k=3)
         assert len(ctx.semantic_memories) > 0
 
     def test_recall_novelty(self, tmp_traces, tmp_graph, tmp_semantic):
-        with patch("memory_recall.TRACES_DIR", tmp_traces), \
-             patch("memory_recall.SEMANTIC_DIR", tmp_semantic), \
-             patch("memory_recall.GRAPH_DIR", tmp_graph), \
-             patch("memory_recall.BASE", tmp_traces.parent):
+        with (
+            patch("memory_recall.TRACES_DIR", tmp_traces),
+            patch("memory_recall.SEMANTIC_DIR", tmp_semantic),
+            patch("memory_recall.GRAPH_DIR", tmp_graph),
+            patch("memory_recall.BASE", tmp_traces.parent),
+        ):
             ctx = recall("completely unknown topic xyzfoo", top_k=1)
         assert ctx.novelty_score > 0
 

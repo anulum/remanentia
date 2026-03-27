@@ -15,6 +15,7 @@
 7. Query-proximity answer extraction
 8. Raised chunking limits
 """
+
 from __future__ import annotations
 
 import time
@@ -31,6 +32,7 @@ import numpy as np
 class TestTokenCounts:
     def test_counts_occurrences(self):
         from memory_index import _token_counts
+
         counts = _token_counts(["hello", "world", "hello", "test", "hello"])
         assert counts["hello"] == 3
         assert counts["world"] == 1
@@ -38,10 +40,12 @@ class TestTokenCounts:
 
     def test_empty_list(self):
         from memory_index import _token_counts
+
         assert _token_counts([]) == {}
 
     def test_single_token(self):
         from memory_index import _token_counts
+
         assert _token_counts(["foo"]) == {"foo": 1}
 
 
@@ -50,14 +54,21 @@ class TestRealTFInBM25:
         """A paragraph mentioning a query term 5 times should score higher
         than one mentioning it once, all else equal."""
         from memory_index import MemoryIndex, _tokenize
+
         idx = MemoryIndex()
         idx._built = True
 
         # Manually set up two paragraphs
         from memory_index import Document
-        doc = Document(name="test.md", source="test", path="/test",
-                       paragraphs=["alpha beta gamma", "alpha alpha alpha alpha alpha"],
-                       date="2026-03-26", doc_type="test")
+
+        doc = Document(
+            name="test.md",
+            source="test",
+            path="/test",
+            paragraphs=["alpha beta gamma", "alpha alpha alpha alpha alpha"],
+            date="2026-03-26",
+            doc_type="test",
+        )
         idx.documents = [doc]
         idx.paragraph_index = [(0, 0), (0, 1)]
         tokens_0 = set(_tokenize("alpha beta gamma"))
@@ -90,6 +101,7 @@ class TestRealTFInBM25:
 class TestDFBasedIDF:
     def test_add_file_tracks_df(self, tmp_path):
         from memory_index import MemoryIndex
+
         idx = MemoryIndex()
         idx._built = True
         idx.documents = []
@@ -106,7 +118,9 @@ class TestDFBasedIDF:
         idx._rust_bm25 = None
 
         f1 = tmp_path / "test1.md"
-        f1.write_text("This is a test document about memory retrieval systems and their performance.")
+        f1.write_text(
+            "This is a test document about memory retrieval systems and their performance."
+        )
         idx.add_file(f1, source="test")
 
         f2 = tmp_path / "test2.md"
@@ -117,6 +131,7 @@ class TestDFBasedIDF:
         assert idx._df.get("memory", 0) >= 2
         # IDF should be computed from real df, not approximated
         import math
+
         n = len(idx.paragraph_tokens)
         expected_idf = math.log(1 + n / (1 + idx._df["memory"]))
         assert abs(idx.idf["memory"] - expected_idf) < 0.01
@@ -125,6 +140,7 @@ class TestDFBasedIDF:
 class TestSaveLoadTokenCounts:
     def test_round_trip(self, tmp_path):
         from memory_index import MemoryIndex
+
         idx = MemoryIndex()
         idx._built = True
         idx.documents = []
@@ -154,6 +170,7 @@ class TestSaveLoadTokenCounts:
 class TestRRF:
     def test_basic_fusion(self):
         from memory_index import _reciprocal_rank_fusion
+
         list_a = [(10, 5.0), (20, 4.0), (30, 3.0)]
         list_b = [(20, 9.0), (30, 8.0), (10, 7.0)]
         fused = _reciprocal_rank_fusion([list_a, list_b], k=60)
@@ -165,6 +182,7 @@ class TestRRF:
 
     def test_item_in_both_lists_ranks_higher(self):
         from memory_index import _reciprocal_rank_fusion
+
         list_a = [(10, 5.0), (20, 4.0)]
         list_b = [(10, 9.0), (30, 8.0)]
         fused = _reciprocal_rank_fusion([list_a, list_b], k=60)
@@ -173,16 +191,19 @@ class TestRRF:
 
     def test_single_list(self):
         from memory_index import _reciprocal_rank_fusion
+
         ranked = [(5, 10.0), (3, 8.0), (7, 6.0)]
         fused = _reciprocal_rank_fusion([ranked], k=60)
         assert [idx for idx, _ in fused] == [5, 3, 7]
 
     def test_empty_lists(self):
         from memory_index import _reciprocal_rank_fusion
+
         assert _reciprocal_rank_fusion([[], []], k=60) == []
 
     def test_k_parameter_affects_scores(self):
         from memory_index import _reciprocal_rank_fusion
+
         ranked = [(1, 10.0), (2, 5.0)]
         fused_k1 = _reciprocal_rank_fusion([ranked], k=1)
         fused_k100 = _reciprocal_rank_fusion([ranked], k=100)
@@ -198,36 +219,42 @@ class TestRRF:
 class TestRelativeDateResolution:
     def test_yesterday(self):
         from temporal_graph import parse_dates
+
         ref = date(2026, 3, 26)
         dates = parse_dates("Saw it yesterday.", reference_date=ref)
         assert "2026-03-25" in dates
 
     def test_today(self):
         from temporal_graph import parse_dates
+
         ref = date(2026, 3, 26)
         dates = parse_dates("Deployed today.", reference_date=ref)
         assert "2026-03-26" in dates
 
     def test_last_week(self):
         from temporal_graph import parse_dates
+
         ref = date(2026, 3, 26)
         dates = parse_dates("Fixed last week.", reference_date=ref)
         assert "2026-03-19" in dates
 
     def test_last_month(self):
         from temporal_graph import parse_dates
+
         ref = date(2026, 3, 26)
         dates = parse_dates("Released last month.", reference_date=ref)
         assert "2026-02-26" in dates
 
     def test_last_year(self):
         from temporal_graph import parse_dates
+
         ref = date(2026, 3, 26)
         dates = parse_dates("Started last year.", reference_date=ref)
         assert "2025-03-26" in dates
 
     def test_this_week(self):
         from temporal_graph import parse_dates
+
         ref = date(2026, 3, 26)  # Thursday
         dates = parse_dates("Happening this week.", reference_date=ref)
         # Should resolve to Monday of current week
@@ -235,18 +262,21 @@ class TestRelativeDateResolution:
 
     def test_this_month(self):
         from temporal_graph import parse_dates
+
         ref = date(2026, 3, 26)
         dates = parse_dates("Updated this month.", reference_date=ref)
         assert "2026-03-01" in dates
 
     def test_this_year(self):
         from temporal_graph import parse_dates
+
         ref = date(2026, 3, 26)
         dates = parse_dates("Released this year.", reference_date=ref)
         assert "2026-01-01" in dates
 
     def test_mixed_absolute_and_relative(self):
         from temporal_graph import parse_dates
+
         ref = date(2026, 3, 26)
         dates = parse_dates("Fixed 2026-03-15, tested yesterday.", reference_date=ref)
         assert "2026-03-15" in dates
@@ -254,6 +284,7 @@ class TestRelativeDateResolution:
 
     def test_no_reference_uses_today(self):
         from temporal_graph import parse_dates
+
         dates = parse_dates("Deployed today.")
         assert date.today().isoformat() in dates
 
@@ -261,12 +292,14 @@ class TestRelativeDateResolution:
 class TestResolveRelativeDate:
     def test_unknown_expression_returns_none(self):
         from temporal_graph import _resolve_relative_date
+
         assert _resolve_relative_date("next century", date(2026, 3, 26)) is None
 
 
 class TestDateBucketedEdgeBuilding:
     def test_same_day_edges(self):
         from temporal_graph import TemporalGraph, TemporalEvent
+
         tg = TemporalGraph()
         events = [
             TemporalEvent(date="2026-03-15", text="Event A", source="a.md"),
@@ -278,6 +311,7 @@ class TestDateBucketedEdgeBuilding:
 
     def test_adjacent_date_edges(self):
         from temporal_graph import TemporalGraph, TemporalEvent
+
         tg = TemporalGraph()
         events = [
             TemporalEvent(date="2026-03-15", text="First event", source="a.md"),
@@ -289,10 +323,11 @@ class TestDateBucketedEdgeBuilding:
 
     def test_no_quadratic_explosion(self):
         from temporal_graph import TemporalGraph, TemporalEvent
+
         tg = TemporalGraph()
         # 100 events on 100 different dates
         events = [
-            TemporalEvent(date=f"2026-01-{i+1:02d}", text=f"Event {i}", source=f"e{i}.md")
+            TemporalEvent(date=f"2026-01-{i + 1:02d}", text=f"Event {i}", source=f"e{i}.md")
             for i in range(100)
         ]
         tg.add_events(events)
@@ -301,6 +336,7 @@ class TestDateBucketedEdgeBuilding:
 
     def test_incremental_add_creates_cross_edges(self):
         from temporal_graph import TemporalGraph, TemporalEvent
+
         tg = TemporalGraph()
         tg.add_events([TemporalEvent(date="2026-03-15", text="Old event", source="a.md")])
         tg.add_events([TemporalEvent(date="2026-03-15", text="New event", source="b.md")])
@@ -311,6 +347,7 @@ class TestDateBucketedEdgeBuilding:
 class TestQueryRelevantDateExtraction:
     def test_returns_most_relevant_date(self):
         from answer_extractor import _extract_date_answer
+
         # Dates far apart so query-proximity window can distinguish them
         text = (
             "The project was initiated on 2026-01-10 with the initial planning phase. "
@@ -324,11 +361,13 @@ class TestQueryRelevantDateExtraction:
 
     def test_single_date_no_query(self):
         from answer_extractor import _extract_date_answer
+
         text = "Released on 2026-03-20."
         assert _extract_date_answer(text) == "2026-03-20"
 
     def test_falls_back_to_first_when_no_query(self):
         from answer_extractor import _extract_date_answer
+
         text = "2026-03-01 and 2026-03-15 and 2026-03-20."
         assert _extract_date_answer(text, query="") == "2026-03-01"
 
@@ -339,6 +378,7 @@ class TestQueryRelevantDateExtraction:
 class TestTypedRelationsInGraph:
     def test_extract_typed_relations(self):
         from consolidation_engine import _extract_typed_relations
+
         text = "The STDP bug was fixed by Miroslav. BM25 depends on scikit-learn."
         entities = ["stdp", "miroslav", "bm25", "scikit-learn"]
         typed = _extract_typed_relations(text, entities)
@@ -349,6 +389,7 @@ class TestTypedRelationsInGraph:
 
     def test_co_occurs_fallback(self):
         from consolidation_engine import _extract_typed_relations
+
         text = "We used BM25 and embedding for retrieval."
         entities = ["bm25", "embedding"]
         typed = _extract_typed_relations(text, entities)
@@ -357,13 +398,17 @@ class TestTypedRelationsInGraph:
 
     def test_update_graph_with_typed_relations(self, tmp_path):
         from consolidation_engine import _update_graph, _load_relations
-        with patch("consolidation_engine.GRAPH_DIR", tmp_path), \
-             patch("consolidation_engine.ENTITIES_PATH", tmp_path / "entities.jsonl"), \
-             patch("consolidation_engine.RELATIONS_PATH", tmp_path / "relations.jsonl"):
+
+        with (
+            patch("consolidation_engine.GRAPH_DIR", tmp_path),
+            patch("consolidation_engine.ENTITIES_PATH", tmp_path / "entities.jsonl"),
+            patch("consolidation_engine.RELATIONS_PATH", tmp_path / "relations.jsonl"),
+        ):
             _update_graph(
                 "test_trace.md",
                 ["stdp", "miroslav"],
-                "test", "2026-03-26",
+                "test",
+                "2026-03-26",
                 text="The STDP bug was fixed by Miroslav in the LIF module.",
             )
             rels = _load_relations()
@@ -376,6 +421,7 @@ class TestTypedRelationsInGraph:
 class TestEntityBoostWithTypedRelations:
     def test_typed_relation_boost(self):
         from memory_index import _entity_boost_score
+
         graph = {
             "entities": {
                 "stdp": {"id": "stdp", "label": "stdp"},
@@ -392,6 +438,7 @@ class TestEntityBoostWithTypedRelations:
 
     def test_co_occurs_no_extra_boost(self):
         from memory_index import _entity_boost_score
+
         graph = {
             "entities": {
                 "stdp": {"id": "stdp", "label": "stdp"},
@@ -412,6 +459,7 @@ class TestEntityBoostWithTypedRelations:
 class TestAsyncConsolidation:
     def test_debounce_prevents_rapid_fire(self):
         import mcp_server
+
         original_last = mcp_server._consolidation_last
         try:
             # Set last consolidation to "just now"
@@ -425,6 +473,7 @@ class TestAsyncConsolidation:
 
     def test_consolidation_runs_after_debounce(self):
         import mcp_server
+
         original_last = mcp_server._consolidation_last
         try:
             # Set last consolidation to long ago
@@ -444,6 +493,7 @@ class TestAsyncConsolidation:
 class TestThreadSafety:
     def test_concurrent_knowledge_store_init(self):
         import mcp_server
+
         original_ks = mcp_server._KNOWLEDGE_STORE
         try:
             mcp_server._KNOWLEDGE_STORE = None
@@ -471,6 +521,7 @@ class TestThreadSafety:
 class TestBestByProximity:
     def test_selects_nearest_to_query(self):
         from answer_extractor import _best_by_proximity
+
         # Spread candidates far apart so 80-char windows don't overlap
         text = (
             "The alpha channel has a precision of 42% which is measured on the validation set. "
@@ -488,6 +539,7 @@ class TestBestByProximity:
 
     def test_single_candidate(self):
         from answer_extractor import _best_by_proximity
+
         best = _best_by_proximity([("42%", 10)], "Score is 42%.", "what score")
         assert best == "42%"
 
@@ -495,12 +547,14 @@ class TestBestByProximity:
 class TestImprovedYesNo:
     def test_multiple_negation_markers(self):
         from answer_extractor import _extract_yes_no
+
         text = "The system couldn't handle it and wasn't able to recover."
         result = _extract_yes_no(text, "can the system handle errors")
         assert result == "No"
 
     def test_positive_context(self):
         from answer_extractor import _extract_yes_no
+
         text = "Yes, the system handles errors gracefully and recovers."
         result = _extract_yes_no(text, "can the system handle errors")
         assert result == "Yes"
@@ -509,6 +563,7 @@ class TestImprovedYesNo:
 class TestNumberProximity:
     def test_returns_query_relevant_number(self):
         from answer_extractor import _extract_number_answer
+
         text = "We have 500 documents. The precision is 92.5. There are 3 clusters."
         result = _extract_number_answer(text, "how many documents")
         assert result == "500"
@@ -520,14 +575,17 @@ class TestNumberProximity:
 class TestChunkingLimits:
     def test_max_code_chunk_chars_raised(self):
         from memory_index import MAX_CODE_CHUNK_CHARS
+
         assert MAX_CODE_CHUNK_CHARS >= 1000
 
     def test_max_code_chunks_raised(self):
         from memory_index import MAX_CODE_CHUNKS
+
         assert MAX_CODE_CHUNKS >= 200
 
     def test_large_file_not_silently_truncated(self):
         from memory_index import _split_python_code
+
         # Generate a file with 100 functions of ~50 chars each
         lines = []
         for i in range(100):

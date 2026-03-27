@@ -14,6 +14,7 @@ Typed relations: pattern matching on connecting text between entities.
 "because" → caused_by, "fixed" → fixed_by, "replaced" → replaced,
 "contradicts" → contradicts, "version" → version_of.
 """
+
 from __future__ import annotations
 
 import re
@@ -23,10 +24,19 @@ from dataclasses import dataclass
 _GLINER_MODEL = None
 
 ENTITY_LABELS = [
-    "person", "project", "software tool", "hardware",
-    "algorithm", "file path", "metric value", "version number",
-    "neural network model", "benchmark", "mathematical concept",
-    "programming language", "scientific concept",
+    "person",
+    "project",
+    "software tool",
+    "hardware",
+    "algorithm",
+    "file path",
+    "metric value",
+    "version number",
+    "neural network model",
+    "benchmark",
+    "mathematical concept",
+    "programming language",
+    "scientific concept",
 ]
 
 RELATION_PATTERNS = [
@@ -67,6 +77,7 @@ def _load_gliner():  # pragma: no cover
     try:
         from gliner import GLiNER
         import torch
+
         device = "cuda" if torch.cuda.is_available() else "cpu"
         _GLINER_MODEL = GLiNER.from_pretrained("urchade/gliner_multi-v2.1")
         if device == "cuda":
@@ -84,18 +95,20 @@ def extract_entities(text: str, labels: list[str] | None = None) -> list[Entity]
     if model is not None:
         # GLiNER extraction — process in chunks (max 512 tokens)
         entities = []
-        chunks = [text[i:i + 1500] for i in range(0, len(text), 1500)]
+        chunks = [text[i : i + 1500] for i in range(0, len(text), 1500)]
         for chunk in chunks[:20]:  # cap at 20 chunks per document
             try:
                 preds = model.predict_entities(chunk, labels, threshold=0.4)
                 for p in preds:
-                    entities.append(Entity(
-                        text=p["text"],
-                        label=p["label"],
-                        score=p["score"],
-                        start=p.get("start", 0),
-                        end=p.get("end", 0),
-                    ))
+                    entities.append(
+                        Entity(
+                            text=p["text"],
+                            label=p["label"],
+                            score=p["score"],
+                            start=p.get("start", 0),
+                            end=p.get("end", 0),
+                        )
+                    )
             except Exception:  # pragma: no cover
                 continue
         # Deduplicate by text
@@ -118,10 +131,26 @@ def _regex_entities(text: str) -> list[Entity]:
     text_lower = text.lower()
 
     patterns = {
-        "project": ["director-ai", "sc-neurocore", "scpn-control", "scpn-fusion",
-                     "scpn-phase-orchestrator", "scpn-quantum-control", "remanentia"],
-        "algorithm": ["stdp", "lif", "kuramoto", "hopfield", "bcpnn", "csdp",
-                       "tf-idf", "bm25", "stuart-landau"],
+        "project": [
+            "director-ai",
+            "sc-neurocore",
+            "scpn-control",
+            "scpn-fusion",
+            "scpn-phase-orchestrator",
+            "scpn-quantum-control",
+            "remanentia",
+        ],
+        "algorithm": [
+            "stdp",
+            "lif",
+            "kuramoto",
+            "hopfield",
+            "bcpnn",
+            "csdp",
+            "tf-idf",
+            "bm25",
+            "stuart-landau",
+        ],
         "hardware": ["gpu", "cuda", "loihi", "gtx 1060"],
         "software tool": ["pytorch", "numpy", "scipy", "fastapi", "docker"],
     }
@@ -149,7 +178,7 @@ def extract_relations(text: str, entities: list[Entity]) -> list[Relation]:
     entity_texts = [(e.text, e) for e in entities]
 
     for i, (t1, e1) in enumerate(entity_texts):
-        for t2, e2 in entity_texts[i + 1:]:
+        for t2, e2 in entity_texts[i + 1 :]:
             # Find text between the two entities
             pos1 = text.lower().find(t1.lower())
             pos2 = text.lower().find(t2.lower())
@@ -160,28 +189,37 @@ def extract_relations(text: str, entities: list[Entity]) -> list[Relation]:
 
             for pattern, rel_type in RELATION_PATTERNS:
                 if re.search(pattern, between, re.IGNORECASE):
-                    relations.append(Relation(
-                        source=t1,
-                        target=t2,
-                        relation_type=rel_type,
-                        evidence=between[:200],
-                    ))
+                    relations.append(
+                        Relation(
+                            source=t1,
+                            target=t2,
+                            relation_type=rel_type,
+                            evidence=between[:200],
+                        )
+                    )
                     break
             else:
                 # Default: co_occurs if within 500 chars
                 if abs(pos1 - pos2) < 500:
-                    relations.append(Relation(
-                        source=t1, target=t2,
-                        relation_type="co_occurs",
-                        evidence="",
-                    ))
+                    relations.append(
+                        Relation(
+                            source=t1,
+                            target=t2,
+                            relation_type="co_occurs",
+                            evidence="",
+                        )
+                    )
 
     return relations
 
 
 if __name__ == "__main__":
     import sys
-    text = " ".join(sys.argv[1:]) or "Miroslav Sotek fixed the STDP bug in snn_backend.py because the LTD mask was wrong."
+
+    text = (
+        " ".join(sys.argv[1:])
+        or "Miroslav Sotek fixed the STDP bug in snn_backend.py because the LTD mask was wrong."
+    )
     print(f"Extracting from: {text[:100]}...")
 
     t0 = time.monotonic()

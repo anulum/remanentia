@@ -11,6 +11,7 @@ Addresses Remanentia's weakest LOCOMO category (temporal: 47.9%).
 Zep's bitemporal model and Mem0g's graph variant both improve temporal
 reasoning significantly via explicit temporal edges.
 """
+
 from __future__ import annotations
 
 import json
@@ -24,10 +25,29 @@ BASE = Path(__file__).parent
 TEMPORAL_PATH = BASE / "memory" / "graph" / "temporal_edges.jsonl"
 
 _MONTHS = {
-    "january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6,
-    "july": 7, "august": 8, "september": 9, "october": 10, "november": 11, "december": 12,
-    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "jun": 6,
-    "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+    "january": 1,
+    "february": 2,
+    "march": 3,
+    "april": 4,
+    "may": 5,
+    "june": 6,
+    "july": 7,
+    "august": 8,
+    "september": 9,
+    "october": 10,
+    "november": 11,
+    "december": 12,
+    "jan": 1,
+    "feb": 2,
+    "mar": 3,
+    "apr": 4,
+    "jun": 6,
+    "jul": 7,
+    "aug": 8,
+    "sep": 9,
+    "oct": 10,
+    "nov": 11,
+    "dec": 12,
 }
 
 _DATE_ISO = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
@@ -74,9 +94,14 @@ class TemporalGraph:
         for i, sent in enumerate(sentences):
             dates = parse_dates(sent)
             for d in dates:
-                events.append(TemporalEvent(
-                    date=d, text=sent.strip()[:200], source=doc_name, paragraph_idx=i,
-                ))
+                events.append(
+                    TemporalEvent(
+                        date=d,
+                        text=sent.strip()[:200],
+                        source=doc_name,
+                        paragraph_idx=i,
+                    )
+                )
         return events
 
     def add_events(self, events: list[TemporalEvent]):
@@ -101,21 +126,27 @@ class TemporalGraph:
             old_in_bucket = [i for i in bucket if i < start_idx]
             for ni in new_in_bucket:
                 for oi in old_in_bucket:
-                    self.edges.append(TemporalEdge(
-                        source_event=self.events[oi].text[:80],
-                        target_event=self.events[ni].text[:80],
-                        relation="same_day",
-                        source_date=d, target_date=d,
-                    ))
+                    self.edges.append(
+                        TemporalEdge(
+                            source_event=self.events[oi].text[:80],
+                            target_event=self.events[ni].text[:80],
+                            relation="same_day",
+                            source_date=d,
+                            target_date=d,
+                        )
+                    )
                 # new-new pairs within same date
                 for nj in new_in_bucket:
                     if nj > ni:
-                        self.edges.append(TemporalEdge(
-                            source_event=self.events[ni].text[:80],
-                            target_event=self.events[nj].text[:80],
-                            relation="same_day",
-                            source_date=d, target_date=d,
-                        ))
+                        self.edges.append(
+                            TemporalEdge(
+                                source_event=self.events[ni].text[:80],
+                                target_event=self.events[nj].text[:80],
+                                relation="same_day",
+                                source_date=d,
+                                target_date=d,
+                            )
+                        )
 
         # before/after edges: only between adjacent dates (sorted)
         all_dates = sorted(self._by_date.keys())
@@ -127,12 +158,15 @@ class TemporalGraph:
                 new_here = [i for i in self._by_date[d] if i >= start_idx]
                 for ni in new_here[:3]:  # cap edges per date pair
                     for nj in self._by_date[next_d][:3]:
-                        self.edges.append(TemporalEdge(
-                            source_event=self.events[ni].text[:80],
-                            target_event=self.events[nj].text[:80],
-                            relation="before",
-                            source_date=d, target_date=next_d,
-                        ))
+                        self.edges.append(
+                            TemporalEdge(
+                                source_event=self.events[ni].text[:80],
+                                target_event=self.events[nj].text[:80],
+                                relation="before",
+                                source_date=d,
+                                target_date=next_d,
+                            )
+                        )
 
     def build_from_documents(self, documents: list[tuple[str, str]]):
         """Build graph from list of (doc_name, text) pairs."""
@@ -198,10 +232,16 @@ class TemporalGraph:
         path.parent.mkdir(parents=True, exist_ok=True)
         lines = []
         for ev in self.events:
-            lines.append(json.dumps({
-                "date": ev.date, "text": ev.text,
-                "source": ev.source, "paragraph_idx": ev.paragraph_idx,
-            }))
+            lines.append(
+                json.dumps(
+                    {
+                        "date": ev.date,
+                        "text": ev.text,
+                        "source": ev.source,
+                        "paragraph_idx": ev.paragraph_idx,
+                    }
+                )
+            )
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     def load(self, path: Path | None = None) -> bool:
@@ -216,8 +256,10 @@ class TemporalGraph:
             d = json.loads(line)
             idx = len(self.events)
             ev = TemporalEvent(
-                date=d["date"], text=d["text"],
-                source=d["source"], paragraph_idx=d.get("paragraph_idx", 0),
+                date=d["date"],
+                text=d["text"],
+                source=d["source"],
+                paragraph_idx=d.get("paragraph_idx", 0),
             )
             self.events.append(ev)
             self._by_date[ev.date].append(idx)
@@ -253,8 +295,11 @@ def temporal_code_execute(query: str, events: list[TemporalEvent]) -> str | None
     if not event_dates:
         return None
 
-    parsed = [(datetime.strptime(d, "%Y-%m-%d").date(), t) for d, t in event_dates
-              if re.match(r"\d{4}-\d{2}-\d{2}$", d)]
+    parsed = [
+        (datetime.strptime(d, "%Y-%m-%d").date(), t)
+        for d, t in event_dates
+        if re.match(r"\d{4}-\d{2}-\d{2}$", d)
+    ]
     if not parsed:
         return None
 
@@ -269,9 +314,9 @@ def temporal_code_execute(query: str, events: list[TemporalEvent]) -> str | None
     if "before" in q and "after" in q and len(parsed) >= 2:
         d1, d2 = parsed[0][0], parsed[1][0]
         if d1 < d2:
-            return f"{parsed[0][1][:60]} happened before {parsed[1][1][:60]} ({(d2-d1).days} days earlier)"
+            return f"{parsed[0][1][:60]} happened before {parsed[1][1][:60]} ({(d2 - d1).days} days earlier)"
         elif d1 > d2:
-            return f"{parsed[0][1][:60]} happened after {parsed[1][1][:60]} ({(d1-d2).days} days later)"
+            return f"{parsed[0][1][:60]} happened after {parsed[1][1][:60]} ({(d1 - d2).days} days later)"
         return f"Both happened on the same day: {d1.isoformat()}"
 
     # "most recent" / "latest"

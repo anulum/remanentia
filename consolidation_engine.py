@@ -18,6 +18,7 @@ The SNN daemon calls consolidate() periodically. The engine:
 No LLM required — uses heuristic extraction from structured traces.
 Can be upgraded to LLM extraction later.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -109,23 +110,78 @@ def _extract_entities(text: str) -> list[str]:
 
     # Layer 2: Known concepts (expanded from 22 to 60+)
     concepts = [
-        "STDP", "LIF", "Kuramoto", "Hopfield", "TF-IDF", "BM25",
-        "embedding", "PyTorch", "CUDA", "GPU", "CPU", "daemon",
-        "holographic", "attractor", "inhibition", "spike", "neuron",
-        "retrieval", "consolidation", "UPDE", "Stuart-Landau",
-        "Dimits", "gyrokinetic", "tokamak", "VQE", "Heron",
-        "BCPNN", "CSDP", "Hebbian", "Perron-Frobenius",
-        "Marchenko-Pastur", "eigenvalue", "SVD",
-        "MiniLM", "sentence-transformer", "FastAPI", "MCP",
-        "Docker", "Prometheus", "Grafana", "CI", "pytest",
-        "Rust", "PyO3", "maturin", "Rayon",
-        "ArcaneNeuron", "chirp", "chimera", "bifurcation",
-        "entropy", "Fisher", "Lyapunov", "Boltzmann",
-        "hippocampus", "dentate gyrus", "pattern separation",
-        "Dale's law", "E/I balance",
-        "Mem0", "Letta", "Zep", "MemOS", "LangMem",
-        "JOSS", "NeurIPS", "EMNLP", "arXiv", "Zenodo",
-        "AGPL", "PyPI", "Loihi",
+        "STDP",
+        "LIF",
+        "Kuramoto",
+        "Hopfield",
+        "TF-IDF",
+        "BM25",
+        "embedding",
+        "PyTorch",
+        "CUDA",
+        "GPU",
+        "CPU",
+        "daemon",
+        "holographic",
+        "attractor",
+        "inhibition",
+        "spike",
+        "neuron",
+        "retrieval",
+        "consolidation",
+        "UPDE",
+        "Stuart-Landau",
+        "Dimits",
+        "gyrokinetic",
+        "tokamak",
+        "VQE",
+        "Heron",
+        "BCPNN",
+        "CSDP",
+        "Hebbian",
+        "Perron-Frobenius",
+        "Marchenko-Pastur",
+        "eigenvalue",
+        "SVD",
+        "MiniLM",
+        "sentence-transformer",
+        "FastAPI",
+        "MCP",
+        "Docker",
+        "Prometheus",
+        "Grafana",
+        "CI",
+        "pytest",
+        "Rust",
+        "PyO3",
+        "maturin",
+        "Rayon",
+        "ArcaneNeuron",
+        "chirp",
+        "chimera",
+        "bifurcation",
+        "entropy",
+        "Fisher",
+        "Lyapunov",
+        "Boltzmann",
+        "hippocampus",
+        "dentate gyrus",
+        "pattern separation",
+        "Dale's law",
+        "E/I balance",
+        "Mem0",
+        "Letta",
+        "Zep",
+        "MemOS",
+        "LangMem",
+        "JOSS",
+        "NeurIPS",
+        "EMNLP",
+        "arXiv",
+        "Zenodo",
+        "AGPL",
+        "PyPI",
+        "Loihi",
     ]
     for concept in concepts:
         if concept.lower() in text_lower:
@@ -181,14 +237,42 @@ def _extract_key_lines(text: str) -> list[str]:
     lines = text.split("\n")
     key_lines = []
     triggers = [
-        "decided", "decision", "found", "finding", "result",
-        "key insight", "conclusion", "fix", "resolved",
-        "chose", "rejected", "confirmed", "measured",
-        "p@1", "precision", "accuracy", "because", "therefore",
-        "root cause", "the reason", "we proved", "this means",
-        "critical", "important", "changed", "broke", "works",
-        "doesn't work", "failed", "succeeded", "shipped",
-        "version", "v0.", "v1.", "v2.", "v3.",
+        "decided",
+        "decision",
+        "found",
+        "finding",
+        "result",
+        "key insight",
+        "conclusion",
+        "fix",
+        "resolved",
+        "chose",
+        "rejected",
+        "confirmed",
+        "measured",
+        "p@1",
+        "precision",
+        "accuracy",
+        "because",
+        "therefore",
+        "root cause",
+        "the reason",
+        "we proved",
+        "this means",
+        "critical",
+        "important",
+        "changed",
+        "broke",
+        "works",
+        "doesn't work",
+        "failed",
+        "succeeded",
+        "shipped",
+        "version",
+        "v0.",
+        "v1.",
+        "v2.",
+        "v3.",
     ]
     for i, line in enumerate(lines):
         stripped = line.strip()
@@ -213,6 +297,7 @@ def _trace_hash(filename: str) -> str:
 
 # ── Clustering ───────────────────────────────────────────────────
 
+
 def _cluster_traces(traces: dict[str, dict]) -> list[list[str]]:
     """Cluster traces by project + date proximity.
 
@@ -235,6 +320,7 @@ def _cluster_traces(traces: dict[str, dict]) -> list[list[str]]:
             # Parse dates and check gap
             try:
                 from datetime import datetime as dt
+
                 d1 = dt.strptime(prev_date, "%Y-%m-%d")
                 d2 = dt.strptime(curr_date, "%Y-%m-%d")
                 gap_days = abs((d2 - d1).days)
@@ -251,6 +337,7 @@ def _cluster_traces(traces: dict[str, dict]) -> list[list[str]]:
 
 
 # ── Semantic memory writing ──────────────────────────────────────
+
 
 def _write_semantic_memory(
     category: str,
@@ -297,6 +384,7 @@ def _write_semantic_memory(
 
 # ── Entity graph ─────────────────────────────────────────────────
 
+
 def _load_entities() -> dict[str, dict]:
     if not ENTITIES_PATH.exists():
         return {}
@@ -330,8 +418,7 @@ def _save_relations(relations: list[dict]):
     RELATIONS_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _update_graph(trace_name: str, entities: list[str], project: str, date: str,
-                   text: str = ""):
+def _update_graph(trace_name: str, entities: list[str], project: str, date: str, text: str = ""):
     """Add entities and relations from a trace.
 
     Extracts typed relations (caused_by, fixed_by, replaced, etc.) when text
@@ -361,7 +448,7 @@ def _update_graph(trace_name: str, entities: list[str], project: str, date: str,
     # Build relation edges
     existing_pairs = {(r["source"], r["target"]) for r in relations}
     for i, e1 in enumerate(entities):
-        for e2 in entities[i + 1:]:
+        for e2 in entities[i + 1 :]:
             pair = tuple(sorted([e1, e2]))
             rel_type = typed_pairs.get(pair, typed_pairs.get((pair[1], pair[0]), "co_occurs"))
             if pair in existing_pairs:
@@ -375,12 +462,15 @@ def _update_graph(trace_name: str, entities: list[str], project: str, date: str,
                             r["type"] = rel_type
                         break
             else:
-                relations.append({
-                    "source": pair[0], "target": pair[1],
-                    "type": rel_type,
-                    "weight": 1,
-                    "evidence": [trace_name],
-                })
+                relations.append(
+                    {
+                        "source": pair[0],
+                        "target": pair[1],
+                        "type": rel_type,
+                        "weight": 1,
+                        "evidence": [trace_name],
+                    }
+                )
                 existing_pairs.add(pair)
 
     _save_entities(entity_db)
@@ -391,7 +481,10 @@ _TYPED_RELATION_PATTERNS = [
     (re.compile(r"\bbecause\b|\bcaused by\b|\bdue to\b|\broot cause\b", re.I), "caused_by"),
     (re.compile(r"\bfixed\b|\brepaired\b|\bcorrected\b|\bpatched\b", re.I), "fixed_by"),
     (re.compile(r"\breplaced\b|\bsuperseded\b|\binstead of\b", re.I), "replaced"),
-    (re.compile(r"\bcontradicts?\b|\binconsistent with\b|\bconflicts? with\b", re.I), "contradicts"),
+    (
+        re.compile(r"\bcontradicts?\b|\binconsistent with\b|\bconflicts? with\b", re.I),
+        "contradicts",
+    ),
     (re.compile(r"\bv\d+\.\d+|\bversion\b", re.I), "version_of"),
     (re.compile(r"\bdepends on\b|\brequires\b|\bneeds\b", re.I), "depends_on"),
     (re.compile(r"\bimproved\b|\bfrom .+ to\b|\bincreased\b|\bdecreased\b", re.I), "improved"),
@@ -406,7 +499,7 @@ def _extract_typed_relations(text: str, entities: list[str]) -> dict[tuple[str, 
     text_lower = text.lower()
     typed: dict[tuple[str, str], str] = {}
     for i, e1 in enumerate(entities):
-        for e2 in entities[i + 1:]:
+        for e2 in entities[i + 1 :]:
             pos1 = text_lower.find(e1.lower())
             pos2 = text_lower.find(e2.lower())
             if pos1 < 0 or pos2 < 0:
@@ -455,6 +548,7 @@ def compute_novelty(spike_pattern: np.ndarray) -> float:
 
 
 # ── Main consolidation pipeline ──────────────────────────────────
+
 
 def get_pending_traces() -> list[str]:
     """Find traces not yet consolidated."""

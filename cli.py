@@ -19,6 +19,7 @@ Usage::
     remanentia daemon stop
     remanentia daemon status
 """
+
 from __future__ import annotations
 
 import argparse
@@ -42,13 +43,17 @@ def _ensure_utf8():  # pragma: no cover
 def cmd_recall(args):
     """Deep memory recall."""
     # Use filtered search if filters are specified
-    has_filters = getattr(args, "project", "") or getattr(args, "after", "") or getattr(args, "before", "")
+    has_filters = (
+        getattr(args, "project", "") or getattr(args, "after", "") or getattr(args, "before", "")
+    )
     if has_filters:
         from memory_index import auto_rebuild_if_needed
+
         idx = auto_rebuild_if_needed(use_gpu=False)
         use_llm = getattr(args, "llm", False) or bool(os.environ.get("REMANENTIA_LLM_ANSWERS"))
         results = idx.search(
-            args.query, top_k=args.top,
+            args.query,
+            top_k=args.top,
             project=getattr(args, "project", ""),
             after=getattr(args, "after", ""),
             before=getattr(args, "before", ""),
@@ -63,6 +68,7 @@ def cmd_recall(args):
         return
 
     from memory_recall import recall
+
     ctx = recall(args.query, top_k=args.top, include_content=args.content)
 
     if args.format == "summary":
@@ -70,24 +76,30 @@ def cmd_recall(args):
     elif args.format == "context":
         print(ctx.to_llm_context())
     elif args.format == "json":
-        print(json.dumps({
-            "query": ctx.query,
-            "trace": ctx.trace,
-            "score": ctx.trace_score,
-            "entities": ctx.entities,
-            "related": ctx.related_entities,
-            "semantic_memories": len(ctx.semantic_memories),
-            "before": ctx.before,
-            "after": ctx.after,
-            "cross_project": ctx.cross_project,
-            "novelty": ctx.novelty_score,
-            "elapsed_ms": ctx.elapsed_ms,
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "query": ctx.query,
+                    "trace": ctx.trace,
+                    "score": ctx.trace_score,
+                    "entities": ctx.entities,
+                    "related": ctx.related_entities,
+                    "semantic_memories": len(ctx.semantic_memories),
+                    "before": ctx.before,
+                    "after": ctx.after,
+                    "cross_project": ctx.cross_project,
+                    "novelty": ctx.novelty_score,
+                    "elapsed_ms": ctx.elapsed_ms,
+                },
+                indent=2,
+            )
+        )
 
 
 def cmd_consolidate(args):
     """Run memory consolidation."""
     from consolidation_engine import consolidate
+
     print("Running consolidation...")
     t0 = time.monotonic()
     result = consolidate(force=args.force)
@@ -111,17 +123,22 @@ def cmd_status(args):
         print(f"  Live retrieval: {s.get('live_retrieval_available', False)}")
         consol = s.get("last_consolidation")
         if consol:
-            print(f"  Last consolidation: {consol.get('memories_written', 0)} memories, "
-                  f"{consol.get('entities_found', 0)} entities")
+            print(
+                f"  Last consolidation: {consol.get('memories_written', 0)} memories, "
+                f"{consol.get('entities_found', 0)} entities"
+            )
     else:
         print("Daemon:  NOT RUNNING")
 
     # Dashboard
     try:
         import urllib.request
+
         resp = urllib.request.urlopen("http://localhost:8888/api/health", timeout=2)
         health = json.loads(resp.read())  # pragma: no cover
-        print(f"Dashboard: UP (port {health.get('port')}, uptime {health.get('uptime_s', 0):.0f}s)")  # pragma: no cover
+        print(
+            f"Dashboard: UP (port {health.get('port')}, uptime {health.get('uptime_s', 0):.0f}s)"
+        )  # pragma: no cover
     except Exception:
         print("Dashboard: DOWN")
 
@@ -161,11 +178,13 @@ def cmd_graph(args):
         print("No relations. Run: remanentia consolidate")
         return
     rels = [json.loads(l) for l in relations_path.read_text().strip().split("\n") if l.strip()]
-    top = sorted(rels, key=lambda r: -r.get("weight", 0))[:args.top]
+    top = sorted(rels, key=lambda r: -r.get("weight", 0))[: args.top]
     print(f"Top {len(top)} entity relationships:\n")
     for r in top:
         evidence = len(r.get("evidence", []))
-        print(f"  {r['source']:25s} <-> {r['target']:25s}  weight={r['weight']:2d}  ({evidence} traces)")
+        print(
+            f"  {r['source']:25s} <-> {r['target']:25s}  weight={r['weight']:2d}  ({evidence} traces)"
+        )
 
 
 def cmd_entities(args):
@@ -178,7 +197,7 @@ def cmd_entities(args):
     entities.sort(key=lambda e: -e.get("trace_count", 0))
     print(f"{len(entities)} entities:\n")
     for e in entities:
-        print(f"  {e['id']:30s}  type={e.get('type','?'):10s}  traces={e.get('trace_count', 0)}")
+        print(f"  {e['id']:30s}  type={e.get('type', '?'):10s}  traces={e.get('trace_count', 0)}")
 
 
 def cmd_init(args):
@@ -207,6 +226,7 @@ def cmd_daemon(args):
     """Daemon management."""
     if args.action == "start":
         import subprocess
+
         script = str(BASE / "gpu_daemon.py")
         subprocess.Popen([sys.executable, script, "--detach"])
         print("Daemon start requested")
@@ -215,8 +235,10 @@ def cmd_daemon(args):
         if lock.exists():
             pid = int(lock.read_text().strip())
             import signal
+
             try:
                 import os
+
                 os.kill(pid, signal.SIGTERM)
                 print(f"Sent SIGTERM to PID {pid}")
             except OSError as e:
@@ -230,6 +252,7 @@ def cmd_daemon(args):
 def cmd_observe(args):  # pragma: no cover
     """Watch filesystem for changes, auto-create knowledge notes."""
     from observer import ObserverState, observe_once, observe_loop
+
     if args.once:
         state = ObserverState()
         state.load()
@@ -243,6 +266,7 @@ def cmd_observe(args):  # pragma: no cover
 def cmd_reflect(args):  # pragma: no cover
     """Run deep consolidation via reflector."""
     from reflector import reflect_once
+
     print(f"Reflecting on last {args.days} days...")
     result = reflect_once(days=args.days, use_llm=args.llm)
     if result.get("digest"):
@@ -254,15 +278,18 @@ def cmd_reflect(args):  # pragma: no cover
 def cmd_notes(args):  # pragma: no cover
     """Show knowledge notes."""
     from knowledge_store import KnowledgeStore
+
     store = KnowledgeStore()
     if not store.load():
         print("No knowledge notes. Run: remanentia observe --once")
         return
     s = store.stats
-    print(f"Knowledge Store: {s['notes']} notes, {s['links']} links, "
-          f"{s['contradictions']} contradictions, {s['triggers_active']} active triggers\n")
+    print(
+        f"Knowledge Store: {s['notes']} notes, {s['links']} links, "
+        f"{s['contradictions']} contradictions, {s['triggers_active']} active triggers\n"
+    )
     notes = sorted(store.notes.values(), key=lambda n: n.updated, reverse=True)
-    for n in notes[:args.top]:
+    for n in notes[: args.top]:
         status = ""
         if n.superseded_by:
             status = " [SUPERSEDED]"
@@ -293,7 +320,9 @@ def main():
         p_recall.add_argument("--project", default="", help="Filter by project/source")
         p_recall.add_argument("--after", default="", help="Filter: docs after date (YYYY-MM-DD)")
         p_recall.add_argument("--before", default="", help="Filter: docs before date (YYYY-MM-DD)")
-        p_recall.add_argument("--llm", action="store_true", help="Use LLM for answer extraction (costs API credits)")
+        p_recall.add_argument(
+            "--llm", action="store_true", help="Use LLM for answer extraction (costs API credits)"
+        )
 
     # consolidate
     p_consol = sub.add_parser("consolidate", help="Run memory consolidation")
@@ -317,14 +346,18 @@ def main():
     sub.add_parser("init", help="Create memory directory structure")
 
     # observe
-    p_observe = sub.add_parser("observe", help="Watch filesystem for changes, auto-create knowledge notes")
+    p_observe = sub.add_parser(
+        "observe", help="Watch filesystem for changes, auto-create knowledge notes"
+    )
     p_observe.add_argument("--once", action="store_true", help="Run once and exit")
     p_observe.add_argument("--interval", type=int, default=30, help="Poll interval in seconds")
 
     # reflect
     p_reflect = sub.add_parser("reflect", help="Run deep consolidation (LLM-powered reflection)")
     p_reflect.add_argument("--days", type=int, default=7, help="Process notes from last N days")
-    p_reflect.add_argument("--llm", action="store_true", help="Use LLM for summaries and prospective queries")
+    p_reflect.add_argument(
+        "--llm", action="store_true", help="Use LLM for summaries and prospective queries"
+    )
 
     # notes
     p_notes = sub.add_parser("notes", help="Show knowledge notes")

@@ -97,10 +97,34 @@ def tmp_graph(tmp_path):
     graph.mkdir(parents=True)
 
     entities = [
-        {"id": "stdp", "type": "concept", "label": "STDP", "first_seen": "2026-03-10", "trace_count": 5},
-        {"id": "bm25", "type": "concept", "label": "BM25", "first_seen": "2026-03-10", "trace_count": 3},
-        {"id": "remanentia", "type": "project", "label": "remanentia", "first_seen": "2026-03-10", "trace_count": 8},
-        {"id": "embedding", "type": "concept", "label": "embedding", "first_seen": "2026-03-12", "trace_count": 4},
+        {
+            "id": "stdp",
+            "type": "concept",
+            "label": "STDP",
+            "first_seen": "2026-03-10",
+            "trace_count": 5,
+        },
+        {
+            "id": "bm25",
+            "type": "concept",
+            "label": "BM25",
+            "first_seen": "2026-03-10",
+            "trace_count": 3,
+        },
+        {
+            "id": "remanentia",
+            "type": "project",
+            "label": "remanentia",
+            "first_seen": "2026-03-10",
+            "trace_count": 8,
+        },
+        {
+            "id": "embedding",
+            "type": "concept",
+            "label": "embedding",
+            "first_seen": "2026-03-12",
+            "trace_count": 4,
+        },
     ]
     (graph / "entities.jsonl").write_text(
         "\n".join(json.dumps(e) for e in entities) + "\n",
@@ -108,10 +132,34 @@ def tmp_graph(tmp_path):
     )
 
     relations = [
-        {"source": "bm25", "target": "remanentia", "type": "used_in", "weight": 5, "evidence": ["trace1"]},
-        {"source": "embedding", "target": "remanentia", "type": "used_in", "weight": 4, "evidence": ["trace2"]},
-        {"source": "stdp", "target": "remanentia", "type": "co_occurs", "weight": 6, "evidence": ["trace1", "trace3"]},
-        {"source": "bm25", "target": "embedding", "type": "co_occurs", "weight": 3, "evidence": ["trace2"]},
+        {
+            "source": "bm25",
+            "target": "remanentia",
+            "type": "used_in",
+            "weight": 5,
+            "evidence": ["trace1"],
+        },
+        {
+            "source": "embedding",
+            "target": "remanentia",
+            "type": "used_in",
+            "weight": 4,
+            "evidence": ["trace2"],
+        },
+        {
+            "source": "stdp",
+            "target": "remanentia",
+            "type": "co_occurs",
+            "weight": 6,
+            "evidence": ["trace1", "trace3"],
+        },
+        {
+            "source": "bm25",
+            "target": "embedding",
+            "type": "co_occurs",
+            "weight": 3,
+            "evidence": ["trace2"],
+        },
     ]
     (graph / "relations.jsonl").write_text(
         "\n".join(json.dumps(r) for r in relations) + "\n",

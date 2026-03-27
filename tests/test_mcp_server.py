@@ -25,7 +25,12 @@ class TestToolDefinitions:
 
     def test_tool_names(self):
         names = {t["name"] for t in TOOLS}
-        assert names == {"remanentia_recall", "remanentia_remember", "remanentia_status", "remanentia_graph"}
+        assert names == {
+            "remanentia_recall",
+            "remanentia_remember",
+            "remanentia_status",
+            "remanentia_graph",
+        }
 
     def test_recall_schema(self):
         recall_tool = next(t for t in TOOLS if t["name"] == "remanentia_recall")
@@ -71,7 +76,9 @@ class TestMCPProtocol:
     def test_tools_call_recall(self):
         with patch("mcp_server.handle_recall", return_value="Test result"):
             req = {
-                "jsonrpc": "2.0", "id": 4, "method": "tools/call",
+                "jsonrpc": "2.0",
+                "id": 4,
+                "method": "tools/call",
                 "params": {"name": "remanentia_recall", "arguments": {"query": "test"}},
             }
             resp = handle_request(req)
@@ -81,7 +88,9 @@ class TestMCPProtocol:
     def test_tools_call_status(self):
         with patch("mcp_server.handle_status", return_value="Status info"):
             req = {
-                "jsonrpc": "2.0", "id": 5, "method": "tools/call",
+                "jsonrpc": "2.0",
+                "id": 5,
+                "method": "tools/call",
                 "params": {"name": "remanentia_status", "arguments": {}},
             }
             resp = handle_request(req)
@@ -90,7 +99,9 @@ class TestMCPProtocol:
     def test_tools_call_graph(self):
         with patch("mcp_server.handle_graph", return_value="Graph data"):
             req = {
-                "jsonrpc": "2.0", "id": 6, "method": "tools/call",
+                "jsonrpc": "2.0",
+                "id": 6,
+                "method": "tools/call",
                 "params": {"name": "remanentia_graph", "arguments": {"entity": "stdp"}},
             }
             resp = handle_request(req)
@@ -98,7 +109,9 @@ class TestMCPProtocol:
 
     def test_tools_call_unknown_tool(self):
         req = {
-            "jsonrpc": "2.0", "id": 7, "method": "tools/call",
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": "tools/call",
             "params": {"name": "nonexistent_tool", "arguments": {}},
         }
         resp = handle_request(req)
@@ -115,8 +128,10 @@ class TestMCPProtocol:
 
 class TestHandleRecall:
     def test_no_index_falls_back(self):
-        with patch("mcp_server._UNIFIED_INDEX", None), \
-             patch("mcp_server._lightweight_recall", return_value="lightweight result"):
+        with (
+            patch("mcp_server._UNIFIED_INDEX", None),
+            patch("mcp_server._lightweight_recall", return_value="lightweight result"),
+        ):
             # MemoryIndex load fails → lightweight
             result = handle_recall("test query")
         assert isinstance(result, str)
@@ -131,9 +146,11 @@ class TestHandleRecall:
 
 class TestHandleRemember:
     def test_writes_trace_file(self, tmp_path):
-        with patch("mcp_server.BASE", tmp_path), \
-             patch("mcp_server._RECALL_INDEX", None), \
-             patch("mcp_server._UNIFIED_INDEX", None):
+        with (
+            patch("mcp_server.BASE", tmp_path),
+            patch("mcp_server._RECALL_INDEX", None),
+            patch("mcp_server._UNIFIED_INDEX", None),
+        ):
             result = handle_remember("We decided to use BM25.", "decision", "remanentia")
         assert "Remembered:" in result
         traces = list((tmp_path / "reasoning_traces").glob("*.md"))
@@ -144,19 +161,22 @@ class TestHandleRemember:
 
     def test_invalidates_recall_cache(self, tmp_path):
         import mcp_server
+
         mcp_server._RECALL_INDEX = {"old": "data"}
-        with patch("mcp_server.BASE", tmp_path), \
-             patch("mcp_server._UNIFIED_INDEX", None):
+        with patch("mcp_server.BASE", tmp_path), patch("mcp_server._UNIFIED_INDEX", None):
             handle_remember("test content", "context", "")
         assert mcp_server._RECALL_INDEX is None
 
     def test_mcp_protocol_remember(self, tmp_path):
-        with patch("mcp_server.BASE", tmp_path), \
-             patch("mcp_server._UNIFIED_INDEX", None):
+        with patch("mcp_server.BASE", tmp_path), patch("mcp_server._UNIFIED_INDEX", None):
             req = {
-                "jsonrpc": "2.0", "id": 10, "method": "tools/call",
-                "params": {"name": "remanentia_remember",
-                           "arguments": {"content": "Test memory", "type": "finding", "project": "test"}},
+                "jsonrpc": "2.0",
+                "id": 10,
+                "method": "tools/call",
+                "params": {
+                    "name": "remanentia_remember",
+                    "arguments": {"content": "Test memory", "type": "finding", "project": "test"},
+                },
             }
             resp = handle_request(req)
         assert "Remembered:" in resp["result"]["content"][0]["text"]
@@ -194,12 +214,15 @@ class TestHandleRememberConsolidation:
     def test_triggers_consolidation(self, tmp_path):
         import time
         from unittest.mock import MagicMock
+
         mock_consolidate = MagicMock(return_value={"status": "nothing_to_consolidate"})
-        with patch("mcp_server.BASE", tmp_path), \
-             patch("mcp_server._RECALL_INDEX", None), \
-             patch("mcp_server._UNIFIED_INDEX", None), \
-             patch("mcp_server._consolidation_last", 0.0), \
-             patch("consolidation_engine.consolidate", mock_consolidate):
+        with (
+            patch("mcp_server.BASE", tmp_path),
+            patch("mcp_server._RECALL_INDEX", None),
+            patch("mcp_server._UNIFIED_INDEX", None),
+            patch("mcp_server._consolidation_last", 0.0),
+            patch("consolidation_engine.consolidate", mock_consolidate),
+        ):
             handle_remember("Test consolidation trigger", "finding", "test")
             # Consolidation now runs in a background thread
             for _ in range(20):
@@ -209,9 +232,11 @@ class TestHandleRememberConsolidation:
         mock_consolidate.assert_called_once()
 
     def test_consolidation_failure_safe(self, tmp_path):
-        with patch("mcp_server.BASE", tmp_path), \
-             patch("mcp_server._RECALL_INDEX", None), \
-             patch("mcp_server._UNIFIED_INDEX", None):
+        with (
+            patch("mcp_server.BASE", tmp_path),
+            patch("mcp_server._RECALL_INDEX", None),
+            patch("mcp_server._UNIFIED_INDEX", None),
+        ):
             result = handle_remember("Test content", "context", "test")
         assert "Remembered:" in result
 
@@ -220,14 +245,21 @@ class TestHandleRecallWithIndex:
     def test_with_loaded_index(self, tmp_path):
         from unittest.mock import MagicMock
         from memory_index import SearchResult
+
         mock_idx = MagicMock()
         mock_idx.load.return_value = True
         mock_idx._built = True
         mock_idx.search.return_value = [
-            SearchResult(name="test.md", source="traces", score=0.9,
-                         snippet="Test snippet", answer="March 15"),
+            SearchResult(
+                name="test.md",
+                source="traces",
+                score=0.9,
+                snippet="Test snippet",
+                answer="March 15",
+            ),
         ]
         import mcp_server
+
         old_idx = mcp_server._UNIFIED_INDEX
         mcp_server._UNIFIED_INDEX = mock_idx
         try:
@@ -239,10 +271,12 @@ class TestHandleRecallWithIndex:
 
     def test_empty_results(self, tmp_path):
         from unittest.mock import MagicMock
+
         mock_idx = MagicMock()
         mock_idx._built = True
         mock_idx.search.return_value = []
         import mcp_server
+
         old_idx = mcp_server._UNIFIED_INDEX
         mcp_server._UNIFIED_INDEX = mock_idx
         try:
@@ -253,10 +287,12 @@ class TestHandleRecallWithIndex:
 
     def test_llm_flag_passed(self):
         from unittest.mock import MagicMock
+
         mock_idx = MagicMock()
         mock_idx._built = True
         mock_idx.search.return_value = []
         import mcp_server
+
         old_idx = mcp_server._UNIFIED_INDEX
         mcp_server._UNIFIED_INDEX = mock_idx
         try:
@@ -270,19 +306,23 @@ class TestHandleRecallWithIndex:
 class TestHandleRecallLightweight:
     def test_lightweight_fallback(self, tmp_traces):
         from mcp_server import _lightweight_recall
+
         with patch("mcp_server.BASE", tmp_traces.parent):
             result = _lightweight_recall("SNN removal decision", top_k=3)
         assert isinstance(result, str)
 
     def test_lightweight_empty_query(self):
         from mcp_server import _lightweight_recall
+
         result = _lightweight_recall("", top_k=3)
         assert "Empty query" in result
 
     def test_lightweight_no_match(self, tmp_traces):
         from mcp_server import _lightweight_recall
+
         with patch("mcp_server.BASE", tmp_traces.parent):
             import mcp_server
+
             mcp_server._RECALL_INDEX = None
             result = _lightweight_recall("xyznonexistent_zzz_999", top_k=3)
         assert "No memories" in result
@@ -305,6 +345,7 @@ class TestBuildRecallIndex:
     def test_builds_index(self, tmp_traces, tmp_semantic):
         from mcp_server import _build_recall_index
         import mcp_server
+
         mcp_server._RECALL_INDEX = None
         with patch("mcp_server.BASE", tmp_traces.parent):
             index = _build_recall_index()
@@ -314,6 +355,7 @@ class TestBuildRecallIndex:
     def test_caches_index(self, tmp_traces):
         from mcp_server import _build_recall_index
         import mcp_server
+
         mcp_server._RECALL_INDEX = None
         with patch("mcp_server.BASE", tmp_traces.parent):
             idx1 = _build_recall_index()
@@ -334,6 +376,7 @@ class TestHandleRecallLoadIndex:
             SearchResult(name="r.md", source="src", score=0.5, snippet="snip"),
         ]
         import mcp_server
+
         old = mcp_server._UNIFIED_INDEX
         mcp_server._UNIFIED_INDEX = None
         try:
@@ -348,12 +391,15 @@ class TestHandleRecallLoadIndex:
 
     def test_load_fails_falls_back(self, tmp_traces):
         import mcp_server
+
         old = mcp_server._UNIFIED_INDEX
         mcp_server._UNIFIED_INDEX = None
         mcp_server._RECALL_INDEX = None
         try:
-            with patch("mcp_server.BASE", tmp_traces.parent), \
-                 patch("mcp_server._UNIFIED_INDEX", None):
+            with (
+                patch("mcp_server.BASE", tmp_traces.parent),
+                patch("mcp_server._UNIFIED_INDEX", None),
+            ):
                 result = handle_recall("SNN decision")
             assert isinstance(result, str)
         finally:
@@ -363,9 +409,11 @@ class TestHandleRecallLoadIndex:
 class TestHandleRememberIndex:
     def test_incremental_index_update(self, tmp_path):
         from unittest.mock import MagicMock
+
         mock_idx = MagicMock()
         mock_idx._built = True
         import mcp_server
+
         old = mcp_server._UNIFIED_INDEX
         mcp_server._UNIFIED_INDEX = mock_idx
         try:
@@ -386,9 +434,13 @@ class TestMCPProtocolRemember:
     def test_tools_call_remember_with_llm(self):
         with patch("mcp_server.handle_recall", return_value="Result") as mock:
             req = {
-                "jsonrpc": "2.0", "id": 8, "method": "tools/call",
-                "params": {"name": "remanentia_recall",
-                           "arguments": {"query": "test", "llm": True}},
+                "jsonrpc": "2.0",
+                "id": 8,
+                "method": "tools/call",
+                "params": {
+                    "name": "remanentia_recall",
+                    "arguments": {"query": "test", "llm": True},
+                },
             }
             resp = handle_request(req)
         mock.assert_called_once()

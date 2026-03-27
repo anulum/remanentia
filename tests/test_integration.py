@@ -10,6 +10,7 @@
 Tests the full path: build index → search → answer extraction → results.
 No mocking — exercises the actual code paths.
 """
+
 from __future__ import annotations
 
 
@@ -65,6 +66,7 @@ def index_with_data(tmp_path_factory):
 
     # Build with only our test directory
     import memory_index
+
     original_sources = memory_index.SOURCES
     memory_index.SOURCES = {"test_traces": traces_dir}
     try:
@@ -121,8 +123,9 @@ class TestInvertedIndex:
     def test_token_in_posting_matches_paragraph(self, index_with_data):
         for token, posting in list(index_with_data._inverted_index.items())[:50]:
             for idx in posting:
-                assert token in index_with_data.paragraph_tokens[idx], \
+                assert token in index_with_data.paragraph_tokens[idx], (
                     f"Token '{token}' in posting for para {idx} but not in para tokens"
+                )
 
     def test_para_lengths_match(self, index_with_data):
         assert len(index_with_data._para_lengths) == len(index_with_data.paragraph_tokens)
@@ -140,6 +143,7 @@ class TestAtomicSave:
         assert not save_path.with_suffix(".pkl.tmp").exists()
 
         from memory_index import MemoryIndex
+
         idx2 = MemoryIndex()
         assert idx2.load(save_path)
         assert len(idx2.documents) == len(index_with_data.documents)
@@ -151,6 +155,7 @@ class TestAtomicSave:
         index_with_data.save(save_path, quantize=False)
 
         from memory_index import MemoryIndex
+
         idx2 = MemoryIndex()
         idx2.load(save_path)
         results = idx2.search("STDP", top_k=3)
@@ -162,20 +167,18 @@ class TestMCPServerIntegration:
 
     def test_mcp_recall_returns_text(self, monkeypatch):
         import mcp_server
+
         monkeypatch.setattr(mcp_server, "_UNIFIED_INDEX", None)
 
-        resp = mcp_server.handle_request({
-            "jsonrpc": "2.0", "id": 1,
-            "method": "initialize", "params": {}
-        })
+        resp = mcp_server.handle_request(
+            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
+        )
         assert resp["result"]["serverInfo"]["name"] == "remanentia"
 
     def test_mcp_tools_list(self):
         import mcp_server
-        resp = mcp_server.handle_request({
-            "jsonrpc": "2.0", "id": 2,
-            "method": "tools/list"
-        })
+
+        resp = mcp_server.handle_request({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
         tools = resp["result"]["tools"]
         names = {t["name"] for t in tools}
         assert "remanentia_recall" in names
@@ -185,10 +188,14 @@ class TestMCPServerIntegration:
 
     def test_mcp_graph_query(self):
         import mcp_server
-        resp = mcp_server.handle_request({
-            "jsonrpc": "2.0", "id": 3,
-            "method": "tools/call",
-            "params": {"name": "remanentia_graph", "arguments": {"top": 5}}
-        })
+
+        resp = mcp_server.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "tools/call",
+                "params": {"name": "remanentia_graph", "arguments": {"top": 5}},
+            }
+        )
         text = resp["result"]["content"][0]["text"]
         assert isinstance(text, str)

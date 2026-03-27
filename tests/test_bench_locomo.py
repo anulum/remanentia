@@ -4,6 +4,7 @@
 Imports specific functions only — bench_locomo has module-level stdout
 redirect that conflicts with pytest capture.
 """
+
 from __future__ import annotations
 
 import re
@@ -15,21 +16,40 @@ import re
 _PERSON_CENTRIC_PATTERNS = re.compile(
     r"\b(relationship|hobby|hobbies|interest|interests|career|job|status|"
     r"personality|feel|feeling|prefer|favorite|partake|destress|self-care|"
-    r"political|leaning|member|community)\b", re.IGNORECASE)
+    r"political|leaning|member|community)\b",
+    re.IGNORECASE,
+)
 
 _POSSESSIVE_PATTERNS = re.compile(
     r"\b(his|her|their|'s)\s+(hobby|hobbies|interest|interests|career|"
     r"relationship|status|personality|feeling|preference|activity|activities)\b",
-    re.IGNORECASE)
+    re.IGNORECASE,
+)
 
 
 def _extract_query_names(query):
     names = set()
     for m in re.finditer(r"\b([A-Z][a-z]{2,})\b", query):
         word = m.group(1).lower()
-        if word not in {"what", "when", "where", "who", "how", "why", "would",
-                        "could", "does", "did", "has", "have", "the", "which",
-                        "likely", "yes", "not"}:
+        if word not in {
+            "what",
+            "when",
+            "where",
+            "who",
+            "how",
+            "why",
+            "would",
+            "could",
+            "does",
+            "did",
+            "has",
+            "have",
+            "the",
+            "which",
+            "likely",
+            "yes",
+            "not",
+        }:
             names.add(word)
     return names
 

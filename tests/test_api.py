@@ -13,6 +13,7 @@ from api import app
 
 try:
     from fastapi.testclient import TestClient
+
     HAS_TEST_CLIENT = True
 except ImportError:
     HAS_TEST_CLIENT = False
@@ -65,9 +66,11 @@ class TestStatus:
         state_dir = tmp_path / "snn_state"
         state_dir.mkdir()
 
-        with patch("api.BASE", tmp_path), \
-             patch("api.STATE_DIR", state_dir), \
-             patch("api.GRAPH_DIR", graph_dir):
+        with (
+            patch("api.BASE", tmp_path),
+            patch("api.STATE_DIR", state_dir),
+            patch("api.GRAPH_DIR", graph_dir),
+        ):
             resp = client.get("/status")
 
         assert resp.status_code == 200
@@ -87,14 +90,17 @@ class TestStatus:
         graph_dir.mkdir(parents=True)
         entities = [{"id": "a"}, {"id": "b"}]
         (graph_dir / "entities.jsonl").write_text(
-            "\n".join(json.dumps(e) for e in entities) + "\n", encoding="utf-8",
+            "\n".join(json.dumps(e) for e in entities) + "\n",
+            encoding="utf-8",
         )
         state_dir = tmp_path / "snn_state"
         state_dir.mkdir()
 
-        with patch("api.BASE", tmp_path), \
-             patch("api.STATE_DIR", state_dir), \
-             patch("api.GRAPH_DIR", graph_dir):
+        with (
+            patch("api.BASE", tmp_path),
+            patch("api.STATE_DIR", state_dir),
+            patch("api.GRAPH_DIR", graph_dir),
+        ):
             resp = client.get("/status")
 
         data = resp.json()
@@ -163,21 +169,25 @@ class TestGraph:
 
 class TestRecall:
     def test_recall_basic(self, client):
-        mock_ctx = type("Ctx", (), {
-            "query": "test",
-            "trace": "trace.md",
-            "trace_score": 0.8,
-            "trace_snippet": "Some snippet content here",
-            "semantic_memories": [],
-            "entities": ["stdp"],
-            "related_entities": [],
-            "before": [],
-            "after": [],
-            "cross_project": [],
-            "novelty_score": 0.3,
-            "elapsed_ms": 15.0,
-            "to_llm_context": lambda self: "context string",
-        })()
+        mock_ctx = type(
+            "Ctx",
+            (),
+            {
+                "query": "test",
+                "trace": "trace.md",
+                "trace_score": 0.8,
+                "trace_snippet": "Some snippet content here",
+                "semantic_memories": [],
+                "entities": ["stdp"],
+                "related_entities": [],
+                "before": [],
+                "after": [],
+                "cross_project": [],
+                "novelty_score": 0.3,
+                "elapsed_ms": 15.0,
+                "to_llm_context": lambda self: "context string",
+            },
+        )()
 
         with patch("api.recall_endpoint") as mock_endpoint:
             # Actually patch the import inside
@@ -185,6 +195,7 @@ class TestRecall:
 
         # Direct approach: patch the recall import
         from unittest.mock import MagicMock
+
         mock_recall = MagicMock(return_value=mock_ctx)
         with patch.dict("sys.modules", {}):
             with patch("memory_recall.recall", mock_recall, create=True):
@@ -193,6 +204,7 @@ class TestRecall:
 
     def test_recall_summary_format(self, client, tmp_traces, tmp_path):
         from unittest.mock import MagicMock
+
         mock_ctx = MagicMock()
         mock_ctx.query = "test"
         mock_ctx.trace = "trace.md"
@@ -215,6 +227,7 @@ class TestRecall:
 
     def test_recall_context_format(self, client):
         from unittest.mock import MagicMock
+
         mock_ctx = MagicMock()
         mock_ctx.to_llm_context.return_value = "LLM context here"
         mock_ctx.elapsed_ms = 10.0
@@ -234,18 +247,26 @@ class TestRecall:
 
     def test_status_with_daemon_state(self, client, tmp_path):
         import time
+
         state_dir = tmp_path / "snn_state"
         state_dir.mkdir()
-        state = {"timestamp": time.time(), "cycle": 5, "n_neurons": 200,
-                 "vram_mb": 100, "live_retrieval_available": True}
+        state = {
+            "timestamp": time.time(),
+            "cycle": 5,
+            "n_neurons": 200,
+            "vram_mb": 100,
+            "live_retrieval_available": True,
+        }
         (state_dir / "current_state.json").write_text(json.dumps(state), encoding="utf-8")
         graph_dir = tmp_path / "memory" / "graph"
         graph_dir.mkdir(parents=True)
         (tmp_path / "reasoning_traces").mkdir()
         (tmp_path / "memory" / "semantic").mkdir(parents=True)
-        with patch("api.BASE", tmp_path), \
-             patch("api.STATE_DIR", state_dir), \
-             patch("api.GRAPH_DIR", graph_dir):
+        with (
+            patch("api.BASE", tmp_path),
+            patch("api.STATE_DIR", state_dir),
+            patch("api.GRAPH_DIR", graph_dir),
+        ):
             resp = client.get("/status")
         data = resp.json()
         assert "daemon" in data

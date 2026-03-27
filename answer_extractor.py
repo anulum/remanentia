@@ -17,6 +17,7 @@ Handles:
 - Names: capitalized multi-word spans near query terms
 - Yes/no: from negation/affirmation patterns
 """
+
 from __future__ import annotations
 
 import os
@@ -47,8 +48,12 @@ def extract_answer(query: str, paragraph: str) -> str | None:
         return _extract_percentage_answer(p)
 
     # Generic: try percentage, then version, then date, then number
-    for extractor in [_extract_percentage_answer, _extract_version_answer,
-                      _extract_date_answer, _extract_number_answer_generic]:
+    for extractor in [
+        _extract_percentage_answer,
+        _extract_version_answer,
+        _extract_date_answer,
+        _extract_number_answer_generic,
+    ]:
         result = extractor(p)
         if result:
             return result
@@ -83,7 +88,7 @@ def extract_all_candidates(query: str, paragraph: str) -> list[dict]:
     for c in candidates:
         pos = p.find(c["answer"])
         if pos >= 0:
-            window = p[max(0, pos - 80):pos + len(c["answer"]) + 80].lower()
+            window = p[max(0, pos - 80) : pos + len(c["answer"]) + 80].lower()
             overlap = sum(1 for t in q_tokens if t in window)
             c["score"] += overlap * 0.1
 
@@ -93,26 +98,33 @@ def extract_all_candidates(query: str, paragraph: str) -> list[dict]:
 
 # ── Question type detection ──────────────────────────────────────
 
+
 def _is_when_question(q: str) -> bool:
     return bool(re.search(r"\bwhen\b|\bwhat date\b|\bwhat time\b", q))
+
 
 def _is_how_many_question(q: str) -> bool:
     return bool(re.search(r"\bhow many\b|\bhow much\b|\bcount\b|\bnumber of\b", q))
 
+
 def _is_version_question(q: str) -> bool:
     return bool(re.search(r"\bversion\b|\brelease\b|\bv\d", q))
+
 
 def _is_who_question(q: str) -> bool:
     return bool(re.search(r"\bwho\b|\bwhose\b|\bwhom\b", q))
 
+
 def _is_yes_no_question(q: str) -> bool:
     return bool(re.search(r"^(is|are|was|were|did|does|do|has|have|can|will|should)\b", q))
+
 
 def _is_what_percent_question(q: str) -> bool:
     return bool(re.search(r"\bpercent\b|\baccuracy\b|\bscore\b|\brate\b|\b%", q))
 
 
 # ── Answer extractors ────────────────────────────────────────────
+
 
 def _extract_date_answer(text: str, query: str = "") -> str | None:
     """Extract the most query-relevant date from text.
@@ -125,7 +137,8 @@ def _extract_date_answer(text: str, query: str = "") -> str | None:
         candidates.append((m.group(), m.start()))
     for m in re.finditer(
         r"((?:January|February|March|April|May|June|July|August|September|"
-        r"October|November|December)\s+\d{1,2}(?:,?\s*\d{4})?)", text
+        r"October|November|December)\s+\d{1,2}(?:,?\s*\d{4})?)",
+        text,
     ):
         candidates.append((m.group(), m.start()))
     if not candidates:
@@ -135,12 +148,13 @@ def _extract_date_answer(text: str, query: str = "") -> str | None:
     q_tokens = set(re.findall(r"\w{3,}", query.lower()))
     best_score, best_date = -1, candidates[0][0]
     for date_str, pos in candidates:
-        window = text[max(0, pos - 80):pos + len(date_str) + 80].lower()
+        window = text[max(0, pos - 80) : pos + len(date_str) + 80].lower()
         overlap = sum(1 for t in q_tokens if t in window)
         if overlap > best_score:
             best_score = overlap
             best_date = date_str
     return best_date
+
 
 def _extract_number_answer(text: str, query: str) -> str | None:
     candidates = []
@@ -155,8 +169,10 @@ def _extract_number_answer(text: str, query: str) -> str | None:
         return candidates[0][0]
     return _best_by_proximity(candidates, text, query)
 
+
 def _extract_number_answer_generic(text: str) -> str | None:
     return _extract_number_answer(text, "")
+
 
 def _extract_version_answer(text: str) -> str | None:
     versions = re.findall(r"v\d+\.\d+(?:\.\d+)?", text)
@@ -164,11 +180,13 @@ def _extract_version_answer(text: str) -> str | None:
         return versions[0]
     return None
 
+
 def _extract_percentage_answer(text: str) -> str | None:
     pcts = re.findall(r"\d+\.?\d*%", text)
     if pcts:
         return pcts[0]
     return None
+
 
 def _extract_name_answer(text: str, query: str) -> str | None:
     candidates = []
@@ -178,7 +196,7 @@ def _extract_name_answer(text: str, query: str) -> str | None:
         q_tokens = set(re.findall(r"\w{3,}", query.lower()))
         for m in re.finditer(r"\b([A-Z][a-z]{2,})\b", text):
             pos = m.start()
-            window = text[max(0, pos - 50):pos + 50].lower()
+            window = text[max(0, pos - 50) : pos + 50].lower()
             if any(t in window for t in q_tokens):
                 candidates.append((m.group(), m.start()))
     if not candidates:
@@ -187,13 +205,31 @@ def _extract_name_answer(text: str, query: str) -> str | None:
         return candidates[0][0]
     return _best_by_proximity(candidates, text, query)
 
+
 def _extract_yes_no(text: str, query: str) -> str | None:
     t = text.lower()
     _negation_markers = [
-        "not ", "no ", "never ", "doesn't ", "didn't ", "isn't ", "wasn't ",
-        "weren't ", "won't ", "wouldn't ", "couldn't ", "shouldn't ",
-        "haven't ", "hasn't ", "can't ", "cannot ", "unable ", "failed to ",
-        "stopped ", "quit ", "gave up ",
+        "not ",
+        "no ",
+        "never ",
+        "doesn't ",
+        "didn't ",
+        "isn't ",
+        "wasn't ",
+        "weren't ",
+        "won't ",
+        "wouldn't ",
+        "couldn't ",
+        "shouldn't ",
+        "haven't ",
+        "hasn't ",
+        "can't ",
+        "cannot ",
+        "unable ",
+        "failed to ",
+        "stopped ",
+        "quit ",
+        "gave up ",
     ]
     q_tokens = set(re.findall(r"\w{3,}", query))
     neg_hits = 0
@@ -201,7 +237,7 @@ def _extract_yes_no(text: str, query: str) -> str | None:
     for token in q_tokens:
         pos = t.find(token)
         if pos >= 0:
-            window = t[max(0, pos - 40):pos + 40]
+            window = t[max(0, pos - 40) : pos + 40]
             if any(neg in window for neg in _negation_markers):
                 neg_hits += 1
             else:
@@ -213,14 +249,17 @@ def _extract_yes_no(text: str, query: str) -> str | None:
 
 # ── Query-proximity scoring ──────────────────────────────────────
 
+
 def _best_by_proximity(
-    candidates: list[tuple[str, int]], text: str, query: str,
+    candidates: list[tuple[str, int]],
+    text: str,
+    query: str,
 ) -> str:
     """Return the candidate closest to query terms in the text."""
     q_tokens = set(re.findall(r"\w{3,}", query.lower()))
     best_score, best_val = -1, candidates[0][0]
     for val, pos in candidates:
-        window = text[max(0, pos - 80):pos + len(val) + 80].lower()
+        window = text[max(0, pos - 80) : pos + len(val) + 80].lower()
         overlap = sum(1 for t in q_tokens if t in window)
         if overlap > best_score:
             best_score = overlap
@@ -229,6 +268,7 @@ def _best_by_proximity(
 
 
 # ── Fuzzy matching ───────────────────────────────────────────────
+
 
 def fuzzy_match(candidate: str, gold: str, threshold: float = 0.7) -> bool:
     """Check if candidate fuzzy-matches gold answer."""
@@ -244,12 +284,36 @@ def fuzzy_match(candidate: str, gold: str, threshold: float = 0.7) -> bool:
 # ── Number normalization ─────────────────────────────────────────
 
 _WORD_TO_NUM = {
-    "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
-    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
-    "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15,
-    "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19, "twenty": 20,
-    "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60,
-    "seventy": 70, "eighty": 80, "ninety": 90, "hundred": 100, "thousand": 1000,
+    "zero": 0,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+    "thirteen": 13,
+    "fourteen": 14,
+    "fifteen": 15,
+    "sixteen": 16,
+    "seventeen": 17,
+    "eighteen": 18,
+    "nineteen": 19,
+    "twenty": 20,
+    "thirty": 30,
+    "forty": 40,
+    "fifty": 50,
+    "sixty": 60,
+    "seventy": 70,
+    "eighty": 80,
+    "ninety": 90,
+    "hundred": 100,
+    "thousand": 1000,
 }
 
 
@@ -292,6 +356,7 @@ def normalize_number(text: str) -> str | None:
 
 # ── Sentence extraction ──────────────────────────────────────────
 
+
 def extract_best_sentence(query: str, paragraph: str) -> str | None:
     """Return the sentence most relevant to the query."""
     sentences = re.split(r"(?<=[.!?])\s+", paragraph)
@@ -314,8 +379,10 @@ def extract_best_sentence(query: str, paragraph: str) -> str | None:
 
 # ── LLM-powered extraction ─────────────────────────────────────
 
-def llm_extract_answer(query: str, paragraph: str,
-                       model: str = "claude-haiku-4-5-20251001") -> str | None:
+
+def llm_extract_answer(
+    query: str, paragraph: str, model: str = "claude-haiku-4-5-20251001"
+) -> str | None:
     """Extract answer via Anthropic API. Fallback when regex returns None.
 
     Requires ANTHROPIC_API_KEY env var and `pip install anthropic`.
@@ -335,15 +402,17 @@ def llm_extract_answer(query: str, paragraph: str,
         response = client.messages.create(
             model=model,
             max_tokens=100,
-            messages=[{
-                "role": "user",
-                "content": (
-                    "Given this context, answer the question in 1-2 sentences. "
-                    "If the context doesn't contain the answer, say 'unknown'.\n\n"
-                    f"Context: {paragraph[:1000]}\n\n"
-                    f"Question: {query}"
-                ),
-            }],
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        "Given this context, answer the question in 1-2 sentences. "
+                        "If the context doesn't contain the answer, say 'unknown'.\n\n"
+                        f"Context: {paragraph[:1000]}\n\n"
+                        f"Question: {query}"
+                    ),
+                }
+            ],
         )
         answer = response.content[0].text.strip()
         if answer.lower() in ("unknown", "i don't know", "not mentioned"):
@@ -366,14 +435,16 @@ def _get_client():
         return None
     try:
         import anthropic
+
         _ANTHROPIC_CLIENT = anthropic.Anthropic(api_key=api_key)
         return _ANTHROPIC_CLIENT
     except ImportError:  # pragma: no cover
         return None
 
 
-def llm_generate_prospective_queries(paragraph: str, doc_name: str,
-                                     model: str = "claude-haiku-4-5-20251001") -> list[str]:
+def llm_generate_prospective_queries(
+    paragraph: str, doc_name: str, model: str = "claude-haiku-4-5-20251001"
+) -> list[str]:
     """Generate hypothetical future queries for a paragraph via LLM.
 
     Kumiho technique: index by "what queries will need this" rather than
@@ -386,16 +457,18 @@ def llm_generate_prospective_queries(paragraph: str, doc_name: str,
         response = client.messages.create(
             model=model,
             max_tokens=200,
-            messages=[{
-                "role": "user",
-                "content": (
-                    "Generate 5 short search queries someone might use to find this information. "
-                    "Include: factual questions, decision lookups, metric requests, temporal questions. "
-                    "One query per line, no numbering.\n\n"
-                    f"Source: {doc_name}\n"
-                    f"Content: {paragraph[:800]}"
-                ),
-            }],
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        "Generate 5 short search queries someone might use to find this information. "
+                        "Include: factual questions, decision lookups, metric requests, temporal questions. "
+                        "One query per line, no numbering.\n\n"
+                        f"Source: {doc_name}\n"
+                        f"Content: {paragraph[:800]}"
+                    ),
+                }
+            ],
         )
         text = response.content[0].text.strip()
         queries = [q.strip() for q in text.split("\n") if q.strip() and len(q.strip()) > 5]
@@ -404,8 +477,9 @@ def llm_generate_prospective_queries(paragraph: str, doc_name: str,
         return []
 
 
-def llm_synthesize_answer(query: str, paragraphs: list[str],
-                          model: str = "claude-haiku-4-5-20251001") -> str | None:
+def llm_synthesize_answer(
+    query: str, paragraphs: list[str], model: str = "claude-haiku-4-5-20251001"
+) -> str | None:
     """Synthesize an answer from multiple retrieved paragraphs.
 
     Unlike llm_extract_answer (single paragraph), this reasons across
@@ -416,7 +490,7 @@ def llm_synthesize_answer(query: str, paragraphs: list[str],
     if not client:
         return None
     context = "\n\n---\n\n".join(  # pragma: no cover
-        f"[Source {i+1}]: {p[:600]}" for i, p in enumerate(paragraphs[:10])
+        f"[Source {i + 1}]: {p[:600]}" for i, p in enumerate(paragraphs[:10])
     )
 
     # Question-type-specific prompt (improves counterfactual/temporal)
@@ -426,27 +500,34 @@ def llm_synthesize_answer(query: str, paragraphs: list[str],
             "Answer the hypothetical question by reasoning about the person's "
             "stated preferences, personality, and past actions from the sources. "
             "Answer with 'Yes' or 'No' followed by a brief reason. "
-            "If insufficient information, say 'unknown'.")
-    elif any(w in q_lower for w in ["what are", "what does", "list", "hobbies",
-                                     "interests", "activities"]):  # pragma: no cover
+            "If insufficient information, say 'unknown'."
+        )
+    elif any(
+        w in q_lower
+        for w in ["what are", "what does", "list", "hobbies", "interests", "activities"]
+    ):  # pragma: no cover
         system_prompt = (
             "List ALL relevant items mentioned across ALL sources. "
             "Combine information from different sources into one complete answer. "
-            "If the answer isn't in the sources, say 'unknown'.")
+            "If the answer isn't in the sources, say 'unknown'."
+        )
     else:  # pragma: no cover
         system_prompt = (
             "Answer the question using ONLY the provided sources. "
             "Be concise (1-3 sentences). "
-            "If sources don't contain the answer, say 'unknown'.")
+            "If sources don't contain the answer, say 'unknown'."
+        )
 
     try:  # pragma: no cover
         response = client.messages.create(
             model=model,
             max_tokens=200,
-            messages=[{
-                "role": "user",
-                "content": f"{system_prompt}\n\n{context}\n\nQuestion: {query}",
-            }],
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"{system_prompt}\n\n{context}\n\nQuestion: {query}",
+                }
+            ],
         )
         answer = response.content[0].text.strip()
         if answer.lower() in ("unknown", "i don't know", "not mentioned"):

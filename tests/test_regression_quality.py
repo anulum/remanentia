@@ -10,6 +10,7 @@
 Uses synthetic conversations with known answers to catch quality
 regressions across code changes. Runs without external data or GPU.
 """
+
 from __future__ import annotations
 
 import math
@@ -104,9 +105,13 @@ def loaded_index(tmp_path_factory):
         for ti, turn in enumerate(conv["turns"]):
             doc_idx = len(idx.documents)
             from memory_index import Document
-            doc = Document(name=f"conv{ci}_turn{ti}", source="test",
-                           path=str(tmp / f"conv{ci}_turn{ti}.md"),
-                           paragraphs=[turn])
+
+            doc = Document(
+                name=f"conv{ci}_turn{ti}",
+                source="test",
+                path=str(tmp / f"conv{ci}_turn{ti}.md"),
+                paragraphs=[turn],
+            )
             idx.documents.append(doc)
             p_idx = len(idx.paragraph_tokens)
             idx.paragraph_index.append((doc_idx, 0))
@@ -147,11 +152,10 @@ class TestRetrievalQuality:
                 break
         return found
 
-    @pytest.mark.parametrize("ci,qi", [
-        (ci, qi)
-        for ci, conv in enumerate(CONVERSATIONS)
-        for qi in range(len(conv["questions"]))
-    ])
+    @pytest.mark.parametrize(
+        "ci,qi",
+        [(ci, qi) for ci, conv in enumerate(CONVERSATIONS) for qi in range(len(conv["questions"]))],
+    )
     def test_retrieval_quality(self, loaded_index, ci, qi):
         conv = CONVERSATIONS[ci]
         question, expected, category = conv["questions"][qi]

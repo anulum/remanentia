@@ -114,9 +114,11 @@ class TestObserveOnce:
         store_path = tmp_path / "notes.jsonl"
         triggers_path = tmp_path / "triggers.jsonl"
 
-        with patch("observer.WATCHED_DIRS", {"traces": traces_dir}), \
-             patch("knowledge_store.STORE_PATH", store_path), \
-             patch("knowledge_store.TRIGGERS_PATH", triggers_path):
+        with (
+            patch("observer.WATCHED_DIRS", {"traces": traces_dir}),
+            patch("knowledge_store.STORE_PATH", store_path),
+            patch("knowledge_store.TRIGGERS_PATH", triggers_path),
+        ):
             state = ObserverState()
             result = observe_once(state, {"traces": traces_dir})
 
@@ -134,9 +136,11 @@ class TestObserveOnce:
         store_path = tmp_path / "notes.jsonl"
         triggers_path = tmp_path / "triggers.jsonl"
 
-        with patch("observer.WATCHED_DIRS", {"traces": traces_dir}), \
-             patch("knowledge_store.STORE_PATH", store_path), \
-             patch("knowledge_store.TRIGGERS_PATH", triggers_path):
+        with (
+            patch("observer.WATCHED_DIRS", {"traces": traces_dir}),
+            patch("knowledge_store.STORE_PATH", store_path),
+            patch("knowledge_store.TRIGGERS_PATH", triggers_path),
+        ):
             state = ObserverState()
             r1 = observe_once(state, {"traces": traces_dir})
             r2 = observe_once(state, {"traces": traces_dir})

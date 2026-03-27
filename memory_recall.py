@@ -12,6 +12,7 @@ Usage::
     context = recall("Dimits shift convergence")
     print(context.summary)
 """
+
 from __future__ import annotations
 
 import json
@@ -31,6 +32,7 @@ HISTORY_PATH = BASE / "snn_state" / "retrieval_history.jsonl"
 @dataclass
 class MemoryContext:
     """Structured recall result — everything the system knows about a query."""
+
     query: str
     # Primary match
     trace: str = ""
@@ -74,7 +76,9 @@ class MemoryContext:
         if self.cross_project:
             lines.append(f"Cross-project: {len(self.cross_project)} insights")
         lines.append(f"Novelty: {self.novelty_score:.2f}")
-        lines.append(f"Recall took {self.elapsed_ms:.0f}ms, consulted {self.sources_consulted} sources")
+        lines.append(
+            f"Recall took {self.elapsed_ms:.0f}ms, consulted {self.sources_consulted} sources"
+        )
         return "\n".join(lines)
 
     def to_llm_context(self) -> str:
@@ -99,6 +103,7 @@ class MemoryContext:
 
 # ── Entity graph queries ─────────────────────────────────────────
 
+
 def _load_entities() -> dict[str, dict]:
     path = GRAPH_DIR / "entities.jsonl"
     if not path.exists():
@@ -115,7 +120,9 @@ def _load_relations() -> list[dict]:
     path = GRAPH_DIR / "relations.jsonl"
     if not path.exists():
         return []
-    return [json.loads(l) for l in path.read_text(encoding="utf-8").strip().split("\n") if l.strip()]
+    return [
+        json.loads(l) for l in path.read_text(encoding="utf-8").strip().split("\n") if l.strip()
+    ]
 
 
 def _find_related(entity_id: str, relations: list[dict], top_k: int = 10) -> list[dict]:
@@ -123,11 +130,23 @@ def _find_related(entity_id: str, relations: list[dict], top_k: int = 10) -> lis
     connected = []
     for r in relations:
         if r["source"] == entity_id:
-            connected.append({"entity": r["target"], "weight": r["weight"],
-                              "relation": r["type"], "evidence": r.get("evidence", [])})
+            connected.append(
+                {
+                    "entity": r["target"],
+                    "weight": r["weight"],
+                    "relation": r["type"],
+                    "evidence": r.get("evidence", []),
+                }
+            )
         elif r["target"] == entity_id:
-            connected.append({"entity": r["source"], "weight": r["weight"],
-                              "relation": r["type"], "evidence": r.get("evidence", [])})
+            connected.append(
+                {
+                    "entity": r["source"],
+                    "weight": r["weight"],
+                    "relation": r["type"],
+                    "evidence": r.get("evidence", []),
+                }
+            )
     connected.sort(key=lambda x: -x["weight"])
     return connected[:top_k]
 
@@ -143,6 +162,7 @@ def _entities_for_query(query: str, entities: dict) -> list[str]:
 
 
 # ── Semantic memory search ───────────────────────────────────────
+
 
 def _search_semantic(query: str, top_k: int = 5) -> list[dict]:
     """Search consolidated semantic memories."""
@@ -181,22 +201,25 @@ def _search_semantic(query: str, top_k: int = 5) -> list[dict]:
                 key_point = stripped.lstrip("- ").strip()
                 break
 
-        results.append({
-            "path": str(md_file.relative_to(BASE)),
-            "score": score,
-            "project": meta.get("project", ""),
-            "type": meta.get("type", ""),
-            "date": meta.get("date", ""),
-            "source_traces": meta.get("source_traces", ""),
-            "content": content[:1000],
-            "key_point": key_point,
-        })
+        results.append(
+            {
+                "path": str(md_file.relative_to(BASE)),
+                "score": score,
+                "project": meta.get("project", ""),
+                "type": meta.get("type", ""),
+                "date": meta.get("date", ""),
+                "source_traces": meta.get("source_traces", ""),
+                "content": content[:1000],
+                "key_point": key_point,
+            }
+        )
 
     results.sort(key=lambda x: -x["score"])
     return results[:top_k]
 
 
 # ── Temporal context ─────────────────────────────────────────────
+
 
 def _temporal_context(trace_name: str) -> tuple[list[str], list[str]]:
     """Find traces that came before and after the given trace."""
@@ -207,15 +230,17 @@ def _temporal_context(trace_name: str) -> tuple[list[str], list[str]]:
         return [], []
 
     idx = names.index(trace_name)
-    before = names[max(0, idx - 3):idx]
-    after = names[idx + 1:idx + 4]
+    before = names[max(0, idx - 3) : idx]
+    after = names[idx + 1 : idx + 4]
     return before, after
 
 
 # ── Cross-project insights ───────────────────────────────────────
 
-def _cross_project_insights(entities: list[str], primary_project: str,
-                             all_entities: dict, relations: list[dict]) -> list[dict]:
+
+def _cross_project_insights(
+    entities: list[str], primary_project: str, all_entities: dict, relations: list[dict]
+) -> list[dict]:
     """Find insights from other projects that share entities."""
     insights = []
     seen_projects = {primary_project}
@@ -230,23 +255,26 @@ def _cross_project_insights(entities: list[str], primary_project: str,
                 # Find what connects them
                 shared = []
                 for rel in relations:
-                    if (rel["source"] == r["entity"] or rel["target"] == r["entity"]):
+                    if rel["source"] == r["entity"] or rel["target"] == r["entity"]:
                         other = rel["target"] if rel["source"] == r["entity"] else rel["source"]
                         if other in entities:
                             shared.append(other)
                 if shared:
-                    insights.append({
-                        "project": r["entity"],
-                        "shared_concepts": shared,
-                        "insight": f"{r['entity']} shares concepts: {', '.join(shared[:5])}",
-                        "weight": r["weight"],
-                    })
+                    insights.append(
+                        {
+                            "project": r["entity"],
+                            "shared_concepts": shared,
+                            "insight": f"{r['entity']} shares concepts: {', '.join(shared[:5])}",
+                            "weight": r["weight"],
+                        }
+                    )
 
     insights.sort(key=lambda x: -x["weight"])
     return insights[:5]
 
 
 # ── Novelty assessment ───────────────────────────────────────────
+
 
 def _assess_novelty(query: str, entities: dict) -> float:
     """How novel is this query relative to known entities?
@@ -267,6 +295,7 @@ def _assess_novelty(query: str, entities: dict) -> float:
 
 # ── Main recall function ─────────────────────────────────────────
 
+
 def recall(
     query: str,
     top_k: int = 3,
@@ -283,6 +312,7 @@ def recall(
     # 1. Primary retrieval via MemoryIndex (unified stack)
     try:
         from memory_index import MemoryIndex
+
         idx = MemoryIndex()
         if not idx.load():
             idx.build(use_gpu_embeddings=False, use_gliner=False)
@@ -335,7 +365,8 @@ def recall(
     if query_entities:
         primary = query_entities[0] if query_entities else ""
         ctx.cross_project = _cross_project_insights(
-            query_entities, primary, all_entities, relations)
+            query_entities, primary, all_entities, relations
+        )
 
     # 6. Novelty
     ctx.novelty_score = _assess_novelty(query, all_entities)
@@ -351,6 +382,7 @@ def recall(
 if __name__ == "__main__":
     import sys
     import io
+
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     query = " ".join(sys.argv[1:]) or "Dimits shift convergence"
     print(f"Recalling: {query}\n")

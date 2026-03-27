@@ -18,8 +18,9 @@ from reflector import (
 from knowledge_store import KnowledgeNote, KnowledgeStore
 
 
-def _make_note(content, keywords=None, entities=None, source="test.md",
-               supersedes="", superseded_by=""):
+def _make_note(
+    content, keywords=None, entities=None, source="test.md", supersedes="", superseded_by=""
+):
     now = time.strftime("%Y-%m-%dT%H%M", time.gmtime())
     return KnowledgeNote(
         id=f"n{hash(content) % 10000}",
@@ -84,6 +85,7 @@ class TestGenerateSummaryLLM:
         import os
         from unittest.mock import patch as p
         import answer_extractor
+
         answer_extractor._ANTHROPIC_CLIENT = None
         notes = [_make_note("test content")]
         with p.dict(os.environ, {}, clear=True):
@@ -141,9 +143,11 @@ class TestReflectOnce:
         store.save(notes_path, triggers_path)
         digest_dir = tmp_path / "digests"
 
-        with patch("knowledge_store.STORE_PATH", notes_path), \
-             patch("knowledge_store.TRIGGERS_PATH", triggers_path), \
-             patch("reflector.BASE", tmp_path):
+        with (
+            patch("knowledge_store.STORE_PATH", notes_path),
+            patch("knowledge_store.TRIGGERS_PATH", triggers_path),
+            patch("reflector.BASE", tmp_path),
+        ):
             result = reflect_once(days=30, use_llm=False)
 
         assert result["status"] == "ok"
@@ -153,8 +157,10 @@ class TestReflectOnce:
 
     def test_reflect_no_notes(self, tmp_path):
         notes_path = tmp_path / "notes.jsonl"
-        with patch("knowledge_store.STORE_PATH", notes_path), \
-             patch("knowledge_store.TRIGGERS_PATH", tmp_path / "t.jsonl"):
+        with (
+            patch("knowledge_store.STORE_PATH", notes_path),
+            patch("knowledge_store.TRIGGERS_PATH", tmp_path / "t.jsonl"),
+        ):
             result = reflect_once(days=7)
         assert result["status"] == "no_notes"
 
@@ -167,8 +173,10 @@ class TestReflectOnce:
         triggers_path = tmp_path / "triggers.jsonl"
         store.save(notes_path, triggers_path)
 
-        with patch("knowledge_store.STORE_PATH", notes_path), \
-             patch("knowledge_store.TRIGGERS_PATH", triggers_path):
+        with (
+            patch("knowledge_store.STORE_PATH", notes_path),
+            patch("knowledge_store.TRIGGERS_PATH", triggers_path),
+        ):
             result = reflect_once(days=7)
         assert result["status"] == "nothing_recent"
 
@@ -180,9 +188,11 @@ class TestReflectOnce:
         triggers_path = tmp_path / "triggers.jsonl"
         store.save(notes_path, triggers_path)
 
-        with patch("knowledge_store.STORE_PATH", notes_path), \
-             patch("knowledge_store.TRIGGERS_PATH", triggers_path), \
-             patch("reflector.BASE", tmp_path):
+        with (
+            patch("knowledge_store.STORE_PATH", notes_path),
+            patch("knowledge_store.TRIGGERS_PATH", triggers_path),
+            patch("reflector.BASE", tmp_path),
+        ):
             result = reflect_once(days=30, use_llm=False)
 
         if result.get("gaps", 0) > 0:

@@ -88,7 +88,9 @@ class TestTokenize:
 
 class TestSplitParagraphs:
     def test_markdown_split(self):
-        text = "First paragraph here with enough content.\n\nSecond paragraph also has enough content."
+        text = (
+            "First paragraph here with enough content.\n\nSecond paragraph also has enough content."
+        )
         paras = _split_paragraphs(text)
         assert len(paras) == 2
         assert "First" in paras[0]
@@ -279,16 +281,19 @@ class TestParseDate:
 class TestRecencyBoost:
     def test_today_high_boost(self):
         from datetime import date
+
         today = date.today().isoformat()
         assert _recency_boost(today) == 1.8
 
     def test_3_day_old_boost(self):
         from datetime import date, timedelta
+
         d = (date.today() - timedelta(days=3)).isoformat()
         assert _recency_boost(d) == 1.4
 
     def test_10_day_old_boost(self):
         from datetime import date, timedelta
+
         d = (date.today() - timedelta(days=10)).isoformat()
         assert _recency_boost(d) == 1.2
 
@@ -630,6 +635,7 @@ class TestNeedsRebuild:
         (source_dir / "old.md").write_text("old content", encoding="utf-8")
         # Touch the index to be newer
         import os
+
         os.utime(idx_path, None)
 
         with patch("memory_index.INDEX_PATH", idx_path):
@@ -647,6 +653,7 @@ class TestNeedsRebuild:
         py_file.write_text("def search(query):\n    return []\n", encoding="utf-8")
 
         import os
+
         old_time = idx_path.stat().st_mtime - 100
         os.utime(idx_path, (old_time, old_time))
 
@@ -761,6 +768,7 @@ class TestSaveLoadEmbeddings:
     def test_load_legacy_4tuple_format(self, tmp_path):
         """Load index saved with old 4-tuple document format."""
         import pickle
+
         data = {
             "documents": [("test.md", "src", "/test.md", ["para1"])],
             "paragraph_index": [(0, 0)],
@@ -785,9 +793,11 @@ class TestTemporalSorting:
         docs_dir = tmp_path / "docs"
         docs_dir.mkdir()
         (docs_dir / "2026-03-10_old.md").write_text(
-            "# Old\n\nWhen did we start in 2026-03-10 on the project.", encoding="utf-8")
+            "# Old\n\nWhen did we start in 2026-03-10 on the project.", encoding="utf-8"
+        )
         (docs_dir / "2026-03-20_new.md").write_text(
-            "# New\n\nWhen was the latest update on 2026-03-20.", encoding="utf-8")
+            "# New\n\nWhen was the latest update on 2026-03-20.", encoding="utf-8"
+        )
         idx = MemoryIndex()
         with patch("memory_index.SOURCES", {"test": docs_dir}):
             with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}):
@@ -799,9 +809,11 @@ class TestTemporalSorting:
         docs_dir = tmp_path / "docs"
         docs_dir.mkdir()
         (docs_dir / "2026-03-10_old.md").write_text(
-            "# Old\n\nThe first experiment was on 2026-03-10 with STDP.", encoding="utf-8")
+            "# Old\n\nThe first experiment was on 2026-03-10 with STDP.", encoding="utf-8"
+        )
         (docs_dir / "2026-03-20_new.md").write_text(
-            "# New\n\nThe first thing we tried with STDP was this.", encoding="utf-8")
+            "# New\n\nThe first thing we tried with STDP was this.", encoding="utf-8"
+        )
         idx = MemoryIndex()
         with patch("memory_index.SOURCES", {"test": docs_dir}):
             with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}):
@@ -819,7 +831,8 @@ class TestSearchLLM:
         docs_dir.mkdir()
         (docs_dir / "test.md").write_text(
             "# Testing Suite\n\nThis is a comprehensive testing document about various testing approaches and testing strategies.",
-            encoding="utf-8")
+            encoding="utf-8",
+        )
         idx = MemoryIndex()
         with patch("memory_index.SOURCES", {"test": docs_dir}):
             with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}):
@@ -832,7 +845,8 @@ class TestSearchLLM:
         docs_dir.mkdir()
         (docs_dir / "test.md").write_text(
             "# Testing Suite\n\nThis is a comprehensive testing document about various testing approaches and testing strategies.",
-            encoding="utf-8")
+            encoding="utf-8",
+        )
         idx = MemoryIndex()
         with patch("memory_index.SOURCES", {"test": docs_dir}):
             with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}):
@@ -848,28 +862,39 @@ class TestAutoRebuild:
     def test_rebuild_when_no_index(self, tmp_path):
         docs_dir = tmp_path / "docs"
         docs_dir.mkdir()
-        (docs_dir / "test.md").write_text("# Test\n\nEnough content for indexing here.", encoding="utf-8")
+        (docs_dir / "test.md").write_text(
+            "# Test\n\nEnough content for indexing here.", encoding="utf-8"
+        )
         idx_path = tmp_path / "missing_index.pkl"
-        with patch("memory_index.INDEX_PATH", idx_path), \
-             patch("memory_index.SOURCES", {"test": docs_dir}), \
-             patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}):
+        with (
+            patch("memory_index.INDEX_PATH", idx_path),
+            patch("memory_index.SOURCES", {"test": docs_dir}),
+            patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}),
+        ):
             idx = auto_rebuild_if_needed(use_gpu=False)
         assert idx._built is True
 
     def test_no_rebuild_when_fresh(self, tmp_path):
         docs_dir = tmp_path / "docs"
         docs_dir.mkdir()
-        (docs_dir / "test.md").write_text("# Test\n\nEnough content here for index.", encoding="utf-8")
+        (docs_dir / "test.md").write_text(
+            "# Test\n\nEnough content here for index.", encoding="utf-8"
+        )
         idx_path = tmp_path / "fresh_index.pkl"
         idx = MemoryIndex()
-        with patch("memory_index.SOURCES", {"test": docs_dir}), \
-             patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}):
+        with (
+            patch("memory_index.SOURCES", {"test": docs_dir}),
+            patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}),
+        ):
             idx.build(use_gpu_embeddings=False, use_gliner=False)
         idx.save(idx_path)
         import os
+
         os.utime(idx_path, None)
-        with patch("memory_index.INDEX_PATH", idx_path), \
-             patch("memory_index.SOURCES", {"test": docs_dir}):
+        with (
+            patch("memory_index.INDEX_PATH", idx_path),
+            patch("memory_index.SOURCES", {"test": docs_dir}),
+        ):
             idx2 = auto_rebuild_if_needed(use_gpu=False)
         assert idx2._built is True
 
@@ -910,7 +935,8 @@ class TestBuildEdgeCases:
         (docs_dir / "short.md").write_text("hi", encoding="utf-8")
         (docs_dir / "long.md").write_text(
             "# Test Document\n\nThis is long enough content for the indexing pipeline to accept it properly.",
-            encoding="utf-8")
+            encoding="utf-8",
+        )
         idx = MemoryIndex()
         with patch("memory_index.SOURCES", {"test": docs_dir}):
             with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}):
@@ -924,7 +950,9 @@ class TestBuildEdgeCases:
         venv = docs_dir / ".venv" / "lib"
         venv.mkdir(parents=True)
         (venv / "module.py").write_text("# long enough content for index builder", encoding="utf-8")
-        (docs_dir / "real.md").write_text("# Test\n\nReal content for indexing purposes.", encoding="utf-8")
+        (docs_dir / "real.md").write_text(
+            "# Test\n\nReal content for indexing purposes.", encoding="utf-8"
+        )
         idx = MemoryIndex()
         with patch("memory_index.SOURCES", {"test": docs_dir}):
             with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md", ".py"}}):
@@ -935,17 +963,23 @@ class TestBuildEdgeCases:
     def test_search_triggers_build(self, tmp_path):
         docs_dir = tmp_path / "docs"
         docs_dir.mkdir()
-        (docs_dir / "test.md").write_text("# Test\n\nContent about automated build testing.", encoding="utf-8")
+        (docs_dir / "test.md").write_text(
+            "# Test\n\nContent about automated build testing.", encoding="utf-8"
+        )
         idx = MemoryIndex()
-        with patch("memory_index.SOURCES", {"test": docs_dir}), \
-             patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}):
+        with (
+            patch("memory_index.SOURCES", {"test": docs_dir}),
+            patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}),
+        ):
             results = idx.search("automated build", top_k=3)
         assert idx._built is True
 
     def test_add_file_short_content(self, tmp_path):
         docs_dir = tmp_path / "docs"
         docs_dir.mkdir()
-        (docs_dir / "a.md").write_text("# Test\n\nSome content long enough for build.", encoding="utf-8")
+        (docs_dir / "a.md").write_text(
+            "# Test\n\nSome content long enough for build.", encoding="utf-8"
+        )
         idx = MemoryIndex()
         with patch("memory_index.SOURCES", {"test": docs_dir}):
             with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}):
@@ -968,9 +1002,11 @@ class TestDocTypeFilter:
         docs_dir = tmp_path / "docs"
         docs_dir.mkdir()
         (docs_dir / "code.py").write_text(
-            '"""Module doc."""\n\ndef search_function():\n    pass\n', encoding="utf-8")
+            '"""Module doc."""\n\ndef search_function():\n    pass\n', encoding="utf-8"
+        )
         (docs_dir / "note.md").write_text(
-            "# Note\n\nThis is a note about search functions and algorithms.", encoding="utf-8")
+            "# Note\n\nThis is a note about search functions and algorithms.", encoding="utf-8"
+        )
         idx = MemoryIndex()
         with patch("memory_index.SOURCES", {"code_test": docs_dir}):
             with patch("memory_index.SOURCE_EXTENSIONS", {"code_test": {".py", ".md"}}):
@@ -1057,6 +1093,7 @@ class TestEntityGraphHelpers:
 
     def test_load_entity_graph_missing_files(self, tmp_path):
         import memory_index
+
         original = memory_index.GRAPH_DIR
         memory_index.GRAPH_DIR = tmp_path / "nonexistent"
         memory_index._ENTITY_GRAPH = None
@@ -1070,15 +1107,16 @@ class TestEntityGraphHelpers:
 
     def test_load_entity_graph_with_data(self, tmp_path):
         import memory_index
+
         original = memory_index.GRAPH_DIR
         graph_dir = tmp_path / "graph"
         graph_dir.mkdir()
         (graph_dir / "entities.jsonl").write_text(
-            json.dumps({"id": "e1", "type": "concept", "label": "test"}) + "\n",
-            encoding="utf-8")
+            json.dumps({"id": "e1", "type": "concept", "label": "test"}) + "\n", encoding="utf-8"
+        )
         (graph_dir / "relations.jsonl").write_text(
-            json.dumps({"source": "e1", "target": "e2", "weight": 1.0}) + "\n",
-            encoding="utf-8")
+            json.dumps({"source": "e1", "target": "e2", "weight": 1.0}) + "\n", encoding="utf-8"
+        )
         memory_index.GRAPH_DIR = graph_dir
         memory_index._ENTITY_GRAPH = None
         try:
@@ -1100,13 +1138,18 @@ class TestPersonNameBoostInSearch:
         (traces / "alice_trace.md").write_text(
             "# Alice's Piano Hobby\n\nAlice has been learning piano since January.\n"
             "She practices every day and loves Chopin.\n"
-            "Alice considers piano her favorite hobby.", encoding="utf-8")
+            "Alice considers piano her favorite hobby.",
+            encoding="utf-8",
+        )
         (traces / "weather_trace.md").write_text(
             "# Weather Report\n\nThe temperature today is 22 degrees.\n"
             "Piano lessons are cancelled due to rain.\n"
-            "No specific person mentioned here at all.", encoding="utf-8")
+            "No specific person mentioned here at all.",
+            encoding="utf-8",
+        )
 
         import memory_index
+
         original_sources = memory_index.SOURCES
         memory_index.SOURCES = {"test": traces}
         try:
@@ -1127,10 +1170,10 @@ class TestIdfZeroEdge:
     def test_zero_idf_token_skipped(self, tmp_path):
         traces = tmp_path / "traces"
         traces.mkdir()
-        (traces / "doc.md").write_text(
-            "# Alpha\n\nAlpha beta gamma delta.", encoding="utf-8")
+        (traces / "doc.md").write_text("# Alpha\n\nAlpha beta gamma delta.", encoding="utf-8")
 
         import memory_index
+
         original_sources = memory_index.SOURCES
         memory_index.SOURCES = {"test": traces}
         try:
@@ -1154,9 +1197,12 @@ class TestTemporalCodeExecution:
         (traces / "meeting.md").write_text(
             "# Meeting Notes\n\n"
             "The project started on 2026-01-15 and the deadline is 2026-06-30.\n"
-            "We need to finish the review by 2026-03-01.", encoding="utf-8")
+            "We need to finish the review by 2026-03-01.",
+            encoding="utf-8",
+        )
 
         import memory_index
+
         original_sources = memory_index.SOURCES
         memory_index.SOURCES = {"test": traces}
         try:
