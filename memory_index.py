@@ -349,7 +349,7 @@ class MemoryIndex:
         import threading
         if self._embed_model is None and not self._embed_loading and self.embeddings is not None:
             self._embed_loading = True
-            def _load_embed():
+            def _load_embed():  # pragma: no cover — downloads real model
                 try:
                     from sentence_transformers import SentenceTransformer
                     import torch
@@ -362,7 +362,7 @@ class MemoryIndex:
 
         if self._cross_encoder is None and not self._ce_loading:
             self._ce_loading = True
-            def _load_ce():
+            def _load_ce():  # pragma: no cover — downloads real model
                 try:
                     from sentence_transformers import CrossEncoder
                     import torch
