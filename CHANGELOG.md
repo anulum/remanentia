@@ -11,11 +11,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - MkDocs documentation site with 4 guides, 9 API refs, benchmarks, research
 - GitHub issue/PR templates, dependabot, CodeQL, Scorecard, stale bot workflows
 - README badges, header image, branding footer
+- **100% test coverage**: 844 tests across 16 modules (3,423 stmts, zero lines missing)
+- Tests for api_server.py, arcane_retriever.py, fact_decomposer.py (3 new test files)
+- api_server, arcane_retriever, fact_decomposer added to py-modules
 
 ### Fixed
 - CI: PEP 639 license classifier conflict
 - CI: mock anthropic import in _get_client tests
 - SPDX headers: Sotek → Šotek across all source files
+- SPDX headers: full 6-line header on all edited test files
 
 ## [0.3.1] - 2026-03-26
 
