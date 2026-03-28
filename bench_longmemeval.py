@@ -152,7 +152,7 @@ def _answer_from_retrieval(
 
         response = client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=300,
+            max_tokens=400,
             messages=[{"role": "user", "content": prompt}],
         )
         answer = response.content[0].text.strip()
@@ -169,8 +169,8 @@ def _answer_from_retrieval(
 def _build_context(question: str, idx, results, sessions: list, qtype: str) -> str:
     """Build LLM context adapted to question type."""
 
-    if qtype in ("multi-session", "temporal-reasoning"):
-        # For cross-session tasks: include ALL session content (oracle has few sessions)
+    if qtype in ("multi-session", "temporal-reasoning", "knowledge-update"):
+        # Cross-session + temporal + knowledge-update: full session content
         parts = []
         for sess_idx, session in enumerate(sessions):
             turns = []
@@ -178,37 +178,61 @@ def _build_context(question: str, idx, results, sessions: list, qtype: str) -> s
                 role = turn["role"].upper()
                 turns.append(f"[{role}]: {turn['content']}")
             parts.append(f"=== Session {sess_idx + 1} ===\n" + "\n".join(turns))
-        return "\n\n".join(parts)
+        context = "\n\n".join(parts)
 
-    # For single-session tasks: use top BM25 results with full paragraphs
+        # For temporal: prepend extracted dates
+        if qtype == "temporal-reasoning":
+            dates_info = _extract_temporal_facts(sessions)
+            if dates_info:
+                context = f"EXTRACTED DATES AND EVENTS:\n{dates_info}\n\n{context}"
+
+        return context
+
+    # Single-session types: focused BM25 results (no noise from surrounding turns)
     paras = []
-    seen_sources = set()
-    for r in results[:8]:
+    for r in results[:5]:
         doc_idx = next(
             (di for di, d in enumerate(idx.documents) if d.name == r.name), None
         )
         if doc_idx is not None:
-            source = idx.documents[doc_idx].source
             full_text = idx.documents[doc_idx].paragraphs[r.paragraph_idx]
-            if source not in seen_sources:
-                seen_sources.add(source)
-                # Include surrounding turns from the same session
-                session_turns = _get_session_turns(idx, source)
-                paras.append(f"[Session {source}]:\n{session_turns}")
-            else:
-                paras.append(f"[{r.name}]: {full_text[:1000]}")
+            paras.append(full_text[:1500])
+        else:
+            paras.append(r.snippet)
 
-    return "\n\n---\n\n".join(paras[:5])
+    return "\n\n---\n\n".join(paras)
 
 
-def _get_session_turns(idx, source: str) -> str:
-    """Get all turns from a session, concatenated."""
-    turns = []
-    for di, doc in enumerate(idx.documents):
-        if doc.source == source:
-            role = "USER" if "user" in doc.name else "ASSISTANT"
-            turns.append(f"[{role}]: {doc.paragraphs[0][:800]}")
-    return "\n".join(turns[:20])
+def _extract_temporal_facts(sessions: list) -> str:
+    """Extract dates and temporal references from sessions for pre-computation."""
+    import re
+    from datetime import datetime, timedelta
+
+    events = []
+    date_patterns = [
+        r"(?:on\s+|since\s+|from\s+)?(\w+ \d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{4})?)",
+        r"(\d{1,2}/\d{1,2}/\d{2,4})",
+        r"((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{4})?)",
+    ]
+
+    for sess_idx, session in enumerate(sessions):
+        for turn in session:
+            if turn["role"] != "user":
+                continue
+            text = turn["content"]
+            for pattern in date_patterns:
+                for m in re.finditer(pattern, text):
+                    date_str = m.group(1) if m.lastindex else m.group()
+                    # Get surrounding context
+                    start = max(0, m.start() - 60)
+                    end = min(len(text), m.end() + 60)
+                    context = text[start:end].strip()
+                    events.append(f"Session {sess_idx+1}: \"{context}\" [date: {date_str}]")
+
+    if not events:
+        return ""
+
+    return "\n".join(events[:20])
 
 
 def _type_prompt(question: str, qtype: str, context: str) -> str:
@@ -216,15 +240,16 @@ def _type_prompt(question: str, qtype: str, context: str) -> str:
 
     if qtype == "temporal-reasoning":
         return (
-            "You are answering a temporal reasoning question about events in a conversation history.\n\n"
-            "INSTRUCTIONS:\n"
-            "1. Identify ALL dates mentioned in the conversations\n"
-            "2. If the question asks 'how many days', calculate the exact difference\n"
-            "3. If the question asks 'which came first', compare dates\n"
-            "4. START your answer with the final answer, then explain briefly\n\n"
-            f"Conversation history:\n{context}\n\n"
+            "Answer this temporal question about a conversation history.\n\n"
+            "RULES:\n"
+            "- 'How many days between A and B': count calendar days from A to B (exclusive of start, inclusive of end)\n"
+            "- 'Which came first': compare the dates\n"
+            "- 'What was the first/last X': find the earliest/latest dated event matching X\n"
+            "- If counting days: show the two dates and the subtraction\n"
+            "- START with the direct answer\n\n"
+            f"{context}\n\n"
             f"Question: {question}\n\n"
-            "Give the answer FIRST, then a brief explanation. Example: '7 days. The workshop was on Jan 10 and the meeting on Jan 17.'"
+            "Answer:"
         )
 
     if qtype == "multi-session":
@@ -248,13 +273,13 @@ def _type_prompt(question: str, qtype: str, context: str) -> str:
 
     if qtype == "single-session-preference":
         return (
-            "You are answering a question about the user's preferences based on their conversation.\n\n"
-            "IMPORTANT: Focus on what the user has explicitly stated about their preferences, "
-            "habits, interests, or personal information. Tailor your response to reflect "
-            "their specific preferences.\n\n"
+            "The user is asking a general question. Based on their conversation history, "
+            "provide a personalized answer that reflects their specific preferences, "
+            "interests, and personal details mentioned in the conversation.\n\n"
+            "Do NOT give a generic answer. Use the user's actual stated preferences.\n\n"
             f"Conversation history:\n{context}\n\n"
             f"Question: {question}\n\n"
-            "Answer by incorporating the user's stated preferences. Be specific and personalized."
+            "Give a personalized response (2-3 sentences) that reflects the user's specific situation."
         )
 
     # single-session-user, single-session-assistant
