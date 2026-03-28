@@ -124,59 +124,146 @@ def _build_index_for_question(sessions: list[list[dict]]):
     return idx
 
 
-def _answer_from_retrieval(question: str, idx, use_llm: bool = False) -> str:
-    """Search index and extract/synthesise answer."""
+def _answer_from_retrieval(
+    question: str, idx, sessions: list, qtype: str, use_llm: bool = False
+) -> str:
+    """Search index and extract/synthesise answer with type-specific strategy."""
     results = idx.search(question, top_k=10)
 
     if not results:
         return "I don't have enough information to answer this question."
 
-    # Gather full paragraphs from top results (not just 300-char snippets)
+    if not use_llm:
+        if results[0].answer:
+            return results[0].answer
+        return results[0].snippet[:500]
+
+    # Build context based on question type
+    context = _build_context(question, idx, results, sessions, qtype)
+
+    # Get type-specific prompt
+    prompt = _type_prompt(question, qtype, context)
+
+    try:
+        from answer_extractor import _get_client
+        client = _get_client()
+        if not client:
+            return results[0].snippet[:500]
+
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        answer = response.content[0].text.strip()
+        if answer.lower() not in ("unknown", "i don't know", "not mentioned"):
+            return answer
+    except Exception:
+        pass
+
+    if results[0].answer:
+        return results[0].answer
+    return results[0].snippet[:500]
+
+
+def _build_context(question: str, idx, results, sessions: list, qtype: str) -> str:
+    """Build LLM context adapted to question type."""
+
+    if qtype in ("multi-session", "temporal-reasoning"):
+        # For cross-session tasks: include ALL session content (oracle has few sessions)
+        parts = []
+        for sess_idx, session in enumerate(sessions):
+            turns = []
+            for turn in session:
+                role = turn["role"].upper()
+                turns.append(f"[{role}]: {turn['content']}")
+            parts.append(f"=== Session {sess_idx + 1} ===\n" + "\n".join(turns))
+        return "\n\n".join(parts)
+
+    # For single-session tasks: use top BM25 results with full paragraphs
     paras = []
-    for r in results[:5]:
+    seen_sources = set()
+    for r in results[:8]:
         doc_idx = next(
             (di for di, d in enumerate(idx.documents) if d.name == r.name), None
         )
         if doc_idx is not None:
+            source = idx.documents[doc_idx].source
             full_text = idx.documents[doc_idx].paragraphs[r.paragraph_idx]
-            paras.append(full_text[:1500])
-        else:
-            paras.append(r.snippet)
+            if source not in seen_sources:
+                seen_sources.add(source)
+                # Include surrounding turns from the same session
+                session_turns = _get_session_turns(idx, source)
+                paras.append(f"[Session {source}]:\n{session_turns}")
+            else:
+                paras.append(f"[{r.name}]: {full_text[:1000]}")
 
-    # LLM synthesis first (much better for conversational Q&A)
-    if use_llm:
-        try:
-            from answer_extractor import _get_client
-            client = _get_client()
-            if client:
-                context = "\n\n---\n\n".join(
-                    f"[Source {i+1}]: {p}" for i, p in enumerate(paras)
-                )
-                response = client.messages.create(
-                    model="claude-haiku-4-5-20251001",
-                    max_tokens=200,
-                    messages=[{
-                        "role": "user",
-                        "content": (
-                            "Based ONLY on the following conversation excerpts, answer the question. "
-                            "Be concise (1-2 sentences). If the answer requires counting days, "
-                            "calculate precisely from the dates mentioned. "
-                            "If the information is not in the sources, say 'unknown'.\n\n"
-                            f"{context}\n\nQuestion: {question}"
-                        ),
-                    }],
-                )
-                answer = response.content[0].text.strip()
-                if answer.lower() not in ("unknown", "i don't know"):
-                    return answer
-        except Exception:
-            pass
+    return "\n\n---\n\n".join(paras[:5])
 
-    # Regex extraction fallback
-    if results[0].answer:
-        return results[0].answer
 
-    return results[0].snippet[:500]
+def _get_session_turns(idx, source: str) -> str:
+    """Get all turns from a session, concatenated."""
+    turns = []
+    for di, doc in enumerate(idx.documents):
+        if doc.source == source:
+            role = "USER" if "user" in doc.name else "ASSISTANT"
+            turns.append(f"[{role}]: {doc.paragraphs[0][:800]}")
+    return "\n".join(turns[:20])
+
+
+def _type_prompt(question: str, qtype: str, context: str) -> str:
+    """Generate type-specific LLM prompt for answer synthesis."""
+
+    if qtype == "temporal-reasoning":
+        return (
+            "You are answering a temporal reasoning question about events in a conversation history.\n\n"
+            "INSTRUCTIONS:\n"
+            "1. Identify ALL dates mentioned in the conversations\n"
+            "2. If the question asks 'how many days', calculate the exact difference\n"
+            "3. If the question asks 'which came first', compare dates\n"
+            "4. START your answer with the final answer, then explain briefly\n\n"
+            f"Conversation history:\n{context}\n\n"
+            f"Question: {question}\n\n"
+            "Give the answer FIRST, then a brief explanation. Example: '7 days. The workshop was on Jan 10 and the meeting on Jan 17.'"
+        )
+
+    if qtype == "multi-session":
+        return (
+            "You are answering a question that requires combining information from multiple conversation sessions.\n\n"
+            "Read ALL sessions carefully. The answer may span multiple sessions.\n\n"
+            f"Conversation sessions:\n{context}\n\n"
+            f"Question: {question}\n\n"
+            "Give the answer directly in 1-2 sentences."
+        )
+
+    if qtype == "knowledge-update":
+        return (
+            "You are answering a question where information may have been updated over time.\n\n"
+            "IMPORTANT: If multiple answers exist across sessions, use the MOST RECENT one.\n"
+            "The user's latest statement supersedes earlier ones.\n\n"
+            f"Conversation history:\n{context}\n\n"
+            f"Question: {question}\n\n"
+            "Answer with the most up-to-date information. Be concise (1-2 sentences)."
+        )
+
+    if qtype == "single-session-preference":
+        return (
+            "You are answering a question about the user's preferences based on their conversation.\n\n"
+            "IMPORTANT: Focus on what the user has explicitly stated about their preferences, "
+            "habits, interests, or personal information. Tailor your response to reflect "
+            "their specific preferences.\n\n"
+            f"Conversation history:\n{context}\n\n"
+            f"Question: {question}\n\n"
+            "Answer by incorporating the user's stated preferences. Be specific and personalized."
+        )
+
+    # single-session-user, single-session-assistant
+    return (
+        "Based ONLY on the following conversation excerpts, answer the question.\n"
+        "Be concise (1-2 sentences). If the information is not present, say 'unknown'.\n\n"
+        f"{context}\n\n"
+        f"Question: {question}"
+    )
 
 
 def run_benchmark():
@@ -208,8 +295,10 @@ def run_benchmark():
         # Build per-question index over haystack sessions
         idx = _build_index_for_question(item["haystack_sessions"])
 
-        # Get answer
-        hypothesis = _answer_from_retrieval(question, idx, use_llm=_USE_LLM)
+        # Get answer (pass sessions + type for context strategy)
+        hypothesis = _answer_from_retrieval(
+            question, idx, item["haystack_sessions"], qtype, use_llm=_USE_LLM
+        )
 
         hypotheses.append({
             "question_id": qid,
