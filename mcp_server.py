@@ -60,7 +60,7 @@ def _get_knowledge_store():
     if _KNOWLEDGE_STORE is not None:
         return _KNOWLEDGE_STORE
     with _lock:
-        if _KNOWLEDGE_STORE is not None:
+        if _KNOWLEDGE_STORE is not None:  # pragma: no cover — thread safety guard
             return _KNOWLEDGE_STORE
         try:
             from knowledge_store import KnowledgeStore

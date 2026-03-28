@@ -200,7 +200,7 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
             super().log_message(fmt, *args)
 
 
-def main():
+def main():  # pragma: no cover — blocking server entry point
     p = argparse.ArgumentParser(description="Remanentia HTTP API server")
     p.add_argument("--port", type=int, default=PORT)
     p.add_argument("--host", default="127.0.0.1")

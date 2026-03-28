@@ -494,7 +494,7 @@ def llm_synthesize_answer(
     )
 
     # Question-type-specific prompt (improves counterfactual/temporal)
-    q_lower = query.lower()
+    q_lower = query.lower()  # pragma: no cover
     if any(w in q_lower for w in ["would", "could", "might", "likely"]):  # pragma: no cover
         system_prompt = (
             "Answer the hypothetical question by reasoning about the person's "

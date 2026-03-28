@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 from observer import (
@@ -157,3 +157,28 @@ class TestObserveOnce:
         state = ObserverState()
         result = observe_once(state, {"nope": tmp_path / "nonexistent"})
         assert result["files_scanned"] == 0
+
+    def test_updates_unified_index(self, tmp_path):
+        traces_dir = tmp_path / "traces"
+        traces_dir.mkdir()
+        (traces_dir / "2026-03-25_metric.md").write_text(
+            "# Metric\n\nAccuracy measured at 92.1% on the new validation set.\n",
+            encoding="utf-8",
+        )
+        store_path = tmp_path / "notes.jsonl"
+        triggers_path = tmp_path / "triggers.jsonl"
+
+        mock_index = MagicMock()
+        mock_index._built = True
+
+        with (
+            patch("observer.WATCHED_DIRS", {"traces": traces_dir}),
+            patch("knowledge_store.STORE_PATH", store_path),
+            patch("knowledge_store.TRIGGERS_PATH", triggers_path),
+            patch("mcp_server._UNIFIED_INDEX", mock_index),
+        ):
+            state = ObserverState()
+            result = observe_once(state, {"traces": traces_dir})
+
+        assert result["notes_created"] >= 1
+        mock_index.add_file.assert_called()

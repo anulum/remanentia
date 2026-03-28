@@ -389,6 +389,29 @@ class TestHandleRecallLoadIndex:
         finally:
             mcp_server._UNIFIED_INDEX = old
 
+    def test_loads_index_via_lock(self):
+        from unittest.mock import MagicMock
+        from memory_index import SearchResult
+
+        mock_idx = MagicMock()
+        mock_idx.load.return_value = True
+        mock_idx._built = True
+        mock_idx.search.return_value = [
+            SearchResult(name="t.md", source="src", score=0.7, snippet="s"),
+        ]
+        import mcp_server
+
+        old = mcp_server._UNIFIED_INDEX
+        mcp_server._UNIFIED_INDEX = None
+        try:
+            with patch("mcp_server.MemoryIndex", return_value=mock_idx, create=True):
+                with patch("memory_index.MemoryIndex", return_value=mock_idx):
+                    result = handle_recall("query")
+            assert mcp_server._UNIFIED_INDEX is mock_idx
+            assert "t.md" in result
+        finally:
+            mcp_server._UNIFIED_INDEX = old
+
     def test_load_fails_falls_back(self, tmp_traces):
         import mcp_server
 

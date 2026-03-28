@@ -280,6 +280,25 @@ class TestTemporalCodeExecute:
         assert result is not None
         assert "before" in result.lower() or "after" in result.lower()
 
+    def test_before_after_reverse_order(self):
+        events = [
+            TemporalEvent(date="2026-03-20", text="Event B occurred", source="b.md"),
+            TemporalEvent(date="2026-03-10", text="Event A occurred", source="a.md"),
+        ]
+        result = temporal_code_execute("did B happen before or after A", events)
+        assert result is not None
+        assert "after" in result.lower()
+        assert "10 days later" in result
+
+    def test_before_after_same_day(self):
+        events = [
+            TemporalEvent(date="2026-03-15", text="Event X occurred", source="x.md"),
+            TemporalEvent(date="2026-03-15", text="Event Y occurred", source="y.md"),
+        ]
+        result = temporal_code_execute("did X happen before or after Y", events)
+        assert result is not None
+        assert "same day" in result.lower()
+
     def test_no_events(self):
         assert temporal_code_execute("anything", []) is None
 

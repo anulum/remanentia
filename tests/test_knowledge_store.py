@@ -408,6 +408,25 @@ class TestProspectiveQueries:
         )
         assert any("2026-03-15" in q for q in pq)
 
+    def test_allergy_queries(self):
+        pq = _generate_prospective_queries(
+            "Caroline is allergic to peanuts and shellfish.",
+            "Allergies",
+            ["caroline"],
+            ["allergic"],
+        )
+        assert any("allergic" in q.lower() for q in pq)
+        assert any("peanuts" in q.lower() for q in pq)
+
+    def test_favourite_queries(self):
+        pq = _generate_prospective_queries(
+            "Her favourite movie is Spirited Away.",
+            "Favourites",
+            ["caroline"],
+            ["movie"],
+        )
+        assert any("favourite" in q.lower() for q in pq)
+
     def test_causal_queries(self):
         pq = _generate_prospective_queries(
             "We decided to remove SNN because it adds no signal.",
@@ -579,3 +598,33 @@ class TestAutoEntityLinking:
         # (may still have similarity links if tokens overlap)
         n2_entity_links = [l for l in n2.links if "shared_entities" in l]
         assert len(n2_entity_links) == 0
+
+    def test_entity_overlap_creates_shared_entities_link(self):
+        import time as _time
+
+        store = KnowledgeStore()
+        now = _time.strftime("%Y-%m-%dT%H%M", _time.gmtime())
+        # Manually insert a note with specific entities so token overlap
+        # with the next note is below the 0.1 Jaccard threshold.
+        existing = KnowledgeNote(
+            id="existing1",
+            title="alpha",
+            content="alpha bravo charlie delta echo foxtrot golf hotel.",
+            keywords=["alpha"],
+            source="old.md",
+            created=now,
+            updated=now,
+            entities=["stdp", "snn"],
+        )
+        store.notes["existing1"] = existing
+        store._token_index["existing1"] = {"alpha", "bravo", "charlie", "delta",
+                                            "echo", "foxtrot", "golf", "hotel"}
+        # Now add_note with different tokens but shared entities stdp + snn
+        n2 = store.add_note(
+            "India juliet kilo lima mike november oscar papa stdp snn.",
+            source="new.md",
+        )
+        entity_links = [l for l in n2.links if "shared_entities" in l]
+        assert len(entity_links) >= 1
+        assert "stdp" in entity_links[0]["shared_entities"]
+        assert "snn" in entity_links[0]["shared_entities"]

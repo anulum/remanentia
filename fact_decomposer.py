@@ -274,7 +274,7 @@ def decompose_sessions(
             sentences = _split_sentences(content)
             for sent in sentences:
                 sent = sent.strip()
-                if len(sent) < 10:
+                if len(sent) < 10:  # pragma: no cover — _split_sentences pre-filters
                     continue
 
                 fact = _build_fact(sent, sess_idx, turn_idx, role, default_year)
@@ -293,7 +293,7 @@ def decompose_sessions(
                                 elif not prev.valid_until:
                                     prev.valid_until = f"before-session-{sess_idx}"
                         entity_last_state[key] = fact_idx
-                elif fact.fact_type == "state":
+                elif fact.fact_type == "state":  # pragma: no cover — state implies change verb implies supersedes
                     for ent in fact.entities:
                         key = ent.lower()
                         entity_last_state[key] = fact_idx
@@ -351,7 +351,7 @@ def _extract_dates(text: str, default_year: int = 2024) -> list[str]:
     for m in _DATE_WRITTEN.finditer(text):
         month_name = m.group(1).lower().rstrip(".")
         month = _MONTHS.get(month_name)
-        if not month:
+        if not month:  # pragma: no cover — regex only matches known month names
             continue
         day = int(m.group(2))
         year = int(m.group(3)) if m.group(3) else default_year

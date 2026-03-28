@@ -335,6 +335,27 @@ class TestUpdateGraph:
         assert rel["weight"] == 2
         assert len(rel["evidence"]) == 2
 
+    def test_upgrades_co_occurs_to_typed(self, tmp_path):
+        graph_dir = tmp_path / "graph"
+        graph_dir.mkdir()
+        with (
+            patch("consolidation_engine.GRAPH_DIR", graph_dir),
+            patch("consolidation_engine.ENTITIES_PATH", graph_dir / "entities.jsonl"),
+            patch("consolidation_engine.RELATIONS_PATH", graph_dir / "relations.jsonl"),
+        ):
+            _update_graph("trace1.md", ["stdp", "bm25"], "remanentia", "2026-03-15")
+            _update_graph(
+                "trace2.md",
+                ["stdp", "bm25"],
+                "remanentia",
+                "2026-03-16",
+                text="stdp depends on bm25 for scoring",
+            )
+
+        rels_text = (graph_dir / "relations.jsonl").read_text(encoding="utf-8")
+        rel = json.loads(rels_text.strip().split("\n")[0])
+        assert rel["type"] == "depends_on"
+
 
 # ── Full consolidation pipeline ──────────────────────────────────
 

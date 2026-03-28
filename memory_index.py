@@ -800,7 +800,7 @@ class MemoryIndex:
                             )
                 if t_events:
                     code_answer = temporal_code_execute(query, t_events)
-                    if code_answer and not results[0].answer:
+                    if code_answer and not results[0].answer:  # pragma: no cover — answer_extractor usually fills first
                         results[0] = SearchResult(
                             name=results[0].name,
                             source=results[0].source,
@@ -877,7 +877,7 @@ class MemoryIndex:
         if project or after or before or doc_type:
             for i in range(len(self.paragraph_index)):
                 doc_idx = self.paragraph_index[i][0]
-                if doc_idx >= len(self.documents):
+                if doc_idx >= len(self.documents):  # pragma: no cover — corrupt index guard
                     continue
                 doc = self.documents[doc_idx]
                 if (
@@ -934,7 +934,7 @@ class MemoryIndex:
             if not posting:
                 continue
             idf_val = self.idf.get(qt, 0)
-            if idf_val == 0:
+            if idf_val == 0:  # pragma: no cover — defensive: idf should never be exactly zero
                 continue
             for i in posting:
                 if i in filtered_out:

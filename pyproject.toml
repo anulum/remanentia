@@ -78,6 +78,9 @@ py-modules = [
     "knowledge_store",
     "observer",
     "reflector",
+    "api_server",
+    "arcane_retriever",
+    "fact_decomposer",
 ]
 
 [tool.setuptools.package-data]
@@ -113,6 +116,7 @@ omit = [
     # Benchmarks and experiment runners (not product code)
     "bench_locomo.py",
     "bench_experiments.py",
+    "bench_longmemeval.py",
     "analyze_failures.py",
     "run_exp*.py",
     "tests/benchmark_internal.py",
