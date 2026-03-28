@@ -37,6 +37,7 @@ OUTPUT_PATH = Path(__file__).parent / "data" / "longmemeval_hypotheses.jsonl"
 
 _USE_LLM = "--llm" in sys.argv
 _EVALUATE = "--evaluate" in sys.argv
+_USE_ARCANE = "--arcane" in sys.argv
 _LIMIT = None
 for i, arg in enumerate(sys.argv):
     if arg == "--limit" and i + 1 < len(sys.argv):
@@ -144,18 +145,16 @@ def _answer_from_retrieval(
     # Get type-specific prompt
     prompt = _type_prompt(question, qtype, context)
 
+    # Try GPT-4o-mini first (Anthropic credits exhausted)
     try:
-        from answer_extractor import _get_client
-        client = _get_client()
-        if not client:
-            return results[0].snippet[:500]
-
-        response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+        from openai import OpenAI
+        client = OpenAI()
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
             max_tokens=400,
             messages=[{"role": "user", "content": prompt}],
         )
-        answer = response.content[0].text.strip()
+        answer = response.choices[0].message.content.strip()
         if answer.lower() not in ("unknown", "i don't know", "not mentioned"):
             return answer
     except Exception:
@@ -291,6 +290,75 @@ def _type_prompt(question: str, qtype: str, context: str) -> str:
     )
 
 
+def _arcane_answer(question: str, sessions: list, qtype: str) -> str:
+    """Answer using ArcaneRetriever pipeline (v0.4.0 architecture)."""
+    from arcane_retriever import ArcaneRetriever
+
+    ar = ArcaneRetriever(sessions)
+    results = ar.retrieve(question, qtype, top_k=15, max_iterations=2)
+
+    if not results:
+        return "I don't have enough information to answer this question."
+
+    # Build context from retrieved facts
+    arcane_context = ar.build_context(question, results, max_facts=15)
+
+    # For temporal/multi-session/knowledge-update: also include full sessions
+    # (the LLM needs full context to reason over, facts provide ranking signal)
+    if qtype in ("temporal-reasoning", "multi-session", "knowledge-update", "single-session-preference"):
+        session_parts = []
+        for sess_idx, session in enumerate(sessions):
+            turns = []
+            for turn in session:
+                role = turn["role"].upper()
+                turns.append(f"[{role}]: {turn['content']}")
+            session_parts.append(f"=== Session {sess_idx + 1} ===\n" + "\n".join(turns))
+        full_context = "\n\n".join(session_parts)
+
+        if qtype == "temporal-reasoning":
+            # Prepend date-rich facts from retrieval + timeline
+            dated_facts = [r for r in results if r.fact.date_mentions]
+            timeline = []
+            for r in dated_facts:
+                for d in r.fact.date_mentions:
+                    timeline.append(f"  {d}: {r.fact.text[:150]}")
+            timeline.sort()
+            timeline_str = "\n".join(timeline) if timeline else "(no explicit dates found)"
+
+            context = (
+                f"TIMELINE OF DATED EVENTS:\n{timeline_str}\n\n"
+                f"RETRIEVED FACTS (ranked by relevance):\n{arcane_context}\n\n"
+                f"FULL CONVERSATION HISTORY:\n{full_context}"
+            )
+        else:
+            context = (
+                f"RETRIEVED FACTS (ranked by relevance):\n{arcane_context}\n\n"
+                f"FULL CONVERSATION HISTORY:\n{full_context}"
+            )
+    else:
+        # Single-session: use retrieved facts as focused context
+        context = arcane_context
+
+    prompt = _type_prompt(question, qtype, context)
+
+    try:
+        from openai import OpenAI
+        client = OpenAI()
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=400,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        answer = response.choices[0].message.content.strip()
+        if answer.lower() not in ("unknown", "i don't know", "not mentioned"):
+            return answer
+    except Exception:
+        pass
+
+    # Fallback: return top fact text
+    return results[0].fact.text[:500] if results else "Unknown"
+
+
 def run_benchmark():
     """Run LongMemEval and output hypothesis file."""
     print(f"Loading LongMemEval from {DATA_PATH}...")
@@ -302,6 +370,7 @@ def run_benchmark():
 
     print(f"Questions: {len(data)}")
     print(f"LLM mode: {_USE_LLM}")
+    print(f"Arcane mode: {_USE_ARCANE}")
     print()
 
     type_counts = Counter(d["question_type"] for d in data)
@@ -317,13 +386,22 @@ def run_benchmark():
         question = item["question"]
         gold = str(item["answer"])
 
-        # Build per-question index over haystack sessions
-        idx = _build_index_for_question(item["haystack_sessions"])
-
-        # Get answer (pass sessions + type for context strategy)
-        hypothesis = _answer_from_retrieval(
-            question, idx, item["haystack_sessions"], qtype, use_llm=_USE_LLM
-        )
+        if _USE_ARCANE:
+            # Hybrid: ArcaneRetriever for hard categories, legacy for single-session
+            if qtype in ("temporal-reasoning", "multi-session", "knowledge-update", "single-session-preference"):
+                hypothesis = _arcane_answer(question, item["haystack_sessions"], qtype)
+            else:
+                # Single-session factoid: legacy BM25 pipeline (full paragraphs) + GPT-4o-mini
+                idx = _build_index_for_question(item["haystack_sessions"])
+                hypothesis = _answer_from_retrieval(
+                    question, idx, item["haystack_sessions"], qtype, use_llm=True
+                )
+        else:
+            # Legacy pipeline
+            idx = _build_index_for_question(item["haystack_sessions"])
+            hypothesis = _answer_from_retrieval(
+                question, idx, item["haystack_sessions"], qtype, use_llm=_USE_LLM
+            )
 
         hypotheses.append({
             "question_id": qid,
@@ -391,19 +469,15 @@ def _fuzzy_overlap(a: str, b: str) -> float:
 
 
 def run_evaluation():
-    """Run GPT-judge evaluation on saved hypotheses."""
-    try:
-        import anthropic
-    except ImportError:
-        print("anthropic package required for evaluation. pip install anthropic")
-        return
+    """Run GPT-judge evaluation on saved hypotheses (GPT-4o-mini judge)."""
+    from openai import OpenAI
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
-        print("ANTHROPIC_API_KEY required for GPT-judge evaluation")
+        print("OPENAI_API_KEY required for GPT-judge evaluation")
         return
 
-    client = anthropic.Anthropic(api_key=api_key)
+    client = OpenAI(api_key=api_key)
 
     with open(DATA_PATH, encoding="utf-8") as f:
         references = json.load(f)
@@ -412,7 +486,7 @@ def run_evaluation():
     with open(OUTPUT_PATH, encoding="utf-8") as f:
         hypotheses = [json.loads(line) for line in f if line.strip()]
 
-    print(f"Evaluating {len(hypotheses)} hypotheses with Claude as judge...")
+    print(f"Evaluating {len(hypotheses)} hypotheses with GPT-4o-mini as judge...")
 
     type_scores = defaultdict(list)
     results = []
@@ -431,12 +505,12 @@ def run_evaluation():
         prompt = _judge_prompt(qtype, question, gold, response)
 
         try:
-            msg = client.messages.create(
-                model="claude-haiku-4-5-20251001",
+            msg = client.chat.completions.create(
+                model="gpt-4o-mini",
                 max_tokens=10,
                 messages=[{"role": "user", "content": prompt}],
             )
-            judge_answer = msg.content[0].text.strip().lower()
+            judge_answer = msg.choices[0].message.content.strip().lower()
             correct = "yes" in judge_answer
         except Exception as e:
             print(f"  Judge error on {qid}: {e}")
