@@ -144,35 +144,18 @@ def _answer_from_retrieval(
     # Get type-specific prompt
     prompt = _type_prompt(question, qtype, context)
 
-    # Try OpenAI first (cheaper, Anthropic may be out of credits)
-    openai_key = os.environ.get("OPENAI_API_KEY")
-    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
-
     try:
-        if openai_key:
-            from openai import OpenAI
-            client = OpenAI(api_key=openai_key)
-            resp = client.chat.completions.create(
-                model="gpt-4o-mini",
-                max_tokens=300,
-                temperature=0,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            answer = resp.choices[0].message.content.strip()
-        elif anthropic_key:
-            from answer_extractor import _get_client
-            client = _get_client()
-            if not client:
-                return results[0].snippet[:500]
-            response = client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=400,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            answer = response.content[0].text.strip()
-        else:
+        from answer_extractor import _get_client
+        client = _get_client()
+        if not client:
             return results[0].snippet[:500]
 
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=400,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        answer = response.content[0].text.strip()
         if answer.lower() not in ("unknown", "i don't know", "not mentioned"):
             return answer
     except Exception:
@@ -221,83 +204,35 @@ def _build_context(question: str, idx, results, sessions: list, qtype: str) -> s
 
 
 def _extract_temporal_facts(sessions: list) -> str:
-    """Extract dates, parse them, compute day differences between all pairs."""
+    """Extract dates and temporal references from sessions for pre-computation."""
     import re
-    from datetime import datetime
+    from datetime import datetime, timedelta
 
-    _MONTHS = {
-        "january": 1, "february": 2, "march": 3, "april": 4,
-        "may": 5, "june": 6, "july": 7, "august": 8,
-        "september": 9, "october": 10, "november": 11, "december": 12,
-    }
-
-    def _parse_date(s: str) -> datetime | None:
-        s = re.sub(r"(\d+)(?:st|nd|rd|th)", r"\1", s.strip())
-        for fmt in (
-            "%B %d, %Y", "%B %d %Y", "%B %d",
-            "%b %d, %Y", "%b %d %Y", "%b %d",
-            "%m/%d/%Y", "%m/%d/%y", "%d/%m/%Y",
-            "%Y-%m-%d", "%Y/%m/%d",
-        ):
-            try:
-                d = datetime.strptime(s, fmt)
-                if d.year == 1900:
-                    d = d.replace(year=2023)
-                return d
-            except ValueError:
-                continue
-        return None
-
-    # Extract all dated events from user turns
+    events = []
     date_patterns = [
-        r"((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{4})?)",
+        r"(?:on\s+|since\s+|from\s+)?(\w+ \d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{4})?)",
         r"(\d{1,2}/\d{1,2}/\d{2,4})",
+        r"((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{4})?)",
     ]
 
-    events: list[tuple[datetime, str]] = []
     for sess_idx, session in enumerate(sessions):
         for turn in session:
+            if turn["role"] != "user":
+                continue
             text = turn["content"]
             for pattern in date_patterns:
                 for m in re.finditer(pattern, text):
                     date_str = m.group(1) if m.lastindex else m.group()
-                    parsed = _parse_date(date_str)
-                    if not parsed:
-                        continue
-                    start = max(0, m.start() - 80)
-                    end = min(len(text), m.end() + 80)
-                    ctx = text[start:end].strip().replace("\n", " ")
-                    events.append((parsed, f"{date_str}: \"{ctx}\""))
+                    # Get surrounding context
+                    start = max(0, m.start() - 60)
+                    end = min(len(text), m.end() + 60)
+                    context = text[start:end].strip()
+                    events.append(f"Session {sess_idx+1}: \"{context}\" [date: {date_str}]")
 
     if not events:
         return ""
 
-    # Deduplicate by date
-    seen_dates: dict[str, tuple[datetime, str]] = {}
-    for dt, desc in events:
-        key = dt.strftime("%Y-%m-%d")
-        if key not in seen_dates:
-            seen_dates[key] = (dt, desc)
-
-    sorted_events = sorted(seen_dates.values(), key=lambda x: x[0])
-
-    lines = ["TIMELINE (chronological):"]
-    for i, (dt, desc) in enumerate(sorted_events):
-        lines.append(f"  {i+1}. {dt.strftime('%B %d, %Y')} ({dt.strftime('%A')}) — {desc}")
-
-    # Compute pairwise day differences for adjacent + notable pairs
-    if len(sorted_events) >= 2:
-        lines.append("\nDAY DIFFERENCES (computed):")
-        for i in range(len(sorted_events)):
-            for j in range(i + 1, min(i + 4, len(sorted_events))):
-                dt_a, desc_a = sorted_events[i]
-                dt_b, desc_b = sorted_events[j]
-                days = (dt_b - dt_a).days
-                lines.append(
-                    f"  {dt_a.strftime('%b %d')} → {dt_b.strftime('%b %d')} = {days} days"
-                )
-
-    return "\n".join(lines)
+    return "\n".join(events[:20])
 
 
 def _type_prompt(question: str, qtype: str, context: str) -> str:
@@ -305,12 +240,13 @@ def _type_prompt(question: str, qtype: str, context: str) -> str:
 
     if qtype == "temporal-reasoning":
         return (
-            "Answer this temporal question using the TIMELINE and DAY DIFFERENCES provided.\n\n"
-            "The day differences have been PRE-COMPUTED for you — use them directly.\n"
-            "For 'how many days' questions: find the two relevant events in the timeline "
-            "and look up their day difference in the computed table.\n"
-            "For 'which came first' questions: check the chronological order in the timeline.\n\n"
-            "START with the direct answer.\n\n"
+            "Answer this temporal question about a conversation history.\n\n"
+            "RULES:\n"
+            "- 'How many days between A and B': count calendar days from A to B (exclusive of start, inclusive of end)\n"
+            "- 'Which came first': compare the dates\n"
+            "- 'What was the first/last X': find the earliest/latest dated event matching X\n"
+            "- If counting days: show the two dates and the subtraction\n"
+            "- START with the direct answer\n\n"
             f"{context}\n\n"
             f"Question: {question}\n\n"
             "Answer:"
@@ -318,13 +254,11 @@ def _type_prompt(question: str, qtype: str, context: str) -> str:
 
     if qtype == "multi-session":
         return (
-            "Answer this question using information from the conversation sessions below.\n"
-            "The answer may require combining facts from different sessions.\n"
-            "If asked 'how many', count carefully across ALL sessions.\n"
-            "Give ONLY the direct answer — no explanation needed.\n\n"
-            f"{context}\n\n"
+            "You are answering a question that requires combining information from multiple conversation sessions.\n\n"
+            "Read ALL sessions carefully. The answer may span multiple sessions.\n\n"
+            f"Conversation sessions:\n{context}\n\n"
             f"Question: {question}\n\n"
-            "Answer (be specific and concise):"
+            "Give the answer directly in 1-2 sentences."
         )
 
     if qtype == "knowledge-update":
@@ -350,12 +284,10 @@ def _type_prompt(question: str, qtype: str, context: str) -> str:
 
     # single-session-user, single-session-assistant
     return (
-        "Answer this question using ONLY the conversation excerpts below.\n"
-        "Give ONLY the specific answer — no explanation, no preamble.\n"
-        "Example: Q: 'What color is my car?' A: 'Blue'\n\n"
+        "Based ONLY on the following conversation excerpts, answer the question.\n"
+        "Be concise (1-2 sentences). If the information is not present, say 'unknown'.\n\n"
         f"{context}\n\n"
-        f"Question: {question}\n\n"
-        "Answer:"
+        f"Question: {question}"
     )
 
 
@@ -459,38 +391,19 @@ def _fuzzy_overlap(a: str, b: str) -> float:
 
 
 def run_evaluation():
-    """Run judge evaluation on saved hypotheses.
-
-    Uses OpenAI gpt-4o-mini by default (matches official LongMemEval protocol).
-    Falls back to Anthropic Claude if OPENAI_API_KEY not set.
-    """
-    openai_key = os.environ.get("OPENAI_API_KEY")
-    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
-
-    judge_backend = None
-    judge_client = None
-
-    if openai_key:
-        try:
-            from openai import OpenAI
-            judge_client = OpenAI(api_key=openai_key)
-            judge_backend = "openai"
-            print("Judge: OpenAI gpt-4o-mini (official LongMemEval protocol)")
-        except ImportError:
-            pass
-
-    if not judge_client and anthropic_key:
-        try:
-            import anthropic
-            judge_client = anthropic.Anthropic(api_key=anthropic_key)
-            judge_backend = "anthropic"
-            print("Judge: Anthropic Claude Haiku")
-        except ImportError:
-            pass
-
-    if not judge_client:
-        print("No API key available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.")
+    """Run GPT-judge evaluation on saved hypotheses."""
+    try:
+        import anthropic
+    except ImportError:
+        print("anthropic package required for evaluation. pip install anthropic")
         return
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        print("ANTHROPIC_API_KEY required for GPT-judge evaluation")
+        return
+
+    client = anthropic.Anthropic(api_key=api_key)
 
     with open(DATA_PATH, encoding="utf-8") as f:
         references = json.load(f)
@@ -499,7 +412,7 @@ def run_evaluation():
     with open(OUTPUT_PATH, encoding="utf-8") as f:
         hypotheses = [json.loads(line) for line in f if line.strip()]
 
-    print(f"Evaluating {len(hypotheses)} hypotheses...")
+    print(f"Evaluating {len(hypotheses)} hypotheses with Claude as judge...")
 
     type_scores = defaultdict(list)
     results = []
@@ -518,21 +431,12 @@ def run_evaluation():
         prompt = _judge_prompt(qtype, question, gold, response)
 
         try:
-            if judge_backend == "openai":
-                resp = judge_client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    max_tokens=10,
-                    temperature=0,
-                    messages=[{"role": "user", "content": prompt}],
-                )
-                judge_answer = resp.choices[0].message.content.strip().lower()
-            else:
-                msg = judge_client.messages.create(
-                    model="claude-haiku-4-5-20251001",
-                    max_tokens=10,
-                    messages=[{"role": "user", "content": prompt}],
-                )
-                judge_answer = msg.content[0].text.strip().lower()
+            msg = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=10,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            judge_answer = msg.content[0].text.strip().lower()
             correct = "yes" in judge_answer
         except Exception as e:
             print(f"  Judge error on {qid}: {e}")
@@ -547,9 +451,8 @@ def run_evaluation():
             print(f"  [{done}/{len(hypotheses)}] correct={total}/{done} ({total/done*100:.1f}%)")
 
     # Final results
-    judge_name = "GPT-4o-mini" if judge_backend == "openai" else "Claude-Haiku"
     print(f"\n{'='*60}")
-    print(f"LongMemEval Results ({judge_name} judge)")
+    print(f"LongMemEval Results (Claude-judge)")
     print(f"{'='*60}")
     all_scores = [s for scores in type_scores.values() for s in scores]
     print(f"Overall: {sum(all_scores)}/{len(all_scores)} ({sum(all_scores)/len(all_scores)*100:.1f}%)")
