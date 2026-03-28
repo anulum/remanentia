@@ -144,18 +144,35 @@ def _answer_from_retrieval(
     # Get type-specific prompt
     prompt = _type_prompt(question, qtype, context)
 
+    # Try OpenAI first (cheaper, Anthropic may be out of credits)
+    openai_key = os.environ.get("OPENAI_API_KEY")
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+
     try:
-        from answer_extractor import _get_client
-        client = _get_client()
-        if not client:
+        if openai_key:
+            from openai import OpenAI
+            client = OpenAI(api_key=openai_key)
+            resp = client.chat.completions.create(
+                model="gpt-4o-mini",
+                max_tokens=300,
+                temperature=0,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            answer = resp.choices[0].message.content.strip()
+        elif anthropic_key:
+            from answer_extractor import _get_client
+            client = _get_client()
+            if not client:
+                return results[0].snippet[:500]
+            response = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=400,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            answer = response.content[0].text.strip()
+        else:
             return results[0].snippet[:500]
 
-        response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=400,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        answer = response.content[0].text.strip()
         if answer.lower() not in ("unknown", "i don't know", "not mentioned"):
             return answer
     except Exception:
@@ -301,11 +318,13 @@ def _type_prompt(question: str, qtype: str, context: str) -> str:
 
     if qtype == "multi-session":
         return (
-            "You are answering a question that requires combining information from multiple conversation sessions.\n\n"
-            "Read ALL sessions carefully. The answer may span multiple sessions.\n\n"
-            f"Conversation sessions:\n{context}\n\n"
+            "Answer this question using information from the conversation sessions below.\n"
+            "The answer may require combining facts from different sessions.\n"
+            "If asked 'how many', count carefully across ALL sessions.\n"
+            "Give ONLY the direct answer — no explanation needed.\n\n"
+            f"{context}\n\n"
             f"Question: {question}\n\n"
-            "Give the answer directly in 1-2 sentences."
+            "Answer (be specific and concise):"
         )
 
     if qtype == "knowledge-update":
@@ -331,10 +350,12 @@ def _type_prompt(question: str, qtype: str, context: str) -> str:
 
     # single-session-user, single-session-assistant
     return (
-        "Based ONLY on the following conversation excerpts, answer the question.\n"
-        "Be concise (1-2 sentences). If the information is not present, say 'unknown'.\n\n"
+        "Answer this question using ONLY the conversation excerpts below.\n"
+        "Give ONLY the specific answer — no explanation, no preamble.\n"
+        "Example: Q: 'What color is my car?' A: 'Blue'\n\n"
         f"{context}\n\n"
-        f"Question: {question}"
+        f"Question: {question}\n\n"
+        "Answer:"
     )
 
 
