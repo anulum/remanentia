@@ -80,21 +80,32 @@ remanentia consolidate --force          # Run consolidation
 remanentia init                         # Create directory structure
 ```
 
-## REST API
+## REST API (FastAPI)
 
 ```bash
 pip install -e ".[api]"
-remanentia serve --port 8001
+python api.py  # starts on http://localhost:8001
 ```
 
 Endpoints:
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/recall?q=query` | Search memory |
-| POST | `/remember` | Store memory |
+| POST | `/recall` | Search memory (JSON body: `{"query": "...", "top_k": 3}`) |
+| POST | `/consolidate` | Run consolidation |
 | GET | `/status` | System status |
-| GET | `/graph?entity=name` | Entity graph |
+| GET | `/health` | Health check |
+| GET | `/entities` | List all entities |
+| GET | `/graph?top=15` | Top entity relationships |
+| GET | `/graph/entity/{id}` | Entity detail with connections |
+
+## HTTP API (stdlib, no dependencies)
+
+```bash
+python api_server.py --port 8001
+```
+
+Lighter alternative with no FastAPI dependency. Same core endpoints (recall, status, consolidate, remember).
 
 ## Next Steps
 

@@ -1,41 +1,39 @@
 # LOCOMO Benchmark Results
 
-## Current Score
+## Current Score (without LLM)
 
-**88.5% overall** (exp8b, 548 questions, 0 test failures)
+**74.7% overall** on 1,986 questions from the LOCOMO multi-session QA dataset.
 
-Measured 2026-03-25 with Haiku LLM synthesis.
+Method: BM25 + token overlap + answer extraction. No embedding rerank, no LLM.
 
-## Pipeline Configuration (exp8b)
+| Category | Accuracy |
+|----------|----------|
+| Multi-hop | 82.6% |
+| Adversarial | 79.5% |
+| Open-domain | 78.7% |
+| Single-hop | 55.7% |
+| Temporal | 42.7% |
+| **Overall** | **74.7%** |
 
-```
-Query → BM25(0.4)+Embed(0.6) hybrid → Entity boost (person-centric only)
-     → Cross-encoder rerank → top 20 candidates
-     → Stage 1: Direct text match (substring + token overlap)
-     → Stage 2: Answer extraction + sentence matching
-     → Stage 3: Temporal code execution
-     → Stage 4: LLM synthesis (Haiku, typed prompts, 15-turn dedup context)
-     → Answer normalization (hedging strip, polarity match, semantic sim)
-```
+**Caveat:** These numbers are from experiment runs not committed to the repository. The LOCOMO dataset must be obtained separately. Results are not independently reproducible from committed code alone.
 
-## Category Breakdown
+## With LLM Synthesis (exp8b, historical)
 
-| Category | Description | Status |
-|----------|-------------|--------|
-| Single-hop | Direct fact retrieval | Working |
-| Multi-hop | Cross-session reasoning | Working (query decomposition) |
-| Temporal | Date/time reasoning | 47.9% — weakest category |
-| Adversarial | Questions about non-existent info | Working |
-| Open-domain | General knowledge questions | Working |
+An experiment run with Haiku LLM synthesis reached 88.5% on 548 questions (a subset). This used:
+
+- BM25(0.4)+Embed(0.6) hybrid retrieval
+- Cross-encoder reranking
+- 4-stage answer extraction with LLM fallback
+- Answer normalisation (hedging strip, polarity match)
+
+This result is not committed and not independently reproducible.
 
 ## What Works
 
 - Hybrid retrieval (BM25+MiniLM) with RRF
 - Cross-encoder reranking (ms-marco-MiniLM)
-- Question-type LLM prompts (counterfactual, list, general)
 - Entity boost gated by person-centricity
-- Answer normalization (yes/no polarity, list overlap, semantic similarity)
-- Turn deduplication (80% token overlap threshold)
+- Answer normalisation (yes/no polarity, list overlap)
 
 ## What Doesn't Work
 
@@ -45,18 +43,22 @@ Query → BM25(0.4)+Embed(0.6) hybrid → Entity boost (person-centric only)
 
 ## Competitive Context
 
+Numbers below are from published papers or official documentation. "—" means not reported.
+
 | System | LOCOMO | LongMemEval | LLM-dependent |
 |--------|:------:|:-----------:|:-------------:|
-| Remanentia | 88.5% | not run | No (optional) |
-| Zep/Graphiti | 94.8% (DMR) | — | Yes |
-| Hindsight | — | 91.4% | Yes |
-| Supermemory | claims #1 | ~85% | Yes |
-| Mem0 | +26% vs baseline | — | Yes |
+| Remanentia | 74.7% (no LLM) | 69.0% (committed) | No (optional) |
+| Zep/Graphiti | 94.8% (DMR, per their paper) | — | Yes |
+| Hindsight | — | 91.4% (per their paper) | Yes |
+| Mem0 | +26% vs baseline (per their docs) | — | Yes |
 
 ## Reproduction
 
 ```bash
-python bench_locomo.py --llm
-```
+# LOCOMO (requires dataset + optional API key)
+python bench_locomo.py           # without LLM
+python bench_locomo.py --llm     # with LLM synthesis (requires ANTHROPIC_API_KEY)
 
-Requires LOCOMO dataset and `ANTHROPIC_API_KEY` for LLM synthesis stage.
+# LongMemEval (committed dataset, reproducible)
+python bench_longmemeval.py --llm --evaluate
+```

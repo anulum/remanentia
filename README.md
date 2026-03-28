@@ -8,7 +8,7 @@ Contact: www.anulum.li | protoscience@anulum.li
 
 [![CI](https://github.com/anulum/remanentia/actions/workflows/ci.yml/badge.svg)](https://github.com/anulum/remanentia/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/badge/version-0.3.1-blue)](https://github.com/anulum/remanentia)
-[![Coverage](https://img.shields.io/badge/coverage-96%25-brightgreen)](VALIDATION.md)
+[![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](VALIDATION.md)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![Rust](https://img.shields.io/badge/engine-Rust-orange)](docs/guides/PERFORMANCE_TUNING.md)
@@ -72,7 +72,7 @@ remanentia recall "STDP learning rule" --format context
 remanentia status
 ```
 
-## Prerequisites
+## Retrieval Pipeline
 
 ```
 Query
@@ -123,10 +123,14 @@ Knowledge store (multi-hop graph search) ...... Zettelkasten + prospective queri
 | `temporal_graph.py` | Temporal event graph, relative date resolution, TReMu |
 | `entity_extractor.py` | GLiNER2 NER + regex fallback, 11 typed relation types |
 | `answer_extractor.py` | Query-proximity answer extraction, LLM fallback |
+| `answer_normalizer.py` | Hedging strip, yes/no polarity, semantic similarity |
 | `observer.py` | Filesystem watcher -> incremental index updates |
 | `reflector.py` | Periodic cluster summarisation + gap detection |
+| `arcane_retriever.py` | 4-channel parallel retrieval with RRF fusion |
+| `fact_decomposer.py` | Atomic fact decomposition with temporal validity windows |
 | `cli.py` | Command-line interface |
 | `api.py` | FastAPI REST server |
+| `api_server.py` | Lightweight HTTP API for cross-service integration |
 
 ### Prerequisites
 
@@ -147,7 +151,7 @@ pip install -e ".[dev]"     # test dependencies
 ```
 Query → Classification (8 intent types)
   ↓
-BM25 scoring (15,938 paragraphs)
+BM25 scoring (inverted index, real TF-IDF)
   ↓
 Bi-encoder rerank (MiniLM-L6-v2, optional)
   ↓
@@ -158,9 +162,27 @@ Answer extraction (dates, numbers, versions, names)
 Results with snippets + extracted answers
 ```
 
-## LOCOMO Benchmark
+## Benchmarks
 
-Evaluated on 1,986 questions from the LOCOMO multi-session QA dataset.
+### LongMemEval (committed, reproducible)
+
+500 questions across 6 categories. GPT-4o-mini generation + judge. Results committed in `data/longmemeval_hypotheses.results.jsonl`.
+
+| Category | Score |
+|----------|-------|
+| single-session-preference | 90.0% (27/30) |
+| single-session-assistant | 87.5% (49/56) |
+| knowledge-update | 87.2% (68/78) |
+| single-session-user | 82.9% (58/70) |
+| multi-session | 61.7% (82/133) |
+| temporal-reasoning | 45.9% (61/133) |
+| **Overall** | **69.0% (345/500)** |
+
+Temporal-reasoning is the weakest category — the primary target for improvement. Hindsight (SOTA with GPT-4 extraction) reports 91.4% on this benchmark.
+
+### LOCOMO (historical, not committed)
+
+1,986 questions from the LOCOMO multi-session QA dataset. Results from experiment runs, not committed to repository. Numbers below are from the last measured run without LLM synthesis:
 
 | Category | Accuracy |
 |----------|----------|
@@ -172,7 +194,6 @@ Evaluated on 1,986 questions from the LOCOMO multi-session QA dataset.
 | **Overall** | **74.7%** |
 
 Method: BM25 + token overlap + answer extraction. No embedding rerank, no LLM.
-Context: Hindsight (GPT-4 answer extraction) achieves 91.4%.
 
 ## MCP Integration
 
@@ -240,19 +261,6 @@ for r in results:
     print(f"  {r.snippet[:100]}")
 ```
 
-## Architecture
-
-| Module | Role |
-|--------|------|
-| `memory_index.py` | Unified BM25 index with query intelligence |
-| `answer_extractor.py` | Regex answer extraction (dates, numbers, names) |
-| `consolidation_engine.py` | Episodic traces → semantic memories |
-| `entity_extractor.py` | GLiNER2 NER + typed relations |
-| `memory_recall.py` | Rich recall: retrieval + graph + temporal |
-| `mcp_server.py` | MCP server (stdio JSON-RPC) |
-| `cli.py` | Command-line interface |
-| `api.py` | FastAPI REST server |
-
 ## Research (Negative Results)
 
 SNN-based retrieval was the original design. After 70+ experiments across 4 learning rules (STDP, BCPNN, Hebbian, E/I balanced), we proved it adds zero discriminative signal. Root cause: 384-dim embeddings hash-encoded into 20K-neuron patterns are too correlated for local learning rules. The current system uses BM25 + optional neural reranking because that's what works.
@@ -268,7 +276,7 @@ pip install -e ".[dev]"
 pytest tests/ -q
 ```
 
-669 tests, 100% coverage gate on product modules.
+844 tests, 100% coverage (3,423 statements, 16 modules, zero lines missing).
 
 ## License
 

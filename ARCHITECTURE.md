@@ -18,8 +18,11 @@ remanentia/
 ├── answer_normalizer.py    Hedging strip, yes/no polarity, semantic similarity
 ├── observer.py             Filesystem watcher → incremental index updates
 ├── reflector.py            Periodic cluster summarisation + gap detection
+├── arcane_retriever.py     4-channel parallel retrieval with RRF fusion
+├── fact_decomposer.py      Atomic fact decomposition with temporal validity
 ├── cli.py                  Command-line interface
 ├── api.py                  FastAPI REST server
+├── api_server.py           Lightweight HTTP API for cross-service integration
 ├── snn_backend.py          Dual-backend LIF network (GPU/CPU) with Rust STDP
 ├── snn_daemon.py           Persistent SNN background daemon
 │
@@ -30,7 +33,7 @@ remanentia/
 │   └── knowledge_notes.jsonl  Zettelkasten atomic notes
 ├── snn_state/              SNN checkpoint, index pickle, weight snapshots
 ├── docs/                   Documentation (MkDocs)
-└── tests/                  669 tests
+└── tests/                  844 tests, 100% coverage
 ```
 
 ## Retrieval Pipeline

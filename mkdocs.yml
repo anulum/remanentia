@@ -51,17 +51,24 @@ nav:
     - Performance Tuning: guides/PERFORMANCE_TUNING.md
   - API Reference:
     - memory_index: api/memory_index.md
+    - memory_recall: api/memory_recall.md
     - mcp_server: api/mcp_server.md
     - knowledge_store: api/knowledge_store.md
     - consolidation_engine: api/consolidation_engine.md
     - answer_extractor: api/answer_extractor.md
+    - answer_normalizer: api/answer_normalizer.md
     - temporal_graph: api/temporal_graph.md
     - entity_extractor: api/entity_extractor.md
     - observer: api/observer.md
+    - reflector: api/reflector.md
+    - arcane_retriever: api/arcane_retriever.md
+    - fact_decomposer: api/fact_decomposer.md
+    - api_server: api/api_server.md
     - CLI: api/cli.md
   - Architecture:
     - Overview: architecture/architecture.md
   - Benchmarks:
+    - LongMemEval: benchmarks/LongMemEval.md
     - LOCOMO: benchmarks/LOCOMO.md
   - Research:
     - SNN Consolidation: research/snn_consolidation.md

@@ -131,16 +131,17 @@ generic co-occurrence edges.
 remanentia graph "STDP" --hops 2
 ```
 
-## SNN Daemon
+## SNN Daemon (experimental, excluded from coverage)
 
 ```bash
 python snn_daemon.py --neurons 1000 --interval 60
 ```
 
-The daemon maintains a persistent LIF spiking network. New reasoning
-traces are encoded as current injection patterns. STDP modifies
-synaptic weights based on temporal correlations in the input.
+The daemon maintains a persistent LIF spiking network for novelty detection
+and consolidation orchestration. This component is **experimental** — it is
+excluded from the product test coverage gate (`snn_daemon.py` and
+`snn_backend.py` are in the coverage omit list). The core retrieval and
+consolidation pipelines function without the daemon.
 
-The SNN's role is consolidation orchestration and novelty detection —
-it detects when information is surprising relative to stored patterns
-and triggers consolidation cycles.
+See [SNN Consolidation](../research/snn_consolidation.md) for the full
+negative results analysis on SNN-based retrieval.

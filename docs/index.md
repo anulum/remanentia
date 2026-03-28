@@ -54,6 +54,15 @@ Knowledge store (multi-hop graph search) ...... Zettelkasten + prospective queri
 | Procedural | `skills/*.json` | Extracted skills and workflows |
 | Graph | `memory/graph/*.jsonl` | Entity-entity relations with evidence |
 
+## Benchmarks
+
+| Benchmark | Score | Questions | Committed |
+|-----------|------:|----------:|:---------:|
+| LongMemEval | 69.0% | 500 | Yes |
+| LOCOMO (no LLM) | 74.7% | 1,986 | No |
+
+844 tests, 100% coverage (3,423 statements, 16 modules).
+
 ## MCP Server
 
 ```json

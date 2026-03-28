@@ -60,16 +60,17 @@ No parameters. Returns index statistics, memory counts, SNN state.
 ```json
 {
   "entity": "STDP",
-  "relation_type": "depends_on",
-  "hops": 2
+  "top": 10
 }
 ```
+
+Parameters: `entity` (filter by entity name, optional), `top` (max relations to return, default 10).
 
 ## REST API (FastAPI)
 
 ```bash
 pip install -e ".[api]"
-remanentia serve --port 8001
+python api.py  # starts on http://localhost:8001
 ```
 
 ### Endpoints
@@ -77,21 +78,27 @@ remanentia serve --port 8001
 ```python
 import httpx
 
-# Search
-r = httpx.get("http://localhost:8001/recall", params={"q": "STDP learning"})
-
-# Remember
-r = httpx.post("http://localhost:8001/remember", json={
-    "content": "Fixed the STDP weight update bug",
-    "memory_type": "fix",
-    "project": "remanentia"
+# Search (POST, not GET)
+r = httpx.post("http://localhost:8001/recall", json={
+    "query": "STDP learning",
+    "top_k": 5,
+    "format": "summary",
 })
+
+# Consolidate
+r = httpx.post("http://localhost:8001/consolidate", json={"force": False})
 
 # Status
 r = httpx.get("http://localhost:8001/status")
 
-# Graph
-r = httpx.get("http://localhost:8001/graph", params={"entity": "STDP"})
+# Entities
+r = httpx.get("http://localhost:8001/entities")
+
+# Graph (top relationships)
+r = httpx.get("http://localhost:8001/graph", params={"top": 15})
+
+# Entity detail
+r = httpx.get("http://localhost:8001/graph/entity/stdp")
 ```
 
 ## Python API
