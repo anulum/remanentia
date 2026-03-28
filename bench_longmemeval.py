@@ -169,7 +169,7 @@ def _answer_from_retrieval(
 def _build_context(question: str, idx, results, sessions: list, qtype: str) -> str:
     """Build LLM context adapted to question type."""
 
-    if qtype in ("multi-session", "temporal-reasoning", "knowledge-update"):
+    if qtype in ("multi-session", "temporal-reasoning", "knowledge-update", "single-session-preference"):
         # Cross-session + temporal + knowledge-update: full session content
         parts = []
         for sess_idx, session in enumerate(sessions):
