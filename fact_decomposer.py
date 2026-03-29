@@ -290,12 +290,34 @@ class FactIndex:
 def decompose_sessions(
     sessions: list[list[dict]],
     default_year: int = 2024,
+    session_dates: list[str] | None = None,
 ) -> list[AtomicFact]:
-    """Decompose all sessions into atomic facts with validity windows."""
+    """Decompose all sessions into atomic facts with validity windows.
+
+    Args:
+        sessions: List of sessions, each a list of ``{"role", "content"}`` dicts.
+        default_year: Fallback year for date parsing when no year is mentioned.
+        session_dates: Optional per-session ISO date strings (from
+            ``haystack_dates``). When provided, vague date expressions like
+            "3 weeks ago" are resolved against the session's timestamp via
+            the C4 date normaliser.
+    """
     all_facts: list[AtomicFact] = []
     entity_last_state: dict[str, int] = {}  # entity → index of latest state fact
 
     for sess_idx, session in enumerate(sessions):
+        # Resolve per-session reference date for C4 date normaliser
+        _ref_date = None
+        if session_dates and sess_idx < len(session_dates):
+            try:
+                from datetime import date as _dt_date
+
+                parts = session_dates[sess_idx].replace("/", "-").split("-")
+                if len(parts) >= 3:
+                    _ref_date = _dt_date(int(parts[0]), int(parts[1]), int(parts[2][:2]))
+            except (ValueError, IndexError):
+                pass
+
         for turn_idx, turn in enumerate(session):
             content = turn["content"]
             role = turn["role"]
@@ -309,7 +331,10 @@ def decompose_sessions(
                 if len(sent) < 10:  # pragma: no cover — _split_sentences pre-filters
                     continue
 
-                fact = _build_fact(sent, sess_idx, turn_idx, role, default_year)
+                fact = _build_fact(
+                    sent, sess_idx, turn_idx, role, default_year,
+                    reference_date=_ref_date,
+                )
                 fact_idx = len(all_facts)
 
                 # Detect if this fact supersedes a prior state for the same entity
@@ -343,12 +368,36 @@ def _build_fact(
     turn_idx: int,
     role: str,
     default_year: int,
+    reference_date: "date | None" = None,
 ) -> AtomicFact:
-    """Build a single AtomicFact from a sentence."""
-    dates = _extract_dates(sentence, default_year)
+    """Build a single AtomicFact from a sentence.
+
+    When *reference_date* is provided, vague expressions ("3 weeks ago")
+    are resolved via the C4 date normaliser.
+    """
+    if reference_date is not None:
+        dates = _extract_dates_with_normaliser(sentence, reference_date, default_year)
+    else:
+        dates = _extract_dates(sentence, default_year)
     entities = _extract_entities_simple(sentence)
+
     fact_type = _classify_fact(sentence)
     supersedes = bool(_CHANGE_VERBS.search(sentence))
+
+    # C5: ML-based fact classification — only override when regex gives
+    # the catch-all "event" type (no explicit pattern match)
+    if fact_type == "event" and not supersedes:
+        try:
+            from fact_validity_model import classify_fact as _ml_classify
+
+            prediction = _ml_classify(sentence)
+            if prediction is not None and prediction.confidence > 0.7:
+                fact_type = prediction.fact_type
+                if prediction.supersedes_prob > 0.5:
+                    supersedes = True
+        except ImportError:
+            pass
+
     valid_from = dates[0] if dates else ""
 
     return AtomicFact(
@@ -402,6 +451,27 @@ def _extract_dates(text: str, default_year: int = 2024) -> list[str]:
         if 1 <= month <= 12 and 1 <= day <= 31:
             results.append(f"{year}-{month:02d}-{day:02d}")
 
+    return results
+
+
+def _extract_dates_with_normaliser(
+    text: str, reference_date: "date | None" = None, default_year: int = 2024,
+) -> list[str]:
+    """Extract dates with ML-augmented vague expression normalisation (C4).
+
+    Only call this when a concrete reference_date is available (e.g., from
+    haystack_dates in LongMemEval), not for arbitrary text.
+    """
+    results = _extract_dates(text, default_year)
+    if not results and reference_date is not None:
+        try:
+            from date_normalizer import extract_and_normalise
+
+            for r in extract_and_normalise(text, reference_date):
+                if r.confidence > 0.7:
+                    results.append(r.iso_date)
+        except ImportError:
+            pass
     return results
 
 

@@ -6,12 +6,36 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Temporal training pipeline (C1–C5)**: 5 models trained on 5x RX 6600 XT (ROCm 6.2)
+  - C1: fine-tuned `all-MiniLM-L6-v2` embedding model for temporal-aware retrieval
+  - C2: fine-tuned `ms-marco-MiniLM-L-6-v2` cross-encoder (AP=84.57%)
+  - C3: temporal relation classifier (`bert-small`, 6 classes: before/after/same_day/overlaps/contains/unknown)
+  - C4: date normaliser with rule-based engine (95% confidence) + ML fallback (`bert-mini`)
+  - C5: fact validity model for type classification + supersession detection (combined=100%)
+- **date_normalizer.py**: rule-based + ML vague date normalisation ("3 weeks ago" → ISO date)
+  - 12 rule patterns: quantified, couple, few, several, weekday, 11 simple expressions
+  - Confidence scoring (0.7–0.95) with graceful ML fallback
+- **temporal_relation.py**: temporal relation classifier for event ordering
+- **fact_validity_model.py**: fact type + supersession detection model
+- **training/**: full training infrastructure (data generation, 5 training scripts, parallel launcher)
+- **197 new tests** (844 → 1,041):
+  - test_date_normalizer (80): rule patterns, ML mock, month arithmetic, weekday, edge cases, model loading
+  - test_temporal_relation (17): classification, ordering, model loading/exception, N>2 pairwise
+  - test_fact_validity_model (18): type/supersedes/boundary classification, model loading/exception
+  - test_temporal_training_integration (24): parse_dates+C4, _build_fact+C5, _ch_temporal+C3, full pipeline, graceful degradation
+  - test_temporal_synth (32): date normalisation, temporal relations, fact validity generators, save_jsonl
+  - test_generate_data (26): tokenise, BM25, flatten_turns, triplet/pair/date extraction
+- `temporal` optional dependency group in pyproject.toml
+- Date extraction coverage: +321% dated facts (121 → 510) after reference_date plumbing fix
+- Local evaluation harness (`training/eval_local.py`): retrieval recall, date coverage, TReMu hits — no API needed
+- Honest assessment (`training/HONEST_ASSESSMENT.md`): component-level validation status
+- **LongMemEval temporal-reasoning: 45.9% → 60.2% (+14.3pp)** — GPT-4o-mini verified
 - Rust STDP/LIF acceleration (arcane_stdp) — 2–3x speedup, bit-exact with numpy
 - Enterprise hardening: ARCHITECTURE, CONTRIBUTING, SECURITY, GOVERNANCE, ROADMAP, VALIDATION, NOTICE, CITATION.cff
 - MkDocs documentation site with 4 guides, 9 API refs, benchmarks, research
 - GitHub issue/PR templates, dependabot, CodeQL, Scorecard, stale bot workflows
 - README badges, header image, branding footer
-- **100% test coverage**: 844 tests across 16 modules (3,423 stmts, zero lines missing)
+- **100% test coverage**: 1,041 tests across 19 modules (zero lines missing)
 - Tests for api_server.py, arcane_retriever.py, fact_decomposer.py (3 new test files)
 - api_server, arcane_retriever, fact_decomposer added to py-modules
 

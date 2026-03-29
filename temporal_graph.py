@@ -368,6 +368,18 @@ def parse_dates(text: str, reference_date: date | None = None) -> list[str]:
         if resolved:
             dates.append(resolved)
 
+    # ML-augmented vague date normalisation (C4)
+    try:
+        from date_normalizer import VAGUE_DATE_RE, normalize_date_expression
+
+        for m in VAGUE_DATE_RE.finditer(text):
+            expr_text = m.group(0)
+            result = normalize_date_expression(expr_text, ref)
+            if result is not None and result.confidence > 0.7:
+                dates.append(result.iso_date)
+    except ImportError:
+        pass
+
     return sorted(set(dates))
 
 

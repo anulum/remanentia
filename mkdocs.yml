@@ -68,6 +68,9 @@ nav:
     - reflector: api/reflector.md
     - arcane_retriever: api/arcane_retriever.md
     - fact_decomposer: api/fact_decomposer.md
+    - date_normalizer: api/date_normalizer.md
+    - temporal_relation: api/temporal_relation.md
+    - fact_validity_model: api/fact_validity_model.md
     - api_server: api/api_server.md
     - CLI: api/cli.md
   - Architecture:

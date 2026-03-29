@@ -32,8 +32,9 @@ dependencies = [
 
 [project.optional-dependencies]
 retrieval = ["scikit-learn>=1.3"]
-embedding = ["sentence-transformers>=2.0"]
+embedding = ["sentence-transformers>=3.0"]
 gpu = ["torch>=2.0"]
+temporal = ["sentence-transformers>=3.0", "torch>=2.0", "transformers>=4.45"]
 sparse = ["scipy>=1.11"]
 api = ["fastapi>=0.100", "uvicorn>=0.20"]
 llm = ["anthropic>=0.40"]
@@ -81,6 +82,9 @@ py-modules = [
     "api_server",
     "arcane_retriever",
     "fact_decomposer",
+    "date_normalizer",
+    "temporal_relation",
+    "fact_validity_model",
 ]
 
 [tool.setuptools.package-data]
@@ -121,6 +125,8 @@ omit = [
     "run_exp*.py",
     "tests/benchmark_internal.py",
     "experimental/*",
+    # Training infrastructure (not product code)
+    "training/*",
     # Test files themselves
     "tests/test_*.py",
     "tests/conftest.py",

@@ -23,3 +23,6 @@ memory/graph/*.jsonl
 docs/internal/
 .codex_scratch/
 data/
+models/
+training/datasets/
+training/logs/

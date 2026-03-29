@@ -20,6 +20,9 @@ remanentia/
 ├── reflector.py            Periodic cluster summarisation + gap detection
 ├── arcane_retriever.py     4-channel parallel retrieval with RRF fusion
 ├── fact_decomposer.py      Atomic fact decomposition with temporal validity
+├── date_normalizer.py      C4: Rule-based + ML vague date normalisation
+├── temporal_relation.py    C3: Temporal relation classifier (6 Allen-interval classes)
+├── fact_validity_model.py  C5: Fact type + supersession detection model
 ├── cli.py                  Command-line interface
 ├── api.py                  FastAPI REST server
 ├── api_server.py           Lightweight HTTP API for cross-service integration
@@ -63,7 +66,7 @@ Reciprocal Rank Fusion ────────────── scale-invarian
 Cross-encoder Rerank ──────────────── ms-marco-MiniLM-L-6-v2 (background load)
   │
   ▼
-Temporal Augmentation ─────────────── date parsing, event graph, TReMu
+Temporal Augmentation ─────────────── C4 date normaliser → event graph → TReMu
   │
   ▼
 Answer Extraction ─────────────────── regex patterns + LLM fallback (optional)
@@ -111,6 +114,46 @@ Detect conflicts ──────────────────── co
   ▼
 Write semantic memory files ───────── YAML frontmatter + markdown
 ```
+
+## Temporal Training Pipeline (C1–C5)
+
+Five locally-trained models address the temporal-reasoning bottleneck
+(45.9% → target 65–70% on LongMemEval).
+
+```
+haystack_dates[session_idx]
+  │
+  ▼
+decompose_sessions(session_dates=...) ── C4 resolves "3 weeks ago" → ISO date
+  │
+  ▼
+_build_fact(reference_date=...) ──────── C5 classifies type + supersession
+  │
+  ▼
+FactIndex.temporal_query() ───────────── C3 boosts temporally relevant results
+  │
+  ▼
+ArcaneRetriever._ch_temporal() ───────── C3 relation-aware score boost (1.3×)
+  │
+  ▼
+memory_index (C1 + C2) ──────────────── Fine-tuned embedding + cross-encoder
+```
+
+| Component | Base Model | Role | Size |
+|-----------|-----------|------|------|
+| C1 | `all-MiniLM-L6-v2` fine-tuned | Temporal-aware bi-encoder embedding | 88 MB |
+| C2 | `ms-marco-MiniLM-L-6-v2` fine-tuned | Temporal cross-encoder reranker | 88 MB |
+| C3 | `bert-small` + 6-class head | Temporal relation classifier | 112 MB |
+| C4 | `bert-mini` + 8-digit heads | Vague date → ISO date normaliser | 44 MB |
+| C5 | `bert-mini` + 3 heads | Fact type + supersession detection | 44 MB |
+
+C4 also includes a **rule-based engine** (12 patterns, 0.95 confidence) that
+handles the majority of vague expressions without requiring the ML model.
+All models degrade gracefully — missing checkpoints fall back to regex-only
+or pre-trained HuggingFace defaults.
+
+Training: 5 jobs in parallel on 5× AMD RX 6600 XT (ROCm 6.2), ~25 min wall time.
+Checkpoints stored in `models/` (gitignored).
 
 ## SNN Substrate
 

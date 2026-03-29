@@ -11,8 +11,8 @@
 
 ## Test Suite
 
-- **844 tests** across 22 test files
-- **100% coverage** — 3,423 statements, 16 modules, zero lines missing
+- **1,049 tests** across 28 test files
+- **100% coverage** — 19 product modules, zero lines missing
 - **Config:** `pyproject.toml` `[tool.coverage.report] fail_under = 100`
 
 ## Coverage by Module
@@ -35,7 +35,10 @@
 | observer.py | 86 | 100% |
 | entity_extractor.py | 73 | 100% |
 | answer_normalizer.py | 72 | 100% |
-| **Total** | **3,423** | **100%** |
+| date_normalizer.py | 139 | 100% |
+| temporal_relation.py | 88 | 100% |
+| fact_validity_model.py | 69 | 100% |
+| **Total** | **~3,720** | **100%** |
 
 ## Excluded from Coverage
 
@@ -47,6 +50,7 @@ Legacy/experimental modules (not part of the product surface):
 - `pattern_separation.py`, `cognitive_snapshot.py`, `active_retrieval.py`, `skill_extractor.py` — experimental
 - `bench_locomo.py`, `bench_longmemeval.py`, `bench_experiments.py`, `run_exp*.py` — benchmark runners
 - `extractors/*`, `experimental/*` — experimental directories
+- `training/*` — training infrastructure (not product code)
 
 ## CI Gates
 

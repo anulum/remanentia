@@ -290,11 +290,20 @@ def _type_prompt(question: str, qtype: str, context: str) -> str:
     )
 
 
-def _arcane_answer(question: str, sessions: list, qtype: str) -> str:
-    """Answer using ArcaneRetriever pipeline (v0.4.0 architecture)."""
+def _arcane_answer(
+    question: str,
+    sessions: list,
+    qtype: str,
+    haystack_dates: list[str] | None = None,
+) -> str:
+    """Answer using ArcaneRetriever pipeline (v0.4.0 architecture).
+
+    When *haystack_dates* are provided, the C4 date normaliser resolves
+    vague expressions ("3 weeks ago") against each session's timestamp.
+    """
     from arcane_retriever import ArcaneRetriever
 
-    ar = ArcaneRetriever(sessions)
+    ar = ArcaneRetriever(sessions, session_dates=haystack_dates)
     results = ar.retrieve(question, qtype, top_k=15, max_iterations=2)
 
     if not results:
@@ -389,7 +398,10 @@ def run_benchmark():
         if _USE_ARCANE:
             # Hybrid: ArcaneRetriever for hard categories, legacy for single-session
             if qtype in ("temporal-reasoning", "multi-session", "knowledge-update", "single-session-preference"):
-                hypothesis = _arcane_answer(question, item["haystack_sessions"], qtype)
+                hypothesis = _arcane_answer(
+                    question, item["haystack_sessions"], qtype,
+                    haystack_dates=item.get("haystack_dates"),
+                )
             else:
                 # Single-session factoid: legacy BM25 pipeline (full paragraphs) + GPT-4o-mini
                 idx = _build_index_for_question(item["haystack_sessions"])

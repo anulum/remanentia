@@ -328,7 +328,9 @@ class MemoryIndex:
 
         if self._embed_model is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
-            self._embed_model = SentenceTransformer("all-MiniLM-L6-v2", device=device)
+            _local = BASE / "models" / "temporal-embed-v1"
+            _model_id = str(_local) if _local.exists() else "all-MiniLM-L6-v2"
+            self._embed_model = SentenceTransformer(_model_id, device=device)
 
         texts = []
         for doc_idx, para_idx in self.paragraph_index:
@@ -439,7 +441,9 @@ class MemoryIndex:
                     import torch
 
                     device = "cuda" if torch.cuda.is_available() else "cpu"
-                    self._embed_model = SentenceTransformer("all-MiniLM-L6-v2", device=device)
+                    _local = BASE / "models" / "temporal-embed-v1"
+                    _model_id = str(_local) if _local.exists() else "all-MiniLM-L6-v2"
+                    self._embed_model = SentenceTransformer(_model_id, device=device)
                 except Exception:
                     pass
                 self._embed_loading = False
@@ -455,9 +459,9 @@ class MemoryIndex:
                     import torch
 
                     device = "cuda" if torch.cuda.is_available() else "cpu"
-                    self._cross_encoder = CrossEncoder(
-                        "cross-encoder/ms-marco-MiniLM-L-6-v2", device=device
-                    )
+                    _local_ce = BASE / "models" / "temporal-ce-v1"
+                    _ce_id = str(_local_ce) if _local_ce.exists() else "cross-encoder/ms-marco-MiniLM-L-6-v2"
+                    self._cross_encoder = CrossEncoder(_ce_id, device=device)
                 except Exception:
                     self._cross_encoder = False
                 self._ce_loading = False

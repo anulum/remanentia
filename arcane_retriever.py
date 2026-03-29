@@ -79,9 +79,13 @@ class ArcaneRetriever:
 
     RRF_K = 60  # RRF constant (standard value)
 
-    def __init__(self, sessions: list[list[dict]]):
+    def __init__(
+        self,
+        sessions: list[list[dict]],
+        session_dates: list[str] | None = None,
+    ):
         self.sessions = sessions
-        self.facts = decompose_sessions(sessions)
+        self.facts = decompose_sessions(sessions, session_dates=session_dates)
         self.fact_index = FactIndex(self.facts)
 
     def retrieve(
@@ -174,12 +178,29 @@ class ArcaneRetriever:
         ]
 
     def _ch_temporal(self, query: str, top_k: int) -> list[RetrievalResult]:
-        """TEMPORAL channel: date-aware retrieval with validity filtering."""
+        """TEMPORAL channel: date-aware retrieval with validity filtering.
+
+        Uses C3 temporal relation classifier to reorder results when available.
+        """
         hits = self.fact_index.temporal_query(query, top_k=top_k)
-        return [
+        results = [
             RetrievalResult(fact=f, score=s, channel="temporal", rank=i)
             for i, (f, s) in enumerate(hits)
         ]
+        # C3: reorder by temporal relation if classifier available
+        try:
+            from temporal_relation import classify_relation
+
+            if len(results) >= 2:
+                # Boost facts classified as temporally relevant to the query
+                for r in results:
+                    rel = classify_relation(query, r.fact.text)
+                    if rel and rel.confidence > 0.6:
+                        if rel.relation in ("before", "after", "same_day"):
+                            r.score *= 1.3  # temporal relevance boost
+        except ImportError:
+            pass
+        return results
 
     def _ch_session(self, query: str, top_k: int) -> list[RetrievalResult]:
         """DEEP channel: cross-session diverse retrieval."""
