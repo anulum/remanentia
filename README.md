@@ -11,7 +11,7 @@ Contact: www.anulum.li | protoscience@anulum.li
 [![Docs](https://github.com/anulum/remanentia/actions/workflows/docs.yml/badge.svg)](https://github.com/anulum/remanentia/actions/workflows/docs.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/anulum/remanentia/badge)](https://securityscorecards.dev/viewer/?uri=github.com/anulum/remanentia)
 [![Version](https://img.shields.io/badge/version-0.3.1-blue)](https://github.com/anulum/remanentia)
-[![Tests](https://img.shields.io/badge/tests-844_passed-brightgreen)](VALIDATION.md)
+[![Tests](https://img.shields.io/badge/tests-1049_passed-brightgreen)](VALIDATION.md)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](VALIDATION.md)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
@@ -285,7 +285,7 @@ pip install -e ".[dev]"
 pytest tests/ -q
 ```
 
-844 tests, 100% coverage (3,423 statements, 16 modules, zero lines missing).
+1,049 tests, 100% coverage (19 modules, zero lines missing).
 
 ## License
 

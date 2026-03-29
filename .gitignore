@@ -26,3 +26,7 @@ data/
 models/
 training/datasets/
 training/logs/
+training/*_hypotheses.jsonl
+training/*_results.json
+site/
+checkpoints/
