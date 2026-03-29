@@ -41,6 +41,7 @@ PORT = 8001
 def _json_default(obj):
     """Handle NumPy types in JSON serialisation."""
     import numpy as np
+
     if isinstance(obj, (np.floating, np.float32, np.float64)):
         return float(obj)
     if isinstance(obj, (np.integer, np.int32, np.int64)):
@@ -98,13 +99,15 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
             with relations_path.open() as f:
                 relations = sum(1 for _ in f)
 
-        self._json_response({
-            "status": "ok",
-            "entities": entities,
-            "relations": relations,
-            "memories": memories,
-            "traces": traces,
-        })
+        self._json_response(
+            {
+                "status": "ok",
+                "entities": entities,
+                "relations": relations,
+                "memories": memories,
+                "traces": traces,
+            }
+        )
 
     def _handle_recall(self, body: dict):
         query = body.get("query", "")
@@ -120,30 +123,37 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
 
         try:
             from memory_recall import recall
+
             ctx = recall(query, top_k=top_k)
 
             results = []
             if ctx.trace:
-                results.append({
-                    "name": ctx.trace,
-                    "score": float(ctx.trace_score),
-                    "snippet": ctx.trace_snippet[:300],
-                    "type": "trace",
-                })
+                results.append(
+                    {
+                        "name": ctx.trace,
+                        "score": float(ctx.trace_score),
+                        "snippet": ctx.trace_snippet[:300],
+                        "type": "trace",
+                    }
+                )
             for sm in ctx.semantic_memories[:top_k]:
-                results.append({
-                    "name": sm.get("file", ""),
-                    "score": float(sm.get("score", 0.0)),
-                    "snippet": str(sm.get("content", ""))[:300],
-                    "type": "semantic",
-                })
+                results.append(
+                    {
+                        "name": sm.get("file", ""),
+                        "score": float(sm.get("score", 0.0)),
+                        "snippet": str(sm.get("content", ""))[:300],
+                        "type": "semantic",
+                    }
+                )
 
-            self._json_response({
-                "results": results,
-                "query": query,
-                "entities": ctx.entities[:10],
-                "novelty": ctx.novelty_score if hasattr(ctx, "novelty_score") else 0.5,
-            })
+            self._json_response(
+                {
+                    "results": results,
+                    "query": query,
+                    "entities": ctx.entities[:10],
+                    "novelty": ctx.novelty_score if hasattr(ctx, "novelty_score") else 0.5,
+                }
+            )
         except Exception as e:
             self._json_response({"error": str(e), "results": []}, 500)
 
@@ -151,11 +161,16 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
         force = body.get("force", False)
         try:
             from consolidation_engine import consolidate
+
             result = consolidate(force=force)
-            self._json_response({
-                "status": "ok",
-                "new_memories": result.get("new_memories", 0) if isinstance(result, dict) else 0,
-            })
+            self._json_response(
+                {
+                    "status": "ok",
+                    "new_memories": result.get("new_memories", 0)
+                    if isinstance(result, dict)
+                    else 0,
+                }
+            )
         except Exception as e:
             self._json_response({"error": str(e)}, 500)
 
@@ -169,6 +184,7 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
 
         try:
             from knowledge_store import KnowledgeStore
+
             ks = KnowledgeStore()
             ks.add_note(content=content, tags=[trigger] if trigger else [])
             self._json_response({"status": "ok", "stored": content[:80]})
@@ -209,10 +225,10 @@ def main():  # pragma: no cover — blocking server entry point
     server = HTTPServer((args.host, args.port), RemanentiaHandler)
     print(f"Remanentia API running on http://{args.host}:{args.port}")
     print(f"  GET  /health")
-    print(f"  POST /recall         {{\"query\": \"...\", \"top_k\": 5}}")
+    print(f'  POST /recall         {{"query": "...", "top_k": 5}}')
     print(f"  GET  /status")
-    print(f"  POST /consolidate    {{\"force\": false}}")
-    print(f"  POST /remember       {{\"content\": \"...\", \"trigger\": \"...\"}}")
+    print(f'  POST /consolidate    {{"force": false}}')
+    print(f'  POST /remember       {{"content": "...", "trigger": "..."}}')
     try:
         server.serve_forever()
     except KeyboardInterrupt:

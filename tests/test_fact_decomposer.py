@@ -189,7 +189,10 @@ class TestBuildFact:
     def test_basic(self):
         fact = _build_fact(
             "I started working at Google on 2024-03-15.",
-            sess_idx=0, turn_idx=0, role="user", default_year=2024,
+            sess_idx=0,
+            turn_idx=0,
+            role="user",
+            default_year=2024,
         )
         assert fact.fact_type == "state"
         assert fact.supersedes is True
@@ -199,7 +202,10 @@ class TestBuildFact:
     def test_no_dates(self):
         fact = _build_fact(
             "The weather is really nice today.",
-            sess_idx=1, turn_idx=2, role="user", default_year=2024,
+            sess_idx=1,
+            turn_idx=2,
+            role="user",
+            default_year=2024,
         )
         assert fact.valid_from == ""
         assert fact.date_mentions == []
@@ -212,11 +218,17 @@ class TestDecomposeSessions:
     def _sessions(self):
         return [
             [
-                {"role": "user", "content": "My name is Caroline and I work as a teacher in Boston."},
+                {
+                    "role": "user",
+                    "content": "My name is Caroline and I work as a teacher in Boston.",
+                },
                 {"role": "assistant", "content": "Nice to meet you Caroline!"},
             ],
             [
-                {"role": "user", "content": "I started a new job as a nurse on March 15, 2024. I left teaching."},
+                {
+                    "role": "user",
+                    "content": "I started a new job as a nurse on March 15, 2024. I left teaching.",
+                },
                 {"role": "assistant", "content": "Congratulations!"},
             ],
         ]
@@ -245,7 +257,14 @@ class TestDecomposeSessions:
 
     def test_short_sentence_filtered(self):
         """Covers line 278: short sentence (<10 chars) is skipped."""
-        sessions = [[{"role": "user", "content": "Yes ok. This is a longer sentence about some important topics for testing."}]]
+        sessions = [
+            [
+                {
+                    "role": "user",
+                    "content": "Yes ok. This is a longer sentence about some important topics for testing.",
+                }
+            ]
+        ]
         facts = decompose_sessions(sessions)
         # "Yes ok" is < 10 chars → filtered by line 278
         texts = [f.text for f in facts]
@@ -254,9 +273,14 @@ class TestDecomposeSessions:
 
     def test_state_without_supersede(self):
         # A state fact with a change verb but no prior state → entity_last_state just records
-        sessions = [[
-            {"role": "user", "content": "I started learning piano last year, it has been wonderful."},
-        ]]
+        sessions = [
+            [
+                {
+                    "role": "user",
+                    "content": "I started learning piano last year, it has been wonderful.",
+                },
+            ]
+        ]
         facts = decompose_sessions(sessions)
         state_facts = [f for f in facts if f.fact_type == "state"]
         assert len(state_facts) >= 1
@@ -266,8 +290,18 @@ class TestDecomposeSessions:
         # First fact must be "state" type → needs a change verb like "joined"
         # Second fact supersedes it with a date
         sessions = [
-            [{"role": "user", "content": "My friend Alice joined the teaching profession at the school on 2023-01-15."}],
-            [{"role": "user", "content": "My friend Alice started working as a nurse on 2024-06-01 at the hospital."}],
+            [
+                {
+                    "role": "user",
+                    "content": "My friend Alice joined the teaching profession at the school on 2023-01-15.",
+                }
+            ],
+            [
+                {
+                    "role": "user",
+                    "content": "My friend Alice started working as a nurse on 2024-06-01 at the hospital.",
+                }
+            ],
         ]
         facts = decompose_sessions(sessions)
         # First fact: state (joined), second: state (started) → supersession
@@ -278,8 +312,18 @@ class TestDecomposeSessions:
         """Covers lines 293-294: supersession without valid_from → 'before-session-N'."""
         # First fact is state (joined), second is state (switched) but no date
         sessions = [
-            [{"role": "user", "content": "My friend Alice joined the teaching staff at the local school recently."}],
-            [{"role": "user", "content": "My friend Alice switched to nursing career and enjoys the change."}],
+            [
+                {
+                    "role": "user",
+                    "content": "My friend Alice joined the teaching staff at the local school recently.",
+                }
+            ],
+            [
+                {
+                    "role": "user",
+                    "content": "My friend Alice switched to nursing career and enjoys the change.",
+                }
+            ],
         ]
         facts = decompose_sessions(sessions)
         before_session = [f for f in facts if f.valid_until and "before-session" in f.valid_until]
@@ -294,33 +338,51 @@ class TestFactIndex:
         return [
             AtomicFact(
                 text="Caroline works as a teacher at Lincoln School.",
-                session_idx=0, turn_idx=0, role="user",
-                fact_type="state", entities=["Caroline"],
-                date_mentions=[], valid_from="",
+                session_idx=0,
+                turn_idx=0,
+                role="user",
+                fact_type="state",
+                entities=["Caroline"],
+                date_mentions=[],
+                valid_from="",
             ),
             AtomicFact(
                 text="Caroline started working as a nurse on March 15, 2024.",
-                session_idx=1, turn_idx=0, role="user",
-                fact_type="state", entities=["Caroline"],
-                date_mentions=["2024-03-15"], valid_from="2024-03-15",
+                session_idx=1,
+                turn_idx=0,
+                role="user",
+                fact_type="state",
+                entities=["Caroline"],
+                date_mentions=["2024-03-15"],
+                valid_from="2024-03-15",
                 supersedes=True,
             ),
             AtomicFact(
                 text="Melanie enjoys hiking and photography on weekends.",
-                session_idx=2, turn_idx=0, role="user",
-                fact_type="preference", entities=["Melanie"],
+                session_idx=2,
+                turn_idx=0,
+                role="user",
+                fact_type="preference",
+                entities=["Melanie"],
                 date_mentions=[],
             ),
             AtomicFact(
                 text="The team meeting happened on January 10, 2024.",
-                session_idx=0, turn_idx=1, role="assistant",
-                fact_type="event", entities=[],
-                date_mentions=["2024-01-10"], valid_from="2024-01-10",
+                session_idx=0,
+                turn_idx=1,
+                role="assistant",
+                fact_type="event",
+                entities=[],
+                date_mentions=["2024-01-10"],
+                valid_from="2024-01-10",
             ),
             AtomicFact(
                 text="Melanie plans to visit Tokyo next summer for vacation.",
-                session_idx=3, turn_idx=0, role="user",
-                fact_type="plan", entities=["Melanie", "Tokyo"],
+                session_idx=3,
+                turn_idx=0,
+                role="user",
+                fact_type="plan",
+                entities=["Melanie", "Tokyo"],
                 date_mentions=[],
             ),
         ]

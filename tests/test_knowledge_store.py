@@ -621,8 +621,16 @@ class TestAutoEntityLinking:
             entities=["stdp", "snn"],
         )
         store.notes["existing1"] = existing
-        store._token_index["existing1"] = {"alpha", "bravo", "charlie", "delta",
-                                            "echo", "foxtrot", "golf", "hotel"}
+        store._token_index["existing1"] = {
+            "alpha",
+            "bravo",
+            "charlie",
+            "delta",
+            "echo",
+            "foxtrot",
+            "golf",
+            "hotel",
+        }
         # Now add_note with different tokens but shared entities stdp + snn
         n2 = store.add_note(
             "India juliet kilo lima mike november oscar papa stdp snn.",

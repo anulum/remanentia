@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, date, timedelta
+from datetime import date
 from typing import Optional
 
 
@@ -43,10 +43,29 @@ _DATE_WRITTEN = re.compile(
     re.IGNORECASE,
 )
 _MONTHS = {
-    "january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6,
-    "july": 7, "august": 8, "september": 9, "october": 10, "november": 11, "december": 12,
-    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "jun": 6,
-    "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+    "january": 1,
+    "february": 2,
+    "march": 3,
+    "april": 4,
+    "may": 5,
+    "june": 6,
+    "july": 7,
+    "august": 8,
+    "september": 9,
+    "october": 10,
+    "november": 11,
+    "december": 12,
+    "jan": 1,
+    "feb": 2,
+    "mar": 3,
+    "apr": 4,
+    "jun": 6,
+    "jul": 7,
+    "aug": 8,
+    "sep": 9,
+    "oct": 10,
+    "nov": 11,
+    "dec": 12,
 }
 
 # State-change verbs that indicate a fact supersedes a prior one
@@ -203,9 +222,22 @@ class FactIndex:
         # For ordering questions, include ALL dated facts even without keyword match
         is_ordering = any(
             w in question.lower()
-            for w in ("first", "last", "before", "after", "earlier", "later",
-                       "how many days", "how long", "when did", "what date",
-                       "which came first", "chronological", "order", "timeline")
+            for w in (
+                "first",
+                "last",
+                "before",
+                "after",
+                "earlier",
+                "later",
+                "how many days",
+                "how long",
+                "when did",
+                "what date",
+                "which came first",
+                "chronological",
+                "order",
+                "timeline",
+            )
         )
         if is_ordering:
             for i, fact in enumerate(self.facts):
@@ -293,7 +325,9 @@ def decompose_sessions(
                                 elif not prev.valid_until:
                                     prev.valid_until = f"before-session-{sess_idx}"
                         entity_last_state[key] = fact_idx
-                elif fact.fact_type == "state":  # pragma: no cover — state implies change verb implies supersedes
+                elif (
+                    fact.fact_type == "state"
+                ):  # pragma: no cover — state implies change verb implies supersedes
                     for ent in fact.entities:
                         key = ent.lower()
                         entity_last_state[key] = fact_idx

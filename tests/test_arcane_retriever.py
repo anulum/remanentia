@@ -16,10 +16,16 @@ from fact_decomposer import AtomicFact
 SESSIONS = [
     [
         {"role": "user", "content": "My name is Caroline and I work as a teacher in Boston."},
-        {"role": "assistant", "content": "Nice to meet you, Caroline! Teaching is a great profession."},
+        {
+            "role": "assistant",
+            "content": "Nice to meet you, Caroline! Teaching is a great profession.",
+        },
     ],
     [
-        {"role": "user", "content": "I started a new job as a nurse on March 15, 2024 at the hospital."},
+        {
+            "role": "user",
+            "content": "I started a new job as a nurse on March 15, 2024 at the hospital.",
+        },
         {"role": "assistant", "content": "Congratulations on the new position at the hospital!"},
     ],
     [
@@ -35,7 +41,11 @@ SESSIONS = [
 class TestDataclasses:
     def test_retrieval_result(self):
         fact = AtomicFact(
-            text="test", session_idx=0, turn_idx=0, role="user", fact_type="event",
+            text="test",
+            session_idx=0,
+            turn_idx=0,
+            role="user",
+            fact_type="event",
         )
         r = RetrievalResult(fact=fact, score=0.9, channel="bm25", rank=0)
         assert r.channel == "bm25"
@@ -43,7 +53,11 @@ class TestDataclasses:
 
     def test_fused_result(self):
         fact = AtomicFact(
-            text="test", session_idx=0, turn_idx=0, role="user", fact_type="event",
+            text="test",
+            session_idx=0,
+            turn_idx=0,
+            role="user",
+            fact_type="event",
         )
         fr = FusedResult(fact=fact, rrf_score=0.5, channels=["bm25"], per_channel_ranks={"bm25": 0})
         assert fr.rrf_score == 0.5
@@ -116,15 +130,19 @@ class TestChannels:
 class TestParallelRetrieve:
     def test_runs_channels(self):
         ar = ArcaneRetriever(SESSIONS)
-        results = ar._parallel_retrieve("Caroline", "single-session-user", ["bm25", "entity"], top_k=5)
+        results = ar._parallel_retrieve(
+            "Caroline", "single-session-user", ["bm25", "entity"], top_k=5
+        )
         assert "bm25" in results
         assert "entity" in results
 
     def test_all_four_channels(self):
         ar = ArcaneRetriever(SESSIONS)
         results = ar._parallel_retrieve(
-            "Caroline March 2024", "temporal-reasoning",
-            ["bm25", "entity", "temporal", "session"], top_k=5,
+            "Caroline March 2024",
+            "temporal-reasoning",
+            ["bm25", "entity", "temporal", "session"],
+            top_k=5,
         )
         assert len(results) == 4
 
@@ -142,7 +160,11 @@ class TestRRFFusion:
     def test_fuses_results(self):
         ar = ArcaneRetriever(SESSIONS)
         fact = AtomicFact(
-            text="shared fact", session_idx=0, turn_idx=0, role="user", fact_type="event",
+            text="shared fact",
+            session_idx=0,
+            turn_idx=0,
+            role="user",
+            fact_type="event",
         )
         channel_results = {
             "bm25": [RetrievalResult(fact=fact, score=0.9, channel="bm25", rank=0)],
@@ -161,7 +183,10 @@ class TestRRFFusion:
             for i in range(10)
         ]
         channel_results = {
-            "bm25": [RetrievalResult(fact=f, score=1.0, channel="bm25", rank=i) for i, f in enumerate(facts)],
+            "bm25": [
+                RetrievalResult(fact=f, score=1.0, channel="bm25", rank=i)
+                for i, f in enumerate(facts)
+            ],
         }
         fused = ar._rrf_fusion(channel_results, top_k=3)
         assert len(fused) == 3
@@ -179,8 +204,13 @@ class TestCheckSufficiency:
     def _fact(self, text="test", session_idx=0, dates=None, entities=None):
         return FusedResult(
             fact=AtomicFact(
-                text=text, session_idx=session_idx, turn_idx=0, role="user",
-                fact_type="event", date_mentions=dates or [], entities=entities or [],
+                text=text,
+                session_idx=session_idx,
+                turn_idx=0,
+                role="user",
+                fact_type="event",
+                date_mentions=dates or [],
+                entities=entities or [],
             ),
             rrf_score=0.5,
             channels=["bm25"],
@@ -219,7 +249,10 @@ class TestCheckSufficiency:
 
     def test_multi_session_diverse(self):
         ar = ArcaneRetriever(SESSIONS)
-        results = [self._fact("what happened", session_idx=0), self._fact("what occurred", session_idx=1)]
+        results = [
+            self._fact("what happened", session_idx=0),
+            self._fact("what occurred", session_idx=1),
+        ]
         ok, reason = ar._check_sufficiency("what", "multi-session", results)
         # With 2 sessions and entity overlap, should be sufficient
         assert ok or reason == "low_entity_coverage"
@@ -254,8 +287,12 @@ class TestRewriteQuery:
     def _fact(self, text="test", entities=None):
         return FusedResult(
             fact=AtomicFact(
-                text=text, session_idx=0, turn_idx=0, role="user",
-                fact_type="event", entities=entities or [],
+                text=text,
+                session_idx=0,
+                turn_idx=0,
+                role="user",
+                fact_type="event",
+                entities=entities or [],
             ),
             rrf_score=0.5,
             channels=["bm25"],
@@ -330,10 +367,14 @@ class TestBuildContext:
             FusedResult(
                 fact=AtomicFact(
                     text="Caroline works as a teacher",
-                    session_idx=0, turn_idx=0, role="user",
-                    fact_type="state", date_mentions=[],
+                    session_idx=0,
+                    turn_idx=0,
+                    role="user",
+                    fact_type="state",
+                    date_mentions=[],
                 ),
-                rrf_score=0.5, channels=["bm25"],
+                rrf_score=0.5,
+                channels=["bm25"],
             ),
         ]
         ctx = ar.build_context("What does Caroline do?", results)
@@ -346,10 +387,14 @@ class TestBuildContext:
             FusedResult(
                 fact=AtomicFact(
                     text="Started nursing on March 15",
-                    session_idx=1, turn_idx=0, role="user",
-                    fact_type="state", date_mentions=["2024-03-15"],
+                    session_idx=1,
+                    turn_idx=0,
+                    role="user",
+                    fact_type="state",
+                    date_mentions=["2024-03-15"],
                 ),
-                rrf_score=0.5, channels=["temporal"],
+                rrf_score=0.5,
+                channels=["temporal"],
             ),
         ]
         ctx = ar.build_context("When?", results)
@@ -361,9 +406,14 @@ class TestBuildContext:
         results = [
             FusedResult(
                 fact=AtomicFact(
-                    text=f"fact {i}", session_idx=0, turn_idx=i, role="user", fact_type="event",
+                    text=f"fact {i}",
+                    session_idx=0,
+                    turn_idx=i,
+                    role="user",
+                    fact_type="event",
                 ),
-                rrf_score=0.5, channels=["bm25"],
+                rrf_score=0.5,
+                channels=["bm25"],
             )
             for i in range(10)
         ]

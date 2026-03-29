@@ -7,11 +7,20 @@ Contact: www.anulum.li | protoscience@anulum.li
 # Remanentia
 
 [![CI](https://github.com/anulum/remanentia/actions/workflows/ci.yml/badge.svg)](https://github.com/anulum/remanentia/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/anulum/remanentia/actions/workflows/codeql.yml/badge.svg)](https://github.com/anulum/remanentia/actions/workflows/codeql.yml)
+[![Docs](https://github.com/anulum/remanentia/actions/workflows/docs.yml/badge.svg)](https://github.com/anulum/remanentia/actions/workflows/docs.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/anulum/remanentia/badge)](https://securityscorecards.dev/viewer/?uri=github.com/anulum/remanentia)
 [![Version](https://img.shields.io/badge/version-0.3.1-blue)](https://github.com/anulum/remanentia)
+[![Tests](https://img.shields.io/badge/tests-844_passed-brightgreen)](VALIDATION.md)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](VALIDATION.md)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![Rust](https://img.shields.io/badge/engine-Rust-orange)](docs/guides/PERFORMANCE_TUNING.md)
+[![Ruff](https://img.shields.io/badge/linter-ruff-261230)](https://github.com/astral-sh/ruff)
+[![Bandit](https://img.shields.io/badge/security-bandit-yellow)](https://github.com/PyCQA/bandit)
+[![Pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://pre-commit.com/)
+[![MCP](https://img.shields.io/badge/MCP-server-purple)](docs/guides/INTEGRATION_GUIDE.md)
+[![CITATION.cff](https://img.shields.io/badge/citation-CFF-blue)](CITATION.cff)
 [![REUSE](https://img.shields.io/badge/REUSE-compliant-green)](REUSE.toml)
 
 ![Remanentia](docs/assets/remanentia_repo_header.png)

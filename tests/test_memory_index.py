@@ -1524,13 +1524,13 @@ class TestCodeSplitNonPython:
     def test_non_python_function_blocks(self):
         """Covers line 1547: non-Python function block extraction via regex."""
         rust_code = (
-            'fn compute_score(query: &str) -> f64 {\n'
-            '    let tokens = query.split_whitespace();\n'
-            '    tokens.count() as f64\n'
-            '}\n\n'
-            'fn search(index: &Index, q: &str) -> Vec<Result> {\n'
-            '    index.find(q).collect()\n'
-            '}\n'
+            "fn compute_score(query: &str) -> f64 {\n"
+            "    let tokens = query.split_whitespace();\n"
+            "    tokens.count() as f64\n"
+            "}\n\n"
+            "fn search(index: &Index, q: &str) -> Vec<Result> {\n"
+            "    index.find(q).collect()\n"
+            "}\n"
         )
         chunks = _split_code(rust_code)
         assert len(chunks) >= 1
@@ -1540,9 +1540,9 @@ class TestCodeSplitNonPython:
         """Covers line 1536: module docstring extraction in non-Python code."""
         code_with_docstring = (
             '"""This is a module-level docstring for testing."""\n\n'
-            '// Some non-parseable code follows\n'
-            '// that is not valid Python\n'
-            'invalid syntax here @#$%\n'
+            "// Some non-parseable code follows\n"
+            "// that is not valid Python\n"
+            "invalid syntax here @#$%\n"
         )
         chunks = _split_code(code_with_docstring)
         assert len(chunks) >= 1
@@ -1588,24 +1588,16 @@ class TestSingleQuerySearch:
             idx = MemoryIndex()
             idx.build(use_gpu_embeddings=False, use_gliner=False)
             # Filter by after date
-            results = idx._single_query_search(
-                "project testing", top_k=5, after="2026-02-01"
-            )
+            results = idx._single_query_search("project testing", top_k=5, after="2026-02-01")
             assert isinstance(results, list)
             # Filter by before date
-            results = idx._single_query_search(
-                "project testing", top_k=5, before="2026-02-01"
-            )
+            results = idx._single_query_search("project testing", top_k=5, before="2026-02-01")
             assert isinstance(results, list)
             # Filter by doc_type
-            results = idx._single_query_search(
-                "project testing", top_k=5, doc_type="traces"
-            )
+            results = idx._single_query_search("project testing", top_k=5, doc_type="traces")
             assert isinstance(results, list)
             # Filter by project
-            results = idx._single_query_search(
-                "project testing", top_k=5, project="test"
-            )
+            results = idx._single_query_search("project testing", top_k=5, project="test")
             assert isinstance(results, list)
         finally:
             memory_index.SOURCES = original_sources
@@ -1883,7 +1875,6 @@ class TestSingleQuerySearchFilters:
 class TestTemporalCodeInjectionDirect:
     def test_how_long_between_events(self, tmp_path):
         """Covers line 804: temporal code answer injection via direct test."""
-        from unittest.mock import MagicMock
 
         traces = tmp_path / "traces"
         traces.mkdir()
