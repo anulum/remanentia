@@ -800,7 +800,9 @@ class MemoryIndex:
                             )
                 if t_events:
                     code_answer = temporal_code_execute(query, t_events)
-                    if code_answer and not results[0].answer:  # pragma: no cover — answer_extractor usually fills first
+                    if (
+                        code_answer and not results[0].answer
+                    ):  # pragma: no cover — answer_extractor usually fills first
                         results[0] = SearchResult(
                             name=results[0].name,
                             source=results[0].source,

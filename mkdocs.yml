@@ -44,7 +44,12 @@ plugins:
 
 nav:
   - Home: index.md
+  - Tutorials:
+    - Quick Start: tutorials/quickstart.md
+    - Knowledge Store: tutorials/knowledge_store_tutorial.md
+    - Temporal Queries: tutorials/temporal_tutorial.md
   - Guides:
+    - Learning Path: guides/learning-path.md
     - Getting Started: guides/getting-started.md
     - User Manual: guides/USER_MANUAL.md
     - Integration Guide: guides/INTEGRATION_GUIDE.md

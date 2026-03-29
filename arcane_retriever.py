@@ -43,9 +43,8 @@ from __future__ import annotations
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from typing import Optional
 
-from fact_decomposer import AtomicFact, FactIndex, decompose_sessions, _tokenize
+from fact_decomposer import AtomicFact, FactIndex, decompose_sessions
 
 
 @dataclass
@@ -97,7 +96,9 @@ class ArcaneRetriever:
         query = question
 
         for iteration in range(max_iterations):
-            channel_results = self._parallel_retrieve(query, qtype, active_channels, top_k=top_k * 2)
+            channel_results = self._parallel_retrieve(
+                query, qtype, active_channels, top_k=top_k * 2
+            )
             fused = self._rrf_fusion(channel_results, top_k=top_k)
 
             if iteration < max_iterations - 1:

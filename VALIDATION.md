@@ -4,55 +4,66 @@
 
 | Python | Platform | Status |
 |--------|----------|:------:|
+| 3.10 | Ubuntu (CI) | ✅ |
+| 3.11 | Ubuntu (CI) | ✅ |
 | 3.12 | Ubuntu (CI) | ✅ |
 | 3.12 | Windows 11 (local) | ✅ |
 
-## Test Counts
+## Test Suite
 
-- **669 tests** across 17 test files
-- **672 tests** with coverage (3 additional coverage-specific tests)
-
-## Coverage Gate
-
-- **Target:** 100% on product modules
-- **Current:** 96.36% (memory_index.py at 89% due to model-dependent paths)
+- **844 tests** across 22 test files
+- **100% coverage** — 3,423 statements, 16 modules, zero lines missing
 - **Config:** `pyproject.toml` `[tool.coverage.report] fail_under = 100`
 
-### Coverage by Module
+## Coverage by Module
 
-| Module | Coverage |
-|--------|:--------:|
-| api.py | 100% |
-| cli.py | 100% |
-| memory_recall.py | 100% |
-| reflector.py | 100% |
-| entity_extractor.py | 100% |
-| answer_normalizer.py | 100% |
-| answer_extractor.py | 99% |
-| consolidation_engine.py | 99% |
-| knowledge_store.py | 99% |
-| mcp_server.py | 99% |
-| observer.py | 98% |
-| temporal_graph.py | 98% |
-| memory_index.py | 89% |
+| Module | Stmts | Cover |
+|--------|------:|:-----:|
+| memory_index.py | 888 | 100% |
+| knowledge_store.py | 357 | 100% |
+| consolidation_engine.py | 294 | 100% |
+| answer_extractor.py | 217 | 100% |
+| fact_decomposer.py | 216 | 100% |
+| memory_recall.py | 207 | 100% |
+| temporal_graph.py | 197 | 100% |
+| mcp_server.py | 185 | 100% |
+| cli.py | 173 | 100% |
+| arcane_retriever.py | 138 | 100% |
+| api_server.py | 117 | 100% |
+| reflector.py | 108 | 100% |
+| api.py | 95 | 100% |
+| observer.py | 86 | 100% |
+| entity_extractor.py | 73 | 100% |
+| answer_normalizer.py | 72 | 100% |
+| **Total** | **3,423** | **100%** |
 
-### Excluded from Coverage
+## Excluded from Coverage
 
-- Legacy/dead modules: snn_daemon, snn_backend, monitor, gpu_daemon, retrieve, encoding
-- Benchmark runners: bench_locomo, bench_experiments, run_exp*.py, analyze_failures
-- Test files and conftest
+Legacy/experimental modules (not part of the product surface):
+
+- `snn_daemon.py`, `snn_backend.py` — SNN experimental, excluded from product gate
+- `monitor.py`, `gpu_daemon.py`, `retrieve.py`, `encoding.py` — dead/legacy code
+- `git_stimulus.py`, `heartbeat_register.py`, `hooks.py` — infrastructure scripts
+- `pattern_separation.py`, `cognitive_snapshot.py`, `active_retrieval.py`, `skill_extractor.py` — experimental
+- `bench_locomo.py`, `bench_longmemeval.py`, `bench_experiments.py`, `run_exp*.py` — benchmark runners
+- `extractors/*`, `experimental/*` — experimental directories
 
 ## CI Gates
 
 | Gate | Requirement |
 |------|-------------|
-| pytest | 669 tests pass |
-| coverage | 70% (CI gate, local gate 100%) |
+| pytest | 844 tests pass (3.10, 3.11, 3.12) |
+| coverage | 100% fail-under on product modules |
+| ruff check | Zero lint errors across 16 modules + tests |
+| ruff format | All files formatted |
+| bandit | Zero high/medium findings (skips: B101, B110, B112, B301, B310, B311, B324, B403, B404, B603, B607) |
 
 ## Benchmark Results
 
-| Benchmark | Score | Date |
-|-----------|-------|------|
-| LOCOMO (exp8b) | 88.5% | 2026-03-25 |
-| Internal P@1 | 92.9% | 14 self-authored queries |
-| LongMemEval | Not yet run | — |
+| Benchmark | Score | Questions | Committed | Date |
+|-----------|------:|----------:|:---------:|------|
+| LongMemEval R8 | 69.0% | 500 | Yes (`data/longmemeval_hypotheses.results.jsonl`) | 2026-03-27 |
+| LOCOMO (no LLM) | 74.7% | 1,986 | No (experiment runs only) | 2026-03-25 |
+| Internal P@1 | 76.0% | 50 | Yes (`paper/internal_benchmark.json`) | 2026-03-26 |
+
+LongMemEval is the primary benchmark. LOCOMO results are historical and not independently reproducible from committed code.
