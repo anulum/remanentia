@@ -16,8 +16,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-torch = pytest.importorskip("torch")
+import torch
 
 from fact_validity_model import (
     FACT_TYPES,

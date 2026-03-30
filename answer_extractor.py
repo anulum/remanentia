@@ -32,7 +32,7 @@ def extract_answer(query: str, paragraph: str) -> str | None:
     """
     try:
         from remanentia_answer_extractor import extract_answer as _rust_extract
-        return _rust_extract(query, paragraph)
+        return _rust_extract(query, paragraph)  # pragma: no cover
     except ImportError:
         pass
 
@@ -280,7 +280,7 @@ def fuzzy_match(candidate: str, gold: str, threshold: float = 0.7) -> bool:
     """Check if candidate fuzzy-matches gold answer. Rust-accelerated."""
     try:
         from remanentia_answer_extractor import fuzzy_match as _rust_fuzzy
-        return _rust_fuzzy(candidate, gold, threshold)
+        return _rust_fuzzy(candidate, gold, threshold)  # pragma: no cover
     except ImportError:
         pass
     if not candidate or not gold:
@@ -332,7 +332,7 @@ def normalize_number(text: str) -> str | None:
     """Normalize number words and formats to digits. Rust-accelerated."""
     try:
         from remanentia_answer_extractor import normalize_number as _rust_num
-        return _rust_num(text)
+        return _rust_num(text)  # pragma: no cover
     except ImportError:
         pass
     t = text.strip().lower()
@@ -374,7 +374,7 @@ def extract_best_sentence(query: str, paragraph: str) -> str | None:
     """Return the sentence most relevant to the query. Rust-accelerated."""
     try:
         from remanentia_answer_extractor import extract_best_sentence as _rust_best
-        return _rust_best(query, paragraph)
+        return _rust_best(query, paragraph)  # pragma: no cover
     except ImportError:
         pass
     sentences = re.split(r"(?<=[.!?])\s+", paragraph)

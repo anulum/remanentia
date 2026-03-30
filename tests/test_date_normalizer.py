@@ -17,8 +17,7 @@ from datetime import date, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-torch = pytest.importorskip("torch")
+import torch
 
 from date_normalizer import (
     VAGUE_DATE_RE,

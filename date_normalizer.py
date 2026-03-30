@@ -115,9 +115,9 @@ def _rule_based_normalise(expr: str, ref: date) -> Optional[DateResult]:
     try:
         from remanentia_temporal import normalise_vague_date
 
-        result = normalise_vague_date(expr, ref.isoformat())
-        if result is not None:
-            return DateResult(iso_date=result[0], confidence=result[1], method=result[2])
+        result = normalise_vague_date(expr, ref.isoformat())  # pragma: no cover
+        if result is not None:  # pragma: no cover
+            return DateResult(iso_date=result[0], confidence=result[1], method=result[2])  # pragma: no cover
     except ImportError:
         pass
 

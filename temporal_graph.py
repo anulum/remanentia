@@ -350,7 +350,7 @@ def parse_dates(text: str, reference_date: date | None = None) -> list[str]:
     try:
         from remanentia_temporal import parse_dates as _rust_parse
 
-        return _rust_parse(text, ref.isoformat())
+        return _rust_parse(text, ref.isoformat())  # pragma: no cover
     except ImportError:
         pass
 

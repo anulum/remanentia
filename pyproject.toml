@@ -129,6 +129,8 @@ omit = [
     "bench_locomo.py",
     "bench_experiments.py",
     "bench_longmemeval.py",
+    "bench_longmemeval_local.py",
+    "bench_all_local_models.py",
     "analyze_failures.py",
     "run_exp*.py",
     "tests/benchmark_internal.py",
