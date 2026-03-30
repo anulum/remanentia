@@ -18,9 +18,8 @@ Tests the interaction between:
 from __future__ import annotations
 
 from datetime import date
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
 
 from date_normalizer import DateResult
 
@@ -223,7 +222,7 @@ class TestChTemporalC3:
     """Test arcane_retriever._ch_temporal with temporal relation classifier."""
 
     def _make_retriever(self):
-        from fact_decomposer import AtomicFact, FactIndex
+        from fact_decomposer import AtomicFact
 
         facts = [
             AtomicFact(
@@ -261,7 +260,6 @@ class TestChTemporalC3:
 
     def test_single_result_no_c3(self):
         """C3 reordering requires >= 2 results."""
-        from fact_decomposer import AtomicFact
         from arcane_retriever import ArcaneRetriever
 
         sessions = [[{"role": "user", "content": "Just one fact here."}]]

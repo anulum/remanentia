@@ -13,10 +13,8 @@ confidence thresholds, and graceful degradation.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
-import pytest
 import torch
 
 from temporal_relation import (
