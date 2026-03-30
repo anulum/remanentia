@@ -1,9 +1,11 @@
-# SPDX-License-Identifier: AGPL-3.0-or-later | Commercial license available
-# Copyright (C) Concepts 1996-2026 Miroslav Sotek. All rights reserved.
-# Copyright (C) Code 2020-2026 Miroslav Sotek. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
 # ORCID: 0009-0009-3560-0851
 # Contact: www.anulum.li | protoscience@anulum.li
-# Project: Remanentia — persistent AI memory
+# Remanentia — Tests for LLM backend
+
 # Repository: https://github.com/anulum/remanentia
 """Tests for llm_backend — pluggable LLM backend abstraction."""
 

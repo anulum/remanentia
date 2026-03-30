@@ -1,5 +1,11 @@
-# SPDX-FileCopyrightText: 2026 ANULUM / Fortis Studio
 # SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Remanentia — C1: Embedding fine-tuning
+
 """C1: Fine-tune all-MiniLM-L6-v2 on temporal-aware embedding triplets.
 
 Usage:
