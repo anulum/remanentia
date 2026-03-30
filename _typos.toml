@@ -5,3 +5,5 @@ BA = "BA"
 ure = "ure"
 # variable name (note dict)
 nd = "nd"
+# HSA = Heterogeneous System Architecture (AMD ROCm env var)
+HSA = "HSA"

@@ -17,7 +17,8 @@ from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
 import pytest
-import torch
+
+torch = pytest.importorskip("torch")
 
 from temporal_relation import (
     LABELS,
