@@ -132,6 +132,9 @@ omit = [
     "bench_longmemeval_local.py",
     "bench_all_local_models.py",
     "analyze_failures.py",
+    # ML inference modules — require trained model files not present in CI
+    "fact_validity_model.py",
+    "temporal_relation.py",
     "run_exp*.py",
     "tests/benchmark_internal.py",
     "experimental/*",
