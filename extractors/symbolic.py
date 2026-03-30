@@ -10,6 +10,7 @@
 Checks which identity conventions are active in the current session
 by reading the disposition files and CLAUDE.md.
 """
+
 from __future__ import annotations
 
 import logging

@@ -31,14 +31,24 @@ try:  # pragma: no cover
     from .retrieve import related_traces, query_suggestions, trace_summaries, chunk_traces
     from .snn_daemon import drop_stimulus, heartbeat
     from .skill_extractor import extract_skills, query_skills, load_skills
-    from .cognitive_snapshot import snapshot_save, snapshot_load, continuity_score, reconstruction_prompt
+    from .cognitive_snapshot import (
+        snapshot_save,
+        snapshot_load,
+        continuity_score,
+        reconstruction_prompt,
+    )
     from .active_retrieval import consult_memory, decision_guard
 except ImportError:
     from retrieve import retrieve, retrieve_context, retrieval_history
     from retrieve import related_traces, query_suggestions, trace_summaries, chunk_traces
     from snn_daemon import drop_stimulus, heartbeat
     from skill_extractor import extract_skills, query_skills, load_skills
-    from cognitive_snapshot import snapshot_save, snapshot_load, continuity_score, reconstruction_prompt
+    from cognitive_snapshot import (
+        snapshot_save,
+        snapshot_load,
+        continuity_score,
+        reconstruction_prompt,
+    )
     from active_retrieval import consult_memory, decision_guard
 
 __all__ = [

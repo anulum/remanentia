@@ -166,7 +166,10 @@ class TestBuildFactC5:
 
         fact = _build_fact(
             "I plan to visit Tokyo next month.",
-            sess_idx=0, turn_idx=0, role="user", default_year=2024,
+            sess_idx=0,
+            turn_idx=0,
+            role="user",
+            default_year=2024,
         )
         assert fact.fact_type == "plan"
 
@@ -175,7 +178,10 @@ class TestBuildFactC5:
 
         fact = _build_fact(
             "I love hiking in the mountains.",
-            sess_idx=0, turn_idx=0, role="user", default_year=2024,
+            sess_idx=0,
+            turn_idx=0,
+            role="user",
+            default_year=2024,
         )
         assert fact.fact_type == "preference"
 
@@ -184,7 +190,10 @@ class TestBuildFactC5:
 
         fact = _build_fact(
             "I started learning piano last year.",
-            sess_idx=0, turn_idx=0, role="user", default_year=2024,
+            sess_idx=0,
+            turn_idx=0,
+            role="user",
+            default_year=2024,
         )
         assert fact.fact_type == "state"
         assert fact.supersedes is True
@@ -197,7 +206,10 @@ class TestBuildFactC5:
         # C5 might override if confident
         fact = _build_fact(
             "The weather is really nice outside.",
-            sess_idx=0, turn_idx=0, role="user", default_year=2024,
+            sess_idx=0,
+            turn_idx=0,
+            role="user",
+            default_year=2024,
         )
         # Whatever C5 decides, it should be a valid type
         assert fact.fact_type in ["state", "event", "preference", "plan"]
@@ -209,7 +221,10 @@ class TestBuildFactC5:
         with patch.dict("sys.modules", {"fact_validity_model": None}):
             fact = _build_fact(
                 "The sun is shining.",
-                sess_idx=0, turn_idx=0, role="user", default_year=2024,
+                sess_idx=0,
+                turn_idx=0,
+                role="user",
+                default_year=2024,
             )
             assert fact.fact_type == "event"  # regex catch-all
             assert fact.supersedes is False
@@ -227,22 +242,31 @@ class TestChTemporalC3:
         facts = [
             AtomicFact(
                 text="I bought a car last month",
-                session_idx=0, turn_idx=0, role="user",
-                fact_type="event", entities=["car"],
+                session_idx=0,
+                turn_idx=0,
+                role="user",
+                fact_type="event",
+                entities=["car"],
                 date_mentions=["2023-03-15"],
             ),
             AtomicFact(
                 text="I visited the dentist yesterday",
-                session_idx=0, turn_idx=1, role="user",
-                fact_type="event", entities=["dentist"],
+                session_idx=0,
+                turn_idx=1,
+                role="user",
+                fact_type="event",
+                entities=["dentist"],
                 date_mentions=["2023-04-09"],
             ),
         ]
         from arcane_retriever import ArcaneRetriever
-        sessions = [[
-            {"role": "user", "content": "I bought a car last month."},
-            {"role": "user", "content": "I visited the dentist yesterday."},
-        ]]
+
+        sessions = [
+            [
+                {"role": "user", "content": "I bought a car last month."},
+                {"role": "user", "content": "I visited the dentist yesterday."},
+            ]
+        ]
         ar = ArcaneRetriever(sessions)
         return ar
 
@@ -313,12 +337,21 @@ class TestFullPipeline:
 
         sessions = [
             [
-                {"role": "user", "content": "I joined a yoga class in January 2024. It was a great decision and I went every Tuesday and Thursday."},
-                {"role": "assistant", "content": "That sounds great! Yoga is wonderful for flexibility."},
+                {
+                    "role": "user",
+                    "content": "I joined a yoga class in January 2024. It was a great decision and I went every Tuesday and Thursday.",
+                },
+                {
+                    "role": "assistant",
+                    "content": "That sounds great! Yoga is wonderful for flexibility.",
+                },
                 {"role": "user", "content": "I also started running on weekends in February 2024."},
             ],
             [
-                {"role": "user", "content": "I switched from yoga to swimming in March 2024. The pool is closer to my new apartment."},
+                {
+                    "role": "user",
+                    "content": "I switched from yoga to swimming in March 2024. The pool is closer to my new apartment.",
+                },
                 {"role": "assistant", "content": "Swimming is excellent full-body exercise."},
                 {"role": "user", "content": "I still go running on Saturdays though."},
             ],
@@ -341,17 +374,22 @@ class TestGracefulDegradation:
 
     def test_all_models_missing(self):
         """Full pipeline should work even without C3, C4, C5 models."""
-        with patch.dict("sys.modules", {
-            "date_normalizer": None,
-            "temporal_relation": None,
-            "fact_validity_model": None,
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "date_normalizer": None,
+                "temporal_relation": None,
+                "fact_validity_model": None,
+            },
+        ):
             from fact_decomposer import FactIndex, decompose_sessions
 
-            sessions = [[
-                {"role": "user", "content": "I bought a car on March 15, 2024."},
-                {"role": "user", "content": "I visited the dentist on April 2, 2024."},
-            ]]
+            sessions = [
+                [
+                    {"role": "user", "content": "I bought a car on March 15, 2024."},
+                    {"role": "user", "content": "I visited the dentist on April 2, 2024."},
+                ]
+            ]
             facts = decompose_sessions(sessions, default_year=2024)
             assert len(facts) >= 2
 
@@ -370,16 +408,23 @@ class TestReferenceDatePlumbing:
         """Vague dates are resolved when session_dates are provided."""
         from fact_decomposer import decompose_sessions
 
-        sessions = [[
-            {"role": "user", "content": "I bought a car about 3 weeks ago and it runs perfectly."},
-        ]]
+        sessions = [
+            [
+                {
+                    "role": "user",
+                    "content": "I bought a car about 3 weeks ago and it runs perfectly.",
+                },
+            ]
+        ]
         # Without session_dates: "3 weeks ago" cannot be resolved
         facts_no_ref = decompose_sessions(sessions, default_year=2023)
         dates_no_ref = [d for f in facts_no_ref for d in f.date_mentions]
 
         # With session_dates: "3 weeks ago" from 2023-04-10 → ~2023-03-20
         facts_with_ref = decompose_sessions(
-            sessions, default_year=2023, session_dates=["2023/04/10"],
+            sessions,
+            default_year=2023,
+            session_dates=["2023/04/10"],
         )
         dates_with_ref = [d for f in facts_with_ref for d in f.date_mentions]
 
@@ -390,9 +435,11 @@ class TestReferenceDatePlumbing:
         """Without session_dates, behaviour is unchanged from baseline."""
         from fact_decomposer import decompose_sessions
 
-        sessions = [[
-            {"role": "user", "content": "I started a new job on March 15, 2024."},
-        ]]
+        sessions = [
+            [
+                {"role": "user", "content": "I started a new job on March 15, 2024."},
+            ]
+        ]
         facts = decompose_sessions(sessions, default_year=2024)
         assert any("2024-03-15" in d for f in facts for d in f.date_mentions)
 
@@ -400,11 +447,15 @@ class TestReferenceDatePlumbing:
         """Malformed session_dates are silently skipped."""
         from fact_decomposer import decompose_sessions
 
-        sessions = [[
-            {"role": "user", "content": "I did something important recently and it went well."},
-        ]]
+        sessions = [
+            [
+                {"role": "user", "content": "I did something important recently and it went well."},
+            ]
+        ]
         facts = decompose_sessions(
-            sessions, default_year=2024, session_dates=["not-a-date"],
+            sessions,
+            default_year=2024,
+            session_dates=["not-a-date"],
         )
         assert isinstance(facts, list)
 
@@ -412,10 +463,15 @@ class TestReferenceDatePlumbing:
         """ArcaneRetriever forwards session_dates to decompose_sessions."""
         from arcane_retriever import ArcaneRetriever
 
-        sessions = [[
-            {"role": "user", "content": "I bought a new laptop about 2 weeks ago, it works great."},
-            {"role": "assistant", "content": "That sounds like a good purchase!"},
-        ]]
+        sessions = [
+            [
+                {
+                    "role": "user",
+                    "content": "I bought a new laptop about 2 weeks ago, it works great.",
+                },
+                {"role": "assistant", "content": "That sounds like a good purchase!"},
+            ]
+        ]
         ar = ArcaneRetriever(sessions, session_dates=["2023/06/15"])
         # Facts should have resolved dates from C4
         dated = [f for f in ar.fact_index.facts if f.date_mentions]
@@ -425,9 +481,11 @@ class TestReferenceDatePlumbing:
         """ArcaneRetriever works fine without session_dates (backward compat)."""
         from arcane_retriever import ArcaneRetriever
 
-        sessions = [[
-            {"role": "user", "content": "I bought a car on March 15, 2024."},
-        ]]
+        sessions = [
+            [
+                {"role": "user", "content": "I bought a car on March 15, 2024."},
+            ]
+        ]
         ar = ArcaneRetriever(sessions)
         assert len(ar.fact_index.facts) >= 1
 
@@ -437,7 +495,10 @@ class TestReferenceDatePlumbing:
 
         fact = _build_fact(
             "I started about 3 weeks ago and it's going well.",
-            sess_idx=0, turn_idx=0, role="user", default_year=2023,
+            sess_idx=0,
+            turn_idx=0,
+            role="user",
+            default_year=2023,
             reference_date=date(2023, 4, 10),
         )
         # C4 should resolve "3 weeks ago" from 2023-04-10 → ~2023-03-20
@@ -450,7 +511,10 @@ class TestReferenceDatePlumbing:
 
         fact = _build_fact(
             "I visited the dentist on March 15, 2024.",
-            sess_idx=0, turn_idx=0, role="user", default_year=2024,
+            sess_idx=0,
+            turn_idx=0,
+            role="user",
+            default_year=2024,
         )
         assert "2024-03-15" in fact.date_mentions
 
@@ -460,12 +524,20 @@ class TestReferenceDatePlumbing:
 
         sessions = [
             [
-                {"role": "user", "content": "I joined a gym about 3 weeks ago. The membership costs fifty dollars a month."},
-                {"role": "user", "content": "I bought new running shoes last week. They are Nike brand and very comfortable."},
+                {
+                    "role": "user",
+                    "content": "I joined a gym about 3 weeks ago. The membership costs fifty dollars a month.",
+                },
+                {
+                    "role": "user",
+                    "content": "I bought new running shoes last week. They are Nike brand and very comfortable.",
+                },
             ],
         ]
         facts = decompose_sessions(
-            sessions, default_year=2023, session_dates=["2023/04/10"],
+            sessions,
+            default_year=2023,
+            session_dates=["2023/04/10"],
         )
         idx = FactIndex(facts)
 

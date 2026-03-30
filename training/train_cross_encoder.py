@@ -51,10 +51,12 @@ def main() -> None:
 
     log.info("Loading pairs...")
     raw = load_pairs()
-    log.info("  Total: %d pairs (pos=%d, neg=%d)",
-             len(raw),
-             sum(1 for r in raw if r["label"] == 1),
-             sum(1 for r in raw if r["label"] == 0))
+    log.info(
+        "  Total: %d pairs (pos=%d, neg=%d)",
+        len(raw),
+        sum(1 for r in raw if r["label"] == 1),
+        sum(1 for r in raw if r["label"] == 0),
+    )
 
     # Split
     split_idx = max(1, int(len(raw) * (1 - EVAL_SPLIT)))
@@ -62,8 +64,7 @@ def main() -> None:
     eval_raw = raw[split_idx:]
 
     train_examples = [
-        InputExample(texts=[r["query"], r["passage"]], label=float(r["label"]))
-        for r in train_raw
+        InputExample(texts=[r["query"], r["passage"]], label=float(r["label"])) for r in train_raw
     ]
     train_loader = DataLoader(train_examples, shuffle=True, batch_size=BATCH_SIZE)
 
@@ -83,7 +84,9 @@ def main() -> None:
     total_steps = len(train_loader) * EPOCHS
     warmup_steps = int(total_steps * WARMUP_RATIO)
 
-    log.info("Training: %d examples, %d steps, %d warmup", len(train_examples), total_steps, warmup_steps)
+    log.info(
+        "Training: %d examples, %d steps, %d warmup", len(train_examples), total_steps, warmup_steps
+    )
 
     model.fit(
         train_dataloader=train_loader,
@@ -102,10 +105,12 @@ def main() -> None:
 
     # Verify
     loaded = CrossEncoder(str(_OUT), device=device)
-    scores = loaded.predict([
-        ("When did I buy the car?", "I bought a new car last Tuesday."),
-        ("When did I buy the car?", "The weather was nice today."),
-    ])
+    scores = loaded.predict(
+        [
+            ("When did I buy the car?", "I bought a new car last Tuesday."),
+            ("When did I buy the car?", "The weather was nice today."),
+        ]
+    )
     log.info("Verification scores: relevant=%.3f, irrelevant=%.3f", scores[0], scores[1])
     log.info("C2 training complete.")
 

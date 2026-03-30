@@ -5,12 +5,15 @@ import math, re, time, json
 from collections import Counter
 from pathlib import Path
 
+
 def tokenize(text):
     return set(re.findall(r"[a-z0-9][a-z0-9_]{2,}", text.lower()))
+
 
 CATS = {1: "single-hop", 2: "multi-hop", 3: "temporal", 4: "adversarial", 5: "open-domain"}
 
 from datasets import load_dataset
+
 ds = load_dataset("KhangPTT373/locomo_preprocess", split="test")
 
 results = {}
@@ -22,7 +25,11 @@ for conv in ds:
     questions = conv["questions"]
     answers = conv["answers"]
     categories = conv["category"]
-    turns = conv["turns"] if isinstance(conv["turns"], list) else [t.strip() for t in conv["turns"].split("\n") if t.strip()]
+    turns = (
+        conv["turns"]
+        if isinstance(conv["turns"], list)
+        else [t.strip() for t in conv["turns"].split("\n") if t.strip()]
+    )
 
     for qi in range(len(questions)):
         q, a = questions[qi], answers[qi]
@@ -54,7 +61,9 @@ for conv in ds:
             dl = len(pt)
             for qt in q_tokens:
                 if qt in pt:
-                    score += idf.get(qt, 0) * (1 + k1) / (1 + k1 * (1 - b + b * dl / max(avg_dl, 1)))
+                    score += (
+                        idf.get(qt, 0) * (1 + k1) / (1 + k1 * (1 - b + b * dl / max(avg_dl, 1)))
+                    )
             if score > 0:
                 scored.append((i, score))
         scored.sort(key=lambda x: -x[1])
@@ -78,7 +87,7 @@ for conv in ds:
             covered = set()
             for idx, sc in retrieved:
                 if idx < len(turns):
-                    covered |= (a_tokens & tokenize(turns[idx]))
+                    covered |= a_tokens & tokenize(turns[idx])
             if len(covered) / max(len(a_tokens), 1) > 0.5:
                 hit = True
 
@@ -92,10 +101,19 @@ for conv in ds:
 elapsed = time.monotonic() - t0
 overall = correct / max(tested, 1) * 100
 
-out = {"experiment": "BM25 baseline", "accuracy": round(overall, 1), "elapsed_s": round(elapsed, 1), "by_category": {}}
+out = {
+    "experiment": "BM25 baseline",
+    "accuracy": round(overall, 1),
+    "elapsed_s": round(elapsed, 1),
+    "by_category": {},
+}
 for cat, s in sorted(results.items()):
     acc = s["correct"] / max(s["total"], 1) * 100
-    out["by_category"][cat] = {"correct": s["correct"], "total": s["total"], "accuracy": round(acc, 1)}
+    out["by_category"][cat] = {
+        "correct": s["correct"],
+        "total": s["total"],
+        "accuracy": round(acc, 1),
+    }
 
 Path("exp1_results.json").write_text(json.dumps(out, indent=2))
 print(json.dumps(out, indent=2))

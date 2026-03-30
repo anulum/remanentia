@@ -129,7 +129,10 @@ def _regex_entities(text: str) -> list[Entity]:
     """Fallback regex entity extraction. Rust-accelerated."""
     try:
         from remanentia_entity_extractor import regex_entities as _rust_ents
-        return [Entity(text=t, label=l, score=s) for t, l, s in _rust_ents(text)]  # pragma: no cover
+
+        return [
+            Entity(text=t, label=l, score=s) for t, l, s in _rust_ents(text)
+        ]  # pragma: no cover
     except ImportError:
         pass
     entities = []

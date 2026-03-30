@@ -32,6 +32,7 @@ Usage::
     p2 = encode_text("transportation model", 2000)
     # cosine(p1, p2) ≈ 0.4-0.6 (vs ≈ 0.0 with hash encoding)
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -170,6 +171,7 @@ def _get_embed_model():
     if _EMBED_MODEL is None:
         try:
             from sentence_transformers import SentenceTransformer
+
             try:
                 _EMBED_MODEL = SentenceTransformer(
                     "all-MiniLM-L6-v2",
@@ -190,8 +192,7 @@ def _get_embed_model():
                     pass
             except Exception as exc:
                 raise ImportError(
-                    "Embedding backend requires a locally cached "
-                    "all-MiniLM-L6-v2 model."
+                    "Embedding backend requires a locally cached all-MiniLM-L6-v2 model."
                 ) from exc
         except ImportError:
             raise ImportError(
@@ -277,6 +278,7 @@ if __name__ == "__main__":
     has_embed = False
     try:
         from sentence_transformers import SentenceTransformer
+
         has_embed = True
     except ImportError:
         pass

@@ -50,6 +50,7 @@ Usage — Python API::
     results = retrieve("scpn-control Dimits shift")
     context = retrieve_context("disruption mitigation", top_k=3)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -116,14 +117,37 @@ _STOPWORDS = frozenset(
 
 def _tokenize(text: str) -> list[str]:
     """Split text into lowercase word tokens, stripping stopwords."""
-    return [w for w in re.findall(r"[a-z0-9_]+", text.lower()) if w not in _STOPWORDS and len(w) > 1]
+    return [
+        w for w in re.findall(r"[a-z0-9_]+", text.lower()) if w not in _STOPWORDS and len(w) > 1
+    ]
 
 
 _STEM_SUFFIXES = [
-    "ation", "tion", "sion", "meant", "ness", "ity", "ous",
-    "ive", "ing", "ical", "ally", "able", "ible", "full",
-    "less", "ized", "ise", "ize", "ed", "ly", "er", "est",
-    "al", "es", "s",
+    "ation",
+    "tion",
+    "sion",
+    "meant",
+    "ness",
+    "ity",
+    "ous",
+    "ive",
+    "ing",
+    "ical",
+    "ally",
+    "able",
+    "ible",
+    "full",
+    "less",
+    "ized",
+    "ise",
+    "ize",
+    "ed",
+    "ly",
+    "er",
+    "est",
+    "al",
+    "es",
+    "s",
 ]
 
 
@@ -151,7 +175,7 @@ def _expand_query(query: str) -> str:
 
 def _bigrams(tokens: list[str]) -> list[str]:
     """Generate bigrams from token list."""
-    return [f"{tokens[i]}_{tokens[i+1]}" for i in range(len(tokens) - 1)]
+    return [f"{tokens[i]}_{tokens[i + 1]}" for i in range(len(tokens) - 1)]
 
 
 def _encode(text: str, n_neurons: int) -> np.ndarray:
@@ -162,6 +186,7 @@ def _encode(text: str, n_neurons: int) -> np.ndarray:
     """
     try:
         from encoding import encode_text
+
         return encode_text(text, n_neurons)
     except ImportError:
         pass
@@ -364,9 +389,7 @@ def _load_network(state_path: Path | None = None) -> dict:
         if not isinstance(data, dict):
             raise ValueError(f"Unexpected network payload in {path}")
         signature = hashlib.md5(
-            f"{path}:{stat.st_mtime_ns}:{stat.st_size}:{config['encoding_backend']}".encode(
-                "utf-8"
-            )
+            f"{path}:{stat.st_mtime_ns}:{stat.st_size}:{config['encoding_backend']}".encode("utf-8")
         ).hexdigest()
         cached = dict(data)
         cached["_checkpoint_path"] = str(path)
@@ -438,7 +461,11 @@ def _load_trace_index_cache(cache_key: str) -> dict | None:
     trace_spikes = cached.get("trace_spikes")
     trace_names_lower = cached.get("trace_names_lower")
     idf = cached.get("idf")
-    if not isinstance(trace_spikes, dict) or not isinstance(trace_names_lower, dict) or not isinstance(idf, dict):
+    if (
+        not isinstance(trace_spikes, dict)
+        or not isinstance(trace_names_lower, dict)
+        or not isinstance(idf, dict)
+    ):
         return None
     return {
         "trace_spikes": trace_spikes,
@@ -469,9 +496,7 @@ def _build_trace_index(tdir: Path, data: dict) -> dict:
         semantic_files = sorted(SEMANTIC_DIR.rglob("*.md"))
     all_files = trace_files + semantic_files
     cache_key = (
-        f"{data['_state_signature']}:"
-        f"{data['_encoding_backend']}:"
-        f"{_trace_fingerprint(all_files)}"
+        f"{data['_state_signature']}:{data['_encoding_backend']}:{_trace_fingerprint(all_files)}"
     )
     cached = _TRACE_INDEX_CACHE.get(cache_key)
     if cached is not None:
@@ -697,8 +722,7 @@ def _entity_graph_score(query: str, trace_name: str) -> float:
     for r in _GRAPH_RELATIONS:
         src, tgt = r.get("source", ""), r.get("target", "")
         w = r.get("weight", 1)
-        if (src in q_entities and tgt in t_entities) or \
-           (tgt in q_entities and src in t_entities):
+        if (src in q_entities and tgt in t_entities) or (tgt in q_entities and src in t_entities):
             score += w
         elif src in q_entities and src in t_entities:
             score += w * 0.5
@@ -730,9 +754,7 @@ def _filename_bonus(query: str, name_lower: str, idf: dict[str, float]) -> float
 # ── Cross-trace linking ───────────────────────────────────────────
 
 
-def related_traces(
-    trace_name: str, top_k: int = 3, traces_dir: Path | None = None
-) -> list[dict]:
+def related_traces(trace_name: str, top_k: int = 3, traces_dir: Path | None = None) -> list[dict]:
     """Find traces most similar to the given trace by keyword overlap."""
     tdir = traces_dir or TRACES_DIR
     target = tdir / trace_name
@@ -740,7 +762,9 @@ def related_traces(
         return []
 
     target_text = target.read_text(encoding="utf-8")
-    target_tokens = set(_tokenize(target_text + " " + trace_name.replace("-", " ").replace("_", " ")))
+    target_tokens = set(
+        _tokenize(target_text + " " + trace_name.replace("-", " ").replace("_", " "))
+    )
     if not target_tokens:
         return []
 
@@ -754,7 +778,9 @@ def related_traces(
         if not overlap:
             continue
         jaccard = len(overlap) / len(target_tokens | tokens)
-        scored.append({"trace": f.name, "similarity": round(jaccard, 4), "shared_terms": len(overlap)})
+        scored.append(
+            {"trace": f.name, "similarity": round(jaccard, 4), "shared_terms": len(overlap)}
+        )
 
     scored.sort(key=lambda x: x["similarity"], reverse=True)
     return scored[:top_k]
@@ -817,14 +843,16 @@ def chunk_traces(traces_dir: Path | None = None) -> list[dict]:
         project = parts[0]
         date = parts[1] if len(parts) > 1 else ""
         summary = f"{project}: {len(files)} trace{'s' if len(files) > 1 else ''} ({date})"
-        chunks.append({
-            "name": key,
-            "project": project,
-            "date": date,
-            "traces": traces,
-            "count": len(files),
-            "summary": summary,
-        })
+        chunks.append(
+            {
+                "name": key,
+                "project": project,
+                "date": date,
+                "traces": traces,
+                "count": len(files),
+                "summary": summary,
+            }
+        )
 
     chunks.sort(key=lambda c: c["date"], reverse=True)
     return chunks
@@ -868,17 +896,13 @@ def _live_service_config() -> dict | None:
     timestamp = float(state.get("timestamp", 0.0) or 0.0)
     if timestamp and time.time() - timestamp > _LIVE_SERVICE_STALE_S:
         return None
-    request_dir = _resolve_path(
-        str(state.get("live_retrieval_request_dir") or LIVE_REQUESTS_DIR)
-    )
+    request_dir = _resolve_path(str(state.get("live_retrieval_request_dir") or LIVE_REQUESTS_DIR))
     response_dir = _resolve_path(
         str(state.get("live_retrieval_response_dir") or LIVE_RESPONSES_DIR)
     )
     if not request_dir.exists() or not response_dir.exists():
         return None
-    advertised_timeout = float(
-        state.get("live_retrieval_timeout_s", _LIVE_RETRIEVAL_TIMEOUT_S)
-    )
+    advertised_timeout = float(state.get("live_retrieval_timeout_s", _LIVE_RETRIEVAL_TIMEOUT_S))
     return {
         "request_dir": request_dir,
         "response_dir": response_dir,
@@ -997,6 +1021,7 @@ def _embedding_similarity(query: str, trace_text: str) -> float:
     if q_key not in _EMBED_CACHE or t_key not in _EMBED_CACHE:
         try:
             from encoding import _get_embed_model
+
             model = _get_embed_model()
         except ImportError:
             return 0.0
@@ -1096,21 +1121,21 @@ def retrieve(
         tier = _trace_tier(trace_path) if trace_path.exists() else "cold"
         tier_boost = _tier_boost(tier)
         base_score = (
-            _WEIGHT_KW * kw
-            + _WEIGHT_NAME * name_bonus
-            + 0.10 * graph_score  # entity graph boost
+            _WEIGHT_KW * kw + _WEIGHT_NAME * name_bonus + 0.10 * graph_score  # entity graph boost
         ) * tier_boost
 
-        scored.append({
-            "trace": trace_name,
-            "score": round(base_score, 4),
-            "kw_score": round(kw, 4),
-            "graph_score": round(graph_score, 4),
-            "emb_score": 0.0,
-            "tier": tier,
-            "_base_score": base_score,
-            "_tier_boost": tier_boost,
-        })
+        scored.append(
+            {
+                "trace": trace_name,
+                "score": round(base_score, 4),
+                "kw_score": round(kw, 4),
+                "graph_score": round(graph_score, 4),
+                "emb_score": 0.0,
+                "tier": tier,
+                "_base_score": base_score,
+                "_tier_boost": tier_boost,
+            }
+        )
 
     scored.sort(key=lambda x: x["score"], reverse=True)
 
@@ -1138,9 +1163,7 @@ def retrieve(
                 name_lower = trace_names_lower[entry["trace"]]
                 name_bonus = _filename_bonus(expanded, name_lower, idf)
                 expanded_score = (
-                    _WEIGHT_KW * kw_exp
-                    + _WEIGHT_SNN * snn_exp
-                    + _WEIGHT_NAME * name_bonus
+                    _WEIGHT_KW * kw_exp + _WEIGHT_SNN * snn_exp + _WEIGHT_NAME * name_bonus
                 ) * entry["_tier_boost"]
                 entry["score"] = max(entry["score"], round(expanded_score, 4))
                 entry["expanded"] = True
@@ -1170,8 +1193,9 @@ def retrieve_context(
     state_path: Path | None = None,
 ) -> str:
     """Retrieve and format traces as an LLM-injectable context block."""
-    results = retrieve(query, top_k=top_k, include_content=True,
-                       traces_dir=traces_dir, state_path=state_path)
+    results = retrieve(
+        query, top_k=top_k, include_content=True, traces_dir=traces_dir, state_path=state_path
+    )
     if not results:
         return ""
 
@@ -1207,7 +1231,9 @@ def network_summary() -> dict:
     hubs = np.argsort(out_strength)[-10:][::-1]
 
     return {
-        "active_retrieval_mode": "gpu_live_service" if state.get("live_retrieval_available") else "checkpoint",
+        "active_retrieval_mode": "gpu_live_service"
+        if state.get("live_retrieval_available")
+        else "checkpoint",
         "retrieval_checkpoint": data.get("_checkpoint_path"),
         "retrieval_backend": data.get("_encoding_backend"),
         "retrieval_source": data.get("_retrieval_source"),
@@ -1267,14 +1293,16 @@ def run_eval(traces_dir: Path | None = None, state_path: Path | None = None) -> 
             correct += 1
         rr = 1.0 / rank if rank else 0.0
         reciprocal_ranks.append(rr)
-        details.append({
-            "query": query,
-            "expected": expected_substr,
-            "got": results[0]["trace"] if results else "(none)",
-            "rank": rank,
-            "score": results[0]["score"] if results else 0,
-            "hit": hit,
-        })
+        details.append(
+            {
+                "query": query,
+                "expected": expected_substr,
+                "got": results[0]["trace"] if results else "(none)",
+                "rank": rank,
+                "score": results[0]["score"] if results else 0,
+                "hit": hit,
+            }
+        )
 
     total = len(EVAL_GROUND_TRUTH)
     return {
@@ -1315,6 +1343,7 @@ def run_extended_eval(traces_dir: Path | None = None, state_path: Path | None = 
     # Encoding quality: measure similarity between semantically related pairs
     try:
         from encoding import similarity, get_backend
+
         backend = get_backend()
         pairs = [
             ("transport coefficient", "transportation model", True),
@@ -1327,7 +1356,15 @@ def run_extended_eval(traces_dir: Path | None = None, state_path: Path | None = 
         for a, b, should_match in pairs:
             sim = similarity(a, b)
             correct = (sim > 0.1) == should_match
-            pair_results.append({"a": a, "b": b, "similarity": sim, "expected_match": should_match, "correct": correct})
+            pair_results.append(
+                {
+                    "a": a,
+                    "b": b,
+                    "similarity": sim,
+                    "expected_match": should_match,
+                    "correct": correct,
+                }
+            )
         results["encoding_quality"] = {
             "backend": backend,
             "accuracy": sum(p["correct"] for p in pair_results) / len(pair_results),
@@ -1389,11 +1426,13 @@ def main():
 
     if args.eval:
         ev = run_eval()
-        print(f"Precision@1: {ev['correct']}/{ev['total']} = {ev['precision_at_1']*100:.0f}%")
+        print(f"Precision@1: {ev['correct']}/{ev['total']} = {ev['precision_at_1'] * 100:.0f}%")
         print(f"MRR: {ev['mrr']:.3f}\n")
         for d in ev["details"]:
             marker = "OK" if d["hit"] else "MISS"
-            print(f"  {marker:4s}  rank={str(d['rank']):>4s}  {d['query'][:45]:<45s}  -> {d['got'][:40]}")
+            print(
+                f"  {marker:4s}  rank={str(d['rank']):>4s}  {d['query'][:45]:<45s}  -> {d['got'][:40]}"
+            )
         return
 
     if not args.query:
@@ -1423,7 +1462,9 @@ def main():
             return
         print(f"Query: '{args.query}'\n")
         for i, r in enumerate(results, 1):
-            print(f"  {i}. [{r['score']:.3f}] {r['trace']}  (kw={r['kw_score']:.3f} snn={r['snn_score']:.3f})")
+            print(
+                f"  {i}. [{r['score']:.3f}] {r['trace']}  (kw={r['kw_score']:.3f} snn={r['snn_score']:.3f})"
+            )
             if "content" in r:
                 preview = r["content"][:200].replace("\n", " ")
                 print(f"     {preview}...")

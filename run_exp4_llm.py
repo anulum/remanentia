@@ -6,8 +6,10 @@ import math, os, re, time, json
 from collections import Counter
 from pathlib import Path
 
+
 def tokenize(text):
     return set(re.findall(r"[a-z0-9][a-z0-9_]{2,}", text.lower()))
+
 
 CATS = {1: "single-hop", 2: "multi-hop", 3: "temporal", 4: "adversarial", 5: "open-domain"}
 
@@ -17,29 +19,32 @@ if not api_key:
     exit(1)
 
 import anthropic
+
 client = anthropic.Anthropic(api_key=api_key)
 
 from datasets import load_dataset
+
 ds = load_dataset("KhangPTT373/locomo_preprocess", split="test")
+
 
 def llm_answer(question, turns, retrieved_indices):
     context = "\n\n".join(
-        f"[Turn {idx}]: {turns[idx][:400]}"
-        for idx, _ in retrieved_indices[:5]
-        if idx < len(turns)
+        f"[Turn {idx}]: {turns[idx][:400]}" for idx, _ in retrieved_indices[:5] if idx < len(turns)
     )
     try:
         response = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=100,
-            messages=[{
-                "role": "user",
-                "content": (
-                    "Answer the question using ONLY the conversation turns below. "
-                    "Be concise (1-2 sentences). If the answer isn't in the turns, say 'unknown'.\n\n"
-                    f"{context}\n\nQuestion: {question}"
-                ),
-            }],
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        "Answer the question using ONLY the conversation turns below. "
+                        "Be concise (1-2 sentences). If the answer isn't in the turns, say 'unknown'.\n\n"
+                        f"{context}\n\nQuestion: {question}"
+                    ),
+                }
+            ],
         )
         answer = response.content[0].text.strip()
         if answer.lower() in ("unknown", "i don't know", "not mentioned"):
@@ -47,6 +52,7 @@ def llm_answer(question, turns, retrieved_indices):
         return answer
     except Exception as e:
         return None
+
 
 results = {}
 correct = 0
@@ -58,7 +64,11 @@ for ci, conv in enumerate(ds):
     questions = conv["questions"]
     answers = conv["answers"]
     categories = conv["category"]
-    turns = conv["turns"] if isinstance(conv["turns"], list) else [t.strip() for t in conv["turns"].split("\n") if t.strip()]
+    turns = (
+        conv["turns"]
+        if isinstance(conv["turns"], list)
+        else [t.strip() for t in conv["turns"].split("\n") if t.strip()]
+    )
 
     # BM25 index for this conversation
     n = len(turns)
@@ -86,7 +96,9 @@ for ci, conv in enumerate(ds):
                 dl = len(pt)
                 for qt in q_tokens:
                     if qt in pt:
-                        score += idf.get(qt, 0) * (1 + k1) / (1 + k1 * (1 - b + b * dl / max(avg_dl, 1)))
+                        score += (
+                            idf.get(qt, 0) * (1 + k1) / (1 + k1 * (1 - b + b * dl / max(avg_dl, 1)))
+                        )
                 if score > 0:
                     scored.append((i, score))
         scored.sort(key=lambda x: -x[1])
@@ -111,7 +123,7 @@ for ci, conv in enumerate(ds):
             covered = set()
             for idx, sc in retrieved:
                 if idx < len(turns):
-                    covered |= (a_tokens & tokenize(turns[idx]))
+                    covered |= a_tokens & tokenize(turns[idx])
             if len(covered) / max(len(a_tokens), 1) > 0.5:
                 hit = True
 
@@ -139,7 +151,7 @@ for ci, conv in enumerate(ds):
     if (ci + 1) % 5 == 0:
         pct = correct / max(tested, 1) * 100
         Path("exp4_progress.txt").write_text(
-            f"Conv {ci+1}/{len(ds)}, {tested} tested, {correct} correct ({pct:.1f}%), {llm_calls} LLM calls\n"
+            f"Conv {ci + 1}/{len(ds)}, {tested} tested, {correct} correct ({pct:.1f}%), {llm_calls} LLM calls\n"
         )
 
 elapsed = time.monotonic() - t0
@@ -154,7 +166,11 @@ out = {
 }
 for cat, s in sorted(results.items()):
     acc = s["correct"] / max(s["total"], 1) * 100
-    out["by_category"][cat] = {"correct": s["correct"], "total": s["total"], "accuracy": round(acc, 1)}
+    out["by_category"][cat] = {
+        "correct": s["correct"],
+        "total": s["total"],
+        "accuracy": round(acc, 1),
+    }
 
 Path("exp4_results.json").write_text(json.dumps(out, indent=2))
 print(json.dumps(out, indent=2))

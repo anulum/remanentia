@@ -82,10 +82,14 @@ def _load_model() -> bool:
                 hidden = self.backbone.config.hidden_size
                 self.type_head = nn.Linear(hidden, num_types)
                 self.supersedes_head = nn.Sequential(
-                    nn.Linear(hidden, 64), nn.ReLU(), nn.Linear(64, 1),
+                    nn.Linear(hidden, 64),
+                    nn.ReLU(),
+                    nn.Linear(64, 1),
                 )
                 self.boundary_head = nn.Sequential(
-                    nn.Linear(hidden, 64), nn.ReLU(), nn.Linear(64, 1),
+                    nn.Linear(hidden, 64),
+                    nn.ReLU(),
+                    nn.Linear(64, 1),
                 )
 
             def forward(self, input_ids, attention_mask):
@@ -127,7 +131,9 @@ def classify_fact(text: str) -> Optional[FactClassification]:
     import torch
 
     max_len = _config.get("max_seq_len", 128)
-    enc = _tokenizer(text, max_length=max_len, padding="max_length", truncation=True, return_tensors="pt")
+    enc = _tokenizer(
+        text, max_length=max_len, padding="max_length", truncation=True, return_tensors="pt"
+    )
 
     with torch.no_grad():
         type_logits, sup_logit, bnd_logit = _model(enc["input_ids"], enc["attention_mask"])

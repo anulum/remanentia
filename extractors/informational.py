@@ -11,6 +11,7 @@ Computes cosine similarity between the current session context
 and stored reasoning traces. High similarity → in-phase (0).
 Low similarity → out-of-phase (π).
 """
+
 from __future__ import annotations
 
 import logging

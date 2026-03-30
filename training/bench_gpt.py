@@ -29,6 +29,7 @@ MODEL = "gpt-4o-mini"
 def _get_client():
     """Create OpenAI client from environment."""
     from openai import OpenAI
+
     key = os.environ.get("OPENAI_API_KEY", "")
     if not key:
         print("ERROR: Set OPENAI_API_KEY environment variable")
@@ -196,7 +197,10 @@ def main():
 
         if use_arcane:
             retrieval_results, context = _arcane_answer(
-                question, sessions, qtype, haystack_dates=haystack_dates,
+                question,
+                sessions,
+                qtype,
+                haystack_dates=haystack_dates,
             )
         else:
             context = _build_context(sessions)
@@ -214,25 +218,29 @@ def main():
         if correct:
             results_by_type[qtype]["correct"] += 1
 
-        hypotheses.append({
-            "question_id": qid,
-            "hypothesis": hypothesis,
-            "judge_label": correct,
-            "question_type": qtype,
-        })
+        hypotheses.append(
+            {
+                "question_id": qid,
+                "hypothesis": hypothesis,
+                "judge_label": correct,
+                "question_type": qtype,
+            }
+        )
 
         if (qi + 1) % 10 == 0:
             elapsed = time.time() - t0
             total_correct = sum(r["correct"] for r in results_by_type.values())
             total_tested = sum(r["total"] for r in results_by_type.values())
             pct = total_correct * 100 / total_tested if total_tested else 0
-            print(f"  [{qi+1}/{len(data)}] {total_correct}/{total_tested} = {pct:.1f}%  ({elapsed:.0f}s)")
+            print(
+                f"  [{qi + 1}/{len(data)}] {total_correct}/{total_tested} = {pct:.1f}%  ({elapsed:.0f}s)"
+            )
 
     # Final results
     elapsed = time.time() - t0
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"RESULTS ({MODEL}, {elapsed:.0f}s)")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     grand_correct = 0
     grand_total = 0
@@ -255,16 +263,20 @@ def main():
 
     res_path = _OUT / f"bench_gpt{suffix}_results.json"
     with open(res_path, "w") as f:
-        json.dump({
-            "model": MODEL,
-            "overall_accuracy": overall,
-            "by_type": {
-                k: {**v, "accuracy": v["correct"] * 100 / v["total"] if v["total"] else 0}
-                for k, v in results_by_type.items()
+        json.dump(
+            {
+                "model": MODEL,
+                "overall_accuracy": overall,
+                "by_type": {
+                    k: {**v, "accuracy": v["correct"] * 100 / v["total"] if v["total"] else 0}
+                    for k, v in results_by_type.items()
+                },
+                "elapsed_s": elapsed,
+                "n_questions": grand_total,
             },
-            "elapsed_s": elapsed,
-            "n_questions": grand_total,
-        }, f, indent=2)
+            f,
+            indent=2,
+        )
 
     print(f"\nSaved: {hyp_path.name}, {res_path.name}")
 

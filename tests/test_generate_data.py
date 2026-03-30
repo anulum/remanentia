@@ -98,18 +98,22 @@ class TestBm25Score:
 
 class TestFlattenTurns:
     def test_basic(self):
-        sessions = [[
-            {"role": "user", "content": "This is a sufficiently long message."},
-            {"role": "assistant", "content": "And this is the reply from assistant."},
-        ]]
+        sessions = [
+            [
+                {"role": "user", "content": "This is a sufficiently long message."},
+                {"role": "assistant", "content": "And this is the reply from assistant."},
+            ]
+        ]
         turns = _flatten_turns(sessions)
         assert len(turns) == 2
 
     def test_filters_short(self):
-        sessions = [[
-            {"role": "user", "content": "Short."},
-            {"role": "user", "content": "This one is long enough to be included in the list."},
-        ]]
+        sessions = [
+            [
+                {"role": "user", "content": "Short."},
+                {"role": "user", "content": "This one is long enough to be included in the list."},
+            ]
+        ]
         turns = _flatten_turns(sessions)
         assert len(turns) == 1
 
@@ -136,11 +140,22 @@ class TestGenerateEmbeddingTriplets:
                 "question_type": "temporal-reasoning",
                 "question": "When did I buy the car?",
                 "answer": "last Tuesday at the dealership",
-                "haystack_sessions": [[
-                    {"role": "user", "content": "I went to the dealership and bought a car last Tuesday at the dealership. It was a great experience overall."},
-                    {"role": "assistant", "content": "That's wonderful! What kind of car did you get?"},
-                    {"role": "user", "content": "A blue Toyota Camry. The weather was beautiful yesterday and I took it for a long drive through the countryside."},
-                ]],
+                "haystack_sessions": [
+                    [
+                        {
+                            "role": "user",
+                            "content": "I went to the dealership and bought a car last Tuesday at the dealership. It was a great experience overall.",
+                        },
+                        {
+                            "role": "assistant",
+                            "content": "That's wonderful! What kind of car did you get?",
+                        },
+                        {
+                            "role": "user",
+                            "content": "A blue Toyota Camry. The weather was beautiful yesterday and I took it for a long drive through the countryside.",
+                        },
+                    ]
+                ],
             },
         ]
 
@@ -179,11 +194,22 @@ class TestGenerateCrossEncoderPairs:
                 "question_type": "temporal-reasoning",
                 "question": "When did I buy the car?",
                 "answer": "last Tuesday at the dealership",
-                "haystack_sessions": [[
-                    {"role": "user", "content": "I bought a car last Tuesday at the dealership. Great experience overall."},
-                    {"role": "assistant", "content": "What kind of car did you buy? I hope it was a good deal."},
-                    {"role": "user", "content": "The weather was beautiful yesterday so I went for a long countryside drive."},
-                ]],
+                "haystack_sessions": [
+                    [
+                        {
+                            "role": "user",
+                            "content": "I bought a car last Tuesday at the dealership. Great experience overall.",
+                        },
+                        {
+                            "role": "assistant",
+                            "content": "What kind of car did you buy? I hope it was a good deal.",
+                        },
+                        {
+                            "role": "user",
+                            "content": "The weather was beautiful yesterday so I went for a long countryside drive.",
+                        },
+                    ]
+                ],
             },
         ]
 
@@ -224,9 +250,11 @@ class TestExtractNaturalDateExamples:
                 "question": "test",
                 "answer": "test",
                 "haystack_dates": ["2023/04/10 (Mon) 17:50"],
-                "haystack_sessions": [[
-                    {"role": "user", "content": "I did it 3 weeks ago"},
-                ]],
+                "haystack_sessions": [
+                    [
+                        {"role": "user", "content": "I did it 3 weeks ago"},
+                    ]
+                ],
             },
         ]
         # Should skip non-temporal questions
@@ -241,9 +269,14 @@ class TestExtractNaturalDateExamples:
                 "question": "When?",
                 "answer": "3 weeks ago",
                 "haystack_dates": ["2023/04/10 (Mon) 17:50"],
-                "haystack_sessions": [[
-                    {"role": "user", "content": "I bought it about 3 weeks ago and it works great."},
-                ]],
+                "haystack_sessions": [
+                    [
+                        {
+                            "role": "user",
+                            "content": "I bought it about 3 weeks ago and it works great.",
+                        },
+                    ]
+                ],
             },
         ]
         results = extract_natural_date_examples(data)
@@ -258,9 +291,11 @@ class TestExtractNaturalDateExamples:
                 "question": "When?",
                 "answer": "test",
                 "haystack_dates": [],
-                "haystack_sessions": [[
-                    {"role": "user", "content": "I did it recently"},
-                ]],
+                "haystack_sessions": [
+                    [
+                        {"role": "user", "content": "I did it recently"},
+                    ]
+                ],
             },
         ]
         results = extract_natural_date_examples(data)

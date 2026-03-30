@@ -44,6 +44,7 @@ def normalize_answer(text: str) -> str:
     """
     try:
         from remanentia_answer_normalizer import normalize_answer as _rust_norm
+
         return _rust_norm(text)  # pragma: no cover
     except ImportError:
         pass

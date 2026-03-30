@@ -8,8 +8,10 @@ import numpy as np
 from collections import Counter
 from pathlib import Path
 
+
 def tokenize(text):
     return set(re.findall(r"[a-z0-9][a-z0-9_]{2,}", text.lower()))
+
 
 CATS = {1: "single-hop", 2: "multi-hop", 3: "temporal", 4: "adversarial", 5: "open-domain"}
 
@@ -17,6 +19,7 @@ api_key = os.environ.get("ANTHROPIC_API_KEY", "")
 
 import torch
 from sentence_transformers import SentenceTransformer, CrossEncoder
+
 device = "cuda" if torch.cuda.is_available() else "cpu"
 embed_model = SentenceTransformer("all-MiniLM-L6-v2", device=device)
 ce_model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", device=device)
@@ -24,9 +27,11 @@ ce_model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", device=device)
 client = None
 if api_key:
     import anthropic
+
     client = anthropic.Anthropic(api_key=api_key)
 
 from datasets import load_dataset
+
 ds = load_dataset("KhangPTT373/locomo_preprocess", split="test")
 
 from temporal_graph import TemporalEvent, temporal_code_execute, parse_dates
@@ -48,8 +53,12 @@ def precompute_conv(turns):
     avg_dl = sum(len(t) for t in para_tokens) / max(n, 1)
 
     turn_embs = embed_model.encode(
-        [p[:512] for p in turns], batch_size=64, show_progress_bar=False,
-        normalize_embeddings=True, convert_to_numpy=True)
+        [p[:512] for p in turns],
+        batch_size=64,
+        show_progress_bar=False,
+        normalize_embeddings=True,
+        convert_to_numpy=True,
+    )
 
     return para_tokens, idf, avg_dl, turn_embs
 
@@ -57,7 +66,9 @@ def precompute_conv(turns):
 _PERSON_CENTRIC_PATTERNS = re.compile(
     r"\b(relationship|hobby|hobbies|interest|interests|career|job|status|"
     r"personality|feel|feeling|prefer|favorite|partake|destress|self-care|"
-    r"political|leaning|member|community)\b", re.IGNORECASE)
+    r"political|leaning|member|community)\b",
+    re.IGNORECASE,
+)
 
 
 def _is_person_centric(query):
@@ -71,9 +82,25 @@ def _extract_query_names(query):
     names = set()
     for m in re.finditer(r"\b([A-Z][a-z]{2,})\b", query):
         word = m.group(1).lower()
-        if word not in {"what", "when", "where", "who", "how", "why", "would",
-                        "could", "does", "did", "has", "have", "the", "which",
-                        "likely", "yes", "not"}:
+        if word not in {
+            "what",
+            "when",
+            "where",
+            "who",
+            "how",
+            "why",
+            "would",
+            "could",
+            "does",
+            "did",
+            "has",
+            "have",
+            "the",
+            "which",
+            "likely",
+            "yes",
+            "not",
+        }:
             names.add(word)
     return names
 
@@ -104,8 +131,9 @@ def hybrid_search(query, turns, para_tokens, idf, avg_dl, turn_embs, top_k=20):
     emb_max = max(emb_scores) if emb_scores else 1
     scored = []
     for i in range(n):
-        fused = (0.4 * bm25_scores[i] / max(bm25_max, 1e-6) +
-                 0.6 * emb_scores[i] / max(emb_max, 1e-6))
+        fused = 0.4 * bm25_scores[i] / max(bm25_max, 1e-6) + 0.6 * emb_scores[i] / max(
+            emb_max, 1e-6
+        )
         # Entity-centric boost: turns mentioning query's person get 1.3x
         if query_names and fused > 0:
             t_lower = turns[i].lower()
@@ -114,7 +142,7 @@ def hybrid_search(query, turns, para_tokens, idf, avg_dl, turn_embs, top_k=20):
         if fused > 0:
             scored.append((i, fused))
     scored.sort(key=lambda x: -x[1])
-    candidates = scored[:top_k * 3]
+    candidates = scored[: top_k * 3]
 
     # Cross-encoder rerank
     if candidates:
@@ -163,9 +191,8 @@ def llm_answer(question, turns, retrieved_indices):
     # Dedup + expand context to 15 turns
     deduped = _dedup_turn_indices(retrieved_indices, turns)
     context = "\n\n".join(
-        f"[Turn {idx}]: {turns[idx][:500]}"
-        for idx, _ in deduped[:15]
-        if idx < len(turns))
+        f"[Turn {idx}]: {turns[idx][:500]}" for idx, _ in deduped[:15] if idx < len(turns)
+    )
 
     # Question-type-specific prompts
     q_lower = question.lower()
@@ -174,24 +201,32 @@ def llm_answer(question, turns, retrieved_indices):
             "Answer the hypothetical question by reasoning about the person's "
             "stated preferences, personality, and past actions from the turns. "
             "Answer with 'Yes' or 'No' (or 'Likely yes/no') followed by a brief reason. "
-            "If insufficient information, say 'unknown'.")
-    elif any(w in q_lower for w in ["what are", "what does", "list", "hobbies",
-                                     "interests", "activities", "all"]):
+            "If insufficient information, say 'unknown'."
+        )
+    elif any(
+        w in q_lower
+        for w in ["what are", "what does", "list", "hobbies", "interests", "activities", "all"]
+    ):
         prompt = (
             "List ALL relevant items mentioned across ALL turns. "
             "Combine information from different turns into one complete answer. "
-            "If the answer isn't in the turns, say 'unknown'.")
+            "If the answer isn't in the turns, say 'unknown'."
+        )
     else:
         prompt = (
             "Answer the question using ONLY the conversation turns below. "
             "Include ALL relevant details from ALL turns. "
-            "Be thorough but concise. If the answer isn't in the turns, say 'unknown'.")
+            "Be thorough but concise. If the answer isn't in the turns, say 'unknown'."
+        )
 
     try:
         response = client.messages.create(
-            model="claude-haiku-4-5-20251001", max_tokens=150,
-            messages=[{"role": "user", "content":
-                f"{prompt}\n\n{context}\n\nQuestion: {question}"}])
+            model="claude-haiku-4-5-20251001",
+            max_tokens=150,
+            messages=[
+                {"role": "user", "content": f"{prompt}\n\n{context}\n\nQuestion: {question}"}
+            ],
+        )
         answer = response.content[0].text.strip()
         if answer.lower() in ("unknown", "i don't know", "not mentioned"):
             return None
@@ -211,7 +246,11 @@ for ci, conv in enumerate(ds):
     questions = conv["questions"]
     answers = conv["answers"]
     categories = conv["category"]
-    turns = conv["turns"] if isinstance(conv["turns"], list) else [t.strip() for t in conv["turns"].split("\n") if t.strip()]
+    turns = (
+        conv["turns"]
+        if isinstance(conv["turns"], list)
+        else [t.strip() for t in conv["turns"].split("\n") if t.strip()]
+    )
 
     # Pre-compute once per conversation (major speedup)
     para_tokens, idf, avg_dl, turn_embs = precompute_conv(turns)
@@ -243,7 +282,7 @@ for ci, conv in enumerate(ds):
             covered = set()
             for idx, sc in retrieved:
                 if idx < len(turns):
-                    covered |= (a_tokens & tokenize(turns[idx]))
+                    covered |= a_tokens & tokenize(turns[idx])
             if len(covered) / max(len(a_tokens), 1) > 0.5:
                 hit = True
 
@@ -270,14 +309,29 @@ for ci, conv in enumerate(ds):
         # Stage 3: Temporal code execution
         if not hit:
             q_lower = q.lower()
-            if any(w in q_lower for w in ["when", "how long", "before", "after", "since",
-                                           "first", "latest", "most recent", "how many days"]):
+            if any(
+                w in q_lower
+                for w in [
+                    "when",
+                    "how long",
+                    "before",
+                    "after",
+                    "since",
+                    "first",
+                    "latest",
+                    "most recent",
+                    "how many days",
+                ]
+            ):
                 t_events = []
                 for idx, _ in retrieved[:10]:
                     if idx < len(turns):
                         for d in parse_dates(turns[idx]):
-                            t_events.append(TemporalEvent(
-                                date=d, text=turns[idx][:200], source="turn", paragraph_idx=idx))
+                            t_events.append(
+                                TemporalEvent(
+                                    date=d, text=turns[idx][:200], source="turn", paragraph_idx=idx
+                                )
+                            )
                 if t_events:
                     code_answer = temporal_code_execute(q, t_events)
                     if code_answer and a_lower:
@@ -322,8 +376,9 @@ for ci, conv in enumerate(ds):
     if (ci + 1) % 5 == 0:
         pct = correct / max(tested, 1) * 100
         Path("exp8_progress.txt").write_text(
-            f"Conv {ci+1}/{len(ds)}, {tested} tested, {correct} correct ({pct:.1f}%), "
-            f"{llm_calls} LLM, {temporal_code_hits} temporal code\n")
+            f"Conv {ci + 1}/{len(ds)}, {tested} tested, {correct} correct ({pct:.1f}%), "
+            f"{llm_calls} LLM, {temporal_code_hits} temporal code\n"
+        )
 
 elapsed = time.monotonic() - t0
 overall = correct / max(tested, 1) * 100
@@ -338,7 +393,11 @@ out = {
 }
 for cat, s in sorted(results.items()):
     acc = s["correct"] / max(s["total"], 1) * 100
-    out["by_category"][cat] = {"correct": s["correct"], "total": s["total"], "accuracy": round(acc, 1)}
+    out["by_category"][cat] = {
+        "correct": s["correct"],
+        "total": s["total"],
+        "accuracy": round(acc, 1),
+    }
 
 Path("exp8_results.json").write_text(json.dumps(out, indent=2))
 print(json.dumps(out, indent=2))

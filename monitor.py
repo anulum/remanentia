@@ -9,6 +9,7 @@ Usage::
     python workspace-internal/monitor.py
     # Opens http://localhost:8888 in browser
 """
+
 from __future__ import annotations
 
 import json
@@ -34,6 +35,7 @@ sys.path.insert(0, str(BASE))
 def _retrieve(query: str, top_k: int = 5) -> list[dict]:
     try:
         from retrieve import retrieve
+
         return retrieve(query, top_k=top_k)
     except Exception as e:
         return [{"error": str(e)}]
@@ -42,6 +44,7 @@ def _retrieve(query: str, top_k: int = 5) -> list[dict]:
 def _retrieval_history() -> list[dict]:
     try:
         from retrieve import retrieval_history
+
         return retrieval_history(limit=50)
     except Exception as e:
         return [{"error": str(e)}]
@@ -50,6 +53,7 @@ def _retrieval_history() -> list[dict]:
 def _trace_summaries() -> list[dict]:
     try:
         from retrieve import trace_summaries
+
         return trace_summaries()
     except Exception as e:
         return [{"error": str(e)}]
@@ -58,6 +62,7 @@ def _trace_summaries() -> list[dict]:
 def _load_network_data() -> tuple[dict | None, str | None]:
     try:
         from retrieve import _load_network
+
         return _load_network(), None
     except Exception as e:
         return None, str(e)
@@ -69,6 +74,7 @@ def _weight_stats() -> dict:
         return {"error": error or "no retrieval checkpoint"}
     try:
         import numpy as np
+
         w = data["w"]
         w_norm = w / (w.max() + 1e-12)
         out_strength = w_norm.sum(axis=1)
@@ -97,12 +103,13 @@ def _weight_heatmap(bins: int = 50) -> dict:
         return {"error": error or "no retrieval checkpoint"}
     try:
         import numpy as np
+
         w = data["w"]
         n = w.shape[0]
         block = max(1, n // bins)
         actual_bins = n // block
         # Downsample by block-mean
-        trimmed = w[:actual_bins * block, :actual_bins * block]
+        trimmed = w[: actual_bins * block, : actual_bins * block]
         reshaped = trimmed.reshape(actual_bins, block, actual_bins, block)
         grid = reshaped.mean(axis=(1, 3))
         return {
@@ -122,6 +129,7 @@ def _hub_graph(top_n: int = 20, edges_per_hub: int = 5) -> dict:
         return {"error": error or "no retrieval checkpoint"}
     try:
         import numpy as np
+
         w = data["w"]
         w_norm = w / (w.max() + 1e-12)
         out_strength = w_norm.sum(axis=1)
@@ -163,12 +171,14 @@ def _session_timeline() -> list[dict]:
         parts = name.split("_", 2)
         date_str = parts[0] if parts else name
         project = parts[1] if len(parts) > 1 else "unknown"
-        entries.append({
-            "date": date_str,
-            "project": project,
-            "file": f.name,
-            "size": f.stat().st_size,
-        })
+        entries.append(
+            {
+                "date": date_str,
+                "project": project,
+                "file": f.name,
+                "size": f.stat().st_size,
+            }
+        )
     return entries
 
 
@@ -178,18 +188,21 @@ def _list_traces() -> list[dict]:
     result = []
     for f in sorted(TRACES_DIR.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True):
         st = f.stat()
-        result.append({
-            "name": f.name,
-            "size": st.st_size,
-            "mtime": round(st.st_mtime),
-            "mtime_str": time.strftime("%Y-%m-%d %H:%M", time.localtime(st.st_mtime)),
-        })
+        result.append(
+            {
+                "name": f.name,
+                "size": st.st_size,
+                "mtime": round(st.st_mtime),
+                "mtime_str": time.strftime("%Y-%m-%d %H:%M", time.localtime(st.st_mtime)),
+            }
+        )
     return result
 
 
 def _related_traces(trace_name: str) -> list[dict]:
     try:
         from retrieve import related_traces
+
         return related_traces(trace_name)
     except Exception as e:
         return [{"error": str(e)}]
@@ -198,6 +211,7 @@ def _related_traces(trace_name: str) -> list[dict]:
 def _query_suggestions(prefix: str) -> list[str]:
     try:
         from retrieve import query_suggestions
+
         return query_suggestions(prefix)
     except Exception as e:
         return []
@@ -273,6 +287,7 @@ def _inject_stimulus(text: str, source: str = "dashboard") -> dict:
     """Inject a stimulus from the dashboard."""
     try:
         from snn_daemon import drop_stimulus
+
         path = drop_stimulus(text, source=source)
         return {"ok": True, "path": path}
     except Exception as e:
@@ -403,13 +418,15 @@ class MonitorHandler(SimpleHTTPRequestHandler):
             for f in sorted(STIMULI_DIR.glob("*.json")):
                 try:
                     d = json.loads(f.read_text())
-                    entries.append({
-                        "file": f.name,
-                        "source": d.get("source", "unknown"),
-                        "text": d.get("text", "")[:200],
-                        "timestamp": d.get("timestamp", 0),
-                        "project": d.get("project", ""),
-                    })
+                    entries.append(
+                        {
+                            "file": f.name,
+                            "source": d.get("source", "unknown"),
+                            "text": d.get("text", "")[:200],
+                            "timestamp": d.get("timestamp", 0),
+                            "project": d.get("project", ""),
+                        }
+                    )
                 except (json.JSONDecodeError, OSError):
                     pass
         self._json_response(entries[-100:])
@@ -1606,6 +1623,7 @@ MONITOR_LOCK = STATE_DIR / "monitor.lock"
 
 def _is_port_in_use() -> bool:
     import socket
+
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         sock.bind(("127.0.0.1", PORT))
@@ -1627,11 +1645,14 @@ def _acquire_monitor_lock() -> bool:
         try:
             pid = int(MONITOR_LOCK.read_text().strip())
             import ctypes
+
             kernel32 = ctypes.windll.kernel32
             handle = kernel32.OpenProcess(0x1000, False, pid)
             if handle:
                 kernel32.CloseHandle(handle)
-                print(f"Monitor already running (PID {pid}). Kill it first or delete {MONITOR_LOCK}")
+                print(
+                    f"Monitor already running (PID {pid}). Kill it first or delete {MONITOR_LOCK}"
+                )
                 return False
         except (ValueError, OSError):
             pass

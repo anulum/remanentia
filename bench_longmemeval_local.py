@@ -15,6 +15,7 @@ Usage:
     python bench_longmemeval_local.py --llm
     python bench_longmemeval_local.py --arcane --llm
 """
+
 from __future__ import annotations
 
 import sys
@@ -80,8 +81,12 @@ def _local_arcane_answer(question, sessions, qtype, haystack_dates=None):
 
     arcane_context = ar.build_context(question, results, max_facts=15)
 
-    if qtype in ("temporal-reasoning", "multi-session", "knowledge-update",
-                  "single-session-preference"):
+    if qtype in (
+        "temporal-reasoning",
+        "multi-session",
+        "knowledge-update",
+        "single-session-preference",
+    ):
         session_parts = []
         for sess_idx, session in enumerate(sessions):
             turns = [f"[{t['role'].upper()}]: {t['content']}" for t in session]
@@ -97,9 +102,7 @@ def _local_arcane_answer(question, sessions, qtype, haystack_dates=None):
             timeline.sort()
             timeline_str = "\n".join(timeline) if timeline else "(no dates found)"
             context = (
-                f"TIMELINE:\n{timeline_str}\n\n"
-                f"FACTS:\n{arcane_context}\n\n"
-                f"HISTORY:\n{full_context}"
+                f"TIMELINE:\n{timeline_str}\n\nFACTS:\n{arcane_context}\n\nHISTORY:\n{full_context}"
             )
         else:
             context = f"FACTS:\n{arcane_context}\n\nHISTORY:\n{full_context}"

@@ -21,6 +21,7 @@ Usage::
     # Scan specific repo only
     python workspace-internal/git_stimulus.py --repo 03_CODE/scpn-control
 """
+
 from __future__ import annotations
 
 import argparse
@@ -87,12 +88,14 @@ def _git_log_since(repo_path: Path, since_sha: str | None, max_commits: int = 20
         parts = line.split("|", 3)
         if len(parts) < 4:
             continue
-        commits.append({
-            "sha": parts[0],
-            "message": parts[1],
-            "author": parts[2],
-            "timestamp": int(parts[3]),
-        })
+        commits.append(
+            {
+                "sha": parts[0],
+                "message": parts[1],
+                "author": parts[2],
+                "timestamp": int(parts[3]),
+            }
+        )
     return commits
 
 

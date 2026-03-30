@@ -15,6 +15,7 @@ Usage:
     python bench_all_local_models.py               # 50 questions per model
     python bench_all_local_models.py --full         # 500 questions on best
 """
+
 from __future__ import annotations
 
 import json
@@ -87,13 +88,20 @@ def _start_server(model_file: str) -> subprocess.Popen | None:
     proc = subprocess.Popen(
         [
             SERVER_BIN,
-            "-m", str(model_path),
-            "--port", str(SERVER_PORT),
-            "--host", "127.0.0.1",
-            "-ngl", "99",
-            "-c", "16384",
-            "-np", "1",
-            "-fit", "off",
+            "-m",
+            str(model_path),
+            "--port",
+            str(SERVER_PORT),
+            "--host",
+            "127.0.0.1",
+            "-ngl",
+            "99",
+            "-c",
+            "16384",
+            "-np",
+            "1",
+            "-fit",
+            "off",
             "--no-warmup",
         ],
         env=env,
@@ -103,6 +111,7 @@ def _start_server(model_file: str) -> subprocess.Popen | None:
 
     # Wait for server to be ready
     import urllib.request
+
     for i in range(90):
         try:
             req = urllib.request.Request(f"http://127.0.0.1:{SERVER_PORT}/health")
@@ -133,12 +142,14 @@ def _run_benchmark(limit: int) -> dict:
 
     # Reload bench module to pick up patched backend
     import importlib
+
     if "bench_longmemeval" in sys.modules:
         importlib.reload(sys.modules["bench_longmemeval"])
     import bench_longmemeval as bench
 
     # Apply patches
     import bench_longmemeval_local
+
     bench._answer_from_retrieval = bench_longmemeval_local._local_answer_from_retrieval
     bench._arcane_answer = bench_longmemeval_local._local_arcane_answer
 
@@ -181,7 +192,9 @@ def _run_benchmark(limit: int) -> dict:
     total = sum(type_total.values())
 
     results = {
-        "overall": f"{total_correct}/{total} ({total_correct/total*100:.1f}%)" if total else "0/0",
+        "overall": f"{total_correct}/{total} ({total_correct / total * 100:.1f}%)"
+        if total
+        else "0/0",
         "overall_pct": round(total_correct / total * 100, 1) if total else 0,
         "per_type": {},
         "time_s": round(elapsed, 1),
@@ -191,7 +204,7 @@ def _run_benchmark(limit: int) -> dict:
     for qtype in sorted(type_total.keys()):
         c = type_correct[qtype]
         t = type_total[qtype]
-        results["per_type"][qtype] = f"{c}/{t} ({c/t*100:.1f}%)" if t else "0/0"
+        results["per_type"][qtype] = f"{c}/{t} ({c / t * 100:.1f}%)" if t else "0/0"
 
     return results
 
@@ -224,8 +237,10 @@ def main():
         try:
             results = _run_benchmark(LIMIT)
             all_results[model_name] = results
-            print(f"  Result: {results['overall']} in {results['time_s']}s "
-                  f"({results['ms_per_q']}ms/q)")
+            print(
+                f"  Result: {results['overall']} in {results['time_s']}s "
+                f"({results['ms_per_q']}ms/q)"
+            )
             for qtype, score in results["per_type"].items():
                 print(f"    {qtype:35s}: {score}")
         except Exception as e:
@@ -256,8 +271,10 @@ def main():
         if "error" in r:
             print(f"{model_name:<25} {'ERROR':>10}")
         else:
-            print(f"{model_name:<25} {r.get('overall_pct', 0):>9.1f}% "
-                  f"{r.get('time_s', 0):>7.1f}s {r.get('ms_per_q', 0):>7d}")
+            print(
+                f"{model_name:<25} {r.get('overall_pct', 0):>9.1f}% "
+                f"{r.get('time_s', 0):>7.1f}s {r.get('ms_per_q', 0):>7d}"
+            )
     print("-" * 55)
 
 

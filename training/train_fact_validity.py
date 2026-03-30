@@ -207,7 +207,13 @@ def main() -> None:
 
         log.info(
             "Epoch %d/%d: loss=%.4f, type_acc=%.3f, sup_acc=%.3f, bnd_acc=%.3f, combined=%.3f",
-            epoch + 1, EPOCHS, avg_loss, type_acc, sup_acc, bnd_acc, combined,
+            epoch + 1,
+            EPOCHS,
+            avg_loss,
+            type_acc,
+            sup_acc,
+            bnd_acc,
+            combined,
         )
 
         if combined > best_acc:

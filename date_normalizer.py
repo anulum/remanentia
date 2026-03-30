@@ -46,8 +46,13 @@ _WEEKDAY_RE = re.compile(
 )
 
 _WEEKDAY_MAP = {
-    "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
-    "friday": 4, "saturday": 5, "sunday": 6,
+    "monday": 0,
+    "tuesday": 1,
+    "wednesday": 2,
+    "thursday": 3,
+    "friday": 4,
+    "saturday": 5,
+    "sunday": 6,
 }
 
 _COUPLE_RE = re.compile(
@@ -71,7 +76,9 @@ _SIMPLE_RE = {
     re.compile(r"\bthe\s+other\s+day\b", re.I): lambda r: r - timedelta(days=3),
     re.compile(r"\bnot\s+long\s+ago\b", re.I): lambda r: r - timedelta(days=7),
     re.compile(r"\brecently\b", re.I): lambda r: r - timedelta(days=5),
-    re.compile(r"\bearlier\s+this\s+week\b", re.I): lambda r: r - timedelta(days=max(r.weekday(), 1)),
+    re.compile(r"\bearlier\s+this\s+week\b", re.I): lambda r: (
+        r - timedelta(days=max(r.weekday(), 1))
+    ),
     re.compile(r"\bearlier\s+this\s+month\b", re.I): lambda r: r.replace(day=max(1, r.day // 2)),
     re.compile(r"\blast\s+week\b", re.I): lambda r: r - timedelta(weeks=1),
     re.compile(r"\blast\s+month\b", re.I): lambda r: _month_delta(r, -1),
@@ -117,7 +124,9 @@ def _rule_based_normalise(expr: str, ref: date) -> Optional[DateResult]:
 
         result = normalise_vague_date(expr, ref.isoformat())  # pragma: no cover
         if result is not None:  # pragma: no cover
-            return DateResult(iso_date=result[0], confidence=result[1], method=result[2])  # pragma: no cover
+            return DateResult(
+                iso_date=result[0], confidence=result[1], method=result[2]
+            )  # pragma: no cover
     except ImportError:
         pass
 
@@ -211,6 +220,7 @@ def _rule_based_normalise(expr: str, ref: date) -> Optional[DateResult]:
 # ML-based normaliser (fallback for expressions rules can't handle)
 # ---------------------------------------------------------------------------
 
+
 def _load_model():
     """Lazy-load the trained bert-mini date normaliser from *_MODEL_DIR*.
 
@@ -236,9 +246,9 @@ def _load_model():
         _tokenizer = AutoTokenizer.from_pretrained(str(_MODEL_DIR))  # pragma: no cover
 
         # Reconstruct model                              # pragma: no cover
-        import torch.nn as nn                             # pragma: no cover
+        import torch.nn as nn  # pragma: no cover
 
-        class _DateNormalizer(nn.Module):                 # pragma: no cover
+        class _DateNormalizer(nn.Module):  # pragma: no cover
             """8-digit date predictor: backbone → 8 × softmax-10 + confidence."""
 
             def __init__(self, model_name, num_digits=8):
@@ -246,11 +256,12 @@ def _load_model():
                 super().__init__()
                 self.backbone = AutoModel.from_pretrained(model_name)
                 hidden = self.backbone.config.hidden_size
-                self.digit_heads = nn.ModuleList([
-                    nn.Linear(hidden, 10) for _ in range(num_digits)
-                ])
+                self.digit_heads = nn.ModuleList([nn.Linear(hidden, 10) for _ in range(num_digits)])
                 self.confidence_head = nn.Sequential(
-                    nn.Linear(hidden, 64), nn.ReLU(), nn.Linear(64, 1), nn.Sigmoid(),
+                    nn.Linear(hidden, 64),
+                    nn.ReLU(),
+                    nn.Linear(64, 1),
+                    nn.Sigmoid(),
                 )
 
             def forward(self, input_ids, attention_mask):
@@ -262,13 +273,17 @@ def _load_model():
                 return digit_logits, confidence
 
         device = "cpu"  # inference on CPU is fast for this tiny model  # pragma: no cover
-        model = _DateNormalizer(config["model_name"], config.get("num_digits", 8))  # pragma: no cover
-        state = torch.load(_MODEL_DIR / "model.pt", map_location=device, weights_only=True)  # pragma: no cover
-        model.load_state_dict(state)                      # pragma: no cover
-        model.eval()                                      # pragma: no cover
-        _model = model                                    # pragma: no cover
+        model = _DateNormalizer(
+            config["model_name"], config.get("num_digits", 8)
+        )  # pragma: no cover
+        state = torch.load(
+            _MODEL_DIR / "model.pt", map_location=device, weights_only=True
+        )  # pragma: no cover
+        model.load_state_dict(state)  # pragma: no cover
+        model.eval()  # pragma: no cover
+        _model = model  # pragma: no cover
         log.info("Date normaliser model loaded from %s", _MODEL_DIR)  # pragma: no cover
-        return True                                       # pragma: no cover
+        return True  # pragma: no cover
     except Exception:
         log.warning("Failed to load date normaliser model", exc_info=True)
         return False
@@ -289,7 +304,9 @@ def _model_normalise(expr: str, ref: date) -> Optional[DateResult]:
     import torch
 
     text = f"reference: {ref.isoformat()} expression: {expr}"
-    enc = _tokenizer(text, max_length=64, padding="max_length", truncation=True, return_tensors="pt")
+    enc = _tokenizer(
+        text, max_length=64, padding="max_length", truncation=True, return_tensors="pt"
+    )
 
     with torch.no_grad():
         digit_logits, confidence = _model(enc["input_ids"], enc["attention_mask"])

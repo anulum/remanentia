@@ -217,8 +217,7 @@ class TestWeekdayPatterns:
 
     def test_all_seven_weekdays(self):
         ref = date(2023, 6, 14)  # Wednesday
-        for day in ["Monday", "Tuesday", "Wednesday", "Thursday",
-                     "Friday", "Saturday", "Sunday"]:
+        for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]:
             r = _rule_based_normalise(f"last {day}", ref)
             assert r is not None, f"Failed for last {day}"
             parsed = date.fromisoformat(r.iso_date)
@@ -433,6 +432,7 @@ class TestModelLoading:
             mock_dir.__truediv__ = lambda self, x: MagicMock(exists=lambda: False)
             # Reset global state
             import date_normalizer
+
             date_normalizer._model = None
             date_normalizer._tokenizer = None
             result = date_normalizer._load_model()
@@ -443,6 +443,7 @@ class TestModelLoading:
 
     def test_already_loaded_returns_true(self):
         import date_normalizer
+
         date_normalizer._model = MagicMock()  # pretend loaded
         assert date_normalizer._load_model() is True
         date_normalizer._model = None  # cleanup
@@ -450,6 +451,7 @@ class TestModelLoading:
     def test_load_model_exception_returns_false(self):
         """_load_model returns False when model construction raises."""
         import date_normalizer
+
         date_normalizer._model = None
         date_normalizer._tokenizer = None
         model_pt = MagicMock(exists=lambda: True)
@@ -483,6 +485,7 @@ class TestModelLoading:
 
     def _cleanup_model(self):
         import date_normalizer
+
         date_normalizer._model = None
         date_normalizer._tokenizer = None
 
@@ -491,6 +494,7 @@ class TestModelLoading:
         self._mock_digit_model([2, 0, 2, 3, 0, 4, 1, 0])  # 2023-04-10
 
         import date_normalizer
+
         r = date_normalizer._model_normalise("test expression", date(2023, 6, 1))
         assert r is not None
         assert r.iso_date == "2023-04-10"
@@ -503,6 +507,7 @@ class TestModelLoading:
         self._mock_digit_model([2, 0, 2, 3, 1, 3, 3, 2])  # 2023-13-32
 
         import date_normalizer
+
         r = date_normalizer._model_normalise("bad date", date(2023, 6, 1))
         assert r is None
         self._cleanup_model()
@@ -512,6 +517,7 @@ class TestModelLoading:
         self._mock_digit_model([2, 0, 2, 3, 0, 0, 1, 5])  # 2023-00-15
 
         import date_normalizer
+
         r = date_normalizer._model_normalise("zero month", date(2023, 6, 1))
         assert r is None
         self._cleanup_model()

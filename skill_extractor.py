@@ -24,6 +24,7 @@ Usage::
     python workspace-internal/skill_extractor.py --list
     python workspace-internal/skill_extractor.py --query "CI failure"
 """
+
 from __future__ import annotations
 
 import argparse
@@ -74,11 +75,13 @@ def extract_skills(traces_dir: Path | None = None) -> list[dict]:
             lower = stripped.lower()
             for trigger_re, action_re in _SKILL_MARKERS:
                 if re.search(trigger_re, lower) and re.search(action_re, lower):
-                    entries.append({
-                        "text": stripped[:200],
-                        "source": f.name,
-                        "tokens": set(_tokenize_lower(stripped)),
-                    })
+                    entries.append(
+                        {
+                            "text": stripped[:200],
+                            "source": f.name,
+                            "tokens": set(_tokenize_lower(stripped)),
+                        }
+                    )
                     break
 
     if not entries:
@@ -118,14 +121,16 @@ def extract_skills(traces_dir: Path | None = None) -> list[dict]:
         sources = sorted(set(e["source"] for e in cluster))
         representative = max(cluster, key=lambda e: len(e["text"]))
 
-        skills.append({
-            "name": name,
-            "description": representative["text"],
-            "evidence": sources,
-            "frequency": len(cluster),
-            "key_terms": key_tokens,
-            "last_seen": sources[-1] if sources else "",
-        })
+        skills.append(
+            {
+                "name": name,
+                "description": representative["text"],
+                "evidence": sources,
+                "frequency": len(cluster),
+                "key_terms": key_tokens,
+                "last_seen": sources[-1] if sources else "",
+            }
+        )
 
     # Sort by frequency (most recurring = most valuable)
     skills.sort(key=lambda s: s["frequency"], reverse=True)

@@ -22,6 +22,7 @@ Properties:
 - Deterministic (fixed seed projection matrix)
 - O(N * expansion_ratio * fan_in) computation
 """
+
 from __future__ import annotations
 
 import numpy as np

@@ -378,15 +378,18 @@ class _ErrorBackend:
 class TestLLMExtractAnswer:
     def setup_method(self):
         import answer_extractor
+
         self._orig = answer_extractor._BACKEND
         answer_extractor._BACKEND = None
 
     def teardown_method(self):
         import answer_extractor
+
         answer_extractor._BACKEND = self._orig
 
     def test_no_backend_returns_none(self):
         from answer_extractor import llm_extract_answer
+
         assert llm_extract_answer("when", "context about dates") is None
 
     def test_successful_extraction(self):
@@ -445,10 +448,12 @@ class TestLLMExtractAnswer:
 class TestLLMBackendAccessors:
     def setup_method(self):
         import answer_extractor
+
         self._orig = answer_extractor._BACKEND
 
     def teardown_method(self):
         import answer_extractor
+
         answer_extractor._BACKEND = self._orig
 
     def test_set_and_get(self):
@@ -471,15 +476,18 @@ class TestLLMBackendAccessors:
 class TestLLMProspectiveQueries:
     def setup_method(self):
         import answer_extractor
+
         self._orig = answer_extractor._BACKEND
         answer_extractor._BACKEND = None
 
     def teardown_method(self):
         import answer_extractor
+
         answer_extractor._BACKEND = self._orig
 
     def test_no_backend_returns_empty(self):
         from answer_extractor import llm_generate_prospective_queries
+
         assert llm_generate_prospective_queries("paragraph text", "doc.md") == []
 
     def test_generates_queries(self):
@@ -523,15 +531,18 @@ class TestLLMProspectiveQueries:
 class TestLLMSynthesizeAnswer:
     def setup_method(self):
         import answer_extractor
+
         self._orig = answer_extractor._BACKEND
         answer_extractor._BACKEND = None
 
     def teardown_method(self):
         import answer_extractor
+
         answer_extractor._BACKEND = self._orig
 
     def test_no_backend_returns_none(self):
         from answer_extractor import llm_synthesize_answer
+
         assert llm_synthesize_answer("query", ["para1", "para2"]) is None
 
     def test_synthesizes_answer(self):

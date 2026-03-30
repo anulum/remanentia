@@ -88,9 +88,7 @@ class DateNormalizer(nn.Module):
         self.backbone = AutoModel.from_pretrained(model_name)
         hidden = self.backbone.config.hidden_size
         # 8 digit heads: each predicts one digit (0-9)
-        self.digit_heads = nn.ModuleList([
-            nn.Linear(hidden, 10) for _ in range(NUM_DIGITS)
-        ])
+        self.digit_heads = nn.ModuleList([nn.Linear(hidden, 10) for _ in range(NUM_DIGITS)])
         # Confidence head
         self.confidence_head = nn.Sequential(
             nn.Linear(hidden, 64),
@@ -166,10 +164,7 @@ def main() -> None:
             digit_logits, confidence = model(input_ids, attention_mask)
 
             # Digit loss: sum of 8 CE losses
-            loss = sum(
-                digit_criterion(digit_logits[i], digits[:, i])
-                for i in range(NUM_DIGITS)
-            )
+            loss = sum(digit_criterion(digit_logits[i], digits[:, i]) for i in range(NUM_DIGITS))
 
             optimizer.zero_grad()
             loss.backward()
@@ -192,7 +187,9 @@ def main() -> None:
                 digits = batch["digits"]  # (B, 8)
 
                 digit_logits, confidence = model(input_ids, attention_mask)
-                pred_digits = torch.stack([dl.argmax(dim=-1).cpu() for dl in digit_logits], dim=1)  # (B, 8)
+                pred_digits = torch.stack(
+                    [dl.argmax(dim=-1).cpu() for dl in digit_logits], dim=1
+                )  # (B, 8)
 
                 for pred, gold in zip(pred_digits, digits):
                     total_eval += 1
@@ -203,6 +200,7 @@ def main() -> None:
                         pred_str = "".join(str(d.item()) for d in pred)
                         gold_str = "".join(str(d.item()) for d in gold)
                         from datetime import date as dt_date
+
                         pred_date = dt_date(
                             int(pred_str[:4]), int(pred_str[4:6]), int(pred_str[6:8])
                         )
@@ -219,7 +217,11 @@ def main() -> None:
 
         log.info(
             "Epoch %d/%d: loss=%.4f, exact=%.3f, relaxed(±3d)=%.3f",
-            epoch + 1, EPOCHS, avg_loss, exact_acc, relaxed_acc,
+            epoch + 1,
+            EPOCHS,
+            avg_loss,
+            exact_acc,
+            relaxed_acc,
         )
 
         if exact_acc > best_exact:

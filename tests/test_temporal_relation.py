@@ -67,6 +67,7 @@ class TestRelationResult:
 class TestModelLoading:
     def test_model_missing_returns_none(self):
         import temporal_relation
+
         temporal_relation._model = None
         temporal_relation._tokenizer = None
         temporal_relation._config = None
@@ -77,6 +78,7 @@ class TestModelLoading:
 
     def test_already_loaded(self):
         import temporal_relation
+
         temporal_relation._model = MagicMock()
         temporal_relation._tokenizer = MagicMock()
         temporal_relation._config = {"labels": LABELS, "max_seq_len": 128}
@@ -88,6 +90,7 @@ class TestModelLoading:
 
     def test_load_model_exception_returns_false(self):
         import temporal_relation
+
         temporal_relation._model = None
         temporal_relation._tokenizer = None
         temporal_relation._config = None
@@ -129,6 +132,7 @@ class TestClassifyRelationMocked:
 
     def _cleanup(self):
         import temporal_relation
+
         temporal_relation._model = None
         temporal_relation._tokenizer = None
         temporal_relation._config = None
@@ -180,6 +184,7 @@ class TestOrderEvents:
 
     def test_model_unavailable_preserves_order(self):
         import temporal_relation
+
         temporal_relation._model = None
         events = [("A", ""), ("B", ""), ("C", "")]
         result = order_events(events)

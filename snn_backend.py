@@ -27,6 +27,7 @@ Usage::
     spikes = net.run(duration=1.0)
     net.save(path)
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -44,6 +45,7 @@ _RUST_STDP = None
 _RUST_LIF = None
 try:
     from arcane_stdp import stdp_batch as _RUST_STDP, lif_step as _RUST_LIF
+
     logger.info("Rust STDP/LIF loaded (arcane_stdp)")
 except ImportError:
     pass
@@ -168,8 +170,12 @@ class GPULIFNetwork(_BaseLIFNetwork):
         self.v_gpu = torch.from_numpy(self.v).to(self.device)
         self._w_np_cache = None  # lazy CPU copy for save/stats
 
-        logger.info("GPU network: %d neurons, W=%.0f MB on %s",
-                     n, n * n * 4 / 1e6, torch.cuda.get_device_name(0))
+        logger.info(
+            "GPU network: %d neurons, W=%.0f MB on %s",
+            n,
+            n * n * 4 / 1e6,
+            torch.cuda.get_device_name(0),
+        )
 
     def run(self, duration: float, arcane_neurons=None) -> int:
         torch = self.torch
@@ -250,15 +256,18 @@ class GPULIFNetwork(_BaseLIFNetwork):
         path.parent.mkdir(parents=True, exist_ok=True)
         w_cpu = self.w.cpu().numpy()
         with open(path, "wb") as f:
-            pickle.dump({
-                "v": self.v.copy(),
-                "w": w_cpu,
-                "last_spike": self.last_spike.copy(),
-                "t": self.t,
-                "n": self.n,
-                "dt": self.dt,
-                "backend": "gpu",
-            }, f)
+            pickle.dump(
+                {
+                    "v": self.v.copy(),
+                    "w": w_cpu,
+                    "last_spike": self.last_spike.copy(),
+                    "t": self.t,
+                    "n": self.n,
+                    "dt": self.dt,
+                    "backend": "gpu",
+                },
+                f,
+            )
 
     @classmethod
     def load(cls, path: Path) -> GPULIFNetwork:
@@ -310,8 +319,12 @@ class DenseCPULIFNetwork(_BaseLIFNetwork):
         # Connectivity mask: STDP only modifies existing connections
         self.mask = (self.w > 0).astype(np.float32)
 
-        logger.info("Dense CPU network: %d neurons, W=%.0f MB, sparsity=%.0f%%",
-                     n, n * n * 4 / 1e6, (1 - self.mask.sum() / n / n) * 100)
+        logger.info(
+            "Dense CPU network: %d neurons, W=%.0f MB, sparsity=%.0f%%",
+            n,
+            n * n * 4 / 1e6,
+            (1 - self.mask.sum() / n / n) * 100,
+        )
 
     def run(self, duration: float, arcane_neurons=None) -> int:
         steps = int(duration / self.dt)
@@ -325,8 +338,14 @@ class DenseCPULIFNetwork(_BaseLIFNetwork):
 
             if use_rust_lif:
                 spike_idx = _RUST_LIF(
-                    self.v, self.w, self.i_ext,
-                    V_REST, V_THRESH, V_RESET, TAU_M, self.dt_ms,
+                    self.v,
+                    self.w,
+                    self.i_ext,
+                    V_REST,
+                    V_THRESH,
+                    V_RESET,
+                    TAU_M,
+                    self.dt_ms,
                 )
                 n_spiked = len(spike_idx)
                 if n_spiked > 0:
@@ -370,9 +389,15 @@ class DenseCPULIFNetwork(_BaseLIFNetwork):
         if _RUST_STDP is not None:
             spike_f = spiked.astype(np.float32)
             _RUST_STDP(
-                self.w, spike_f, self.last_spike.astype(np.float32),
-                float(self.t), self.mask,
-                STDP_A_PLUS, STDP_A_MINUS, STDP_TAU, STDP_W_MAX,
+                self.w,
+                spike_f,
+                self.last_spike.astype(np.float32),
+                float(self.t),
+                self.mask,
+                STDP_A_PLUS,
+                STDP_A_MINUS,
+                STDP_TAU,
+                STDP_W_MAX,
             )
             return
 
@@ -396,16 +421,19 @@ class DenseCPULIFNetwork(_BaseLIFNetwork):
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "wb") as f:
-            pickle.dump({
-                "v": self.v,
-                "w": self.w,
-                "mask": self.mask,
-                "last_spike": self.last_spike,
-                "t": self.t,
-                "n": self.n,
-                "dt": self.dt,
-                "backend": "dense_cpu",
-            }, f)
+            pickle.dump(
+                {
+                    "v": self.v,
+                    "w": self.w,
+                    "mask": self.mask,
+                    "last_spike": self.last_spike,
+                    "t": self.t,
+                    "n": self.n,
+                    "dt": self.dt,
+                    "backend": "dense_cpu",
+                },
+                f,
+            )
 
     @classmethod
     def load(cls, path: Path) -> DenseCPULIFNetwork:
@@ -460,6 +488,7 @@ def load_network(path: Path, backend: str | None = None) -> GPULIFNetwork | Dens
     if target == "gpu":
         try:
             import torch
+
             if torch.cuda.is_available():
                 return GPULIFNetwork.load(path)
         except ImportError:
@@ -499,6 +528,7 @@ def load_sparse(path: Path) -> np.ndarray:
     if npz.exists():
         try:
             from scipy.sparse import load_npz
+
             w = load_npz(npz).toarray()
             logger.info("Loaded sparse W from %s: shape=%s", npz.name, w.shape)
             return w.astype(np.float32)

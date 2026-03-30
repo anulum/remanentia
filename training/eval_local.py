@@ -60,8 +60,10 @@ def run_eval(use_session_dates: bool) -> dict:
         data = json.load(f)
 
     temporal = [q for q in data if q.get("question_type") == "temporal-reasoning"]
-    print(f"\nEvaluating {len(temporal)} temporal questions "
-          f"({'WITH' if use_session_dates else 'WITHOUT'} session_dates)")
+    print(
+        f"\nEvaluating {len(temporal)} temporal questions "
+        f"({'WITH' if use_session_dates else 'WITHOUT'} session_dates)"
+    )
 
     recall_at_5 = 0
     recall_at_10 = 0
@@ -121,22 +123,36 @@ def run_eval(use_session_dates: bool) -> dict:
 
         # Metric 4: TReMu (temporal code execution) for arithmetic questions
         q_lower = question.lower()
-        if any(w in q_lower for w in ("how many days", "how long", "before or after",
-                                       "most recent", "first", "earliest", "latest")):
+        if any(
+            w in q_lower
+            for w in (
+                "how many days",
+                "how long",
+                "before or after",
+                "most recent",
+                "first",
+                "earliest",
+                "latest",
+            )
+        ):
             tremu_attempts += 1
             events = []
             for fact, _ in hits[:10]:
                 for d in fact.date_mentions:
-                    events.append(TemporalEvent(
-                        date=d, text=fact.text[:200], source="eval",
-                    ))
+                    events.append(
+                        TemporalEvent(
+                            date=d,
+                            text=fact.text[:200],
+                            source="eval",
+                        )
+                    )
             if events:
                 code_answer = temporal_code_execute(question, events)
                 if code_answer and answer in code_answer.lower():
                     tremu_hits += 1
 
         if (qi + 1) % 25 == 0:
-            print(f"  [{qi+1}/{total}] recall@10={recall_at_10}/{qi+1}")
+            print(f"  [{qi + 1}/{total}] recall@10={recall_at_10}/{qi + 1}")
 
     elapsed = time.time() - t0
     results = {
@@ -160,7 +176,9 @@ def run_eval(use_session_dates: bool) -> dict:
     print(f"  Recall@10:      {results['recall_at_10']}/{total} = {results['recall_at_10_pct']}%")
     print(f"  Direct match:   {results['direct_match']}/{total} = {results['direct_match_pct']}%")
     print(f"  Date coverage:  {results['date_coverage']}/{total} = {results['date_coverage_pct']}%")
-    print(f"  TReMu hits:     {results['tremu_hits']}/{results['tremu_attempts']} = {results['tremu_pct']}%")
+    print(
+        f"  TReMu hits:     {results['tremu_hits']}/{results['tremu_attempts']} = {results['tremu_pct']}%"
+    )
     print(f"  Time:           {results['elapsed_s']}s")
 
     return results
@@ -185,8 +203,13 @@ def main() -> None:
         print(f"\n{'=' * 60}")
         print("COMPARISON: baseline vs wired pipeline")
         print(f"{'=' * 60}")
-        for key in ("recall_at_5_pct", "recall_at_10_pct", "direct_match_pct",
-                     "date_coverage_pct", "tremu_pct"):
+        for key in (
+            "recall_at_5_pct",
+            "recall_at_10_pct",
+            "direct_match_pct",
+            "date_coverage_pct",
+            "tremu_pct",
+        ):
             label = key.replace("_pct", "").replace("_", " ").title()
             b = baseline[key]
             w = wired[key]

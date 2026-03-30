@@ -185,10 +185,13 @@ def main() -> None:
 
         # Macro F1
         from sklearn.metrics import f1_score
+
         f1 = f1_score(all_labels, all_preds, average="macro")
         acc = sum(p == l for p, l in zip(all_preds, all_labels)) / len(all_labels)
 
-        log.info("Epoch %d/%d: loss=%.4f, acc=%.3f, F1-macro=%.3f", epoch + 1, EPOCHS, avg_loss, acc, f1)
+        log.info(
+            "Epoch %d/%d: loss=%.4f, acc=%.3f, F1-macro=%.3f", epoch + 1, EPOCHS, avg_loss, acc, f1
+        )
 
         if f1 > best_f1:
             best_f1 = f1

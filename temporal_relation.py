@@ -122,7 +122,8 @@ def classify_relation(event_a: str, event_b: str) -> Optional[RelationResult]:
 
     max_len = _config.get("max_seq_len", 128)
     enc = _tokenizer(
-        event_a, event_b,
+        event_a,
+        event_b,
         max_length=max_len,
         padding="max_length",
         truncation=True,

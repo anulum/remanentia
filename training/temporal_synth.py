@@ -49,14 +49,22 @@ _VAGUE_TEMPLATES = [
     ("recently", lambda r: r - timedelta(days=_RNG.randint(1, 10))),
     ("the other day", lambda r: r - timedelta(days=_RNG.randint(2, 5))),
     ("earlier this week", lambda r: r - timedelta(days=_RNG.randint(1, min(r.weekday(), 3) + 1))),
-    ("earlier this month", lambda r: r.replace(day=max(1, r.day - _RNG.randint(5, min(r.day - 1, 15))))),
+    (
+        "earlier this month",
+        lambda r: r.replace(day=max(1, r.day - _RNG.randint(5, min(r.day - 1, 15)))),
+    ),
     ("late last month", lambda r: _month_delta(r, -1).replace(day=_RNG.randint(20, 28))),
     ("early last month", lambda r: _month_delta(r, -1).replace(day=_RNG.randint(1, 10))),
 ]
 
 _WEEKDAYS = [
-    "Monday", "Tuesday", "Wednesday", "Thursday",
-    "Friday", "Saturday", "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
 ]
 
 _SEASONS = {
@@ -129,11 +137,13 @@ def generate_date_normalisation(n: int = 50000) -> list[dict]:
         expr = tmpl.format(n=num)
         if _RNG.random() < 0.15:
             expr = _RNG.choice(_HEDGING_PREFIXES) + expr
-        samples.append({
-            "expr": expr,
-            "ref_date": ref.isoformat(),
-            "target_date": target.isoformat(),
-        })
+        samples.append(
+            {
+                "expr": expr,
+                "ref_date": ref.isoformat(),
+                "target_date": target.isoformat(),
+            }
+        )
 
     # --- Vague relative ("a few days ago", "recently", etc.) ---
     for _ in range(n // 10):
@@ -145,11 +155,13 @@ def generate_date_normalisation(n: int = 50000) -> list[dict]:
             continue
         if _RNG.random() < 0.1:
             expr_text = _RNG.choice(_HEDGING_PREFIXES) + expr_text
-        samples.append({
-            "expr": expr_text,
-            "ref_date": ref.isoformat(),
-            "target_date": target.isoformat(),
-        })
+        samples.append(
+            {
+                "expr": expr_text,
+                "ref_date": ref.isoformat(),
+                "target_date": target.isoformat(),
+            }
+        )
 
     # --- "last Monday/Tuesday/..." ---
     for _ in range(n // 10):
@@ -162,11 +174,13 @@ def generate_date_normalisation(n: int = 50000) -> list[dict]:
             days_back = 7
         target = ref - timedelta(days=days_back)
         expr = f"last {day_name}"
-        samples.append({
-            "expr": expr,
-            "ref_date": ref.isoformat(),
-            "target_date": target.isoformat(),
-        })
+        samples.append(
+            {
+                "expr": expr,
+                "ref_date": ref.isoformat(),
+                "target_date": target.isoformat(),
+            }
+        )
 
     # --- "this past Friday", "this Monday" ---
     for _ in range(n // 10):
@@ -178,11 +192,13 @@ def generate_date_normalisation(n: int = 50000) -> list[dict]:
             days_back = 7
         target = ref - timedelta(days=days_back)
         expr = _RNG.choice([f"this past {day_name}", f"this {day_name}"])
-        samples.append({
-            "expr": expr,
-            "ref_date": ref.isoformat(),
-            "target_date": target.isoformat(),
-        })
+        samples.append(
+            {
+                "expr": expr,
+                "ref_date": ref.isoformat(),
+                "target_date": target.isoformat(),
+            }
+        )
 
     # --- Seasonal ("earlier this spring", "late last summer") ---
     for _ in range(n // 25):
@@ -208,11 +224,13 @@ def generate_date_normalisation(n: int = 50000) -> list[dict]:
             target = date(year, month, day)
         except ValueError:
             continue
-        samples.append({
-            "expr": f"{prefix} {season}",
-            "ref_date": ref.isoformat(),
-            "target_date": target.isoformat(),
-        })
+        samples.append(
+            {
+                "expr": f"{prefix} {season}",
+                "ref_date": ref.isoformat(),
+                "target_date": target.isoformat(),
+            }
+        )
 
     # --- Compound: "N weeks/months before/after <event>" ---
     # For these, the target is relative to a synthetic anchor date
@@ -233,22 +251,26 @@ def generate_date_normalisation(n: int = 50000) -> list[dict]:
         else:
             target = anchor + delta
         expr = f"{num} {unit} {direction} {anchor.isoformat()}"
-        samples.append({
-            "expr": expr,
-            "ref_date": ref.isoformat(),
-            "target_date": target.isoformat(),
-        })
+        samples.append(
+            {
+                "expr": expr,
+                "ref_date": ref.isoformat(),
+                "target_date": target.isoformat(),
+            }
+        )
 
     # Pad to exactly n if short
     while len(samples) < n:
         ref = _random_ref_date()
         num = _RNG.randint(1, 30)
         target = ref - timedelta(days=num)
-        samples.append({
-            "expr": f"{num} days ago",
-            "ref_date": ref.isoformat(),
-            "target_date": target.isoformat(),
-        })
+        samples.append(
+            {
+                "expr": f"{num} days ago",
+                "ref_date": ref.isoformat(),
+                "target_date": target.isoformat(),
+            }
+        )
 
     _RNG.shuffle(samples)
     return samples[:n]
@@ -278,30 +300,68 @@ _EVENT_TEMPLATES = [
 
 _FILLERS = {
     "activity": [
-        "yoga classes", "cooking course", "language lessons",
-        "marathon training", "swimming practice", "guitar lessons",
-        "painting workshop", "coding bootcamp", "dance classes",
-        "meditation retreat", "photography course", "writing workshop",
+        "yoga classes",
+        "cooking course",
+        "language lessons",
+        "marathon training",
+        "swimming practice",
+        "guitar lessons",
+        "painting workshop",
+        "coding bootcamp",
+        "dance classes",
+        "meditation retreat",
+        "photography course",
+        "writing workshop",
     ],
     "place": [
-        "the dentist", "New York", "the gym", "the library",
-        "Paris", "the clinic", "downtown", "the park",
-        "San Francisco", "the museum", "Tokyo", "the office",
+        "the dentist",
+        "New York",
+        "the gym",
+        "the library",
+        "Paris",
+        "the clinic",
+        "downtown",
+        "the park",
+        "San Francisco",
+        "the museum",
+        "Tokyo",
+        "the office",
     ],
     "item": [
-        "new laptop", "coffee maker", "bicycle", "car",
-        "phone", "camera", "watch", "stand mixer",
-        "printer", "headphones", "tablet", "vacuum cleaner",
+        "new laptop",
+        "coffee maker",
+        "bicycle",
+        "car",
+        "phone",
+        "camera",
+        "watch",
+        "stand mixer",
+        "printer",
+        "headphones",
+        "tablet",
+        "vacuum cleaner",
     ],
     "topic": [
-        "budget planning", "project timeline", "team restructuring",
-        "product launch", "marketing strategy", "performance review",
-        "hiring plan", "office relocation", "client feedback",
+        "budget planning",
+        "project timeline",
+        "team restructuring",
+        "product launch",
+        "marketing strategy",
+        "performance review",
+        "hiring plan",
+        "office relocation",
+        "client feedback",
     ],
     "event": [
-        "charity run", "company picnic", "team building",
-        "fundraiser gala", "science fair", "book club",
-        "volunteer day", "hackathon", "open house",
+        "charity run",
+        "company picnic",
+        "team building",
+        "fundraiser gala",
+        "science fair",
+        "book club",
+        "volunteer day",
+        "hackathon",
+        "open house",
     ],
 }
 
@@ -362,13 +422,15 @@ def generate_temporal_relations(n: int = 15000) -> list[dict]:
             date_a = base
             date_b = base + timedelta(days=_RNG.randint(-365, 365))
 
-        samples.append({
-            "event_a": event_a,
-            "event_b": event_b,
-            "date_a": date_a.isoformat(),
-            "date_b": date_b.isoformat(),
-            "relation": relation_type,
-        })
+        samples.append(
+            {
+                "event_a": event_a,
+                "event_b": event_b,
+                "date_a": date_a.isoformat(),
+                "date_b": date_b.isoformat(),
+                "relation": relation_type,
+            }
+        )
 
     _RNG.shuffle(samples)
     return samples
@@ -478,63 +540,75 @@ def generate_fact_validity(n: int = 6000) -> list[dict]:
     # State facts (non-superseding)
     for _ in range(per_type):
         text = _fill_template(_RNG.choice(_STATE_TEMPLATES))
-        samples.append({
-            "text": text,
-            "fact_type": "state",
-            "supersedes": False,
-            "has_boundary": False,
-        })
+        samples.append(
+            {
+                "text": text,
+                "fact_type": "state",
+                "supersedes": False,
+                "has_boundary": False,
+            }
+        )
 
     # Event facts
     for _ in range(per_type):
         text = _fill_template(_RNG.choice(_EVENT_FACT_TEMPLATES))
-        samples.append({
-            "text": text,
-            "fact_type": "event",
-            "supersedes": False,
-            "has_boundary": True,
-        })
+        samples.append(
+            {
+                "text": text,
+                "fact_type": "event",
+                "supersedes": False,
+                "has_boundary": True,
+            }
+        )
 
     # Preference facts
     for _ in range(per_type):
         text = _fill_template(_RNG.choice(_PREFERENCE_TEMPLATES))
-        samples.append({
-            "text": text,
-            "fact_type": "preference",
-            "supersedes": False,
-            "has_boundary": False,
-        })
+        samples.append(
+            {
+                "text": text,
+                "fact_type": "preference",
+                "supersedes": False,
+                "has_boundary": False,
+            }
+        )
 
     # Plan facts
     for _ in range(per_type):
         text = _fill_template(_RNG.choice(_PLAN_TEMPLATES))
-        samples.append({
-            "text": text,
-            "fact_type": "plan",
-            "supersedes": False,
-            "has_boundary": True,
-        })
+        samples.append(
+            {
+                "text": text,
+                "fact_type": "plan",
+                "supersedes": False,
+                "has_boundary": True,
+            }
+        )
 
     # State-change facts (superseding)
     for _ in range(per_type):
         tmpl, _ = _RNG.choice(_CHANGE_TEMPLATES)
         text = _fill_template(tmpl)
-        samples.append({
-            "text": text,
-            "fact_type": "state",
-            "supersedes": True,
-            "has_boundary": True,
-        })
+        samples.append(
+            {
+                "text": text,
+                "fact_type": "state",
+                "supersedes": True,
+                "has_boundary": True,
+            }
+        )
 
     # Pad to n
     while len(samples) < n:
         text = _fill_template(_RNG.choice(_STATE_TEMPLATES))
-        samples.append({
-            "text": text,
-            "fact_type": "state",
-            "supersedes": False,
-            "has_boundary": False,
-        })
+        samples.append(
+            {
+                "text": text,
+                "fact_type": "state",
+                "supersedes": False,
+                "has_boundary": False,
+            }
+        )
 
     _RNG.shuffle(samples)
     return samples[:n]
@@ -543,6 +617,7 @@ def generate_fact_validity(n: int = 6000) -> list[dict]:
 # ---------------------------------------------------------------------------
 # CLI entry point: generate all synthetic data to JSONL files
 # ---------------------------------------------------------------------------
+
 
 def save_jsonl(data: list[dict], path: Path) -> None:
     """Write *data* as newline-delimited JSON to *path*, creating parents."""

@@ -20,6 +20,7 @@ The daemon owns the dashboard: starts it on launch, doesn't care which
 agent (Claude/Codex/Gemini) is connected. Agents are memory contributors,
 not dashboard runners.
 """
+
 from __future__ import annotations
 
 import json
@@ -117,6 +118,7 @@ def _acquire_lock():
             old_pid = int(LOCK_FILE.read_text().strip())
             if not stale_heartbeat:
                 import ctypes
+
                 handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, old_pid)
                 if handle:
                     ctypes.windll.kernel32.CloseHandle(handle)
@@ -185,6 +187,7 @@ def _start_dashboard():
         return
     try:
         from monitor import ensure_running
+
         result = ensure_running()
         print(f"Dashboard: {result['status']} on port {result['port']}")
     except Exception as e:
@@ -198,9 +201,10 @@ def _spawn_detached():
     args = [a for a in sys.argv[1:] if a != "--detach"]
     STATE_DIR.mkdir(parents=True, exist_ok=True)
 
-    with open(DAEMON_STDOUT_LOG, "a", encoding="utf-8") as stdout_log, open(
-        DAEMON_STDERR_LOG, "a", encoding="utf-8"
-    ) as stderr_log:
+    with (
+        open(DAEMON_STDOUT_LOG, "a", encoding="utf-8") as stdout_log,
+        open(DAEMON_STDERR_LOG, "a", encoding="utf-8") as stderr_log,
+    ):
         if sys.platform == "win32":
             flags = (
                 subprocess.CREATE_NEW_PROCESS_GROUP
@@ -287,8 +291,7 @@ class _LiveRetrievalService:
             self.trace_texts = dict(initial_trace_texts)
             self.trace_stimuli = dict(initial_trace_stimuli)
             self.trace_names_lower = {
-                name: name.lower().replace("-", " ").replace("_", " ")
-                for name in self.trace_texts
+                name: name.lower().replace("-", " ").replace("_", " ") for name in self.trace_texts
             }
             self.idf = self.build_idf(self.trace_texts)
             self._warm_trace_names = sorted(self.trace_texts)
@@ -312,7 +315,9 @@ class _LiveRetrievalService:
             if force or self.trace_texts.get(trace_file.name) != text:
                 self.trace_texts[trace_file.name] = text
                 self.trace_stimuli[trace_file.name] = self.encode_text(text, self.net.n)
-                self.trace_names_lower[trace_file.name] = trace_file.name.lower().replace("-", " ").replace("_", " ")
+                self.trace_names_lower[trace_file.name] = (
+                    trace_file.name.lower().replace("-", " ").replace("_", " ")
+                )
                 changed = True
 
         if changed:
@@ -351,9 +356,7 @@ class _LiveRetrievalService:
                 fired = (v_gpu >= LIVE_V_THRESH).float()
                 i_syn = torch.mv(self.net.w, fired)
                 dv = (
-                    -(v_gpu - LIVE_V_REST) / LIVE_TAU_M
-                    + i_ext_gpu
-                    + i_syn * 0.5
+                    -(v_gpu - LIVE_V_REST) / LIVE_TAU_M + i_ext_gpu + i_syn * 0.5
                 ) * self.net.dt_ms
                 v_gpu += dv
                 spiked = v_gpu >= LIVE_V_THRESH
@@ -370,11 +373,7 @@ class _LiveRetrievalService:
         for _ in range(LIVE_FEATURE_STEPS):
             fired = (v >= LIVE_V_THRESH).astype(np.float32)
             i_syn = self.net.w.dot(fired) if hasattr(self.net.w, "dot") else (self.net.w @ fired)
-            dv = (
-                -(v - LIVE_V_REST) / LIVE_TAU_M
-                + i_ext
-                + i_syn * 0.5
-            ) * self.net.dt_ms
+            dv = (-(v - LIVE_V_REST) / LIVE_TAU_M + i_ext + i_syn * 0.5) * self.net.dt_ms
             v += dv
             spiked = v >= LIVE_V_THRESH
             spike_count += spiked.astype(np.float32)
@@ -408,22 +407,21 @@ class _LiveRetrievalService:
             name_bonus = self.filename_bonus(query, self.trace_names_lower[trace_name], self.idf)
             tier = self.trace_tier(TRACES / trace_name)
             tier_boost = self.tier_boost(tier)
-            lexical_base = (
-                self.weight_kw * kw
-                + self.weight_name * name_bonus
-            ) * tier_boost
-            lexical_scored.append({
-                "trace": trace_name,
-                "score": round(lexical_base, 4),
-                "kw_score": round(kw, 4),
-                "snn_score": 0.0,
-                "emb_score": 0.0,
-                "tier": tier,
-                "_kw_score": kw,
-                "_name_bonus": name_bonus,
-                "_base_score": lexical_base,
-                "_tier_boost": tier_boost,
-            })
+            lexical_base = (self.weight_kw * kw + self.weight_name * name_bonus) * tier_boost
+            lexical_scored.append(
+                {
+                    "trace": trace_name,
+                    "score": round(lexical_base, 4),
+                    "kw_score": round(kw, 4),
+                    "snn_score": 0.0,
+                    "emb_score": 0.0,
+                    "tier": tier,
+                    "_kw_score": kw,
+                    "_name_bonus": name_bonus,
+                    "_base_score": lexical_base,
+                    "_tier_boost": tier_boost,
+                }
+            )
 
         lexical_scored.sort(key=lambda item: item["score"], reverse=True)
         if self._warm_index >= len(self._warm_trace_names):
@@ -534,6 +532,7 @@ class _LiveRetrievalService:
 
 def main(n_neurons: int = 20000):
     import torch
+
     sys.path.insert(0, str(BASE))
     from snn_backend import create_network
     from encoding import set_backend, encode_text
@@ -560,7 +559,7 @@ def main(n_neurons: int = 20000):
 
         net = create_network(n_neurons=n_neurons, backend="gpu")
         _append_runtime_log(f"network ready pid={pid} neurons={net.n}")
-        print(f"GPU Daemon: {net.n} neurons, VRAM={torch.cuda.memory_allocated()/1e6:.0f}MB")
+        print(f"GPU Daemon: {net.n} neurons, VRAM={torch.cuda.memory_allocated() / 1e6:.0f}MB")
         _publish_status(
             "starting",
             "GPU network initialized",
@@ -604,9 +603,7 @@ def main(n_neurons: int = 20000):
             initial_trace_texts=initial_trace_texts,
             initial_trace_stimuli=initial_trace_stimuli,
         )
-        _append_runtime_log(
-            f"live retrieval ready traces={len(initial_trace_texts)} pid={pid}"
-        )
+        _append_runtime_log(f"live retrieval ready traces={len(initial_trace_texts)} pid={pid}")
 
         processed_stimuli = set()
         processed_traces = set(initial_trace_texts)
@@ -652,9 +649,7 @@ def main(n_neurons: int = 20000):
                 files = list(TRACES.glob("*.md"))
                 if files:
                     for f in rng.choice(files, size=min(3, len(files)), replace=False):
-                        net.inject_stimulus(
-                            encode_text(f.read_text(encoding="utf-8"), net.n) * 0.3
-                        )
+                        net.inject_stimulus(encode_text(f.read_text(encoding="utf-8"), net.n) * 0.3)
 
             # Membrane histogram for raster
             v_cpu = net.v if isinstance(net.v, np.ndarray) else net.v
@@ -665,12 +660,13 @@ def main(n_neurons: int = 20000):
             if cycle % 10 == 0 and cycle > 0:
                 try:
                     from consolidation_engine import consolidate
+
                     consolidation_result = consolidate()
                     _append_runtime_log(
                         f"consolidation cycle={cycle}: "
-                        f"status={consolidation_result.get('status','?')}, "
-                        f"memories={consolidation_result.get('memories_written',0)}, "
-                        f"entities={consolidation_result.get('entities_found',0)}"
+                        f"status={consolidation_result.get('status', '?')}, "
+                        f"memories={consolidation_result.get('memories_written', 0)}, "
+                        f"entities={consolidation_result.get('entities_found', 0)}"
                     )
                 except Exception as ce:
                     _append_runtime_log(f"consolidation error: {ce}")
@@ -721,24 +717,40 @@ def main(n_neurons: int = 20000):
                 summary["last_consolidation"] = consolidation_result
             _write_json_atomic(STATE_DIR / "current_state.json", summary)
             with open(STATE_DIR / "history.jsonl", "a", encoding="utf-8") as hf:
-                hf.write(json.dumps({
-                    "t": summary["t"], "cycle": cycle, "spikes": int(spikes),
-                    "v_mean": summary["v_mean"], "mean_v_deep": 0.0, "mean_v_work": 0.0,
-                    "traces": len(processed_traces), "stimuli": len(processed_stimuli),
-                    "sources": list(stimulus_sources), "raster": v_hist.tolist(),
-                    "memory_bytes": mem["total_bytes"],
-                    "memory_breakdown": {k: v for k, v in mem["breakdown"].items()},
-                    "ts": summary["timestamp"],
-                }) + "\n")
+                hf.write(
+                    json.dumps(
+                        {
+                            "t": summary["t"],
+                            "cycle": cycle,
+                            "spikes": int(spikes),
+                            "v_mean": summary["v_mean"],
+                            "mean_v_deep": 0.0,
+                            "mean_v_work": 0.0,
+                            "traces": len(processed_traces),
+                            "stimuli": len(processed_stimuli),
+                            "sources": list(stimulus_sources),
+                            "raster": v_hist.tolist(),
+                            "memory_bytes": mem["total_bytes"],
+                            "memory_breakdown": {k: v for k, v in mem["breakdown"].items()},
+                            "ts": summary["timestamp"],
+                        }
+                    )
+                    + "\n"
+                )
 
             # Heartbeat
             HEARTBEAT_DIR.mkdir(parents=True, exist_ok=True)
-            _write_json_atomic(HEARTBEAT_DIR / "snn-daemon.json", {
-                "agent": "snn-daemon", "project": "arcane-sapience",
-                "status": "running", "pid": pid,
-                "detail": f"GPU cycle={cycle} n={net.n} spikes={spikes} vram={summary['vram_mb']}MB",
-                "timestamp": time.time(),
-            })
+            _write_json_atomic(
+                HEARTBEAT_DIR / "snn-daemon.json",
+                {
+                    "agent": "snn-daemon",
+                    "project": "arcane-sapience",
+                    "status": "running",
+                    "pid": pid,
+                    "detail": f"GPU cycle={cycle} n={net.n} spikes={spikes} vram={summary['vram_mb']}MB",
+                    "timestamp": time.time(),
+                },
+            )
 
             if cycle % 5 == 0:
                 print(
@@ -775,6 +787,7 @@ def main(n_neurons: int = 20000):
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(description="Arcane Sapience GPU SNN Daemon")
     parser.add_argument("--neurons", type=int, default=20000)
     parser.add_argument("--detach", action="store_true", help="Spawn detached and exit")

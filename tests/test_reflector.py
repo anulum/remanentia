@@ -92,11 +92,13 @@ class _FakeBackend:
 class TestGenerateSummaryLLM:
     def setup_method(self):
         import answer_extractor
+
         self._orig = answer_extractor._BACKEND
         answer_extractor._BACKEND = None
 
     def teardown_method(self):
         import answer_extractor
+
         answer_extractor._BACKEND = self._orig
 
     def test_no_backend_returns_none(self):
@@ -136,11 +138,13 @@ class TestGenerateSummaryLLM:
 class TestGenerateProspectiveQueriesLLM:
     def setup_method(self):
         import answer_extractor
+
         self._orig = answer_extractor._BACKEND
         answer_extractor._BACKEND = None
 
     def teardown_method(self):
         import answer_extractor
+
         answer_extractor._BACKEND = self._orig
 
     def test_no_backend_returns_empty(self):

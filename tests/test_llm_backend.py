@@ -100,9 +100,11 @@ class TestAnthropicBackend:
 
 def _mock_openai_response(content: str = "test answer"):
     """Create a fake OpenAI-compatible JSON response."""
-    body = json.dumps({
-        "choices": [{"message": {"content": content}}],
-    }).encode("utf-8")
+    body = json.dumps(
+        {
+            "choices": [{"message": {"content": content}}],
+        }
+    ).encode("utf-8")
     resp = mock.MagicMock()
     resp.read.return_value = body
     resp.status = 200
@@ -114,7 +116,9 @@ def _mock_openai_response(content: str = "test answer"):
 class TestLocalLLMBackend:
     def test_complete_success(self):
         b = LocalLLMBackend(base_url="http://localhost:9999/v1")
-        with mock.patch("urllib.request.urlopen", return_value=_mock_openai_response("hello world")):
+        with mock.patch(
+            "urllib.request.urlopen", return_value=_mock_openai_response("hello world")
+        ):
             result = b.complete("test prompt")
         assert result == "hello world"
 
@@ -192,7 +196,6 @@ class TestLocalLLMBackend:
         assert b._base_url == "http://localhost:8080/v1"
 
 
-
 # ── AutoBackend ───────────────────────────────────────────────────
 
 
@@ -267,7 +270,7 @@ class TestLoadConfig:
         toml_path = tmp_path / "llm.toml"
         toml_path.write_text(
             '[llm]\nbackend = "local"\nlocal_url = "http://gpu:9090/v1"\n'
-            "local_model = \"llama-3b\"\n\n"
+            'local_model = "llama-3b"\n\n'
             "[llm.tokens]\nextract = 50\ngenerate = 100\nsynthesise = 150\n",
             encoding="utf-8",
         )

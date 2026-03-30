@@ -219,12 +219,14 @@ class LocalLLMBackend:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
 
-        payload = json.dumps({
-            "model": self._model,
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": 0.1,
-        }).encode("utf-8")
+        payload = json.dumps(
+            {
+                "model": self._model,
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "temperature": 0.1,
+            }
+        ).encode("utf-8")
 
         req = urllib.request.Request(
             f"{self._base_url}/chat/completions",

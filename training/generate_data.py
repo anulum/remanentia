@@ -98,10 +98,7 @@ def generate_embedding_triplets(data: list[dict]) -> list[dict]:
 
         if not positives:
             # Fallback: best token overlap
-            overlaps = [
-                (turn, len(_tokenise(answer) & _tokenise(turn)))
-                for turn in turns
-            ]
+            overlaps = [(turn, len(_tokenise(answer) & _tokenise(turn))) for turn in turns]
             overlaps.sort(key=lambda x: -x[1])
             if overlaps and overlaps[0][1] > 0:
                 positives = [overlaps[0][0]]
@@ -132,12 +129,14 @@ def generate_embedding_triplets(data: list[dict]) -> list[dict]:
         # Create triplets: each positive paired with top-5 hard negatives
         for pos in positives[:3]:
             for neg, _ in scored_negs[:5]:
-                triplets.append({
-                    "anchor": question,
-                    "positive": pos[:512],
-                    "negative": neg[:512],
-                    "qtype": q.get("question_type", ""),
-                })
+                triplets.append(
+                    {
+                        "anchor": question,
+                        "positive": pos[:512],
+                        "negative": neg[:512],
+                        "qtype": q.get("question_type", ""),
+                    }
+                )
 
     _RNG.shuffle(triplets)
     return triplets
@@ -159,24 +158,28 @@ def generate_cross_encoder_pairs(data: list[dict]) -> list[dict]:
 
         for turn in turns:
             if answer in turn.lower():
-                pairs.append({
-                    "query": question,
-                    "passage": turn[:512],
-                    "label": 1,
-                    "qtype": q.get("question_type", ""),
-                })
+                pairs.append(
+                    {
+                        "query": question,
+                        "passage": turn[:512],
+                        "label": 1,
+                        "qtype": q.get("question_type", ""),
+                    }
+                )
             else:
                 # Only keep hard negatives (with some keyword overlap)
                 q_tokens = _tokenise(question)
                 t_tokens = _tokenise(turn)
                 overlap = len(q_tokens & t_tokens)
                 if overlap >= 2:
-                    pairs.append({
-                        "query": question,
-                        "passage": turn[:512],
-                        "label": 0,
-                        "qtype": q.get("question_type", ""),
-                    })
+                    pairs.append(
+                        {
+                            "query": question,
+                            "passage": turn[:512],
+                            "label": 0,
+                            "qtype": q.get("question_type", ""),
+                        }
+                    )
 
     # Balance: 1:3 positive:negative ratio
     pos = [p for p in pairs if p["label"] == 1]
@@ -227,11 +230,13 @@ def extract_natural_date_examples(data: list[dict]) -> list[dict]:
             for turn in sess:
                 content = turn.get("content", "")
                 for match in vague_re.finditer(content):
-                    samples.append({
-                        "expr": match.group(0),
-                        "ref_date": ref_date,
-                        "source": "longmemeval_natural",
-                    })
+                    samples.append(
+                        {
+                            "expr": match.group(0),
+                            "ref_date": ref_date,
+                            "source": "longmemeval_natural",
+                        }
+                    )
 
     return samples
 

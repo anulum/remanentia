@@ -332,7 +332,11 @@ def decompose_sessions(
                     continue
 
                 fact = _build_fact(
-                    sent, sess_idx, turn_idx, role, default_year,
+                    sent,
+                    sess_idx,
+                    turn_idx,
+                    role,
+                    default_year,
                     reference_date=_ref_date,
                 )
                 fact_idx = len(all_facts)
@@ -455,7 +459,9 @@ def _extract_dates(text: str, default_year: int = 2024) -> list[str]:
 
 
 def _extract_dates_with_normaliser(
-    text: str, reference_date: "date | None" = None, default_year: int = 2024,
+    text: str,
+    reference_date: "date | None" = None,
+    default_year: int = 2024,
 ) -> list[str]:
     """Extract dates with ML-augmented vague expression normalisation (C4).
 

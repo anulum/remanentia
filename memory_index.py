@@ -460,7 +460,11 @@ class MemoryIndex:
 
                     device = "cuda" if torch.cuda.is_available() else "cpu"
                     _local_ce = BASE / "models" / "temporal-ce-v1"
-                    _ce_id = str(_local_ce) if _local_ce.exists() else "cross-encoder/ms-marco-MiniLM-L-6-v2"
+                    _ce_id = (
+                        str(_local_ce)
+                        if _local_ce.exists()
+                        else "cross-encoder/ms-marco-MiniLM-L-6-v2"
+                    )
                     self._cross_encoder = CrossEncoder(_ce_id, device=device)
                 except Exception:
                     self._cross_encoder = False

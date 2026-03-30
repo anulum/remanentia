@@ -49,6 +49,7 @@ Usage::
     state = snapshot_load()
     score = continuity_score(state, current_context="working on dashboard...")
 """
+
 from __future__ import annotations
 
 import json
@@ -101,6 +102,7 @@ def snapshot_save(
     if focus:
         try:
             from snn_daemon import drop_stimulus
+
             drop_stimulus(
                 f"cognitive-focus: {focus}. concerns: {', '.join(concerns or [])}. "
                 f"momentum: {momentum}",
@@ -197,7 +199,9 @@ def reconstruction_prompt(state: dict) -> str:
     lines = []
     age_hours = (time.time() - state.get("timestamp", 0)) / 3600
 
-    lines.append(f"## Cognitive State (from {age_hours:.0f}h ago, project: {state.get('project', '?')})")
+    lines.append(
+        f"## Cognitive State (from {age_hours:.0f}h ago, project: {state.get('project', '?')})"
+    )
 
     if state.get("focus"):
         lines.append(f"**Active focus:** {state['focus']}")

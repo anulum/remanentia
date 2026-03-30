@@ -58,8 +58,7 @@ def main() -> None:
     eval_raw = raw[split_idx:]
 
     train_examples = [
-        InputExample(texts=[r["anchor"], r["positive"], r["negative"]])
-        for r in train_raw
+        InputExample(texts=[r["anchor"], r["positive"], r["negative"]]) for r in train_raw
     ]
     train_loader = DataLoader(train_examples, shuffle=True, batch_size=BATCH_SIZE)
 
@@ -92,7 +91,9 @@ def main() -> None:
     total_steps = len(train_loader) * EPOCHS
     warmup_steps = int(total_steps * WARMUP_RATIO)
 
-    log.info("Training: %d examples, %d steps, %d warmup", len(train_examples), total_steps, warmup_steps)
+    log.info(
+        "Training: %d examples, %d steps, %d warmup", len(train_examples), total_steps, warmup_steps
+    )
 
     model.fit(
         train_objectives=[(train_loader, train_loss)],

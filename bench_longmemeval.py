@@ -19,6 +19,7 @@ Usage:
     python bench_longmemeval.py --limit 50         # first 50 questions
     python bench_longmemeval.py --evaluate          # run GPT-judge after
 """
+
 from __future__ import annotations
 
 import io
@@ -117,9 +118,7 @@ def _build_index_for_question(sessions: list[list[dict]]):
                 idx._inverted_index[t].append(para_idx)
 
     # Compute para lengths
-    idx._para_lengths = np.array(
-        [len(t) for t in idx.paragraph_tokens], dtype=np.float32
-    )
+    idx._para_lengths = np.array([len(t) for t in idx.paragraph_tokens], dtype=np.float32)
     idx._avg_dl = float(np.mean(idx._para_lengths)) if len(idx._para_lengths) > 0 else 1.0
 
     return idx
@@ -148,6 +147,7 @@ def _answer_from_retrieval(
     # Try GPT-4o-mini first (Anthropic credits exhausted)
     try:
         from openai import OpenAI
+
         client = OpenAI()
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -168,7 +168,12 @@ def _answer_from_retrieval(
 def _build_context(question: str, idx, results, sessions: list, qtype: str) -> str:
     """Build LLM context adapted to question type."""
 
-    if qtype in ("multi-session", "temporal-reasoning", "knowledge-update", "single-session-preference"):
+    if qtype in (
+        "multi-session",
+        "temporal-reasoning",
+        "knowledge-update",
+        "single-session-preference",
+    ):
         # Cross-session + temporal + knowledge-update: full session content
         parts = []
         for sess_idx, session in enumerate(sessions):
@@ -190,9 +195,7 @@ def _build_context(question: str, idx, results, sessions: list, qtype: str) -> s
     # Single-session types: focused BM25 results (no noise from surrounding turns)
     paras = []
     for r in results[:5]:
-        doc_idx = next(
-            (di for di, d in enumerate(idx.documents) if d.name == r.name), None
-        )
+        doc_idx = next((di for di, d in enumerate(idx.documents) if d.name == r.name), None)
         if doc_idx is not None:
             full_text = idx.documents[doc_idx].paragraphs[r.paragraph_idx]
             paras.append(full_text[:1500])
@@ -226,7 +229,7 @@ def _extract_temporal_facts(sessions: list) -> str:
                     start = max(0, m.start() - 60)
                     end = min(len(text), m.end() + 60)
                     context = text[start:end].strip()
-                    events.append(f"Session {sess_idx+1}: \"{context}\" [date: {date_str}]")
+                    events.append(f'Session {sess_idx + 1}: "{context}" [date: {date_str}]')
 
     if not events:
         return ""
@@ -314,7 +317,12 @@ def _arcane_answer(
 
     # For temporal/multi-session/knowledge-update: also include full sessions
     # (the LLM needs full context to reason over, facts provide ranking signal)
-    if qtype in ("temporal-reasoning", "multi-session", "knowledge-update", "single-session-preference"):
+    if qtype in (
+        "temporal-reasoning",
+        "multi-session",
+        "knowledge-update",
+        "single-session-preference",
+    ):
         session_parts = []
         for sess_idx, session in enumerate(sessions):
             turns = []
@@ -352,6 +360,7 @@ def _arcane_answer(
 
     try:
         from openai import OpenAI
+
         client = OpenAI()
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -397,9 +406,16 @@ def run_benchmark():
 
         if _USE_ARCANE:
             # Hybrid: ArcaneRetriever for hard categories, legacy for single-session
-            if qtype in ("temporal-reasoning", "multi-session", "knowledge-update", "single-session-preference"):
+            if qtype in (
+                "temporal-reasoning",
+                "multi-session",
+                "knowledge-update",
+                "single-session-preference",
+            ):
                 hypothesis = _arcane_answer(
-                    question, item["haystack_sessions"], qtype,
+                    question,
+                    item["haystack_sessions"],
+                    qtype,
                     haystack_dates=item.get("haystack_dates"),
                 )
             else:
@@ -415,10 +431,12 @@ def run_benchmark():
                 question, idx, item["haystack_sessions"], qtype, use_llm=_USE_LLM
             )
 
-        hypotheses.append({
-            "question_id": qid,
-            "hypothesis": hypothesis,
-        })
+        hypotheses.append(
+            {
+                "question_id": qid,
+                "hypothesis": hypothesis,
+            }
+        )
 
         type_total[qtype] += 1
 
@@ -454,18 +472,18 @@ def run_benchmark():
     print(f"\nHypotheses saved to {OUTPUT_PATH}")
 
     # Print local results (indicative, not authoritative)
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"LongMemEval Local Results (fuzzy match, NOT GPT-judge)")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     total_correct = sum(type_correct.values())
     total = sum(type_total.values())
-    print(f"Overall: {total_correct}/{total} ({total_correct/total*100:.1f}%)")
+    print(f"Overall: {total_correct}/{total} ({total_correct / total * 100:.1f}%)")
     print()
     for qtype in sorted(type_total.keys()):
         c = type_correct[qtype]
         t = type_total[qtype]
-        print(f"  {qtype:30s}: {c:3d}/{t:3d} ({c/t*100:.1f}%)")
-    print(f"\nTime: {elapsed:.1f}s ({elapsed/len(data)*1000:.0f}ms/question)")
+        print(f"  {qtype:30s}: {c:3d}/{t:3d} ({c / t * 100:.1f}%)")
+    print(f"\nTime: {elapsed:.1f}s ({elapsed / len(data) * 1000:.0f}ms/question)")
     print(f"\nNOTE: These are local fuzzy-match scores. Run with --evaluate")
     print(f"for authoritative GPT-judge scoring.")
 
@@ -534,18 +552,24 @@ def run_evaluation():
         if (i + 1) % 50 == 0:
             total = sum(sum(v) for v in type_scores.values())
             done = sum(len(v) for v in type_scores.values())
-            print(f"  [{done}/{len(hypotheses)}] correct={total}/{done} ({total/done*100:.1f}%)")
+            print(
+                f"  [{done}/{len(hypotheses)}] correct={total}/{done} ({total / done * 100:.1f}%)"
+            )
 
     # Final results
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"LongMemEval Results (Claude-judge)")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     all_scores = [s for scores in type_scores.values() for s in scores]
-    print(f"Overall: {sum(all_scores)}/{len(all_scores)} ({sum(all_scores)/len(all_scores)*100:.1f}%)")
+    print(
+        f"Overall: {sum(all_scores)}/{len(all_scores)} ({sum(all_scores) / len(all_scores) * 100:.1f}%)"
+    )
     print()
     for qtype in sorted(type_scores.keys()):
         scores = type_scores[qtype]
-        print(f"  {qtype:30s}: {sum(scores):3d}/{len(scores):3d} ({sum(scores)/len(scores)*100:.1f}%)")
+        print(
+            f"  {qtype:30s}: {sum(scores):3d}/{len(scores):3d} ({sum(scores) / len(scores) * 100:.1f}%)"
+        )
 
     # Save results
     results_path = OUTPUT_PATH.with_suffix(".results.jsonl")

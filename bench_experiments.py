@@ -22,16 +22,20 @@ def tokenize(text):
 
 # ── Experiment 1: Semantic search via embeddings ────────────────
 
+
 def embed_search(query, paragraphs, model, top_k=20):
     """Pure embedding cosine similarity search."""
     import numpy as np
+
     if not paragraphs:
         return []
     q_emb = model.encode(query, normalize_embeddings=True, convert_to_numpy=True)
     p_embs = model.encode(
         [p[:512] for p in paragraphs],
-        batch_size=64, show_progress_bar=False,
-        normalize_embeddings=True, convert_to_numpy=True,
+        batch_size=64,
+        show_progress_bar=False,
+        normalize_embeddings=True,
+        convert_to_numpy=True,
     )
     sims = p_embs @ q_emb
     top_idx = np.argsort(-sims)[:top_k]
@@ -39,6 +43,7 @@ def embed_search(query, paragraphs, model, top_k=20):
 
 
 # ── Experiment 2: BM25 + embedding hybrid ───────────────────────
+
 
 def hybrid_search(query, paragraphs, model, top_k=20, bm25_weight=0.4):
     """BM25 + embedding fusion."""
@@ -71,8 +76,10 @@ def hybrid_search(query, paragraphs, model, top_k=20, bm25_weight=0.4):
     q_emb = model.encode(query, normalize_embeddings=True, convert_to_numpy=True)
     p_embs = model.encode(
         [p[:512] for p in paragraphs],
-        batch_size=64, show_progress_bar=False,
-        normalize_embeddings=True, convert_to_numpy=True,
+        batch_size=64,
+        show_progress_bar=False,
+        normalize_embeddings=True,
+        convert_to_numpy=True,
     )
     emb_scores = (p_embs @ q_emb).tolist()
 
@@ -91,6 +98,7 @@ def hybrid_search(query, paragraphs, model, top_k=20, bm25_weight=0.4):
 
 # ── Experiment 3: LLM answering (send context + question to Haiku) ──
 
+
 def llm_answer(question, turns, retrieved_indices, model_name="claude-haiku-4-5-20251001"):
     """Send top retrieved turns to LLM for answer generation."""
     import anthropic
@@ -101,9 +109,7 @@ def llm_answer(question, turns, retrieved_indices, model_name="claude-haiku-4-5-
         return None
 
     context = "\n\n".join(
-        f"[Turn {idx}]: {turns[idx][:400]}"
-        for idx, _ in retrieved_indices[:5]
-        if idx < len(turns)
+        f"[Turn {idx}]: {turns[idx][:400]}" for idx, _ in retrieved_indices[:5] if idx < len(turns)
     )
 
     client = anthropic.Anthropic(api_key=api_key)
@@ -111,14 +117,16 @@ def llm_answer(question, turns, retrieved_indices, model_name="claude-haiku-4-5-
         response = client.messages.create(
             model=model_name,
             max_tokens=100,
-            messages=[{
-                "role": "user",
-                "content": (
-                    "Answer the question using ONLY the conversation turns below. "
-                    "Be concise (1-2 sentences). If the answer isn't in the turns, say 'unknown'.\n\n"
-                    f"{context}\n\nQuestion: {question}"
-                ),
-            }],
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        "Answer the question using ONLY the conversation turns below. "
+                        "Be concise (1-2 sentences). If the answer isn't in the turns, say 'unknown'.\n\n"
+                        f"{context}\n\nQuestion: {question}"
+                    ),
+                }
+            ],
         )
         answer = response.content[0].text.strip()
         if answer.lower() in ("unknown", "i don't know"):
@@ -129,6 +137,7 @@ def llm_answer(question, turns, retrieved_indices, model_name="claude-haiku-4-5-
 
 
 # ── Evaluation ──────────────────────────────────────────────────
+
 
 def evaluate(question, gold_answer, retrieved, turns, session_offsets=None, llm_answer_text=None):
     """Check if we got the right answer via multiple matching strategies."""
@@ -152,13 +161,14 @@ def evaluate(question, gold_answer, retrieved, turns, session_offsets=None, llm_
         covered = set()
         for idx, score in retrieved:
             if idx < len(turns):
-                covered |= (a_tokens & tokenize(turns[idx]))
+                covered |= a_tokens & tokenize(turns[idx])
         if len(covered) / max(len(a_tokens), 1) > 0.5:
             return True
 
     # Answer extraction
     try:
         from answer_extractor import extract_answer, fuzzy_match
+
         for idx, score in retrieved[:5]:
             if idx < len(turns):
                 extracted = extract_answer(question, turns[idx])
@@ -182,14 +192,22 @@ def evaluate(question, gold_answer, retrieved, turns, session_offsets=None, llm_
     return False
 
 
-CATEGORY_NAMES = {1: "single-hop", 2: "multi-hop", 3: "temporal", 4: "adversarial", 5: "open-domain"}
+CATEGORY_NAMES = {
+    1: "single-hop",
+    2: "multi-hop",
+    3: "temporal",
+    4: "adversarial",
+    5: "open-domain",
+}
 
 _DS = None
+
 
 def _get_dataset():
     global _DS
     if _DS is None:
         from datasets import load_dataset
+
         _DS = load_dataset("KhangPTT373/locomo_preprocess", split="test")
     return _DS
 
@@ -197,9 +215,9 @@ def _get_dataset():
 def run_experiment(name, search_fn, use_llm_answer=False):
     """Run a LOCOMO experiment with a given search function."""
     ds = _get_dataset()
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"EXPERIMENT: {name}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     results_by_cat = {}
     total_correct = 0
@@ -210,7 +228,11 @@ def run_experiment(name, search_fn, use_llm_answer=False):
         questions = conv["questions"]
         answers = conv["answers"]
         categories = conv["category"]
-        turns = conv["turns"] if isinstance(conv["turns"], list) else [t.strip() for t in conv["turns"].split("\n") if t.strip()]
+        turns = (
+            conv["turns"]
+            if isinstance(conv["turns"], list)
+            else [t.strip() for t in conv["turns"].split("\n") if t.strip()]
+        )
         sessions = conv.get("sessions", [])
         session_offsets = []
         if isinstance(sessions, list):
@@ -262,6 +284,7 @@ def run_experiment(name, search_fn, use_llm_answer=False):
 
 if __name__ == "__main__":
     import os
+
     results = []
 
     # Pre-load dataset
@@ -290,7 +313,9 @@ if __name__ == "__main__":
             dl = len(pt)
             for qt in q_tokens:
                 if qt in pt:
-                    score += idf.get(qt, 0) * (1 + k1) / (1 + k1 * (1 - b + b * dl / max(avg_dl, 1)))
+                    score += (
+                        idf.get(qt, 0) * (1 + k1) / (1 + k1 * (1 - b + b * dl / max(avg_dl, 1)))
+                    )
             if score > 0:
                 scored.append((i, score))
         scored.sort(key=lambda x: -x[1])
@@ -307,6 +332,7 @@ if __name__ == "__main__":
     print("\nLoading embedding model...")
     from sentence_transformers import SentenceTransformer
     import torch
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
     embed_model = SentenceTransformer("all-MiniLM-L6-v2", device=device)
     print(f"Model loaded on {device}")
@@ -334,12 +360,11 @@ if __name__ == "__main__":
         results.append(r4)
 
     # Summary
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("EXPERIMENT SUMMARY")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     for r in results:
         print(f"  {r['experiment']:40s}: {r['accuracy']:5.1f}%")
 
-    Path("paper/experiment_results_v2.json").write_text(
-        json.dumps(results, indent=2) + "\n")
+    Path("paper/experiment_results_v2.json").write_text(json.dumps(results, indent=2) + "\n")
     print(f"\nSaved to paper/experiment_results_v2.json")

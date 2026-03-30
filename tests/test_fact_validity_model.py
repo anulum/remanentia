@@ -67,6 +67,7 @@ class TestFactClassification:
 class TestModelLoading:
     def test_model_missing_returns_none(self):
         import fact_validity_model
+
         fact_validity_model._model = None
         fact_validity_model._tokenizer = None
         fact_validity_model._config = None
@@ -77,12 +78,14 @@ class TestModelLoading:
 
     def test_already_loaded(self):
         import fact_validity_model
+
         fact_validity_model._model = MagicMock()
         assert fact_validity_model._load_model() is True
         fact_validity_model._model = None
 
     def test_load_model_exception_returns_false(self):
         import fact_validity_model
+
         fact_validity_model._model = None
         fact_validity_model._tokenizer = None
         fact_validity_model._config = None
@@ -125,6 +128,7 @@ class TestClassifyFactMocked:
 
     def _cleanup(self):
         import fact_validity_model
+
         fact_validity_model._model = None
         fact_validity_model._tokenizer = None
         fact_validity_model._config = None
@@ -198,6 +202,7 @@ class TestWithRealModel:
     @pytest.fixture(autouse=True)
     def _reset_model(self):
         import fact_validity_model
+
         fact_validity_model._model = None
         fact_validity_model._tokenizer = None
         fact_validity_model._config = None

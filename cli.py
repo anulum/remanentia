@@ -347,9 +347,7 @@ def main():
         p_recall.add_argument("--project", default="", help="Filter by project/source")
         p_recall.add_argument("--after", default="", help="Filter: docs after date (YYYY-MM-DD)")
         p_recall.add_argument("--before", default="", help="Filter: docs before date (YYYY-MM-DD)")
-        p_recall.add_argument(
-            "--llm", action="store_true", help="Use LLM for answer extraction"
-        )
+        p_recall.add_argument("--llm", action="store_true", help="Use LLM for answer extraction")
         p_recall.add_argument(
             "--llm-backend",
             choices=["auto", "local", "anthropic", "none"],

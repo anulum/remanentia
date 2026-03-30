@@ -12,6 +12,7 @@ and converts membrane potentials to phases via Hilbert transform.
 
 Falls back to uniform random phases if no SNN state exists.
 """
+
 from __future__ import annotations
 
 import logging

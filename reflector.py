@@ -92,9 +92,7 @@ def _generate_summary_llm(notes: list, model: str = "claude-haiku-4-5-20251001")
         return None
 
 
-def _generate_prospective_queries_llm(
-    note, model: str = "claude-haiku-4-5-20251001"
-) -> list[str]:
+def _generate_prospective_queries_llm(note, model: str = "claude-haiku-4-5-20251001") -> list[str]:
     """Generate hypothetical future queries for a note via LLM (Kumiho technique)."""
     from answer_extractor import get_llm_backend
 

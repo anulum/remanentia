@@ -79,18 +79,21 @@ def _restore_all() -> None:
 def _run_evaluation(config_id: int) -> dict:
     """Run temporal retrieval evaluation for a given ablation config."""
     config = CONFIGS[config_id]
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Config {config_id}: {config['name']}")
     print(f"Enabled: {config['enabled'] or 'none (baseline)'}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     # Toggle models
     _toggle_models(config["enabled"])
 
     # Force reimport of modules to pick up model changes
     for mod in [
-        "date_normalizer", "temporal_relation", "fact_validity_model",
-        "temporal_graph", "fact_decomposer",
+        "date_normalizer",
+        "temporal_relation",
+        "fact_validity_model",
+        "temporal_graph",
+        "fact_decomposer",
     ]:
         if mod in sys.modules:
             # Reset lazy-loaded model state
@@ -135,11 +138,13 @@ def _run_evaluation(config_id: int) -> dict:
         facts = decompose_sessions(sessions, default_year=ref_date.year)
         if not facts:
             results["total"] += 1
-            results["details"].append({
-                "id": q["question_id"],
-                "correct": False,
-                "reason": "no_facts",
-            })
+            results["details"].append(
+                {
+                    "id": q["question_id"],
+                    "correct": False,
+                    "reason": "no_facts",
+                }
+            )
             continue
 
         # Build fact index and retrieve
@@ -162,14 +167,16 @@ def _run_evaluation(config_id: int) -> dict:
         results["total"] += 1
         if hit:
             results["correct"] += 1
-        results["details"].append({
-            "id": q["question_id"],
-            "correct": hit,
-        })
+        results["details"].append(
+            {
+                "id": q["question_id"],
+                "correct": hit,
+            }
+        )
 
         if (qi + 1) % 25 == 0:
             pct = results["correct"] / results["total"] * 100
-            print(f"  [{qi+1}/{len(temporal)}] accuracy: {pct:.1f}%")
+            print(f"  [{qi + 1}/{len(temporal)}] accuracy: {pct:.1f}%")
 
     elapsed = time.time() - t0
     accuracy = results["correct"] / max(results["total"], 1) * 100
@@ -187,29 +194,35 @@ def _run_evaluation(config_id: int) -> dict:
 
 def main() -> None:
     """Run ablation study across all configs or a single specified config."""
-    config_arg = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].startswith("-") is False else 5
+    config_arg = (
+        int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].startswith("-") is False else 5
+    )
 
     if config_arg == 5:
         # Run all configs
         all_results = {}
         for cid in sorted(CONFIGS):
             if not CONFIGS[cid]["enabled"] or all(
-                _COMPONENTS[c].exists() or (_COMPONENTS[c].parent / (_COMPONENTS[c].name + ".disabled")).exists()
+                _COMPONENTS[c].exists()
+                or (_COMPONENTS[c].parent / (_COMPONENTS[c].name + ".disabled")).exists()
                 for c in CONFIGS[cid]["enabled"]
             ):
                 all_results[cid] = _run_evaluation(cid)
             else:
-                missing = [c for c in CONFIGS[cid]["enabled"]
-                           if not _COMPONENTS[c].exists()
-                           and not (_COMPONENTS[c].parent / (_COMPONENTS[c].name + ".disabled")).exists()]
+                missing = [
+                    c
+                    for c in CONFIGS[cid]["enabled"]
+                    if not _COMPONENTS[c].exists()
+                    and not (_COMPONENTS[c].parent / (_COMPONENTS[c].name + ".disabled")).exists()
+                ]
                 print(f"\nSkipping config {cid} — missing models: {missing}")
 
         _restore_all()
 
         # Summary
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("ABLATION SUMMARY")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         for cid, res in sorted(all_results.items()):
             print(f"  Config {cid} ({res['config']}): {res['accuracy']:.1f}%")
 

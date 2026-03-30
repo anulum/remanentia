@@ -10,6 +10,7 @@
 Session start: load state → extract phases → compute R → report regime
 Session end: compute exposure → update imprint → save state + traces
 """
+
 from __future__ import annotations
 
 import json
@@ -38,6 +39,7 @@ def session_start(project: str, context_text: str = "", agent: str = "claude") -
     # Register heartbeat so the dashboard shows this session
     try:
         from .snn_daemon import heartbeat
+
         heartbeat(agent, project=project, status="active", detail="session start")
     except Exception:
         pass  # daemon may not be running
@@ -78,7 +80,10 @@ def session_start(project: str, context_text: str = "", agent: str = "claude") -
 
     logger.info(
         "Session start [%s]: R=%.3f regime=%s actions=%d",
-        project, R, regime, len(actions),
+        project,
+        R,
+        regime,
+        len(actions),
     )
 
     return {
@@ -107,10 +112,10 @@ def session_end(
     state_path = STATE_DIR / f"{now}_{project}_state.md"
     content = f"# Session State — {project} ({now})\n\n"
     content += "## Active Dispositions\n"
-    for d in (active_dispositions or []):
+    for d in active_dispositions or []:
         content += f"- {d}\n"
     content += "\n## Key Decisions\n"
-    for d in (decisions or []):
+    for d in decisions or []:
         content += f"- {d}\n"
     state_path.write_text(content, encoding="utf-8")
     logger.info("Session state saved: %s", state_path.name)
@@ -167,18 +172,40 @@ def _load_oscillator_ids() -> list[str]:
 
 def _default_oscillator_ids() -> list[str]:
     return [
-        "ws_action_first", "ws_verify_before_claim", "ws_commit_incremental",
-        "ws_preflight_push", "ws_one_at_a_time",
-        "rp_simplest_design", "rp_verify_audits", "rp_change_problem",
-        "rp_multi_signal", "rp_measure_first",
-        "rel_autonomous", "rel_milestones", "rel_no_questions",
-        "rel_honesty", "rel_money_clock",
-        "aes_antislop", "aes_honest_naming", "aes_terse",
-        "aes_spdx", "aes_no_noqa",
-        "dk_director", "dk_neurocore", "dk_fusion", "dk_control",
-        "dk_orchestrator", "dk_ccw", "dk_scpn", "dk_quantum",
-        "cp_threshold_halt", "cp_multi_signal", "cp_retrieval_scoring",
-        "cp_state_preserve", "cp_decompose_verify", "cp_resolution",
+        "ws_action_first",
+        "ws_verify_before_claim",
+        "ws_commit_incremental",
+        "ws_preflight_push",
+        "ws_one_at_a_time",
+        "rp_simplest_design",
+        "rp_verify_audits",
+        "rp_change_problem",
+        "rp_multi_signal",
+        "rp_measure_first",
+        "rel_autonomous",
+        "rel_milestones",
+        "rel_no_questions",
+        "rel_honesty",
+        "rel_money_clock",
+        "aes_antislop",
+        "aes_honest_naming",
+        "aes_terse",
+        "aes_spdx",
+        "aes_no_noqa",
+        "dk_director",
+        "dk_neurocore",
+        "dk_fusion",
+        "dk_control",
+        "dk_orchestrator",
+        "dk_ccw",
+        "dk_scpn",
+        "dk_quantum",
+        "cp_threshold_halt",
+        "cp_multi_signal",
+        "cp_retrieval_scoring",
+        "cp_state_preserve",
+        "cp_decompose_verify",
+        "cp_resolution",
         "cp_claims_evidence",
     ]
 

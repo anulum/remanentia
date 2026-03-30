@@ -13,6 +13,7 @@ Called automatically by Claude Code SessionStart hook, or manually::
     python workspace-internal/heartbeat_register.py codex director-ai active "lint fixes"
     python workspace-internal/heartbeat_register.py gemini sc-neurocore idle
 """
+
 from __future__ import annotations
 
 import json

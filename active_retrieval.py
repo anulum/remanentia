@@ -43,6 +43,7 @@ Usage as decision guard::
     )
     # Returns warnings if past reasoning contradicts this action
 """
+
 from __future__ import annotations
 
 import re
@@ -95,7 +96,9 @@ def consult_memory(reasoning_text: str, top_k: int = 3) -> str:
         lines = ["## Memory Advisory (automatic)"]
         for r in results:
             if r["score"] >= 0.3:
-                lines.append(f"- **{r['trace']}** (relevance: {r['score']:.3f}, tier: {r.get('tier', '?')})")
+                lines.append(
+                    f"- **{r['trace']}** (relevance: {r['score']:.3f}, tier: {r.get('tier', '?')})"
+                )
         return "\n".join(lines) if len(lines) > 1 else ""
 
     advisories = []
@@ -163,8 +166,7 @@ def decision_guard(action: str, context: str = "") -> list[str]:
                 sentence_words = set(sentence.split())
                 if len(action_words & sentence_words) >= 2:
                     warnings.append(
-                        f"Trace '{r['trace']}' (score={r['score']:.3f}): "
-                        f"{sentence.strip()[:120]}"
+                        f"Trace '{r['trace']}' (score={r['score']:.3f}): {sentence.strip()[:120]}"
                     )
 
     return warnings

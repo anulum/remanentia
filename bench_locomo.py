@@ -13,6 +13,7 @@ from specific sessions/turns to answer.
 
 We test: given a question, can our retrieval find the evidence turns?
 """
+
 from __future__ import annotations
 
 import io
@@ -41,6 +42,7 @@ def _get_cross_encoder():
     try:
         from sentence_transformers import CrossEncoder
         import torch
+
         device = "cuda" if torch.cuda.is_available() else "cpu"
         _CE_MODEL = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", device=device)
         return _CE_MODEL
@@ -58,6 +60,7 @@ def _get_embed_model():
     try:
         from sentence_transformers import SentenceTransformer
         import torch
+
         device = "cuda" if torch.cuda.is_available() else "cpu"
         _EMBED_MODEL = SentenceTransformer("all-MiniLM-L6-v2", device=device)
         return _EMBED_MODEL
@@ -68,12 +71,15 @@ def _get_embed_model():
 _PERSON_CENTRIC_PATTERNS = re.compile(
     r"\b(relationship|hobby|hobbies|interest|interests|career|job|status|"
     r"personality|feel|feeling|prefer|favorite|partake|destress|self-care|"
-    r"political|leaning|member|community)\b", re.IGNORECASE)
+    r"political|leaning|member|community)\b",
+    re.IGNORECASE,
+)
 
 _POSSESSIVE_PATTERNS = re.compile(
     r"\b(his|her|their|'s)\s+(hobby|hobbies|interest|interests|career|"
     r"relationship|status|personality|feeling|preference|activity|activities)\b",
-    re.IGNORECASE)
+    re.IGNORECASE,
+)
 
 
 def _extract_query_names(query):
@@ -81,9 +87,25 @@ def _extract_query_names(query):
     names = set()
     for m in re.finditer(r"\b([A-Z][a-z]{2,})\b", query):
         word = m.group(1).lower()
-        if word not in {"what", "when", "where", "who", "how", "why", "would",
-                        "could", "does", "did", "has", "have", "the", "which",
-                        "likely", "yes", "not"}:
+        if word not in {
+            "what",
+            "when",
+            "where",
+            "who",
+            "how",
+            "why",
+            "would",
+            "could",
+            "does",
+            "did",
+            "has",
+            "have",
+            "the",
+            "which",
+            "likely",
+            "yes",
+            "not",
+        }:
             names.add(word)
     return names
 
@@ -137,18 +159,23 @@ def bm25_search(query, paragraphs, top_k=10):
         for qt in q_tokens:
             if qt in pt:
                 tf = 1.0
-                score += idf.get(qt, 0) * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * dl / max(avg_dl, 1)))
+                score += (
+                    idf.get(qt, 0) * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * dl / max(avg_dl, 1)))
+                )
         bm25_scores.append(score)
 
     # Embedding scoring (hybrid fusion)
     embed = _get_embed_model()
     if embed is not None:
         import numpy as np
+
         q_emb = embed.encode(query, normalize_embeddings=True, convert_to_numpy=True)
         p_embs = embed.encode(
             [p[:512] for p in paragraphs],
-            batch_size=64, show_progress_bar=False,
-            normalize_embeddings=True, convert_to_numpy=True,
+            batch_size=64,
+            show_progress_bar=False,
+            normalize_embeddings=True,
+            convert_to_numpy=True,
         )
         emb_scores = (p_embs @ q_emb).tolist()
 
@@ -157,8 +184,9 @@ def bm25_search(query, paragraphs, top_k=10):
         emb_max = max(emb_scores) if emb_scores else 1
         scored = []
         for i in range(n):
-            fused = (0.4 * bm25_scores[i] / max(bm25_max, 1e-6) +
-                     0.6 * emb_scores[i] / max(emb_max, 1e-6))
+            fused = 0.4 * bm25_scores[i] / max(bm25_max, 1e-6) + 0.6 * emb_scores[i] / max(
+                emb_max, 1e-6
+            )
             # Entity-centric boost: turns mentioning query's person get 1.3x
             if query_names and fused > 0:
                 p_lower = paragraphs[i].lower()
@@ -178,7 +206,7 @@ def bm25_search(query, paragraphs, top_k=10):
                 scored.append((i, s))
 
     scored.sort(key=lambda x: -x[1])
-    candidates = scored[:top_k * 3]
+    candidates = scored[: top_k * 3]
 
     # Cross-encoder rerank on candidates
     ce = _get_cross_encoder()
@@ -195,8 +223,9 @@ def bm25_search(query, paragraphs, top_k=10):
     return candidates[:top_k]
 
 
-def evaluate_retrieval(question, answer, evidence_indices, retrieved_indices, turns,
-                       session_offsets=None):
+def evaluate_retrieval(
+    question, answer, evidence_indices, retrieved_indices, turns, session_offsets=None
+):
     """Evaluate if retrieval found the evidence."""
     # Evidence hit: map (session, turn) to flat index using session offsets
     evidence_flat = set()
@@ -232,13 +261,14 @@ def evaluate_retrieval(question, answer, evidence_indices, retrieved_indices, tu
         covered = set()
         for idx, score in retrieved_indices:
             if idx < len(turns):
-                covered |= (a_tokens & tokenize(turns[idx]))
+                covered |= a_tokens & tokenize(turns[idx])
         if len(covered) / max(len(a_tokens), 1) > 0.5:
             return True
 
     # Answer extraction + fuzzy matching
     try:
         from answer_extractor import extract_answer, fuzzy_match, extract_best_sentence
+
         for idx, score in retrieved_indices[:5]:
             if idx < len(turns):
                 extracted = extract_answer(question, turns[idx])
@@ -260,16 +290,33 @@ def evaluate_retrieval(question, answer, evidence_indices, retrieved_indices, tu
     # Temporal code execution: precise date arithmetic instead of LLM guessing
     try:
         from temporal_graph import TemporalEvent, temporal_code_execute
+
         q_lower = question.lower()
-        if any(w in q_lower for w in ["when", "how long", "before", "after", "since",
-                                       "first", "latest", "most recent", "how many days"]):
+        if any(
+            w in q_lower
+            for w in [
+                "when",
+                "how long",
+                "before",
+                "after",
+                "since",
+                "first",
+                "latest",
+                "most recent",
+                "how many days",
+            ]
+        ):
             t_events = []
             for idx, _ in retrieved_indices[:10]:
                 if idx < len(turns):
                     from temporal_graph import parse_dates
+
                     for d in parse_dates(turns[idx]):
-                        t_events.append(TemporalEvent(
-                            date=d, text=turns[idx][:200], source="turn", paragraph_idx=idx))
+                        t_events.append(
+                            TemporalEvent(
+                                date=d, text=turns[idx][:200], source="turn", paragraph_idx=idx
+                            )
+                        )
             if t_events:
                 code_answer = temporal_code_execute(question, t_events)
                 if code_answer and answer_lower:
@@ -286,6 +333,7 @@ def evaluate_retrieval(question, answer, evidence_indices, retrieved_indices, tu
     if _USE_LLM:
         try:
             from answer_extractor import llm_synthesize_answer, fuzzy_match
+
             top_paras = [turns[idx] for idx, _ in retrieved_indices[:10] if idx < len(turns)]
             if top_paras:
                 synthesized = llm_synthesize_answer(question, top_paras)
@@ -304,7 +352,13 @@ def evaluate_retrieval(question, answer, evidence_indices, retrieved_indices, tu
     return False
 
 
-CATEGORY_NAMES = {1: "single-hop", 2: "multi-hop", 3: "temporal", 4: "adversarial", 5: "open-domain"}
+CATEGORY_NAMES = {
+    1: "single-hop",
+    2: "multi-hop",
+    3: "temporal",
+    4: "adversarial",
+    5: "open-domain",
+}
 
 
 def main():
@@ -364,6 +418,7 @@ def main():
             if cat == 3:  # temporal
                 try:
                     from temporal_graph import parse_dates
+
                     q_dates = parse_dates(question)
                     if q_dates:
                         for ti, turn in enumerate(turns):
@@ -376,8 +431,9 @@ def main():
                     pass
 
             # Evaluate
-            correct = evaluate_retrieval(question, answer, evidence, retrieved, turns,
-                                        session_offsets=session_offsets)
+            correct = evaluate_retrieval(
+                question, answer, evidence, retrieved, turns, session_offsets=session_offsets
+            )
 
             if cat_name not in results_by_cat:
                 results_by_cat[cat_name] = {"correct": 0, "total": 0}
@@ -388,9 +444,9 @@ def main():
 
     elapsed = time.monotonic() - t0
 
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"LOCOMO RESULTS ({total_tested} questions, {elapsed:.1f}s)")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     overall = total_correct / max(total_tested, 1) * 100
     print(f"\nOverall: {total_correct}/{total_tested} ({overall:.1f}%)")
     print(f"\nBy category:")

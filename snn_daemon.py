@@ -27,6 +27,7 @@ The daemon:
 5. Saves membrane state for the P-channel extractor to read
 6. Loops indefinitely
 """
+
 from __future__ import annotations
 
 import argparse
@@ -52,6 +53,7 @@ _RUST_STDP = None
 _RUST_LIF = None
 try:
     from arcane_stdp import stdp_batch as _RUST_STDP, lif_step as _RUST_LIF
+
     logger.info("Rust STDP/LIF loaded (arcane_stdp)")
 except ImportError:
     pass
@@ -73,19 +75,22 @@ LOCK_PATH = STATE_DIR / "daemon.lock"
 def _acquire_lock() -> bool:
     """File-based singleton lock. Returns True if this is the only instance."""
     import os
+
     LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
     if LOCK_PATH.exists():
         try:
             pid = int(LOCK_PATH.read_text().strip())
             # Check if the PID is still alive (Windows-compatible)
             import ctypes
+
             kernel32 = ctypes.windll.kernel32
             handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
             if handle:
                 kernel32.CloseHandle(handle)
                 logger.error(
-                    "Another daemon is running (PID %d). "
-                    "Kill it first or delete %s", pid, LOCK_PATH,
+                    "Another daemon is running (PID %d). Kill it first or delete %s",
+                    pid,
+                    LOCK_PATH,
                 )
                 return False
             # Stale lock — process is dead
@@ -123,7 +128,13 @@ class SimpleLIFNetwork:
     architecture without requiring sc-neurocore installation.
     """
 
-    def __init__(self, n_neurons: int = 2000, dt: float = 0.001, seed: int = 42, topology: str = "small_world"):
+    def __init__(
+        self,
+        n_neurons: int = 2000,
+        dt: float = 0.001,
+        seed: int = 42,
+        topology: str = "small_world",
+    ):
         self.n = n_neurons
         self.dt = dt
         self.rng = np.random.default_rng(seed)
@@ -190,9 +201,13 @@ class SimpleLIFNetwork:
 
             if use_rust_lif:
                 spike_idx = _RUST_LIF(
-                    self.v, self.w, self.i_ext,
-                    np.float32(self.v_rest), np.float32(self.v_thresh),
-                    np.float32(self.v_reset), np.float32(self.tau_m),
+                    self.v,
+                    self.w,
+                    self.i_ext,
+                    np.float32(self.v_rest),
+                    np.float32(self.v_thresh),
+                    np.float32(self.v_reset),
+                    np.float32(self.tau_m),
                     np.float32(self.dt_ms),
                 )
                 n_spiked = len(spike_idx)
@@ -234,9 +249,15 @@ class SimpleLIFNetwork:
             spike_f = spiked.astype(np.float32)
             mask = (self.w > 0).astype(np.float32)
             _RUST_STDP(
-                self.w, spike_f, self.last_spike,
-                float(self.t), mask,
-                0.005, 0.005, 20.0, 2.0,
+                self.w,
+                spike_f,
+                self.last_spike,
+                float(self.t),
+                mask,
+                0.005,
+                0.005,
+                20.0,
+                2.0,
             )
             return
 
@@ -279,14 +300,17 @@ class SimpleLIFNetwork:
     def save(self, path: Path):
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "wb") as f:
-            pickle.dump({
-                "v": self.v,
-                "w": self.w,
-                "last_spike": self.last_spike,
-                "t": self.t,
-                "n": self.n,
-                "dt": self.dt,
-            }, f)
+            pickle.dump(
+                {
+                    "v": self.v,
+                    "w": self.w,
+                    "last_spike": self.last_spike,
+                    "t": self.t,
+                    "n": self.n,
+                    "dt": self.dt,
+                },
+                f,
+            )
 
     @classmethod
     def load(cls, path: Path) -> SimpleLIFNetwork:
@@ -311,6 +335,7 @@ def encode_text_to_stimulus(text: str, n_neurons: int) -> np.ndarray:
     """
     try:
         from encoding import encode_text
+
         return encode_text(text, n_neurons)
     except ImportError:
         pass
@@ -327,7 +352,7 @@ def encode_text_to_stimulus(text: str, n_neurons: int) -> np.ndarray:
             pattern[idx] = min(pattern[idx] + 0.15, 1.0)
 
     for i in range(len(tokens) - 1):
-        bg = f"{tokens[i]}_{tokens[i+1]}"
+        bg = f"{tokens[i]}_{tokens[i + 1]}"
         h = int(hashlib.md5(bg.encode()).hexdigest(), 16)
         for p in _HASH_PRIMES[:5]:
             idx = (h + p) % n_neurons
@@ -359,6 +384,7 @@ def check_new_traces(traces_dir: Path, processed: set) -> list[Path]:
 def _current_encoding_backend() -> str:
     try:
         from encoding import get_backend
+
         return get_backend()
     except Exception:
         return "lsh"
@@ -406,6 +432,7 @@ def heartbeat(agent: str, project: str = "", status: str = "active", detail: str
           > workspace-internal/heartbeats/codex.json
     """
     import os
+
     HEARTBEAT_DIR.mkdir(parents=True, exist_ok=True)
     safe = agent.replace("/", "_").replace("\\", "_").replace(" ", "_")
     path = HEARTBEAT_DIR / f"{safe}.json"
@@ -454,7 +481,9 @@ def drop_stimulus(text: str, source: str = "unknown"):
     return str(path)
 
 
-def _replay_traces(net, traces_dir: Path, processed: set, n_traces: int = 3, amplitude: float = 0.1):
+def _replay_traces(
+    net, traces_dir: Path, processed: set, n_traces: int = 3, amplitude: float = 0.1
+):
     """Replay stored traces at low amplitude during idle cycles.
 
     Biological analogue: hippocampal replay during sleep. Strengthens
@@ -537,7 +566,9 @@ def main():
     parser = argparse.ArgumentParser(description="Arcane Sapience SNN daemon")
     parser.add_argument("--neurons", type=int, default=1000)
     parser.add_argument("--interval", type=int, default=60, help="Check interval (seconds)")
-    parser.add_argument("--burst", type=float, default=1.0, help="Simulation burst duration (seconds)")
+    parser.add_argument(
+        "--burst", type=float, default=1.0, help="Simulation burst duration (seconds)"
+    )
     args = parser.parse_args()
 
     signal.signal(signal.SIGINT, _handle_signal)
@@ -556,11 +587,13 @@ def main():
     arcane_backend = "none"
     try:
         from sc_neurocore_engine.sc_neurocore_engine import ArcaneNeuron
+
         arcane_backend = "rust"
         logger.info("ArcaneNeuron loaded from Rust/PyO3 — native speed")
     except ImportError:
         try:
             from sc_neurocore.neurons.models.arcane_neuron import ArcaneNeuron
+
             arcane_backend = "python"
             logger.info("ArcaneNeuron loaded from Python")
         except ImportError:
@@ -587,7 +620,11 @@ def main():
                 # Step with zero current to initialise, then rely on
                 # accumulated v_deep from continued operation
                 an.step(0.0)
-            logger.info("Restored %d ArcaneNeurons from JSON (%s backend)", len(arcane_neurons), arcane_backend)
+            logger.info(
+                "Restored %d ArcaneNeurons from JSON (%s backend)",
+                len(arcane_neurons),
+                arcane_backend,
+            )
         else:
             arcane_neurons = [ArcaneNeuron() for _ in range(35)]
             logger.info("Created 35 ArcaneNeurons (%s backend)", arcane_backend)
@@ -602,6 +639,7 @@ def main():
     git_stim_available = False
     try:
         from git_stimulus import scan_repos as _git_scan
+
         git_stim_available = True
         logger.info("Git stimulus integration active")
     except ImportError:
@@ -611,6 +649,7 @@ def main():
     sparse_w_available = False
     try:
         from snn_backend import save_sparse
+
         sparse_w_available = True
     except ImportError:
         pass
@@ -630,9 +669,12 @@ def main():
         w_slow = np.zeros_like(net.w)
         logger.info("Created slow consolidation matrix")
 
-    logger.info("SNN daemon started (interval=%ds, burst=%.1fs, topology=%s)",
-                args.interval, args.burst,
-                "small_world" if hasattr(net, 'n') else "random")
+    logger.info(
+        "SNN daemon started (interval=%ds, burst=%.1fs, topology=%s)",
+        args.interval,
+        args.burst,
+        "small_world" if hasattr(net, "n") else "random",
+    )
 
     while _running:
         cycle += 1
@@ -656,7 +698,9 @@ def main():
             summary = _extract_summary(text)
             if summary:
                 trace_summaries[trace_path.name] = summary
-            logger.info("Injected trace: %s (%d active neurons)", trace_path.name, (stimulus > 0).sum())
+            logger.info(
+                "Injected trace: %s (%d active neurons)", trace_path.name, (stimulus > 0).sum()
+            )
             processed_traces.add(trace_path.name)
 
         # Check for explicit stimulus files (from Codex, Gemini, or any agent)
@@ -743,26 +787,33 @@ def main():
             "arcane_neurons": len(arcane_neurons),
             "identity_depth": depths,
             "mean_v_deep": float(np.mean(depths)) if depths else 0.0,
-            "mean_v_work": float(np.mean([s.get("v_work", 0.0) for s in arcane_states])) if arcane_states else 0.0,
+            "mean_v_work": float(np.mean([s.get("v_work", 0.0) for s in arcane_states]))
+            if arcane_states
+            else 0.0,
             "stimulus_sources": list(stimulus_sources),
             "raster": raster_row,
             "timestamp": time.time(),
         }
         summary_path.write_text(json.dumps(summary, indent=2) + "\n")
         with open(history_path, "a") as hf:
-            hf.write(json.dumps({
-                "t": summary["t"],
-                "cycle": cycle,
-                "spikes": int(spikes),
-                "v_mean": summary["v_mean"],
-                "mean_v_deep": summary["mean_v_deep"],
-                "mean_v_work": summary["mean_v_work"],
-                "traces": len(processed_traces),
-                "stimuli": len(processed_stimuli),
-                "sources": list(stimulus_sources),
-                "raster": raster_row,
-                "ts": summary["timestamp"],
-            }) + "\n")
+            hf.write(
+                json.dumps(
+                    {
+                        "t": summary["t"],
+                        "cycle": cycle,
+                        "spikes": int(spikes),
+                        "v_mean": summary["v_mean"],
+                        "mean_v_deep": summary["mean_v_deep"],
+                        "mean_v_work": summary["mean_v_work"],
+                        "traces": len(processed_traces),
+                        "stimuli": len(processed_stimuli),
+                        "sources": list(stimulus_sources),
+                        "raster": raster_row,
+                        "ts": summary["timestamp"],
+                    }
+                )
+                + "\n"
+            )
 
         if cycle % 10 == 0:
             depth_str = ""
@@ -771,13 +822,18 @@ def main():
                 depth_str = f", v_deep=[{min(depths):.2e}..{max(depths):.2e}]"
             logger.info(
                 "Cycle %d: t=%.1fs, spikes=%d, v_mean=%.1f, traces=%d%s",
-                cycle, state["t"], spikes, float(state["membrane_potentials"].mean()),
-                len(processed_traces), depth_str,
+                cycle,
+                state["t"],
+                spikes,
+                float(state["membrane_potentials"].mean()),
+                len(processed_traces),
+                depth_str,
             )
 
         # Daemon heartbeat
         heartbeat(
-            "snn-daemon", project="arcane-sapience",
+            "snn-daemon",
+            project="arcane-sapience",
             status="running",
             detail=f"cycle={cycle} t={state['t']:.0f}s spikes={spikes} traces={len(processed_traces)}",
         )

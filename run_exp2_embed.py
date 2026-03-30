@@ -5,16 +5,20 @@ import re, time, json
 import numpy as np
 from pathlib import Path
 
+
 def tokenize(text):
     return set(re.findall(r"[a-z0-9][a-z0-9_]{2,}", text.lower()))
+
 
 CATS = {1: "single-hop", 2: "multi-hop", 3: "temporal", 4: "adversarial", 5: "open-domain"}
 
 from datasets import load_dataset
+
 ds = load_dataset("KhangPTT373/locomo_preprocess", split="test")
 
 import torch
 from sentence_transformers import SentenceTransformer
+
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model = SentenceTransformer("all-MiniLM-L6-v2", device=device)
 
@@ -27,13 +31,19 @@ for ci, conv in enumerate(ds):
     questions = conv["questions"]
     answers = conv["answers"]
     categories = conv["category"]
-    turns = conv["turns"] if isinstance(conv["turns"], list) else [t.strip() for t in conv["turns"].split("\n") if t.strip()]
+    turns = (
+        conv["turns"]
+        if isinstance(conv["turns"], list)
+        else [t.strip() for t in conv["turns"].split("\n") if t.strip()]
+    )
 
     # Pre-encode all turns for this conversation
     turn_embs = model.encode(
         [t[:512] for t in turns],
-        batch_size=64, show_progress_bar=False,
-        normalize_embeddings=True, convert_to_numpy=True,
+        batch_size=64,
+        show_progress_bar=False,
+        normalize_embeddings=True,
+        convert_to_numpy=True,
     )
 
     for qi in range(len(questions)):
@@ -64,7 +74,7 @@ for ci, conv in enumerate(ds):
             covered = set()
             for idx, sc in retrieved:
                 if idx < len(turns):
-                    covered |= (a_tokens & tokenize(turns[idx]))
+                    covered |= a_tokens & tokenize(turns[idx])
             if len(covered) / max(len(a_tokens), 1) > 0.5:
                 hit = True
 
@@ -78,10 +88,19 @@ for ci, conv in enumerate(ds):
 elapsed = time.monotonic() - t0
 overall = correct / max(tested, 1) * 100
 
-out = {"experiment": "Embedding-only (MiniLM)", "accuracy": round(overall, 1), "elapsed_s": round(elapsed, 1), "by_category": {}}
+out = {
+    "experiment": "Embedding-only (MiniLM)",
+    "accuracy": round(overall, 1),
+    "elapsed_s": round(elapsed, 1),
+    "by_category": {},
+}
 for cat, s in sorted(results.items()):
     acc = s["correct"] / max(s["total"], 1) * 100
-    out["by_category"][cat] = {"correct": s["correct"], "total": s["total"], "accuracy": round(acc, 1)}
+    out["by_category"][cat] = {
+        "correct": s["correct"],
+        "total": s["total"],
+        "accuracy": round(acc, 1),
+    }
 
 Path("exp2_results.json").write_text(json.dumps(out, indent=2))
 print(json.dumps(out, indent=2))
