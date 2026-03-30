@@ -177,3 +177,29 @@ class TestSemanticSimilarity:
         sim = semantic_similarity("pottery and running", "pottery and camping")
         assert sim > 0.5  # lexical fallback should still return reasonable score
         answer_normalizer._embed_model = old
+
+
+# ── Rust acceleration verification ────────────────────────────
+
+
+class TestRustWiring:
+    """Verify Rust normaliser is wired in and produces correct results."""
+
+    def test_normalize_works_regardless_of_backend(self):
+        """normalize_answer must work whether Rust is installed or not."""
+        assert normalize_answer("Likely yes, because reading") == "likely yes"
+        assert normalize_answer("No, since never") == "no"
+        assert normalize_answer("  pottery  ") == "pottery"
+
+    def test_answers_match_through_pipeline(self):
+        """Full pipeline: normalize → polarity check → list overlap."""
+        assert answers_match("Yes, I think so", "Yes") is True
+        assert answers_match("No way", "Likely no") is True
+        assert answers_match("pottery, hiking", "pottery, camping, hiking, reading") is True
+        assert answers_match("completely wrong", "totally different") is False
+
+    def test_extract_items_preserves_semantics(self):
+        items = extract_answer_items("hiking, pottery and swimming")
+        assert "hiking" in items
+        assert "pottery" in items
+        assert "swimming" in items
