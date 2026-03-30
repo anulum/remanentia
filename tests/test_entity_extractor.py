@@ -179,6 +179,187 @@ class TestExtractRelations:
         assert rels == []
 
 
+# ── Edge cases ──────────────────────────────────────────────────
+
+
+class TestRegexEntitiesEdgeCases:
+    def test_empty_text(self):
+        assert _regex_entities("") == []
+
+    def test_no_entities(self):
+        assert _regex_entities("The weather is nice today.") == []
+
+    def test_all_project_names(self):
+        text = "sc-neurocore, scpn-control, scpn-fusion, scpn-phase-orchestrator, scpn-quantum-control, remanentia"
+        ents = _regex_entities(text)
+        names = {e.text for e in ents}
+        assert "sc-neurocore" in names
+        assert "remanentia" in names
+        assert "scpn-quantum-control" in names
+        assert len(names) >= 6
+
+    def test_all_algorithms(self):
+        text = "stdp lif kuramoto hopfield bcpnn csdp tf-idf bm25 stuart-landau"
+        ents = _regex_entities(text)
+        assert len(ents) >= 8
+
+    def test_version_two_part(self):
+        ents = _regex_entities("Released v2.0.")
+        assert any(e.text == "v2.0" for e in ents)
+
+    def test_version_three_part(self):
+        ents = _regex_entities("Upgraded to v3.14.1.")
+        assert any(e.text == "v3.14.1" for e in ents)
+
+    def test_file_path_with_directory(self):
+        ents = _regex_entities("Edit src/snn_backend.py now.")
+        names = [e.text for e in ents if e.label == "file path"]
+        assert "snn_backend.py" in names
+
+    def test_file_extensions(self):
+        for ext in ["py", "rs", "md", "json", "yaml", "toml"]:
+            ents = _regex_entities(f"Edited config.{ext} today.")
+            names = [e.text for e in ents if e.label == "file path"]
+            assert any(ext in n for n in names), f"Missing {ext} file"
+
+    def test_case_insensitive(self):
+        ents = _regex_entities("STDP and Stdp and stdp")
+        assert len([e for e in ents if e.text == "stdp"]) >= 1
+
+    def test_multiple_versions(self):
+        ents = _regex_entities("Migrated from v2.0 to v3.0.")
+        versions = [e for e in ents if e.label == "version number"]
+        assert len(versions) >= 2
+
+
+class TestExtractRelationsEdgeCases:
+    def test_empty_entities(self):
+        rels = extract_relations("Some text", [])
+        assert rels == []
+
+    def test_single_entity(self):
+        rels = extract_relations("Just BM25 here.", [
+            Entity(text="BM25", label="algorithm", score=0.9),
+        ])
+        assert rels == []
+
+    def test_version_of(self):
+        text = "BM25 version v3.0 was released."
+        ents = [
+            Entity(text="BM25", label="algorithm", score=0.9),
+            Entity(text="v3.0", label="version", score=0.8),
+        ]
+        rels = extract_relations(text, ents)
+        assert any(r.relation_type == "version_of" for r in rels)
+
+    def test_depends_on(self):
+        text = "STDP requires NumPy for computation."
+        ents = [
+            Entity(text="STDP", label="algorithm", score=0.9),
+            Entity(text="NumPy", label="tool", score=0.8),
+        ]
+        rels = extract_relations(text, ents)
+        assert any(r.relation_type == "depends_on" for r in rels)
+
+    def test_improved(self):
+        text = "BM25 improved from 81% to 88% with remanentia."
+        ents = [
+            Entity(text="BM25", label="algorithm", score=0.9),
+            Entity(text="remanentia", label="project", score=0.8),
+        ]
+        rels = extract_relations(text, ents)
+        assert any(r.relation_type == "improved" for r in rels)
+
+    def test_tested_with(self):
+        text = "STDP was benchmarked against Hopfield networks."
+        ents = [
+            Entity(text="STDP", label="algorithm", score=0.9),
+            Entity(text="Hopfield", label="algorithm", score=0.8),
+        ]
+        rels = extract_relations(text, ents)
+        assert any(r.relation_type == "tested_with" for r in rels)
+
+    def test_produced(self):
+        text = "PyTorch generated the embeddings for BM25."
+        ents = [
+            Entity(text="PyTorch", label="tool", score=0.9),
+            Entity(text="BM25", label="algorithm", score=0.8),
+        ]
+        rels = extract_relations(text, ents)
+        assert any(r.relation_type == "produced" for r in rels)
+
+    def test_used_in(self):
+        text = "BM25 used in the remanentia retrieval pipeline."
+        ents = [
+            Entity(text="BM25", label="algorithm", score=0.9),
+            Entity(text="remanentia", label="project", score=0.8),
+        ]
+        rels = extract_relations(text, ents)
+        assert any(r.relation_type == "used_in" for r in rels)
+
+    def test_contradicts(self):
+        text = "STDP contradicts the Hopfield convergence assumption."
+        ents = [
+            Entity(text="STDP", label="algorithm", score=0.9),
+            Entity(text="Hopfield", label="algorithm", score=0.8),
+        ]
+        rels = extract_relations(text, ents)
+        assert any(r.relation_type == "contradicts" for r in rels)
+
+    def test_evidence_truncated(self):
+        long_text = "BM25 " + "x" * 300 + " fixed STDP"
+        ents = [
+            Entity(text="BM25", label="algorithm", score=0.9),
+            Entity(text="STDP", label="algorithm", score=0.8),
+        ]
+        rels = extract_relations(long_text, ents)
+        for r in rels:
+            assert len(r.evidence) <= 200 or r.evidence == ""
+
+    def test_three_entities_pairwise(self):
+        text = "BM25 replaced TF-IDF and improved STDP scoring."
+        ents = [
+            Entity(text="BM25", label="algorithm", score=0.9),
+            Entity(text="TF-IDF", label="algorithm", score=0.9),
+            Entity(text="STDP", label="algorithm", score=0.9),
+        ]
+        rels = extract_relations(text, ents)
+        # Should produce relations for all 3 pairs
+        pairs = {(r.source, r.target) for r in rels}
+        assert len(pairs) == 3
+
+
+class TestGLiNEREdgeCases:
+    def test_gliner_exception_handled(self):
+        """GLiNER predict_entities raising does not crash."""
+
+        class BrokenModel:
+            def predict_entities(self, text, labels, threshold=0.4):
+                raise RuntimeError("GPU OOM")
+
+        with patch("entity_extractor._load_gliner", return_value=BrokenModel()):
+            entities = extract_entities("We used STDP on GPU.")
+        # Should return list (empty from broken GLiNER, deduped)
+        assert isinstance(entities, list)
+
+    def test_custom_labels(self):
+        with patch("entity_extractor._load_gliner", return_value=None):
+            entities = extract_entities("We used BM25.", labels=["algorithm"])
+        assert isinstance(entities, list)
+
+    def test_long_text_chunking(self):
+        """Very long text gets chunked (max 20 chunks × 1500 chars)."""
+        from unittest.mock import MagicMock
+
+        model = MagicMock()
+        model.predict_entities.return_value = []
+        with patch("entity_extractor._load_gliner", return_value=model):
+            extract_entities("word " * 10000)
+        # Should be called multiple times (chunked)
+        assert model.predict_entities.call_count > 1
+        assert model.predict_entities.call_count <= 20
+
+
 # ── Dataclass sanity ─────────────────────────────────────────────
 
 
@@ -187,10 +368,19 @@ class TestDataclasses:
         e = Entity(text="BM25", label="algorithm", score=0.9, start=0, end=4)
         assert e.text == "BM25"
         assert e.label == "algorithm"
+        assert e.start == 0
+        assert e.end == 4
+
+    def test_entity_defaults(self):
+        e = Entity(text="x", label="y", score=0.5)
+        assert e.start == 0
+        assert e.end == 0
 
     def test_relation(self):
         r = Relation(
             source="A", target="B", relation_type="caused_by", evidence="because A broke B"
         )
         assert r.source == "A"
+        assert r.target == "B"
         assert r.relation_type == "caused_by"
+        assert "because" in r.evidence

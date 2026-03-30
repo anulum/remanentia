@@ -187,3 +187,186 @@ class TestObserveOnce:
 
         assert result["notes_created"] >= 1
         mock_index.add_file.assert_called()
+
+
+# ── Additional edge cases ────────────────────────────────────────
+
+
+class TestHasSignalEdgeCases:
+    def test_empty_string(self):
+        assert _has_signal("") is False
+
+    def test_whitespace_only(self):
+        assert _has_signal("   \n\t  ") is False
+
+    def test_accuracy_signal(self):
+        assert _has_signal("The accuracy of the model improved.") is True
+
+    def test_benchmark_signal(self):
+        assert _has_signal("Our benchmark shows good results.") is True
+
+    def test_released_signal(self):
+        assert _has_signal("We released the new version today.") is True
+
+    def test_because_signal(self):
+        assert _has_signal("We did this because of performance.") is True
+
+    def test_case_insensitive(self):
+        assert _has_signal("We DECIDED to use BM25.") is True
+
+    def test_version_signal(self):
+        assert _has_signal("Upgraded to v3.14.0 today.") is True
+
+    def test_critical_signal(self):
+        assert _has_signal("This is a critical finding.") is True
+
+
+class TestSplitIntoParagraphsEdgeCases:
+    def test_single_paragraph(self):
+        text = "We decided to use BM25 for all retrieval queries going forward."
+        paras = _split_into_paragraphs(text)
+        assert len(paras) == 1
+
+    def test_multiple_signals(self):
+        text = (
+            "We decided to use BM25 for retrieval scoring in all pipelines.\n\n"
+            "The accuracy measured improved from 81.2% to 88.5% on our benchmark.\n\n"
+            "Version v3.14.0 was released with all improvements included."
+        )
+        paras = _split_into_paragraphs(text)
+        assert len(paras) >= 2
+
+    def test_only_short_paragraphs(self):
+        text = "Short.\n\nAlso short.\n\nTiny."
+        assert _split_into_paragraphs(text) == []
+
+    def test_blank_lines_splitting(self):
+        text = "We decided to act on the retrieval pipeline changes.\n\n\n\n\nThe accuracy measured was 95% on the benchmark."
+        paras = _split_into_paragraphs(text)
+        assert len(paras) >= 1
+
+
+class TestExtractNotesEdgeCases:
+    def test_binary_file_skipped(self, tmp_path):
+        f = tmp_path / "binary.bin"
+        f.write_bytes(b"\x00\x01\x02\x03" * 100)
+        # Should not crash
+        notes = extract_notes_from_file(f)
+        assert isinstance(notes, list)
+
+    def test_unicode_content(self, tmp_path):
+        f = tmp_path / "unicode.md"
+        f.write_text(
+            "# Šotek rozhodol\n\n"
+            "We decided to use the Šotek–Kuramoto coupling framework for all oscillator models.\n",
+            encoding="utf-8",
+        )
+        notes = extract_notes_from_file(f)
+        assert len(notes) >= 1
+
+    def test_no_signal_paragraphs(self, tmp_path):
+        f = tmp_path / "chatter.md"
+        f.write_text(
+            "Just talking about the weather today.\n\n"
+            "More idle chat without substance.\n",
+            encoding="utf-8",
+        )
+        notes = extract_notes_from_file(f)
+        assert notes == []
+
+    def test_source_field(self, tmp_path):
+        f = tmp_path / "my_trace.md"
+        f.write_text(
+            "We decided to restructure the entire retrieval pipeline for better accuracy.\n",
+            encoding="utf-8",
+        )
+        notes = extract_notes_from_file(f)
+        if notes:
+            assert all(n["source"] == "my_trace.md" for n in notes)
+
+
+class TestObserverStateEdgeCases:
+    def test_changed_file_detected(self, tmp_path):
+        state = ObserverState()
+        f = tmp_path / "test.md"
+        f.write_text("v1", encoding="utf-8")
+        state.mark_processed(f)
+        assert state.is_new_or_changed(f) is False
+        # Modify the file
+        import time
+
+        time.sleep(0.05)
+        f.write_text("v2", encoding="utf-8")
+        assert state.is_new_or_changed(f) is True
+
+    def test_save_load_roundtrip_multiple_files(self, tmp_path):
+        state = ObserverState()
+        for i in range(5):
+            f = tmp_path / f"file_{i}.md"
+            f.write_text(f"content {i}", encoding="utf-8")
+            state.mark_processed(f)
+
+        state_path = tmp_path / "state.json"
+        state.save(state_path)
+
+        state2 = ObserverState()
+        state2.load(state_path)
+        for i in range(5):
+            f = tmp_path / f"file_{i}.md"
+            assert state2.is_new_or_changed(f) is False
+
+    def test_corrupt_state_file(self, tmp_path):
+        state_path = tmp_path / "state.json"
+        state_path.write_text("not valid json {{{{", encoding="utf-8")
+        state = ObserverState()
+        assert state.load(state_path) is False
+
+    def test_save_creates_parent_dirs(self, tmp_path):
+        state = ObserverState()
+        state_path = tmp_path / "deep" / "nested" / "state.json"
+        state.save(state_path)
+        assert state_path.exists()
+
+
+class TestObserveOnceEdgeCases:
+    def test_multiple_dirs(self, tmp_path):
+        d1 = tmp_path / "dir1"
+        d2 = tmp_path / "dir2"
+        d1.mkdir()
+        d2.mkdir()
+        (d1 / "a.md").write_text(
+            "We decided to restructure retrieval for better accuracy metrics.\n",
+            encoding="utf-8",
+        )
+        (d2 / "b.md").write_text(
+            "Accuracy measured at 92% on our new comprehensive benchmark.\n",
+            encoding="utf-8",
+        )
+        store_path = tmp_path / "notes.jsonl"
+        triggers_path = tmp_path / "triggers.jsonl"
+        with (
+            patch("knowledge_store.STORE_PATH", store_path),
+            patch("knowledge_store.TRIGGERS_PATH", triggers_path),
+        ):
+            state = ObserverState()
+            result = observe_once(state, {"d1": d1, "d2": d2})
+        assert result["files_scanned"] >= 2
+
+    def test_mixed_file_types(self, tmp_path):
+        """Observer handles non-md files gracefully."""
+        d = tmp_path / "traces"
+        d.mkdir()
+        (d / "notes.md").write_text(
+            "We decided to restructure retrieval for better accuracy results.\n",
+            encoding="utf-8",
+        )
+        (d / "data.json").write_text("{}", encoding="utf-8")
+        store_path = tmp_path / "notes.jsonl"
+        triggers_path = tmp_path / "triggers.jsonl"
+        with (
+            patch("knowledge_store.STORE_PATH", store_path),
+            patch("knowledge_store.TRIGGERS_PATH", triggers_path),
+        ):
+            state = ObserverState()
+            result = observe_once(state, {"traces": d})
+        assert result["files_scanned"] >= 1

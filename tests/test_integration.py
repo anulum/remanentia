@@ -200,3 +200,124 @@ class TestMCPServerIntegration:
         )
         text = resp["result"]["content"][0]["text"]
         assert isinstance(text, str)
+
+
+# ── Negative / edge case tests ───────────────────────────────
+
+
+class TestSearchEdgeCases:
+    """Boundary, empty, and adversarial inputs."""
+
+    def test_empty_query(self, index_with_data):
+        results = index_with_data.search("", top_k=3)
+        assert isinstance(results, list)
+
+    def test_nonsense_query(self, index_with_data):
+        results = index_with_data.search("xyzzy frobnicator qux", top_k=3)
+        # Should return empty or low-score results, not crash
+        assert isinstance(results, list)
+
+    def test_top_k_zero(self, index_with_data):
+        results = index_with_data.search("STDP", top_k=0)
+        assert results == []
+
+    def test_top_k_one(self, index_with_data):
+        results = index_with_data.search("STDP", top_k=1)
+        assert len(results) <= 1
+
+    def test_top_k_larger_than_corpus(self, index_with_data):
+        results = index_with_data.search("STDP", top_k=10000)
+        assert len(results) <= len(index_with_data.documents)
+
+    def test_query_with_special_chars(self, index_with_data):
+        results = index_with_data.search("what's the 85.7% score?", top_k=3)
+        assert isinstance(results, list)
+
+    def test_unicode_query(self, index_with_data):
+        results = index_with_data.search("Šotek Remanentia výsledky", top_k=3)
+        assert isinstance(results, list)
+
+    def test_very_long_query(self, index_with_data):
+        results = index_with_data.search("STDP " * 500, top_k=3)
+        assert isinstance(results, list)
+
+
+class TestSearchQuality:
+    """Retrieval quality assertions beyond basic smoke tests."""
+
+    def test_scores_monotonically_decrease(self, index_with_data):
+        results = index_with_data.search("LOCOMO benchmark", top_k=10)
+        if len(results) >= 2:
+            scores = [r.score for r in results]
+            for i in range(len(scores) - 1):
+                assert scores[i] >= scores[i + 1], "Results not sorted by score"
+
+    def test_different_queries_different_top(self, index_with_data):
+        r1 = index_with_data.search("STDP learning SNN", top_k=1)
+        r2 = index_with_data.search("Alice hobbies pottery", top_k=1)
+        if r1 and r2:
+            assert r1[0].name != r2[0].name, "Different queries should rank different docs first"
+
+    def test_exact_term_match_ranked_high(self, index_with_data):
+        results = index_with_data.search("pottery", top_k=3)
+        if results:
+            assert "pottery" in results[0].snippet.lower()
+
+    def test_project_filter_narrows_results(self, index_with_data):
+        all_results = index_with_data.search("decision", top_k=10)
+        filtered = index_with_data.search("decision", top_k=10, project="sc-neurocore")
+        assert len(filtered) <= len(all_results)
+
+
+class TestSaveLoadIntegrity:
+    """Save/load preserves all index properties."""
+
+    def test_idf_preserved(self, index_with_data, tmp_path):
+        save_path = tmp_path / "idf_test.pkl"
+        index_with_data.save(save_path, quantize=False)
+        from memory_index import MemoryIndex
+
+        idx2 = MemoryIndex()
+        idx2.load(save_path)
+        assert set(idx2.idf.keys()) == set(index_with_data.idf.keys())
+
+    def test_search_results_match_after_roundtrip(self, index_with_data, tmp_path):
+        save_path = tmp_path / "roundtrip.pkl"
+        index_with_data.save(save_path, quantize=False)
+        from memory_index import MemoryIndex
+
+        idx2 = MemoryIndex()
+        idx2.load(save_path)
+
+        q = "LOCOMO benchmark accuracy"
+        r_orig = index_with_data.search(q, top_k=3)
+        r_loaded = idx2.search(q, top_k=3)
+        assert len(r_orig) == len(r_loaded)
+        for a, b in zip(r_orig, r_loaded):
+            assert a.name == b.name
+            assert abs(a.score - b.score) < 0.01
+
+
+class TestMCPEdgeCases:
+    """MCP server error handling."""
+
+    def test_unknown_method(self):
+        import mcp_server
+
+        resp = mcp_server.handle_request(
+            {"jsonrpc": "2.0", "id": 99, "method": "nonexistent/method"}
+        )
+        assert "error" in resp
+
+    def test_unknown_tool(self):
+        import mcp_server
+
+        resp = mcp_server.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 99,
+                "method": "tools/call",
+                "params": {"name": "nonexistent_tool", "arguments": {}},
+            }
+        )
+        assert "error" in resp or "Unknown" in str(resp)
