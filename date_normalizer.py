@@ -107,7 +107,21 @@ class DateResult:
 
 
 def _rule_based_normalise(expr: str, ref: date) -> Optional[DateResult]:
-    """Attempt rule-based normalisation. Returns None if no rule matches."""
+    """Attempt rule-based normalisation. Returns None if no rule matches.
+
+    Uses Rust engine when available (~14× faster).
+    """
+    # Try Rust engine first
+    try:
+        from remanentia_temporal import normalise_vague_date
+
+        result = normalise_vague_date(expr, ref.isoformat())
+        if result is not None:
+            return DateResult(iso_date=result[0], confidence=result[1], method=result[2])
+    except ImportError:
+        pass
+
+    # Python fallback
     expr_stripped = expr.strip()
 
     # Quantified: "N days/weeks/months/years ago"

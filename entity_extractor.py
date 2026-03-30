@@ -126,7 +126,12 @@ def extract_entities(text: str, labels: list[str] | None = None) -> list[Entity]
 
 
 def _regex_entities(text: str) -> list[Entity]:
-    """Fallback regex entity extraction."""
+    """Fallback regex entity extraction. Rust-accelerated."""
+    try:
+        from remanentia_entity_extractor import regex_entities as _rust_ents
+        return [Entity(text=t, label=l, score=s) for t, l, s in _rust_ents(text)]
+    except ImportError:
+        pass
     entities = []
     text_lower = text.lower()
 

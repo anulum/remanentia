@@ -342,9 +342,19 @@ def parse_dates(text: str, reference_date: date | None = None) -> list[str]:
     """Extract all dates from text, return as ISO strings.
 
     Resolves relative expressions (yesterday, last week) against reference_date
-    (defaults to today).
+    (defaults to today). Uses Rust engine when available (~14× faster).
     """
     ref = reference_date or date.today()
+
+    # Try Rust engine first
+    try:
+        from remanentia_temporal import parse_dates as _rust_parse
+
+        return _rust_parse(text, ref.isoformat())
+    except ImportError:
+        pass
+
+    # Python fallback
     dates = []
 
     for m in _DATE_ISO.finditer(text):

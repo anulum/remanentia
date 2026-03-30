@@ -33,7 +33,7 @@ _HEDGING_PREFIX = re.compile(
 
 
 def normalize_answer(text: str) -> str:
-    """Strip hedging, explanations, extract answer core.
+    """Strip hedging, explanations, extract answer core. Rust-accelerated.
 
     >>> normalize_answer("Likely yes, because she enjoys reading")
     'likely yes'
@@ -42,6 +42,11 @@ def normalize_answer(text: str) -> str:
     >>> normalize_answer("  Running, pottery  ")
     'running, pottery'
     """
+    try:
+        from remanentia_answer_normalizer import normalize_answer as _rust_norm
+        return _rust_norm(text)
+    except ImportError:
+        pass
     text = text.strip()
     if not text:
         return ""
@@ -84,7 +89,7 @@ def extract_answer_items(text: str) -> set[str]:
 
 
 def answers_match(predicted: str, ground_truth: str, threshold: float = 0.25) -> bool:
-    """Compare predicted vs ground truth with normalization.
+    """Compare predicted vs ground truth with normalization. Rust-accelerated.
 
     Handles:
     - Yes/no core matching ("Likely yes, because X" matches "Yes")
