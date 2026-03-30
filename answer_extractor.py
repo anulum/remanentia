@@ -20,7 +20,6 @@ Handles:
 
 from __future__ import annotations
 
-import os
 import re
 from difflib import SequenceMatcher
 
@@ -29,7 +28,14 @@ def extract_answer(query: str, paragraph: str) -> str | None:
     """Extract a short answer from a paragraph given a query.
 
     Returns the best candidate answer string, or None if no answer found.
+    Uses Rust engine when available (~11× faster).
     """
+    try:
+        from remanentia_answer_extractor import extract_answer as _rust_extract
+        return _rust_extract(query, paragraph)
+    except ImportError:
+        pass
+
     q = query.lower()
     p = paragraph
 
@@ -271,7 +277,12 @@ def _best_by_proximity(
 
 
 def fuzzy_match(candidate: str, gold: str, threshold: float = 0.7) -> bool:
-    """Check if candidate fuzzy-matches gold answer."""
+    """Check if candidate fuzzy-matches gold answer. Rust-accelerated."""
+    try:
+        from remanentia_answer_extractor import fuzzy_match as _rust_fuzzy
+        return _rust_fuzzy(candidate, gold, threshold)
+    except ImportError:
+        pass
     if not candidate or not gold:
         return False
     c, g = candidate.lower().strip(), gold.lower().strip()
@@ -318,10 +329,12 @@ _WORD_TO_NUM = {
 
 
 def normalize_number(text: str) -> str | None:
-    """Normalize number words and formats to digits.
-
-    "forty-two" → "42", "88%" → "88", "1,986" → "1986"
-    """
+    """Normalize number words and formats to digits. Rust-accelerated."""
+    try:
+        from remanentia_answer_extractor import normalize_number as _rust_num
+        return _rust_num(text)
+    except ImportError:
+        pass
     t = text.strip().lower()
 
     # Already numeric
@@ -358,7 +371,12 @@ def normalize_number(text: str) -> str | None:
 
 
 def extract_best_sentence(query: str, paragraph: str) -> str | None:
-    """Return the sentence most relevant to the query."""
+    """Return the sentence most relevant to the query. Rust-accelerated."""
+    try:
+        from remanentia_answer_extractor import extract_best_sentence as _rust_best
+        return _rust_best(query, paragraph)
+    except ImportError:
+        pass
     sentences = re.split(r"(?<=[.!?])\s+", paragraph)
     if not sentences:  # pragma: no cover
         return None
@@ -377,68 +395,49 @@ def extract_best_sentence(query: str, paragraph: str) -> str | None:
     return best_sent
 
 
+# ── LLM backend ───────────────────────────────────────────────────
+
+_BACKEND = None
+
+
+def set_llm_backend(backend) -> None:
+    """Set the module-level LLM backend instance."""
+    global _BACKEND
+    _BACKEND = backend
+
+
+def get_llm_backend():
+    """Return the current LLM backend (or ``None``)."""
+    return _BACKEND
+
+
 # ── LLM-powered extraction ─────────────────────────────────────
 
 
 def llm_extract_answer(
     query: str, paragraph: str, model: str = "claude-haiku-4-5-20251001"
 ) -> str | None:
-    """Extract answer via Anthropic API. Fallback when regex returns None.
+    """Extract answer via LLM backend. Fallback when regex returns None.
 
-    Requires ANTHROPIC_API_KEY env var and `pip install anthropic`.
     Returns 1-2 sentence answer or None.
     """
+    if _BACKEND is None:
+        return None
+
+    prompt = (
+        "Given this context, answer the question in 1-2 sentences. "
+        "If the context doesn't contain the answer, say 'unknown'.\n\n"
+        f"Context: {paragraph[:1000]}\n\n"
+        f"Question: {query}"
+    )
     try:
-        import anthropic
-    except ImportError:  # pragma: no cover
-        return None
-
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        return None
-
-    client = anthropic.Anthropic(api_key=api_key)
-    try:  # pragma: no cover
-        response = client.messages.create(
-            model=model,
-            max_tokens=100,
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        "Given this context, answer the question in 1-2 sentences. "
-                        "If the context doesn't contain the answer, say 'unknown'.\n\n"
-                        f"Context: {paragraph[:1000]}\n\n"
-                        f"Question: {query}"
-                    ),
-                }
-            ],
-        )
-        answer = response.content[0].text.strip()
+        answer = _BACKEND.complete(prompt, max_tokens=100)
+        if not answer:
+            return None
         if answer.lower() in ("unknown", "i don't know", "not mentioned"):
             return None
         return answer
     except Exception:
-        return None
-
-
-_ANTHROPIC_CLIENT = None
-
-
-def _get_client():
-    """Cached Anthropic client."""
-    global _ANTHROPIC_CLIENT
-    if _ANTHROPIC_CLIENT is not None:
-        return _ANTHROPIC_CLIENT
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        return None
-    try:
-        import anthropic
-
-        _ANTHROPIC_CLIENT = anthropic.Anthropic(api_key=api_key)
-        return _ANTHROPIC_CLIENT
-    except ImportError:  # pragma: no cover
         return None
 
 
@@ -450,30 +449,23 @@ def llm_generate_prospective_queries(
     Kumiho technique: index by "what queries will need this" rather than
     "what does this say". Measured at 98.5% recall in Kumiho (2026).
     """
-    client = _get_client()
-    if not client:
+    if _BACKEND is None:
         return []
-    try:  # pragma: no cover
-        response = client.messages.create(
-            model=model,
-            max_tokens=200,
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        "Generate 5 short search queries someone might use to find this information. "
-                        "Include: factual questions, decision lookups, metric requests, temporal questions. "
-                        "One query per line, no numbering.\n\n"
-                        f"Source: {doc_name}\n"
-                        f"Content: {paragraph[:800]}"
-                    ),
-                }
-            ],
-        )
-        text = response.content[0].text.strip()
+
+    prompt = (
+        "Generate 5 short search queries someone might use to find this information. "
+        "Include: factual questions, decision lookups, metric requests, temporal questions. "
+        "One query per line, no numbering.\n\n"
+        f"Source: {doc_name}\n"
+        f"Content: {paragraph[:800]}"
+    )
+    try:
+        text = _BACKEND.complete(prompt, max_tokens=200)
+        if not text:
+            return []
         queries = [q.strip() for q in text.split("\n") if q.strip() and len(q.strip()) > 5]
         return queries[:8]
-    except Exception:  # pragma: no cover
+    except Exception:
         return []
 
 
@@ -486,16 +478,16 @@ def llm_synthesize_answer(
     multiple sources to produce a grounded, cited answer.
     Uses question-type-specific prompts for better accuracy.
     """
-    client = _get_client()
-    if not client:
+    if _BACKEND is None:
         return None
-    context = "\n\n---\n\n".join(  # pragma: no cover
+
+    context = "\n\n---\n\n".join(
         f"[Source {i + 1}]: {p[:600]}" for i, p in enumerate(paragraphs[:10])
     )
 
     # Question-type-specific prompt (improves counterfactual/temporal)
-    q_lower = query.lower()  # pragma: no cover
-    if any(w in q_lower for w in ["would", "could", "might", "likely"]):  # pragma: no cover
+    q_lower = query.lower()
+    if any(w in q_lower for w in ["would", "could", "might", "likely"]):
         system_prompt = (
             "Answer the hypothetical question by reasoning about the person's "
             "stated preferences, personality, and past actions from the sources. "
@@ -505,33 +497,28 @@ def llm_synthesize_answer(
     elif any(
         w in q_lower
         for w in ["what are", "what does", "list", "hobbies", "interests", "activities"]
-    ):  # pragma: no cover
+    ):
         system_prompt = (
             "List ALL relevant items mentioned across ALL sources. "
             "Combine information from different sources into one complete answer. "
             "If the answer isn't in the sources, say 'unknown'."
         )
-    else:  # pragma: no cover
+    else:
         system_prompt = (
             "Answer the question using ONLY the provided sources. "
             "Be concise (1-3 sentences). "
             "If sources don't contain the answer, say 'unknown'."
         )
 
-    try:  # pragma: no cover
-        response = client.messages.create(
-            model=model,
+    try:
+        answer = _BACKEND.complete(
+            f"{system_prompt}\n\n{context}\n\nQuestion: {query}",
             max_tokens=200,
-            messages=[
-                {
-                    "role": "user",
-                    "content": f"{system_prompt}\n\n{context}\n\nQuestion: {query}",
-                }
-            ],
         )
-        answer = response.content[0].text.strip()
+        if not answer:
+            return None
         if answer.lower() in ("unknown", "i don't know", "not mentioned"):
             return None
         return answer
-    except Exception:  # pragma: no cover
+    except Exception:
         return None

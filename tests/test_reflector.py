@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from reflector import (
     _cluster_notes,
+    _generate_prospective_queries_llm,
     _generate_summary_heuristic,
     _generate_summary_llm,
     _identify_contradictions,
@@ -80,18 +81,110 @@ class TestGenerateSummaryHeuristic:
         assert _generate_summary_heuristic([]) == ""
 
 
+class _FakeBackend:
+    def __init__(self, response):
+        self._response = response
+
+    def complete(self, prompt, *, max_tokens=200, system=""):
+        return self._response
+
+
 class TestGenerateSummaryLLM:
-    def test_no_client_returns_none(self):
-        import os
-        from unittest.mock import patch as p
+    def setup_method(self):
+        import answer_extractor
+        self._orig = answer_extractor._BACKEND
+        answer_extractor._BACKEND = None
+
+    def teardown_method(self):
+        import answer_extractor
+        answer_extractor._BACKEND = self._orig
+
+    def test_no_backend_returns_none(self):
+        notes = [_make_note("test content")]
+        result = _generate_summary_llm(notes)
+        assert result is None
+
+    def test_with_backend_returns_summary(self):
         import answer_extractor
 
-        answer_extractor._ANTHROPIC_CLIENT = None
+        answer_extractor._BACKEND = _FakeBackend("Dense summary of 1 note.")
         notes = [_make_note("test content")]
-        with p.dict(os.environ, {}, clear=True):
-            result = _generate_summary_llm(notes)
+        result = _generate_summary_llm(notes)
+        assert result == "Dense summary of 1 note."
+
+    def test_backend_none_response(self):
+        import answer_extractor
+
+        answer_extractor._BACKEND = _FakeBackend(None)
+        notes = [_make_note("test content")]
+        result = _generate_summary_llm(notes)
         assert result is None
-        answer_extractor._ANTHROPIC_CLIENT = None
+
+    def test_backend_exception(self):
+        import answer_extractor
+
+        class _ErrorBackend:
+            def complete(self, prompt, **kwargs):
+                raise RuntimeError("fail")
+
+        answer_extractor._BACKEND = _ErrorBackend()
+        notes = [_make_note("test content")]
+        result = _generate_summary_llm(notes)
+        assert result is None
+
+
+class TestGenerateProspectiveQueriesLLM:
+    def setup_method(self):
+        import answer_extractor
+        self._orig = answer_extractor._BACKEND
+        answer_extractor._BACKEND = None
+
+    def teardown_method(self):
+        import answer_extractor
+        answer_extractor._BACKEND = self._orig
+
+    def test_no_backend_returns_empty(self):
+        note = _make_note("test content about hiking")
+        result = _generate_prospective_queries_llm(note)
+        assert result == []
+
+    def test_with_backend_returns_queries(self):
+        import answer_extractor
+
+        answer_extractor._BACKEND = _FakeBackend(
+            "What are the hiking trails?\nDoes the user like mountains?"
+        )
+        note = _make_note("User went hiking in the Alps last weekend")
+        result = _generate_prospective_queries_llm(note)
+        assert len(result) == 2
+
+    def test_backend_none_response(self):
+        import answer_extractor
+
+        answer_extractor._BACKEND = _FakeBackend(None)
+        note = _make_note("test content")
+        result = _generate_prospective_queries_llm(note)
+        assert result == []
+
+    def test_filters_short_queries(self):
+        import answer_extractor
+
+        answer_extractor._BACKEND = _FakeBackend("What about hiking trails?\nOk\nShort")
+        note = _make_note("test content")
+        result = _generate_prospective_queries_llm(note)
+        assert len(result) == 1  # only first one > 5 chars
+
+    def test_backend_exception(self):
+        import answer_extractor
+
+        class _ErrorBackend:
+            def complete(self, prompt, **kwargs):
+                raise RuntimeError("fail")
+
+        answer_extractor._BACKEND = _ErrorBackend()
+        note = _make_note("test content")
+        result = _generate_prospective_queries_llm(note)
+        assert result == []
 
 
 class TestIdentifyGaps:

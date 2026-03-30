@@ -40,6 +40,14 @@ def _ensure_utf8():  # pragma: no cover
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
 
+def _setup_llm_backend(name: str = "auto") -> None:
+    """Resolve and install the LLM backend for this session."""
+    from llm_backend import resolve_backend
+    from answer_extractor import set_llm_backend
+
+    set_llm_backend(resolve_backend(name))
+
+
 def cmd_recall(args):
     """Deep memory recall."""
     # Use filtered search if filters are specified
@@ -51,6 +59,8 @@ def cmd_recall(args):
 
         idx = auto_rebuild_if_needed(use_gpu=False)
         use_llm = getattr(args, "llm", False) or bool(os.environ.get("REMANENTIA_LLM_ANSWERS"))
+        if use_llm:
+            _setup_llm_backend(getattr(args, "llm_backend", "auto"))
         results = idx.search(
             args.query,
             top_k=args.top,
@@ -267,12 +277,29 @@ def cmd_reflect(args):  # pragma: no cover
     """Run deep consolidation via reflector."""
     from reflector import reflect_once
 
+    if args.llm:
+        _setup_llm_backend(getattr(args, "llm_backend", "auto"))
+
     print(f"Reflecting on last {args.days} days...")
     result = reflect_once(days=args.days, use_llm=args.llm)
     if result.get("digest"):
         print(result["digest"])
     else:
         print(json.dumps(result, indent=2))
+
+
+def cmd_setup_llm(args):  # pragma: no cover
+    """Detect hardware and configure local LLM."""
+    from llm_setup import cmd_setup_llm as _setup
+
+    _setup(args)
+
+
+def cmd_serve_llm(args):  # pragma: no cover
+    """Start local LLM server."""
+    from llm_setup import cmd_serve_llm as _serve
+
+    _serve(args)
 
 
 def cmd_notes(args):  # pragma: no cover
@@ -321,7 +348,13 @@ def main():
         p_recall.add_argument("--after", default="", help="Filter: docs after date (YYYY-MM-DD)")
         p_recall.add_argument("--before", default="", help="Filter: docs before date (YYYY-MM-DD)")
         p_recall.add_argument(
-            "--llm", action="store_true", help="Use LLM for answer extraction (costs API credits)"
+            "--llm", action="store_true", help="Use LLM for answer extraction"
+        )
+        p_recall.add_argument(
+            "--llm-backend",
+            choices=["auto", "local", "anthropic", "none"],
+            default="auto",
+            help="LLM backend to use (default: auto)",
         )
 
     # consolidate
@@ -358,6 +391,22 @@ def main():
     p_reflect.add_argument(
         "--llm", action="store_true", help="Use LLM for summaries and prospective queries"
     )
+    p_reflect.add_argument(
+        "--llm-backend",
+        choices=["auto", "local", "anthropic", "none"],
+        default="auto",
+        help="LLM backend to use (default: auto)",
+    )
+
+    # setup-llm
+    p_setup_llm = sub.add_parser("setup-llm", help="Detect hardware and configure local LLM")
+    p_setup_llm.add_argument("--model", default=None, help="Model name override")
+    p_setup_llm.add_argument("--quant", default="q4_k_m", help="Quantisation level")
+    p_setup_llm.add_argument("--device", default=None, help="Device (e.g. cuda:0, cpu)")
+
+    # serve-llm
+    p_serve_llm = sub.add_parser("serve-llm", help="Start local LLM server")
+    p_serve_llm.add_argument("--port", type=int, default=8080, help="Server port")
 
     # notes
     p_notes = sub.add_parser("notes", help="Show knowledge notes")
@@ -380,6 +429,8 @@ def main():
         "observe": cmd_observe,
         "reflect": cmd_reflect,
         "notes": cmd_notes,
+        "setup-llm": cmd_setup_llm,
+        "serve-llm": cmd_serve_llm,
     }
     cmd_map[args.command](args)
 

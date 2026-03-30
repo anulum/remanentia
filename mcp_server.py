@@ -105,6 +105,15 @@ def handle_recall(
                     _UNIFIED_INDEX = idx
 
         use_llm = llm or bool(os.environ.get("REMANENTIA_LLM_ANSWERS"))
+        if use_llm:
+            from answer_extractor import get_llm_backend
+
+            if get_llm_backend() is None:
+                from llm_backend import resolve_backend
+                from answer_extractor import set_llm_backend
+
+                backend_name = os.environ.get("REMANENTIA_LLM_BACKEND", "auto")
+                set_llm_backend(resolve_backend(backend_name))
         results = _UNIFIED_INDEX.search(
             query, top_k=top_k, project=project, after=after, before=before, use_llm=use_llm
         )

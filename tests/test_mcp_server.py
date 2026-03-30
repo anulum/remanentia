@@ -306,6 +306,26 @@ class TestHandleRecallWithIndex:
         finally:
             mcp_server._UNIFIED_INDEX = old_idx
 
+    def test_llm_backend_auto_setup(self):
+        """When llm=True and no backend set, auto-resolves backend."""
+        from unittest.mock import MagicMock
+        import answer_extractor
+        import mcp_server
+
+        mock_idx = MagicMock()
+        mock_idx._built = True
+        mock_idx.search.return_value = []
+        old_idx = mcp_server._UNIFIED_INDEX
+        old_backend = answer_extractor._BACKEND
+        answer_extractor._BACKEND = None
+        mcp_server._UNIFIED_INDEX = mock_idx
+        try:
+            handle_recall("test", llm=True)
+            assert answer_extractor._BACKEND is not None
+        finally:
+            mcp_server._UNIFIED_INDEX = old_idx
+            answer_extractor._BACKEND = old_backend
+
 
 class TestHandleRecallLightweight:
     def test_lightweight_fallback(self, tmp_traces):

@@ -38,6 +38,11 @@ temporal = ["sentence-transformers>=3.0", "torch>=2.0", "transformers>=4.45"]
 sparse = ["scipy>=1.11"]
 api = ["fastapi>=0.100", "uvicorn>=0.20"]
 llm = ["anthropic>=0.40"]
+local = ["tomli>=2.0; python_version < '3.11'"]
+guarded = [
+    "tomli>=2.0; python_version < '3.11'",
+    "director-ai[nli]>=3.11",
+]
 all = [
     "scikit-learn>=1.3",
     "sentence-transformers>=2.0",
@@ -45,6 +50,7 @@ all = [
     "fastapi>=0.100",
     "uvicorn>=0.20",
     "anthropic>=0.40",
+    "tomli>=2.0; python_version < '3.11'",
 ]
 dev = [
     "pytest>=8.0",
@@ -85,6 +91,8 @@ py-modules = [
     "date_normalizer",
     "temporal_relation",
     "fact_validity_model",
+    "llm_backend",
+    "llm_setup",
 ]
 
 [tool.setuptools.package-data]

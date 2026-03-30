@@ -74,65 +74,43 @@ def _generate_summary_heuristic(notes: list) -> str:
 
 def _generate_summary_llm(notes: list, model: str = "claude-haiku-4-5-20251001") -> str | None:
     """Generate a dense summary from a cluster of notes via LLM."""
-    try:
-        from answer_extractor import _get_client
+    from answer_extractor import get_llm_backend
 
-        client = _get_client()
-        if not client:
-            return None
-    except ImportError:  # pragma: no cover
+    backend = get_llm_backend()
+    if backend is None:
         return None
 
-    content = "\n\n".join(f"[{n.source}] {n.content[:300]}" for n in notes[:5])  # pragma: no cover
-    try:  # pragma: no cover
-        response = client.messages.create(
-            model=model,
-            max_tokens=200,
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        "Summarize these related knowledge notes in 2-3 sentences. "
-                        "Focus on decisions, findings, and metrics. Be precise.\n\n"
-                        f"{content}"
-                    ),
-                }
-            ],
-        )
-        return response.content[0].text.strip()
-    except Exception:  # pragma: no cover
+    content = "\n\n".join(f"[{n.source}] {n.content[:300]}" for n in notes[:5])
+    prompt = (
+        "Summarize these related knowledge notes in 2-3 sentences. "
+        "Focus on decisions, findings, and metrics. Be precise.\n\n"
+        f"{content}"
+    )
+    try:
+        return backend.complete(prompt, max_tokens=200)
+    except Exception:
         return None
 
 
 def _generate_prospective_queries_llm(
     note, model: str = "claude-haiku-4-5-20251001"
-) -> list[str]:  # pragma: no cover
+) -> list[str]:
     """Generate hypothetical future queries for a note via LLM (Kumiho technique)."""
-    try:
-        from answer_extractor import _get_client
+    from answer_extractor import get_llm_backend
 
-        client = _get_client()
-        if not client:
-            return []
-    except ImportError:
+    backend = get_llm_backend()
+    if backend is None:
         return []
 
+    prompt = (
+        "Generate 3 short search queries someone might use to find this information. "
+        "One per line, no numbering.\n\n"
+        f"{note.content[:500]}"
+    )
     try:
-        response = client.messages.create(
-            model=model,
-            max_tokens=150,
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        "Generate 3 short search queries someone might use to find this information. "
-                        "One per line, no numbering.\n\n"
-                        f"{note.content[:500]}"
-                    ),
-                }
-            ],
-        )
-        text = response.content[0].text.strip()
+        text = backend.complete(prompt, max_tokens=150)
+        if not text:
+            return []
         return [q.strip() for q in text.split("\n") if q.strip() and len(q.strip()) > 5][:5]
     except Exception:
         return []

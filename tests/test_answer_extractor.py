@@ -346,169 +346,262 @@ class TestNormalizeNumberEdge:
         assert normalize_number("twenty and one") == "21"
 
 
+# ── FakeBackend for LLM tests ─────────────────────────────────
+
+
+class _FakeBackend:
+    """Simple LLM backend stub for testing."""
+
+    def __init__(self, response):
+        self._response = response
+        self.last_prompt = None
+        self.last_kwargs = {}
+
+    def complete(self, prompt, *, max_tokens=200, system=""):
+        self.last_prompt = prompt
+        self.last_kwargs = {"max_tokens": max_tokens, "system": system}
+        if callable(self._response):
+            return self._response(prompt)
+        return self._response
+
+
+class _ErrorBackend:
+    """Backend that always raises."""
+
+    def complete(self, prompt, **kwargs):
+        raise RuntimeError("backend error")
+
+
 # ── llm_extract_answer ─────────────────────────────────────────
 
 
 class TestLLMExtractAnswer:
-    def test_no_api_key_returns_none(self):
-        import os
-        from unittest.mock import patch as p
-        from answer_extractor import llm_extract_answer
+    def setup_method(self):
+        import answer_extractor
+        self._orig = answer_extractor._BACKEND
+        answer_extractor._BACKEND = None
 
-        with p.dict(os.environ, {}, clear=True):
-            result = llm_extract_answer("when", "context about dates 2026-03-15")
-        assert result is None
+    def teardown_method(self):
+        import answer_extractor
+        answer_extractor._BACKEND = self._orig
+
+    def test_no_backend_returns_none(self):
+        from answer_extractor import llm_extract_answer
+        assert llm_extract_answer("when", "context about dates") is None
 
     def test_successful_extraction(self):
-        import os
-        from unittest.mock import MagicMock, patch as p
-
-        mock_content = MagicMock()
-        mock_content.text = "March 15, 2026"
-        mock_response = MagicMock()
-        mock_response.content = [mock_content]
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = mock_response
-
-        mock_anthropic = MagicMock()
-        mock_anthropic.Anthropic.return_value = mock_client
-
         import answer_extractor
+        from answer_extractor import llm_extract_answer
 
-        with (
-            p.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}),
-            p.object(answer_extractor, "anthropic", mock_anthropic, create=True),
-        ):
-            # Need to call directly since import is inside function
-            import importlib
-
-            importlib.reload(answer_extractor)
-            with p.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
-                result = answer_extractor.llm_extract_answer("when", "context")
-        # Reload may or may not work; just check no crash
-        assert result is None or isinstance(result, str)
+        backend = _FakeBackend("March 15, 2026")
+        answer_extractor._BACKEND = backend
+        result = llm_extract_answer("when", "context")
+        assert result == "March 15, 2026"
+        assert "context" in backend.last_prompt
+        assert backend.last_kwargs["max_tokens"] == 100
 
     def test_unknown_answer_returns_none(self):
-        import os
-        from unittest.mock import MagicMock, patch as p
-
-        mock_content = MagicMock()
-        mock_content.text = "unknown"
-        mock_response = MagicMock()
-        mock_response.content = [mock_content]
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = mock_response
-
-        mock_module = MagicMock()
-        mock_module.Anthropic.return_value = mock_client
-
+        import answer_extractor
         from answer_extractor import llm_extract_answer
 
-        with (
-            p.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}),
-            p.dict("sys.modules", {"anthropic": mock_module}),
-        ):
-            result = llm_extract_answer("when did X happen", "some context")
-        # anthropic module mock may not intercept internal import; test graceful behavior
-        assert result is None or isinstance(result, str)
+        answer_extractor._BACKEND = _FakeBackend("unknown")
+        assert llm_extract_answer("when did X happen", "some context") is None
 
-    def test_api_error_returns_none(self):
-        import os
-        from unittest.mock import MagicMock, patch as p
-
-        mock_module = MagicMock()
-        mock_module.Anthropic.return_value.messages.create.side_effect = Exception("API error")
-
+    def test_i_dont_know_returns_none(self):
+        import answer_extractor
         from answer_extractor import llm_extract_answer
 
-        with (
-            p.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}),
-            p.dict("sys.modules", {"anthropic": mock_module}),
-        ):
-            result = llm_extract_answer("question", "paragraph")
-        assert result is None or isinstance(result, str)
+        answer_extractor._BACKEND = _FakeBackend("I don't know")
+        assert llm_extract_answer("question", "paragraph") is None
 
-
-# ── Cached client ──────────────────────────────────────────────
-
-
-class TestGetClient:
-    def test_no_api_key(self):
-        import os
-        from unittest.mock import patch as p
-        from answer_extractor import _get_client
+    def test_none_response_returns_none(self):
         import answer_extractor
+        from answer_extractor import llm_extract_answer
 
-        answer_extractor._ANTHROPIC_CLIENT = None
-        with p.dict(os.environ, {}, clear=True):
-            assert _get_client() is None
-        answer_extractor._ANTHROPIC_CLIENT = None
+        answer_extractor._BACKEND = _FakeBackend(None)
+        assert llm_extract_answer("question", "paragraph") is None
 
-    def test_with_api_key(self):
-        import os
-        import sys
-        from unittest.mock import patch as p, MagicMock
-        from answer_extractor import _get_client
+    def test_backend_error_returns_none(self):
         import answer_extractor
+        from answer_extractor import llm_extract_answer
 
-        answer_extractor._ANTHROPIC_CLIENT = None
-        mock_anthropic = MagicMock()
-        with (
-            p.dict(os.environ, {"ANTHROPIC_API_KEY": "test"}),
-            p.dict(sys.modules, {"anthropic": mock_anthropic}),
-        ):
-            client = _get_client()
-        assert client is not None
-        answer_extractor._ANTHROPIC_CLIENT = None
+        answer_extractor._BACKEND = _ErrorBackend()
+        assert llm_extract_answer("question", "paragraph") is None
 
-    def test_caches(self):
-        import os
-        import sys
-        from unittest.mock import patch as p, MagicMock
-        from answer_extractor import _get_client
+    def test_paragraph_truncated_to_1000(self):
         import answer_extractor
+        from answer_extractor import llm_extract_answer
 
-        answer_extractor._ANTHROPIC_CLIENT = None
-        mock_anthropic = MagicMock()
-        with (
-            p.dict(os.environ, {"ANTHROPIC_API_KEY": "test"}),
-            p.dict(sys.modules, {"anthropic": mock_anthropic}),
-        ):
-            c1 = _get_client()
-            c2 = _get_client()
-        assert c1 is c2
-        answer_extractor._ANTHROPIC_CLIENT = None
+        backend = _FakeBackend("answer")
+        answer_extractor._BACKEND = backend
+        llm_extract_answer("q", "x" * 2000)
+        # The prompt should contain at most 1000 chars of paragraph
+        assert "x" * 1001 not in backend.last_prompt
+
+
+# ── LLM backend getter/setter ────────────────────────────────
+
+
+class TestLLMBackendAccessors:
+    def setup_method(self):
+        import answer_extractor
+        self._orig = answer_extractor._BACKEND
+
+    def teardown_method(self):
+        import answer_extractor
+        answer_extractor._BACKEND = self._orig
+
+    def test_set_and_get(self):
+        from answer_extractor import set_llm_backend, get_llm_backend
+
+        backend = _FakeBackend("test")
+        set_llm_backend(backend)
+        assert get_llm_backend() is backend
+
+    def test_set_none(self):
+        from answer_extractor import set_llm_backend, get_llm_backend
+
+        set_llm_backend(None)
+        assert get_llm_backend() is None
 
 
 # ── LLM prospective queries ───────────────────────────────────
 
 
 class TestLLMProspectiveQueries:
-    def test_no_client_returns_empty(self):
-        import os
-        from unittest.mock import patch as p
-        from answer_extractor import llm_generate_prospective_queries
+    def setup_method(self):
         import answer_extractor
+        self._orig = answer_extractor._BACKEND
+        answer_extractor._BACKEND = None
 
-        answer_extractor._ANTHROPIC_CLIENT = None
-        with p.dict(os.environ, {}, clear=True):
-            result = llm_generate_prospective_queries("paragraph text", "doc.md")
-        assert result == []
-        answer_extractor._ANTHROPIC_CLIENT = None
+    def teardown_method(self):
+        import answer_extractor
+        answer_extractor._BACKEND = self._orig
+
+    def test_no_backend_returns_empty(self):
+        from answer_extractor import llm_generate_prospective_queries
+        assert llm_generate_prospective_queries("paragraph text", "doc.md") == []
+
+    def test_generates_queries(self):
+        import answer_extractor
+        from answer_extractor import llm_generate_prospective_queries
+
+        answer_extractor._BACKEND = _FakeBackend(
+            "What is the LOCOMO score?\nWhen was the benchmark run?\nTiny"
+        )
+        result = llm_generate_prospective_queries("paragraph", "doc.md")
+        assert len(result) == 2  # "Tiny" is <= 5 chars, filtered out
+
+    def test_none_response_returns_empty(self):
+        import answer_extractor
+        from answer_extractor import llm_generate_prospective_queries
+
+        answer_extractor._BACKEND = _FakeBackend(None)
+        assert llm_generate_prospective_queries("paragraph", "doc.md") == []
+
+    def test_backend_error_returns_empty(self):
+        import answer_extractor
+        from answer_extractor import llm_generate_prospective_queries
+
+        answer_extractor._BACKEND = _ErrorBackend()
+        assert llm_generate_prospective_queries("paragraph", "doc.md") == []
+
+    def test_max_8_queries(self):
+        import answer_extractor
+        from answer_extractor import llm_generate_prospective_queries
+
+        answer_extractor._BACKEND = _FakeBackend(
+            "\n".join(f"Query number {i} about something" for i in range(15))
+        )
+        result = llm_generate_prospective_queries("paragraph", "doc.md")
+        assert len(result) <= 8
 
 
 # ── LLM synthesis ──────────────────────────────────────────────
 
 
 class TestLLMSynthesizeAnswer:
-    def test_no_client_returns_none(self):
-        import os
-        from unittest.mock import patch as p
-        from answer_extractor import llm_synthesize_answer
+    def setup_method(self):
         import answer_extractor
+        self._orig = answer_extractor._BACKEND
+        answer_extractor._BACKEND = None
 
-        answer_extractor._ANTHROPIC_CLIENT = None
-        with p.dict(os.environ, {}, clear=True):
-            result = llm_synthesize_answer("query", ["para1", "para2"])
-        assert result is None
-        answer_extractor._ANTHROPIC_CLIENT = None
+    def teardown_method(self):
+        import answer_extractor
+        answer_extractor._BACKEND = self._orig
+
+    def test_no_backend_returns_none(self):
+        from answer_extractor import llm_synthesize_answer
+        assert llm_synthesize_answer("query", ["para1", "para2"]) is None
+
+    def test_synthesizes_answer(self):
+        import answer_extractor
+        from answer_extractor import llm_synthesize_answer
+
+        backend = _FakeBackend("The score was 69.0%")
+        answer_extractor._BACKEND = backend
+        result = llm_synthesize_answer("what was the score?", ["para about scores"])
+        assert result == "The score was 69.0%"
+
+    def test_unknown_returns_none(self):
+        import answer_extractor
+        from answer_extractor import llm_synthesize_answer
+
+        answer_extractor._BACKEND = _FakeBackend("unknown")
+        assert llm_synthesize_answer("query", ["para"]) is None
+
+    def test_none_response_returns_none(self):
+        import answer_extractor
+        from answer_extractor import llm_synthesize_answer
+
+        answer_extractor._BACKEND = _FakeBackend(None)
+        assert llm_synthesize_answer("query", ["para"]) is None
+
+    def test_backend_error_returns_none(self):
+        import answer_extractor
+        from answer_extractor import llm_synthesize_answer
+
+        answer_extractor._BACKEND = _ErrorBackend()
+        assert llm_synthesize_answer("query", ["para"]) is None
+
+    def test_hypothetical_prompt(self):
+        import answer_extractor
+        from answer_extractor import llm_synthesize_answer
+
+        backend = _FakeBackend("Yes, they would enjoy it")
+        answer_extractor._BACKEND = backend
+        result = llm_synthesize_answer("would the user enjoy hiking?", ["likes outdoors"])
+        assert result == "Yes, they would enjoy it"
+        assert "hypothetical" in backend.last_prompt.lower()
+
+    def test_list_prompt(self):
+        import answer_extractor
+        from answer_extractor import llm_synthesize_answer
+
+        backend = _FakeBackend("hiking, reading, cooking")
+        answer_extractor._BACKEND = backend
+        result = llm_synthesize_answer("what are the hobbies?", ["hobby info"])
+        assert result == "hiking, reading, cooking"
+        assert "list all" in backend.last_prompt.lower()
+
+    def test_default_prompt(self):
+        import answer_extractor
+        from answer_extractor import llm_synthesize_answer
+
+        backend = _FakeBackend("The answer is 42")
+        answer_extractor._BACKEND = backend
+        result = llm_synthesize_answer("how many tests?", ["test count info"])
+        assert result == "The answer is 42"
+        assert "concise" in backend.last_prompt.lower()
+
+    def test_max_10_paragraphs(self):
+        import answer_extractor
+        from answer_extractor import llm_synthesize_answer
+
+        backend = _FakeBackend("answer")
+        answer_extractor._BACKEND = backend
+        paras = [f"paragraph {i}" for i in range(20)]
+        llm_synthesize_answer("query", paras)
+        # Only first 10 should be in prompt
+        assert "[Source 10]" in backend.last_prompt
+        assert "[Source 11]" not in backend.last_prompt
