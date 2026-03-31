@@ -410,3 +410,29 @@ class TestMemoryContextExtended:
         )
         llm = ctx.to_llm_context()
         assert "Cross-project" in llm
+
+
+# ── Missing patterns: error, pipeline, roundtrip ─────────────
+
+
+class TestRecallEdgeCases:
+    def test_empty_query(self, tmp_traces):
+        from memory_recall import recall, MemoryContext
+
+        ctx = recall("", top_k=3)
+        assert isinstance(ctx, MemoryContext)
+
+    def test_recall_returns_memory_context(self, tmp_traces):
+        from memory_recall import recall, MemoryContext
+
+        ctx = recall("STDP", top_k=3)
+        assert isinstance(ctx, MemoryContext)
+        assert hasattr(ctx, "query")
+        assert hasattr(ctx, "trace")
+
+    def test_recall_to_llm_context(self, tmp_traces):
+        from memory_recall import recall
+
+        ctx = recall("STDP", top_k=3)
+        llm = ctx.to_llm_context()
+        assert isinstance(llm, str)

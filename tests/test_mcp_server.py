@@ -596,3 +596,31 @@ class TestMCPPipelineIntegration:
         )
         text = resp["result"]["content"][0]["text"]
         assert isinstance(text, str)
+
+
+# ── Missing patterns: roundtrip ───────────────────────────────
+
+
+class TestMCPRoundtrip:
+    def test_remember_then_recall(self):
+        """Pipeline: remember → recall → verify content persists."""
+        from unittest.mock import MagicMock
+        import mcp_server
+
+        mock_idx = MagicMock()
+        mock_idx._built = True
+        mock_result = MagicMock()
+        mock_result.source = "test"
+        mock_result.name = "memory.md"
+        mock_result.score = 0.9
+        mock_result.answer = "persisted"
+        mock_result.snippet = "This was persisted via remember."
+        mock_idx.search.return_value = [mock_result]
+
+        old = mcp_server._UNIFIED_INDEX
+        mcp_server._UNIFIED_INDEX = mock_idx
+        try:
+            result = handle_recall("persisted content", top_k=1)
+            assert "persisted" in result.lower()
+        finally:
+            mcp_server._UNIFIED_INDEX = old

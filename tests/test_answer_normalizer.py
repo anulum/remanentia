@@ -203,3 +203,31 @@ class TestRustWiring:
         assert "hiking" in items
         assert "pottery" in items
         assert "swimming" in items
+
+
+# ── Missing patterns: error, roundtrip ────────────────────────
+
+
+class TestNormalizerEdgeCases:
+    def test_empty_string(self):
+        assert normalize_answer("") == ""
+
+    def test_whitespace_only(self):
+        assert normalize_answer("   ") == ""
+
+    def test_very_long_input(self):
+        result = normalize_answer("yes " * 1000 + ", because reasons")
+        assert "yes" in result
+
+    def test_normalize_roundtrip(self):
+        """Normalising twice produces same result (idempotent)."""
+        texts = ["Likely yes, because reading", "No way", "pottery, hiking"]
+        for t in texts:
+            r1 = normalize_answer(t)
+            r2 = normalize_answer(r1)
+            assert r1 == r2
+
+    def test_answers_match_error_inputs(self):
+        assert answers_match("", "yes") is False
+        assert answers_match("yes", "") is False
+        assert answers_match("", "") is False

@@ -420,3 +420,25 @@ class TestBuildContext:
         ]
         ctx = ar.build_context("test", results, max_facts=3)
         assert ctx.count("[Session") == 3
+
+
+# ── Missing patterns: roundtrip ───────────────────────────────
+
+
+class TestArcaneRetrieverRoundtrip:
+    def test_retrieve_and_build_context(self):
+        """Full cycle: sessions → retrieve → build_context → text."""
+        from arcane_retriever import ArcaneRetriever
+
+        sessions = [
+            [
+                {"role": "user", "content": "I love hiking in the Alps every summer."},
+                {"role": "user", "content": "My favourite food is sushi and ramen."},
+            ]
+        ]
+        ar = ArcaneRetriever(sessions)
+        results = ar.retrieve("what food does the user like", "single-session-user", top_k=5)
+        if results:
+            ctx = ar.build_context("food preferences", results, max_facts=5)
+            assert isinstance(ctx, str)
+            assert len(ctx) > 0

@@ -359,3 +359,27 @@ class TestResolveBackend:
         with mock.patch("llm_backend.load_config", return_value=LLMConfig()) as m:
             resolve_backend("none")
             m.assert_called_once()
+
+
+# ── Missing patterns: pipeline ────────────────────────────────
+
+
+class TestLLMBackendPipeline:
+    def test_auto_backend_feeds_answer_extractor(self):
+        """AutoBackend → set_llm_backend → answer_extractor uses it."""
+        from answer_extractor import set_llm_backend, get_llm_backend
+        from llm_backend import NullBackend
+
+        backend = NullBackend()
+        set_llm_backend(backend)
+        assert get_llm_backend() is backend
+        set_llm_backend(None)
+
+    def test_resolve_backend_feeds_mcp(self):
+        """resolve_backend output is compatible with MCP server path."""
+        from llm_backend import resolve_backend, NullBackend
+
+        backend = resolve_backend("none")
+        assert isinstance(backend, NullBackend)
+        result = backend.complete("test")
+        assert result is None

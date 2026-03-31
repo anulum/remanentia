@@ -570,3 +570,39 @@ class TestDateResult:
         a = DateResult(iso_date="2023-04-10", confidence=0.95, method="rule")
         b = DateResult(iso_date="2023-04-10", confidence=0.95, method="rule")
         assert a == b
+
+
+# ── Missing patterns: pipeline, roundtrip ─────────────────────
+
+
+class TestDateNormalizerPipeline:
+    def test_feeds_temporal_graph(self):
+        """date_normalizer results feed into temporal_graph.parse_dates."""
+        from temporal_graph import parse_dates
+        from datetime import date
+
+        # Vague expression → date_normalizer → temporal_graph
+        result = parse_dates("about 3 weeks ago we started", date(2026, 3, 30))
+        assert len(result) >= 1
+        assert any("2026-03" in d for d in result)
+
+    def test_feeds_fact_decomposer(self):
+        """date_normalizer dates appear in decomposed facts."""
+        from fact_decomposer import decompose_sessions
+
+        facts = decompose_sessions(
+            [[{"role": "user", "content": "I moved to Berlin on January 15, 2024."}]]
+        )
+        dated = [f for f in facts if f.valid_from]
+        assert len(dated) >= 1
+
+    def test_roundtrip_rule_based(self):
+        from date_normalizer import _rule_based_normalise
+        from datetime import date
+
+        ref = date(2026, 3, 30)
+        for expr in ["yesterday", "last week", "3 days ago", "a few months ago"]:
+            result = _rule_based_normalise(expr, ref)
+            if result is not None:
+                assert len(result.iso_date) == 10
+                assert result.confidence > 0

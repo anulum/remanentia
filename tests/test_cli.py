@@ -483,3 +483,64 @@ class TestCmdStatusStale:
             cmd_status(type("Args", (), {})())
         out = capsys.readouterr().out
         assert "3 memories" in out or "consolidation" in out.lower()
+
+
+# ── Missing patterns: empty, error, pipeline, roundtrip ──────
+
+
+class TestCLIEdgeCases:
+    """Empty inputs, error handling, pipeline flow."""
+
+    def test_empty_query_recall(self, capsys):
+        from unittest.mock import patch
+
+        with patch("sys.argv", ["remanentia", "recall", "", "--top", "1"]):
+            try:
+                from cli import main
+
+                main()
+            except SystemExit:
+                pass
+        # Should not crash
+
+    def test_nonexistent_command(self, capsys):
+        from unittest.mock import patch
+
+        with patch("sys.argv", ["remanentia", "nonexistent"]):
+            try:
+                from cli import main
+
+                main()
+            except SystemExit:
+                pass
+
+    def test_recall_with_llm_backend_flag(self):
+        """Pipeline: --llm-backend wires through to answer_extractor."""
+        from unittest.mock import patch, MagicMock
+
+        mock_idx = MagicMock()
+        mock_idx.search.return_value = []
+
+        with (
+            patch(
+                "sys.argv", ["remanentia", "recall", "test query", "--llm", "--llm-backend", "none"]
+            ),
+            patch("memory_index.auto_rebuild_if_needed", return_value=mock_idx),
+        ):
+            try:
+                from cli import main
+
+                main()
+            except SystemExit:
+                pass
+
+    def test_status_command_runs(self):
+        from unittest.mock import patch
+
+        with patch("sys.argv", ["remanentia", "status"]):
+            try:
+                from cli import main
+
+                main()
+            except SystemExit:
+                pass

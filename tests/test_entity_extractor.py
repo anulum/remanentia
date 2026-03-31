@@ -387,3 +387,19 @@ class TestDataclasses:
         assert r.target == "B"
         assert r.relation_type == "caused_by"
         assert "because" in r.evidence
+
+
+# ── Missing patterns: roundtrip ───────────────────────────────
+
+
+class TestEntityExtractorRoundtrip:
+    def test_extract_then_relations(self):
+        """Full cycle: text → entities → relations."""
+        text = "BM25 replaced TF-IDF because TF-IDF was too slow for remanentia v3.14.0."
+        entities = _regex_entities(text)
+        assert len(entities) >= 2
+        relations = extract_relations(text, entities)
+        assert isinstance(relations, list)
+        # Should find at least one typed relation
+        typed = [r for r in relations if r.relation_type != "co_occurs"]
+        assert len(typed) >= 1

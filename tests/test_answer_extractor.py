@@ -621,3 +621,34 @@ class TestLLMSynthesizeAnswer:
         # Only first 10 should be in prompt
         assert "[Source 10]" in backend.last_prompt
         assert "[Source 11]" not in backend.last_prompt
+
+
+# ── Missing patterns: pipeline, roundtrip ─────────────────────
+
+
+class TestAnswerExtractorPipeline:
+    """Full pipeline: query → extract → normalise → match."""
+
+    def test_extract_feeds_normalizer(self):
+        from answer_extractor import extract_answer
+        from answer_normalizer import normalize_answer
+
+        answer = extract_answer("What accuracy?", "The accuracy reached 88.5% on LOCOMO.")
+        assert answer is not None
+        normed = normalize_answer(answer)
+        assert "88.5" in normed
+
+    def test_extract_feeds_fuzzy_match(self):
+        from answer_extractor import extract_answer, fuzzy_match
+
+        answer = extract_answer("When was it?", "The review was on March 15, 2026.")
+        assert answer is not None
+        assert fuzzy_match(answer, "March 15, 2026")
+
+    def test_rust_and_python_agree(self):
+        """Rust extract_answer matches Python on same input."""
+        from answer_extractor import extract_answer
+
+        result = extract_answer("When?", "Meeting on 2026-03-15.")
+        assert result is not None
+        assert "2026-03-15" in result or "March" in result

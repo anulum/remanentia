@@ -259,3 +259,31 @@ class TestModelDir:
 
         assert llm_setup._DEFAULT_MODEL_DIR.name == "models"
         assert llm_setup._DEFAULT_MODEL_DIR.parent == llm_setup._REPO_DIR
+
+
+# ── Missing patterns: negative, pipeline ──────────────────────
+
+
+class TestLLMSetupEdgeCases:
+    def test_negative_vram(self):
+        assert recommend_model(vram=-10, ram=-10) is None
+
+    def test_float_boundaries(self):
+        assert recommend_model(vram=7.999, ram=0) is not None
+        assert (
+            recommend_model(vram=3.999, ram=0) is None
+            or recommend_model(vram=3.999, ram=16) is not None
+        )
+
+    def test_write_config_feeds_load_config(self, tmp_path):
+        """Pipeline: write_config → load_config roundtrip."""
+        from llm_backend import load_config
+
+        path = tmp_path / "test.toml"
+        write_config(
+            backend="local", local_url="http://test:9090/v1", local_model="test-3b", path=path
+        )
+        cfg = load_config(path)
+        assert cfg.backend == "local"
+        assert cfg.local_url == "http://test:9090/v1"
+        assert cfg.local_model == "test-3b"

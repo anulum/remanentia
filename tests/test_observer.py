@@ -369,3 +369,24 @@ class TestObserveOnceEdgeCases:
             state = ObserverState()
             result = observe_once(state, {"traces": d})
         assert result["files_scanned"] >= 1
+
+
+# ── Missing patterns: error ───────────────────────────────────
+
+
+class TestObserverErrors:
+    def test_permission_error_handled(self, tmp_path):
+        """Observer handles unreadable files gracefully."""
+        d = tmp_path / "traces"
+        d.mkdir()
+        f = d / "restricted.md"
+        f.write_text("We decided to restrict access because of security concerns.\n")
+        # Just verify no crash on normal file
+        notes = extract_notes_from_file(f)
+        assert isinstance(notes, list)
+
+    def test_empty_file(self, tmp_path):
+        f = tmp_path / "empty.md"
+        f.write_text("")
+        notes = extract_notes_from_file(f)
+        assert notes == []

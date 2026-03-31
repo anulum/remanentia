@@ -276,3 +276,28 @@ class TestRecall:
         data = resp.json()
         assert "daemon" in data
         assert data["daemon"]["cycle"] == 5
+
+
+# ── Missing patterns: pipeline, roundtrip ─────────────────────
+
+
+class TestAPIPipeline:
+    def test_status_endpoint_pipeline(self, tmp_path):
+        """Status endpoint exercises the full pipeline."""
+        from unittest.mock import patch
+        from fastapi.testclient import TestClient
+        from api import app
+
+        state_dir = tmp_path / "snn_state"
+        state_dir.mkdir()
+        graph_dir = tmp_path / "graph"
+        graph_dir.mkdir()
+        with (
+            patch("api.BASE", tmp_path),
+            patch("api.STATE_DIR", state_dir),
+            patch("api.GRAPH_DIR", graph_dir),
+        ):
+            client = TestClient(app)
+            resp = client.get("/status")
+        assert resp.status_code == 200
+        assert isinstance(resp.json(), dict)

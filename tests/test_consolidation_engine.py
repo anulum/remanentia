@@ -702,3 +702,27 @@ class TestConsolidationPipeline:
             r2 = consolidate(force=False)
 
         assert r2.get("status") == "nothing_to_consolidate"
+
+
+# ── Missing patterns: error ───────────────────────────────────
+
+
+class TestConsolidationErrors:
+    def test_corrupt_trace_file(self, tmp_path):
+        """Consolidation handles binary/corrupt trace files."""
+
+        traces_dir = tmp_path / "traces"
+        traces_dir.mkdir()
+        (traces_dir / "corrupt.md").write_bytes(b"\x00\x01\x02" * 100)
+
+        with TestConsolidationPipeline._patch_all_paths(tmp_path):
+            result = consolidate(force=True)
+        assert isinstance(result, dict)
+
+    def test_empty_trace_dir(self, tmp_path):
+        traces_dir = tmp_path / "traces"
+        traces_dir.mkdir()
+
+        with TestConsolidationPipeline._patch_all_paths(tmp_path):
+            result = consolidate(force=True)
+        assert isinstance(result, dict)

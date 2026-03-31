@@ -299,3 +299,33 @@ class TestReflectOnce:
 
         if result.get("gaps", 0) > 0:
             assert "Knowledge Gaps" in result["digest"]
+
+
+# ── Missing patterns: pipeline, roundtrip ─────────────────────
+
+
+class TestReflectorPipeline:
+    def test_reflect_once_with_store(self, tmp_path):
+        """Reflector processes knowledge store notes end-to-end."""
+        from knowledge_store import KnowledgeStore
+        from reflector import reflect_once
+        from unittest.mock import patch
+
+        store = KnowledgeStore()
+        store.add_note("BM25 accuracy measured at 88.5%.", source="a.md")
+
+        store_path = tmp_path / "notes.jsonl"
+        triggers_path = tmp_path / "triggers.jsonl"
+        with (
+            patch("knowledge_store.STORE_PATH", store_path),
+            patch("knowledge_store.TRIGGERS_PATH", triggers_path),
+        ):
+            store.save()
+            result = reflect_once(days=30, use_llm=False)
+        assert isinstance(result, dict)
+
+    def test_reflect_empty_store(self):
+        from reflector import reflect_once
+
+        result = reflect_once(days=1, use_llm=False)
+        assert isinstance(result, dict)

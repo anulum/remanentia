@@ -606,3 +606,27 @@ class TestFactDecomposerPipeline:
         ar = ArcaneRetriever(sessions)
         results = ar.retrieve("what food does the user like", "single-session-user", top_k=5)
         assert isinstance(results, list)
+
+
+# ── Missing patterns: roundtrip ───────────────────────────────
+
+
+class TestFactDecomposerRoundtrip:
+    def test_decompose_index_query_roundtrip(self):
+        """Full cycle: sessions → facts → index → query → results."""
+        sessions = [
+            [
+                {"role": "user", "content": "I started running every morning in January 2024."},
+                {
+                    "role": "user",
+                    "content": "My favourite restaurant is the Italian place downtown.",
+                },
+            ]
+        ]
+        facts = decompose_sessions(sessions)
+        assert len(facts) >= 2
+
+        idx = FactIndex(facts)
+        results = idx.query("running")
+        # Should return list (may be empty depending on tokenisation)
+        assert isinstance(results, list)
