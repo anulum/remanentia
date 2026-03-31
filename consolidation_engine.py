@@ -864,7 +864,7 @@ def build_summary_dag(trace_data: dict[str, dict]) -> list[dict]:
         next_level: list[DAGNode] = []
         for i in range(0, len(current_level_nodes), DAG_FANOUT):
             group = current_level_nodes[i : i + DAG_FANOUT]
-            if not group:
+            if not group:  # pragma: no cover — range() never yields empty slice
                 break
 
             # Merge summaries: take first sentence from each child

@@ -571,6 +571,41 @@ class TestRecencyDecay:
         )
         assert ar._recency_weight(fake_fact) == 1.0
 
+    def test_decay_with_invalid_reference_date_returns_one(self):
+        """Invalid reference_date should not crash — returns weight 1.0."""
+        from arcane_retriever import ArcaneRetriever
+
+        sessions = [[{"role": "user", "content": "Some statement about BM25 retrieval."}]]
+        ar = ArcaneRetriever(
+            sessions,
+            session_dates=["2024-06-15"],
+            reference_date="not-a-date",
+            recency_half_life_days=30,
+        )
+        assert ar._recency_weight(ar.facts[0]) == 1.0
+
+    def test_decay_fact_without_date_or_session_date(self):
+        """Facts with no valid_from and no session date get weight 1.0."""
+        from arcane_retriever import ArcaneRetriever
+        from fact_decomposer import AtomicFact
+
+        sessions = [[{"role": "user", "content": "Some undated statement about the project."}]]
+        ar = ArcaneRetriever(
+            sessions,
+            session_dates=[],
+            reference_date="2024-06-15",
+            recency_half_life_days=30,
+        )
+        fake = AtomicFact(
+            text="no date",
+            session_idx=0,
+            turn_idx=0,
+            role="user",
+            fact_type="event",
+            valid_from="",
+        )
+        assert ar._recency_weight(fake) == 1.0
+
     def test_empty_sessions_no_crash(self):
         """Empty sessions should not cause errors in recency computation."""
         from arcane_retriever import ArcaneRetriever

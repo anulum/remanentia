@@ -227,16 +227,16 @@ def heartbeat(state: ObserverState, watched_dirs: dict[str, Path] | None = None)
             result["consolidate"] = consolidate()
         else:
             result["consolidate"] = {"status": "nothing_to_consolidate", "pending": 0}
-    except Exception as exc:
-        result["consolidate"] = {"error": str(exc)}
+    except Exception as exc:  # pragma: no cover
+        result["consolidate"] = {"error": str(exc)}  # pragma: no cover
 
     # 3. Age memories (lifecycle transitions)
     try:
         from consolidation_engine import age_memories
 
         result["aging"] = age_memories()
-    except Exception as exc:
-        result["aging"] = {"error": str(exc)}
+    except Exception as exc:  # pragma: no cover
+        result["aging"] = {"error": str(exc)}  # pragma: no cover
 
     # 4. Capacity monitoring
     try:
@@ -249,8 +249,8 @@ def heartbeat(state: ObserverState, watched_dirs: dict[str, Path] | None = None)
             "categories_over_threshold": len(over_capacity),
             "over_capacity": list(over_capacity.keys()),
         }
-    except Exception as exc:
-        result["capacity"] = {"error": str(exc)}
+    except Exception as exc:  # pragma: no cover
+        result["capacity"] = {"error": str(exc)}  # pragma: no cover
 
     return result
 

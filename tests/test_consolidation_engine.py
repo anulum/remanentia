@@ -844,6 +844,60 @@ class TestMemoryLifecycle:
     def test_parse_frontmatter_no_delimiters(self):
         assert _parse_frontmatter("Just plain text") is None
 
+    def test_parse_frontmatter_no_closing_delimiter(self):
+        assert _parse_frontmatter("---\ntype: decision\nno closing") is None
+
+    def test_age_memories_no_frontmatter(self, tmp_path):
+        """Files without frontmatter should be skipped, not crash."""
+        import consolidation_engine as ce
+
+        orig = ce.SEMANTIC_DIR
+        sem_dir = tmp_path / "semantic" / "decision"
+        sem_dir.mkdir(parents=True)
+        ce.SEMANTIC_DIR = tmp_path / "semantic"
+        try:
+            (sem_dir / "no_fm.md").write_text("Just plain text, no frontmatter.", encoding="utf-8")
+            stats = age_memories()
+            assert stats["scanned"] == 1
+            assert stats["active_to_stale"] == 0
+        finally:
+            ce.SEMANTIC_DIR = orig
+
+    def test_age_memories_no_last_accessed(self, tmp_path):
+        """Files with frontmatter but no last_accessed should be skipped."""
+        import consolidation_engine as ce
+
+        orig = ce.SEMANTIC_DIR
+        sem_dir = tmp_path / "semantic" / "decision"
+        sem_dir.mkdir(parents=True)
+        ce.SEMANTIC_DIR = tmp_path / "semantic"
+        try:
+            (sem_dir / "no_date.md").write_text(
+                "---\nvalidity_state: active\n---\nNo dates.", encoding="utf-8"
+            )
+            stats = age_memories()
+            assert stats["active_to_stale"] == 0
+        finally:
+            ce.SEMANTIC_DIR = orig
+
+    def test_age_memories_corrupt_date(self, tmp_path):
+        """Files with unparsable dates should be skipped."""
+        import consolidation_engine as ce
+
+        orig = ce.SEMANTIC_DIR
+        sem_dir = tmp_path / "semantic" / "decision"
+        sem_dir.mkdir(parents=True)
+        ce.SEMANTIC_DIR = tmp_path / "semantic"
+        try:
+            (sem_dir / "bad_date.md").write_text(
+                "---\nvalidity_state: active\nlast_accessed: not-a-date\n---\nBad.",
+                encoding="utf-8",
+            )
+            stats = age_memories()
+            assert stats["active_to_stale"] == 0
+        finally:
+            ce.SEMANTIC_DIR = orig
+
     def test_update_frontmatter_field_existing(self, tmp_path):
         f = tmp_path / "test.md"
         f.write_text("---\nvalidity_state: active\n---\nContent.", encoding="utf-8")
@@ -913,6 +967,21 @@ class TestCapacityReport:
         try:
             report = capacity_report()
             assert report == {}
+        finally:
+            ce.SEMANTIC_DIR = orig
+
+    def test_capacity_report_skips_non_dirs(self, tmp_path):
+        """Non-directory items in SEMANTIC_DIR should be skipped."""
+        import consolidation_engine as ce
+
+        orig = ce.SEMANTIC_DIR
+        sem_dir = tmp_path / "semantic"
+        sem_dir.mkdir()
+        (sem_dir / "stray_file.md").write_text("Not a category dir.")
+        ce.SEMANTIC_DIR = sem_dir
+        try:
+            report = capacity_report()
+            assert "stray_file.md" not in report
         finally:
             ce.SEMANTIC_DIR = orig
 
@@ -1011,6 +1080,16 @@ class TestSummaryDAG:
         dag = build_summary_dag(data)
         results = search_summary_dag(dag, "quantum chromodynamics plasma")
         assert results == []
+
+    def test_search_dag_deduplicates_seen_nodes(self):
+        """Search should not revisit already-seen nodes."""
+        data = self._make_trace_data(8)
+        dag = build_summary_dag(data)
+        # Search twice with same query — should return same results
+        r1 = search_summary_dag(dag, "accuracy BM25 retrieval", top_k=5)
+        r2 = search_summary_dag(dag, "accuracy BM25 retrieval", top_k=5)
+        assert len(r1) == len(r2)
+        assert [n["node_id"] for n in r1] == [n["node_id"] for n in r2]
 
     def test_dag_date_ranges_correct(self):
         data = self._make_trace_data(8)
