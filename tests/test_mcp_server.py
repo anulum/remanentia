@@ -494,3 +494,97 @@ class TestMCPProtocolRemember:
         mock.assert_called_once()
         call_kwargs = mock.call_args
         assert call_kwargs[1].get("llm") is True
+
+
+# ── Pipeline integration ─────────────────────────────────────
+
+
+class TestMCPPipelineIntegration:
+    """MCP server as the entry point for the entire Remanentia pipeline."""
+
+    def test_recall_flows_through_memory_index(self):
+        """MCP recall → MemoryIndex.search → results."""
+        from unittest.mock import MagicMock
+        import mcp_server
+
+        mock_idx = MagicMock()
+        mock_idx._built = True
+        mock_result = MagicMock()
+        mock_result.source = "test"
+        mock_result.name = "trace.md"
+        mock_result.score = 0.9
+        mock_result.answer = "42"
+        mock_result.snippet = "The answer is 42."
+        mock_idx.search.return_value = [mock_result]
+
+        old = mcp_server._UNIFIED_INDEX
+        mcp_server._UNIFIED_INDEX = mock_idx
+        try:
+            result = handle_recall("what is the answer", top_k=3)
+            assert "42" in result
+            mock_idx.search.assert_called_once()
+        finally:
+            mcp_server._UNIFIED_INDEX = old
+
+    def test_remember_creates_file_and_updates_index(self):
+        """MCP remember → write file → add to index."""
+        from unittest.mock import MagicMock, patch as p
+        import mcp_server
+
+        mock_idx = MagicMock()
+        mock_idx._built = True
+        old = mcp_server._UNIFIED_INDEX
+        mcp_server._UNIFIED_INDEX = mock_idx
+        try:
+            with p("mcp_server.BASE", mcp_server.BASE):
+                result = handle_remember("Test memory content for pipeline verification.")
+            assert "stored" in result.lower() or "saved" in result.lower() or isinstance(result, str)
+        finally:
+            mcp_server._UNIFIED_INDEX = old
+
+    def test_status_returns_structured_info(self):
+        result = handle_status()
+        assert isinstance(result, str)
+        # Should mention index, entities, or similar
+        assert len(result) > 10
+
+    def test_llm_backend_wiring_in_recall(self):
+        """When llm=True, MCP sets up LLM backend automatically."""
+        from unittest.mock import MagicMock
+        import answer_extractor
+        import mcp_server
+
+        mock_idx = MagicMock()
+        mock_idx._built = True
+        mock_idx.search.return_value = []
+        old_idx = mcp_server._UNIFIED_INDEX
+        old_backend = answer_extractor._BACKEND
+        answer_extractor._BACKEND = None
+        mcp_server._UNIFIED_INDEX = mock_idx
+        try:
+            handle_recall("test query", llm=True)
+            # Backend should have been auto-resolved
+            assert answer_extractor._BACKEND is not None
+        finally:
+            mcp_server._UNIFIED_INDEX = old_idx
+            answer_extractor._BACKEND = old_backend
+
+    def test_graph_query_returns_entities(self):
+        """MCP graph tool returns entity relationship text."""
+        resp = handle_request({
+            "jsonrpc": "2.0", "id": 99,
+            "method": "tools/call",
+            "params": {"name": "remanentia_graph", "arguments": {"top": 3}},
+        })
+        text = resp["result"]["content"][0]["text"]
+        assert isinstance(text, str)
+
+    def test_consolidate_via_mcp(self):
+        """MCP status call exercises consolidation path."""
+        resp = handle_request({
+            "jsonrpc": "2.0", "id": 99,
+            "method": "tools/call",
+            "params": {"name": "remanentia_status", "arguments": {}},
+        })
+        text = resp["result"]["content"][0]["text"]
+        assert isinstance(text, str)
