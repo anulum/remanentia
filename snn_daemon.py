@@ -435,7 +435,9 @@ def heartbeat(agent: str, project: str = "", status: str = "active", detail: str
     import os
 
     HEARTBEAT_DIR.mkdir(parents=True, exist_ok=True)
-    safe = agent.replace("/", "_").replace("\\", "_").replace(" ", "_")
+    # Derive a filesystem-safe token from the agent name
+    tmp = agent.replace("/", "_").replace("\\", "_").replace(" ", "_")
+    safe = "".join(ch for ch in tmp if ch.isalnum() or ch in ("_", "-")) or "unknown"
     path = HEARTBEAT_DIR / f"{safe}.json"
     data = {
         "agent": agent,
@@ -469,7 +471,9 @@ def drop_stimulus(text: str, source: str = "unknown"):
     """
     STIMULUS_DIR.mkdir(parents=True, exist_ok=True)
     ts = int(time.time())
-    safe_source = source.replace("/", "_").replace("\\", "_")
+    # Derive a filesystem-safe token from the source identifier
+    tmp = source.replace("/", "_").replace("\\", "_")
+    safe_source = "".join(ch for ch in tmp if ch.isalnum() or ch in ("_", "-")) or "unknown"
     path = STIMULUS_DIR / f"{safe_source}_{ts}.json"
     # Store text only — daemon re-encodes at its own neuron count
     data = {
