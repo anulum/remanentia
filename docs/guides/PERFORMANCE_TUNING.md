@@ -45,11 +45,15 @@ regex engine dominates — 14.1× speedup.
 |-------|--------|---------|
 | `remanentia_temporal` | temporal_graph, date_normalizer | 14.2× (large) |
 | `remanentia_answer_extractor` | answer_extractor | 11.4× (large) |
-| `remanentia_fact_decomposer` | fact_decomposer | ~7× |
+| `remanentia_fact_decomposer` | fact_decomposer, arcane_retriever | ~7× |
 | `remanentia_answer_normalizer` | answer_normalizer | ~6× |
 | `remanentia_search` | memory_index (BM25, Rayon) | ~3-5× |
 | `arcane_stdp` | snn_backend | ~2-3× |
 | `remanentia_entity_extractor` | entity_extractor | ~2× |
+| `remanentia_knowledge_store` | knowledge_store | NEW |
+| `remanentia_consolidation` | consolidation_engine | NEW |
+| `remanentia_skill_extractor` | skill_extractor | NEW |
+| `remanentia_active_retrieval` | active_retrieval | NEW |
 
 ## v0.4 Feature Performance
 
@@ -221,7 +225,101 @@ Install `arcane_stdp` wheel for automatic Rust acceleration.
 | Content hash cache (2K files) | ~0.5 MB |
 | Summary DAG (100 traces) | ~50 KB |
 
+## Complete Rust Function Benchmark (11 crates, 27 functions)
+
+All functions measured on AMD Ryzen 5 3600, 1,000 iterations, `time.perf_counter()`.
+
+### Crate 1: remanentia_temporal
+
+| Function | Measured | Wired into |
+|----------|---------|------------|
+| `parse_dates` (short text) | 11.8 µs | temporal_graph.parse_dates |
+| `normalise_vague_date` | 5.1 µs | date_normalizer._rule_based_normalise |
+
+### Crate 2: remanentia_answer_extractor
+
+| Function | Measured | Wired into |
+|----------|---------|------------|
+| `extract_answer` (short) | 3.2 µs | answer_extractor.extract_answer |
+| `fuzzy_match` | 0.3 µs | answer_extractor.fuzzy_match |
+| `normalize_number` | 5.8 µs | answer_extractor.normalize_number |
+| `extract_best_sentence` | — | answer_extractor.extract_best_sentence |
+
+### Crate 3: remanentia_answer_normalizer
+
+| Function | Measured | Wired into |
+|----------|---------|------------|
+| `normalize_answer` | 0.4 µs | answer_normalizer.normalize_answer |
+| `answers_match` | 0.7 µs | answer_normalizer.answers_match |
+| `extract_answer_items` | 1.6 µs | answer_normalizer.extract_answer_items |
+
+### Crate 4: remanentia_entity_extractor
+
+| Function | Measured | Wired into |
+|----------|---------|------------|
+| `regex_entities` (short) | 7.2 µs | entity_extractor._regex_entities |
+| `extract_relations` | — | entity_extractor.extract_relations |
+
+### Crate 5: remanentia_fact_decomposer
+
+| Function | Measured | Wired into |
+|----------|---------|------------|
+| `classify_fact_type` (9 types) | 0.3 µs | fact_decomposer._classify_fact |
+| `split_sentences` | 0.3 µs | fact_decomposer._split_sentences |
+| `has_change_verb` | 0.2 µs | fact_decomposer._build_fact |
+| `tokenize_words` | 7.4 µs | arcane_retriever._check_sufficiency |
+
+### Crate 6: remanentia_search
+
+| Function | Measured | Wired into |
+|----------|---------|------------|
+| `BM25Index.search` | 1-5 ms (20K paras) | memory_index.search (≥50K) |
+| `cosine_batch` | — | memory_index._compute_embeddings |
+| `tokenize` | 1.6 µs | memory_index._tokenize |
+| `classify_paragraph` | 6.1 µs | memory_index._classify_paragraph |
+| `split_paragraphs` | — | (available, Python windowing used) |
+| `token_counts` | — | (available) |
+
+### Crate 7: arcane_stdp
+
+| Function | Measured | Wired into |
+|----------|---------|------------|
+| `stdp_batch` | ~2-3× speedup | snn_backend.stdp_update |
+| `lif_step` | ~2-3× speedup | snn_backend.lif_step |
+
+### Crate 8: remanentia_knowledge_store
+
+| Function | Measured | Wired into |
+|----------|---------|------------|
+| `tokenize` | 1.5 µs | knowledge_store._tokenize |
+| `extract_keywords` | 13.2 µs | knowledge_store._extract_keywords |
+| `extract_entities` | 1.7 µs | knowledge_store._extract_entities |
+| `extract_person_names` | 7.1 µs | knowledge_store.extract_person_names |
+
+### Crate 9: remanentia_consolidation
+
+| Function | Measured | Wired into |
+|----------|---------|------------|
+| `extract_entities` | 15.7 µs | consolidation_engine._extract_entities |
+| `extract_key_lines` | 1.6 µs | consolidation_engine._extract_key_lines |
+| `extract_typed_relations` | — | consolidation_engine._extract_typed_relations |
+| `parse_frontmatter` | 6.8 µs | consolidation_engine._parse_frontmatter |
+
+### Crate 10: remanentia_skill_extractor
+
+| Function | Measured | Wired into |
+|----------|---------|------------|
+| `tokenize_lower` | 1.9 µs | skill_extractor._tokenize_lower |
+| `matches_skill_marker` | 2.9 µs | skill_extractor.extract_skills |
+| `rank_skills_by_overlap` | — | (available for query_skills) |
+
+### Crate 11: remanentia_active_retrieval
+
+| Function | Measured | Wired into |
+|----------|---------|------------|
+| `extract_decision_points` | 1.0 µs | active_retrieval.extract_decision_points |
+
 ## Test Coverage
 
-1,430 tests, 100% coverage, 43 dedicated performance tests with budget
+1,430+ tests, 100% coverage, 43+ dedicated performance tests with budget
 assertions. All benchmarks run in CI and fail if budgets are exceeded.
