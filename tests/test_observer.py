@@ -417,19 +417,19 @@ class TestHeartbeat:
         traces.mkdir()
         sem = tmp_path / "semantic"
         sem.mkdir()
-        consol = tmp_path / "consolidation"
-        consol.mkdir()
+        con_dir = tmp_path / "consolidation"
+        con_dir.mkdir()
         graph = tmp_path / "graph"
         graph.mkdir()
 
         ce.TRACES_DIR = traces
         ce.SEMANTIC_DIR = sem
-        ce.CONSOLIDATION_DIR = consol
+        ce.CONSOLIDATION_DIR = con_dir
         ce.GRAPH_DIR = graph
-        ce.PENDING_PATH = consol / "pending.json"
-        ce.LAST_RUN_PATH = consol / "last.json"
+        ce.PENDING_PATH = con_dir / "pending.json"
+        ce.LAST_RUN_PATH = con_dir / "last.json"
         ce.CLUSTERS_PATH = graph / "clusters.json"
-        ce.SUMMARY_DAG_PATH = consol / "dag.json"
+        ce.SUMMARY_DAG_PATH = con_dir / "dag.json"
 
         try:
             state = ObserverState()
@@ -470,8 +470,8 @@ class TestHeartbeat:
         traces.mkdir()
         sem = tmp_path / "semantic"
         sem.mkdir()
-        consol = tmp_path / "consolidation"
-        consol.mkdir()
+        con_dir = tmp_path / "consolidation"
+        con_dir.mkdir()
         graph = tmp_path / "graph"
         graph.mkdir()
 
@@ -484,14 +484,14 @@ class TestHeartbeat:
 
         ce.TRACES_DIR = traces
         ce.SEMANTIC_DIR = sem
-        ce.CONSOLIDATION_DIR = consol
+        ce.CONSOLIDATION_DIR = con_dir
         ce.GRAPH_DIR = graph
-        ce.PENDING_PATH = consol / "pending.json"
-        ce.LAST_RUN_PATH = consol / "last.json"
+        ce.PENDING_PATH = con_dir / "pending.json"
+        ce.LAST_RUN_PATH = con_dir / "last.json"
         ce.CLUSTERS_PATH = graph / "clusters.json"
         ce.ENTITIES_PATH = graph / "entities.jsonl"
         ce.RELATIONS_PATH = graph / "relations.jsonl"
-        ce.SUMMARY_DAG_PATH = consol / "dag.json"
+        ce.SUMMARY_DAG_PATH = con_dir / "dag.json"
 
         try:
             state = ObserverState()

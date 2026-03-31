@@ -647,6 +647,7 @@ class TestConsolidationPipeline:
             ("CLUSTERS_PATH", graph_dir / "trace_clusters.json"),
             ("PENDING_PATH", console_dir / "pending.json"),
             ("LAST_RUN_PATH", console_dir / "last_consolidation.json"),
+            ("SUMMARY_DAG_PATH", console_dir / "summary_dag.json"),
         ]:
             stack.enter_context(p(f"consolidation_engine.{attr}", val))
         return stack

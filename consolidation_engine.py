@@ -716,6 +716,7 @@ def consolidate(force: bool = False) -> dict:
     # Build and save hierarchical summary DAG
     dag_nodes = build_summary_dag(trace_data)
     if dag_nodes:
+        SUMMARY_DAG_PATH.parent.mkdir(parents=True, exist_ok=True)
         SUMMARY_DAG_PATH.write_text(json.dumps(dag_nodes, indent=2) + "\n", encoding="utf-8")
 
     # Mark traces as processed
