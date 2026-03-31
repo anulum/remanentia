@@ -14,9 +14,7 @@ round-trip, file system errors, idempotency, and content validation.
 
 from __future__ import annotations
 
-import os
 
-import pytest
 
 from llm_setup import ModelConfig, recommend_model, write_config
 
@@ -261,4 +259,4 @@ class TestModelDir:
         import llm_setup
 
         assert llm_setup._DEFAULT_MODEL_DIR.name == "models"
-        assert llm_setup._REPO_DIR == llm_setup._DEFAULT_MODEL_DIR.parent
+        assert llm_setup._DEFAULT_MODEL_DIR.parent == llm_setup._REPO_DIR

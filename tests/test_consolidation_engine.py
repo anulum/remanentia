@@ -647,7 +647,6 @@ class TestConsolidationPipeline:
 
     def test_full_consolidation_creates_semantic_memories(self, tmp_path):
         """Write traces → consolidate → verify semantic memories created."""
-        from unittest.mock import patch as p
 
         traces_dir = tmp_path / "traces"
         traces_dir.mkdir()
@@ -673,7 +672,6 @@ class TestConsolidationPipeline:
 
     def test_consolidation_updates_entity_graph(self, tmp_path):
         """Consolidation creates entity graph files."""
-        from unittest.mock import patch as p
 
         traces_dir = tmp_path / "traces"
         traces_dir.mkdir()
@@ -692,7 +690,6 @@ class TestConsolidationPipeline:
 
     def test_consolidation_idempotent(self, tmp_path):
         """Running consolidate twice doesn't duplicate results."""
-        from unittest.mock import patch as p
 
         traces_dir = tmp_path / "traces"
         traces_dir.mkdir()

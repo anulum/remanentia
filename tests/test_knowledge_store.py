@@ -651,7 +651,7 @@ class TestKnowledgeStorePipeline:
 
     def test_observer_creates_notes_in_store(self, tmp_path):
         """Observer writes notes → KnowledgeStore loads them."""
-        from knowledge_store import KnowledgeStore, STORE_PATH
+        from knowledge_store import KnowledgeStore
         from observer import ObserverState, observe_once
         from unittest.mock import patch
 
@@ -679,7 +679,7 @@ class TestKnowledgeStorePipeline:
     def test_store_feeds_reflector(self, tmp_path):
         """KnowledgeStore notes are consumed by reflector."""
         from knowledge_store import KnowledgeStore
-        from reflector import _cluster_notes, _generate_summary_heuristic
+        from reflector import _generate_summary_heuristic
 
         store = KnowledgeStore()
         # Use distinct content to avoid merge
@@ -710,7 +710,9 @@ class TestKnowledgeStorePipeline:
         n1 = store.add_note("BM25 accuracy is 81.2% on LOCOMO.", source="a.md")
         n2 = store.add_note("BM25 accuracy is 88.5% on LOCOMO.", source="b.md")
         # n2 should supersede n1 (same metric, different value)
-        assert n2.supersedes or n1.superseded_by or True  # at minimum, no crash
+        # Verify no crash; contradiction detection may or may not fire
+        assert isinstance(n2.supersedes, str)
+        assert isinstance(n1.superseded_by, str)
 
     def test_trigger_fires_on_recall(self):
         """Triggers created in store fire when matching queries."""

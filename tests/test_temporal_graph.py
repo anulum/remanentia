@@ -342,7 +342,7 @@ class TestParseDatesEdgeCases:
         assert (ref - timedelta(days=1)).isoformat() in dates
 
     def test_relative_last_week(self):
-        from datetime import date, timedelta
+        from datetime import date
 
         ref = date(2026, 3, 30)
         dates = parse_dates("It happened last week.", ref)
