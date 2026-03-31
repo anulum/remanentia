@@ -436,3 +436,19 @@ class TestRecallEdgeCases:
         ctx = recall("STDP", top_k=3)
         llm = ctx.to_llm_context()
         assert isinstance(llm, str)
+
+
+class TestRecallErrorHandling:
+    def test_recall_error_on_broken_trace(self, tmp_traces):
+        """Recall handles missing/broken traces gracefully."""
+        from memory_recall import recall, MemoryContext
+
+        ctx = recall("nonexistent topic with no matching traces", top_k=1)
+        assert isinstance(ctx, MemoryContext)
+
+    def test_recall_error_returns_context(self, tmp_traces):
+        from memory_recall import recall, MemoryContext
+
+        ctx = recall("STDP error handling", top_k=3)
+        assert isinstance(ctx, MemoryContext)
+        assert hasattr(ctx, "to_llm_context")

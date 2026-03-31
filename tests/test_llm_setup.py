@@ -287,3 +287,16 @@ class TestLLMSetupEdgeCases:
         assert cfg.backend == "local"
         assert cfg.local_url == "http://test:9090/v1"
         assert cfg.local_model == "test-3b"
+
+
+class TestLLMSetupNegativeCases:
+    def test_not_enough_ram(self):
+        """Insufficient hardware returns None, not a broken config."""
+        result = recommend_model(vram=0, ram=2)
+        assert result is None
+
+    def test_not_enough_anything(self):
+        assert recommend_model(vram=0, ram=0) is None
+
+    def test_negative_values_not_crash(self):
+        assert recommend_model(vram=-100, ram=-50) is None
