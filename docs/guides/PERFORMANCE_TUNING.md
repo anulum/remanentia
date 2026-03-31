@@ -47,7 +47,7 @@ same iteration count (2000).
 | `ks._extract_keywords` | 10.2 | 2.9 | **3.5×** |
 | `parse_dates` | 12.8 | 4.4 | **2.9×** |
 
-On short texts, 6 of 27 functions show meaningful speedup (2.9-9.2×).
+On short texts, 6 of 36 functions show meaningful speedup (2.9-9.2×).
 The remaining functions show 0.8-1.1× (parity) because PyO3 FFI
 overhead dominates when there is very little regex work per call.
 
@@ -79,7 +79,7 @@ characters per call.
 | `remanentia_skill_extractor` | skill_extractor | ~1.0× |
 | `remanentia_active_retrieval` | active_retrieval | ~1.0× |
 
-## Per-Function Rust Benchmarks (27 functions)
+## Per-Function Rust Benchmarks (36 exported functions)
 
 Absolute Rust call times, 1000 iterations each.
 
@@ -114,7 +114,8 @@ Absolute Rust call times, 1000 iterations each.
 | `extract_best_sentence` | 4.95 | answer_extractor |
 | `parse_dates` | 8.79 | temporal |
 
-All 27 functions under 9 µs per call.
+All measured functions under 9 µs per call. 36 functions exported total
+(28 measured individually, 8 via class methods or untested paths).
 
 ## End-to-End Pipeline Benchmarks
 
