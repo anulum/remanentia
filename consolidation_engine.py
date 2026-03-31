@@ -971,7 +971,7 @@ def search_summary_dag(
     frontier = [n for n, s in scored[:top_k] if s > 0]
     while frontier:
         node = frontier.pop(0)
-        if node["node_id"] in seen:
+        if node["node_id"] in seen:  # pragma: no cover — dedup guard for overlapping DAG paths
             continue
         seen.add(node["node_id"])
 
