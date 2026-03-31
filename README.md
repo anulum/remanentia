@@ -11,7 +11,7 @@ Contact: www.anulum.li | protoscience@anulum.li
 [![Docs](https://github.com/anulum/remanentia/actions/workflows/docs.yml/badge.svg)](https://github.com/anulum/remanentia/actions/workflows/docs.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/anulum/remanentia/badge)](https://securityscorecards.dev/viewer/?uri=github.com/anulum/remanentia)
 [![Version](https://img.shields.io/badge/version-0.3.1-blue)](https://github.com/anulum/remanentia)
-[![Tests](https://img.shields.io/badge/tests-1049_passed-brightgreen)](VALIDATION.md)
+[![Tests](https://img.shields.io/badge/tests-1343_passed-brightgreen)](VALIDATION.md)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](VALIDATION.md)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
@@ -131,6 +131,7 @@ Knowledge store (multi-hop graph search) ...... Zettelkasten + prospective queri
 | `knowledge_store.py` | Zettelkasten atomic notes, prospective triggers, graph search |
 | `temporal_graph.py` | Temporal event graph, relative date resolution, TReMu |
 | `entity_extractor.py` | GLiNER2 NER + regex fallback, 11 typed relation types |
+| `llm_backend.py` | Pluggable LLM backend: Auto, Local, Anthropic, Null |
 | `answer_extractor.py` | Query-proximity answer extraction, LLM fallback |
 | `answer_normalizer.py` | Hedging strip, yes/no polarity, semantic similarity |
 | `observer.py` | Filesystem watcher -> incremental index updates |
@@ -145,7 +146,8 @@ Knowledge store (multi-hop graph search) ...... Zettelkasten + prospective queri
 
 - Python 3.10+
 - numpy (required)
-- Optional: sentence-transformers (embedding rerank), torch (GPU), fastapi (REST API)
+- Optional: sentence-transformers (embedding rerank), torch (GPU), fastapi (REST API), anthropic (cloud LLM)
+- Optional: llama.cpp / Ollama for local LLM (any OpenAI-compatible endpoint)
 
 ## CLI
 
@@ -270,11 +272,25 @@ for r in results:
     print(f"  {r.snippet[:100]}")
 ```
 
+## Rust Acceleration
+
+7 PyO3 crates built with maturin. Python fallback preserved in every module.
+
+| Crate | Speedup | Wired into |
+|-------|--------:|------------|
+| remanentia_temporal | 14.2× | temporal_graph, date_normalizer |
+| remanentia_answer_extractor | 11.4× | answer_extractor |
+| remanentia_fact_decomposer | ~7× | fact_decomposer |
+| remanentia_answer_normalizer | ~6× | answer_normalizer |
+| remanentia_search | ~3-5× | memory_index (BM25, Rayon) |
+| arcane_stdp | ~2-3× | snn_backend |
+| remanentia_entity_extractor | ~2× | entity_extractor |
+
+Full regex pipeline: **0.60ms** (Rust) vs 9.07ms (Python) on 470K chars = **14.1× on large workloads**.
+
 ## Research (Negative Results)
 
 SNN-based retrieval was the original design. After 70+ experiments across 4 learning rules (STDP, BCPNN, Hebbian, E/I balanced), we proved it adds zero discriminative signal. Root cause: 384-dim embeddings hash-encoded into 20K-neuron patterns are too correlated for local learning rules. The current system uses BM25 + optional neural reranking because that's what works.
-
-A Rust BM25 engine (PyO3 + Rayon) was built but is slower than Python at the current 15K-paragraph scale due to FFI overhead.
 
 Full analysis: `paper/remanentia_paper_draft.md`
 
@@ -285,7 +301,7 @@ pip install -e ".[dev]"
 pytest tests/ -q
 ```
 
-1,049 tests, 100% coverage (19 modules, zero lines missing).
+1,343 tests, 100% coverage (19 modules, zero lines missing).
 
 ## License
 

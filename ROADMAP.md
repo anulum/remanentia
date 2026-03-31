@@ -5,12 +5,17 @@
 - [x] LongMemEval benchmark: 69.0% (345/500), results committed
 - [x] LOCOMO benchmark: 74.7% (1,986 questions, no LLM)
 - [x] PyPI publish workflow (OIDC trusted publisher, `publish.yml`)
-- [x] 100% test coverage (844 tests, 3,423 statements, 16 modules)
+- [x] 100% test coverage (1,343 tests, 19 modules, zero lines missing)
 - [x] MCP server with 4 tools (recall, remember, status, graph)
 - [x] ArcaneRetriever 4-channel parallel retrieval with RRF fusion
 - [x] Atomic fact decomposer with temporal validity windows
 - [x] Enterprise hardening (CI, CodeQL, Scorecard, REUSE, CITATION.cff)
-- [x] Documentation site (MkDocs, 15 API refs, 4 guides, 2 benchmarks)
+- [x] Documentation site (MkDocs, 18 API refs, 5 guides, 2 benchmarks)
+- [x] 7 Rust acceleration crates (PyO3 + maturin, up to 14× speedup)
+- [x] Pluggable LLM backend (Auto, Local, Anthropic, Null)
+- [x] 8-model local LLM benchmark (Qwen 2.5 3B recommended, ROCm)
+- [x] Pipeline performance documented (0.6ms regex pipeline, 27 budget tests)
+- [x] SPDX header standardisation (103 Python files)
 
 ## v0.4.0 — Temporal Breakthrough
 
