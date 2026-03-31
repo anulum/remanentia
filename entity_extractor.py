@@ -186,7 +186,7 @@ def extract_relations(text: str, entities: list[Entity]) -> list[Relation]:
     try:
         from remanentia_entity_extractor import extract_relations as _rust_rels
 
-        entity_names = [e.text for e in entities]
+        entity_names = [e.text for e in entities]  # pragma: no cover
         rust_results = _rust_rels(text, entity_names)  # pragma: no cover
         return [  # pragma: no cover
             Relation(source=s, target=t, relation_type=rt, evidence=ev)
