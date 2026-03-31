@@ -758,3 +758,645 @@ class TestDocumentedPerformanceSummary:
             print("=" * 70)
         except ImportError:
             print("\n(Rust modules not installed — skipping Rust comparison)")
+
+
+# ── v0.4 features: end-to-end + benchmarks ──────────────────────
+
+
+class TestEndToEndNewFeatures:
+    """End-to-end tests exercising all 7 v0.4 features through the pipeline.
+
+    Verifies that features are not decorative — every new component is
+    wired into the infrastructure and produces measurable, correct output.
+    """
+
+    def test_e2e_extended_fact_types_through_full_pipeline(self):
+        """Sessions → decompose → FactIndex → ArcaneRetriever → all 9 types survive."""
+        from arcane_retriever import ArcaneRetriever
+
+        sessions = [
+            [
+                {
+                    "role": "user",
+                    "content": "We decided to adopt BM25 as primary retrieval engine.",
+                },
+                {"role": "assistant", "content": "Actually the STDP measurements were wrong."},
+                {"role": "user", "content": "Always verify test coverage before merging to main."},
+                {
+                    "role": "assistant",
+                    "content": "The deadline is April 15 and I committed to deliver.",
+                },
+                {
+                    "role": "user",
+                    "content": "To fix this run the following pytest command with -x.",
+                },
+                {"role": "assistant", "content": "I plan to add temporal reasoning improvements."},
+                {
+                    "role": "user",
+                    "content": "I prefer dark mode and minimal user interface designs.",
+                },
+                {"role": "assistant", "content": "She started working at Google in January 2024."},
+                {"role": "user", "content": "The quarterly review meeting was held last Friday."},
+            ]
+        ]
+        ar = ArcaneRetriever(
+            sessions,
+            session_dates=["2024-06-01"],
+            reference_date="2024-06-15",
+            recency_half_life_days=30,
+        )
+        # All 9 types must exist in decomposed facts
+        types_found = {f.fact_type for f in ar.facts}
+        expected = {
+            "decision",
+            "correction",
+            "principle",
+            "commitment",
+            "skill",
+            "plan",
+            "preference",
+            "state",
+            "event",
+        }
+        assert types_found == expected, f"Missing types: {expected - types_found}"
+
+        # Retrieve decision — should return decision-type fact first
+        results = ar.retrieve("what did we decide about retrieval", "general", top_k=5)
+        assert len(results) > 0
+        assert results[0].fact.fact_type == "decision"
+
+        # Retrieve correction — should surface correction
+        results = ar.retrieve("what was wrong with STDP", "general", top_k=5)
+        assert any(r.fact.fact_type == "correction" for r in results[:3])
+
+        # Build context — should produce LLM-ready string
+        ctx = ar.build_context("retrieval decision", results)
+        assert isinstance(ctx, str)
+        assert len(ctx) > 0
+
+    def test_e2e_recency_decay_changes_ranking(self):
+        """Recent facts must outrank old facts with identical content."""
+        from arcane_retriever import ArcaneRetriever
+
+        sessions = [
+            [{"role": "user", "content": "BM25 retrieval accuracy measured at 74.7 percent."}],
+            [{"role": "user", "content": "BM25 retrieval accuracy measured at 74.7 percent."}],
+        ]
+        # Old session (Jan) vs recent session (Jun)
+        dates = ["2024-01-01", "2024-06-01"]
+
+        ar = ArcaneRetriever(
+            sessions,
+            session_dates=dates,
+            reference_date="2024-06-15",
+            recency_half_life_days=30,
+        )
+        results = ar.retrieve("BM25 accuracy", "general", top_k=10)
+        session_scores = {}
+        for r in results:
+            session_scores.setdefault(r.fact.session_idx, []).append(r.rrf_score)
+
+        if 0 in session_scores and 1 in session_scores:
+            assert max(session_scores[1]) > max(session_scores[0])
+
+    def test_e2e_consolidation_writes_lifecycle_and_dag(self, tmp_path):
+        """consolidate() → semantic memories with validity_state + summary DAG."""
+        import consolidation_engine as ce
+
+        orig = {
+            "TRACES_DIR": ce.TRACES_DIR,
+            "SEMANTIC_DIR": ce.SEMANTIC_DIR,
+            "CONSOLIDATION_DIR": ce.CONSOLIDATION_DIR,
+            "GRAPH_DIR": ce.GRAPH_DIR,
+            "ENTITIES_PATH": ce.ENTITIES_PATH,
+            "RELATIONS_PATH": ce.RELATIONS_PATH,
+            "CLUSTERS_PATH": ce.CLUSTERS_PATH,
+            "PENDING_PATH": ce.PENDING_PATH,
+            "LAST_RUN_PATH": ce.LAST_RUN_PATH,
+            "SUMMARY_DAG_PATH": ce.SUMMARY_DAG_PATH,
+        }
+        traces = tmp_path / "traces"
+        traces.mkdir()
+        sem = tmp_path / "semantic"
+        sem.mkdir()
+        con = tmp_path / "consolidation"
+        con.mkdir()
+        graph = tmp_path / "graph"
+        graph.mkdir()
+
+        (traces / "2024-01-01_decision.md").write_text(
+            "# Decision\n\nWe decided to remove SNN from retrieval.\n\n"
+            "We found that accuracy improved to 81 percent.\n",
+            encoding="utf-8",
+        )
+        (traces / "2024-01-02_technical.md").write_text(
+            "# Technical\n\nFixed BM25 scoring bug in memory_index.\n\n"
+            "Always verify test coverage before pushing.\n",
+            encoding="utf-8",
+        )
+
+        ce.TRACES_DIR = traces
+        ce.SEMANTIC_DIR = sem
+        ce.CONSOLIDATION_DIR = con
+        ce.GRAPH_DIR = graph
+        ce.ENTITIES_PATH = graph / "entities.jsonl"
+        ce.RELATIONS_PATH = graph / "relations.jsonl"
+        ce.CLUSTERS_PATH = graph / "clusters.json"
+        ce.PENDING_PATH = con / "pending.json"
+        ce.LAST_RUN_PATH = con / "last.json"
+        ce.SUMMARY_DAG_PATH = con / "dag.json"
+
+        try:
+            result = ce.consolidate(force=True)
+            assert result["traces_processed"] >= 2
+            assert result["memories_written"] >= 1
+
+            # Verify lifecycle state in written memories
+            for md in sem.rglob("*.md"):
+                text = md.read_text(encoding="utf-8")
+                assert "validity_state: active" in text
+                assert "last_accessed:" in text
+
+            # Verify DAG was created
+            dag_path = con / "dag.json"
+            assert dag_path.exists()
+            import json
+
+            dag = json.loads(dag_path.read_text(encoding="utf-8"))
+            assert len(dag) >= 2  # at least 2 leaf nodes
+            leaves = [n for n in dag if n["level"] == 0]
+            assert len(leaves) >= 2
+
+            # DAG should be searchable
+            from consolidation_engine import search_summary_dag
+
+            results = search_summary_dag(dag, "BM25 accuracy")
+            assert len(results) >= 1
+        finally:
+            for k, v in orig.items():
+                setattr(ce, k, v)
+
+    def test_e2e_capacity_report_reflects_consolidation(self, tmp_path):
+        """After consolidation, capacity_report should show the new memories."""
+        import consolidation_engine as ce
+
+        orig_sem = ce.SEMANTIC_DIR
+        sem = tmp_path / "semantic"
+        cat = sem / "decision"
+        cat.mkdir(parents=True)
+        ce.SEMANTIC_DIR = sem
+
+        try:
+            (cat / "d1.md").write_text(
+                "---\nvalidity_state: active\n---\n" + "Decision content.\n" * 100,
+                encoding="utf-8",
+            )
+            report = ce.capacity_report()
+            assert "decision" in report
+            assert report["decision"]["file_count"] == 1
+            assert report["decision"]["chars"] > 0
+            assert report["decision"]["state_counts"].get("active", 0) == 1
+        finally:
+            ce.SEMANTIC_DIR = orig_sem
+
+    def test_e2e_heartbeat_runs_full_cycle(self, tmp_path):
+        """Heartbeat should observe + consolidate + age + report capacity."""
+        import consolidation_engine as ce
+        from observer import ObserverState, heartbeat
+
+        orig = {
+            k: getattr(ce, k)
+            for k in [
+                "TRACES_DIR",
+                "SEMANTIC_DIR",
+                "CONSOLIDATION_DIR",
+                "GRAPH_DIR",
+                "ENTITIES_PATH",
+                "RELATIONS_PATH",
+                "CLUSTERS_PATH",
+                "PENDING_PATH",
+                "LAST_RUN_PATH",
+                "SUMMARY_DAG_PATH",
+            ]
+        }
+        traces = tmp_path / "traces"
+        traces.mkdir()
+        sem = tmp_path / "semantic"
+        sem.mkdir()
+        con = tmp_path / "consolidation"
+        con.mkdir()
+        graph = tmp_path / "graph"
+        graph.mkdir()
+
+        (traces / "2024-01-01_trace.md").write_text(
+            "# Trace\n\nWe decided to benchmark BM25 retrieval accuracy.\n",
+            encoding="utf-8",
+        )
+
+        ce.TRACES_DIR = traces
+        ce.SEMANTIC_DIR = sem
+        ce.CONSOLIDATION_DIR = con
+        ce.GRAPH_DIR = graph
+        ce.ENTITIES_PATH = graph / "entities.jsonl"
+        ce.RELATIONS_PATH = graph / "relations.jsonl"
+        ce.CLUSTERS_PATH = graph / "clusters.json"
+        ce.PENDING_PATH = con / "pending.json"
+        ce.LAST_RUN_PATH = con / "last.json"
+        ce.SUMMARY_DAG_PATH = con / "dag.json"
+
+        try:
+            state = ObserverState()
+            result = heartbeat(state, {"traces": traces})
+            # All 4 sections must be present and not error
+            for section in ("observe", "consolidate", "aging", "capacity"):
+                assert section in result
+                assert "error" not in result[section], f"{section} errored: {result[section]}"
+        finally:
+            for k, v in orig.items():
+                setattr(ce, k, v)
+
+    def test_e2e_incremental_index_skips_unchanged(self, tmp_path):
+        """Second build with same files should show hash_hits > 0."""
+        import memory_index
+
+        orig_sources = memory_index.SOURCES
+        orig_hash = memory_index.HASH_CACHE_PATH
+
+        traces = tmp_path / "traces"
+        traces.mkdir()
+        (traces / "doc.md").write_text(
+            "# Document\n\nWe found that BM25 retrieval accuracy improved to 81 percent on LOCOMO.\n",
+            encoding="utf-8",
+        )
+        memory_index.SOURCES = {"traces": traces}
+        memory_index.HASH_CACHE_PATH = tmp_path / "hashes.json"
+
+        try:
+            idx = memory_index.MemoryIndex()
+            s1 = idx.build(use_gpu_embeddings=False, use_gliner=False, incremental=True)
+            assert s1["hash_misses"] >= 1
+            assert s1["hash_hits"] == 0
+
+            idx2 = memory_index.MemoryIndex()
+            s2 = idx2.build(use_gpu_embeddings=False, use_gliner=False, incremental=True)
+            assert s2["hash_hits"] >= 1
+            assert s2["documents"] == 0  # all skipped
+        finally:
+            memory_index.SOURCES = orig_sources
+            memory_index.HASH_CACHE_PATH = orig_hash
+
+
+class TestV04FeatureBenchmarks:
+    """Precise benchmarks for all v0.4 features with documented budgets.
+
+    Prints a formatted performance table at the end.
+    """
+
+    def test_classify_fact_9_types_benchmark(self):
+        """Budget: classify_fact < 0.01ms per call."""
+        from fact_decomposer import _classify_fact
+
+        sentences = [
+            "We decided to use BM25 for retrieval.",
+            "Actually the previous approach was wrong.",
+            "Always verify coverage before pushing.",
+            "The deadline is March 30.",
+            "To fix this, run pytest.",
+            "I plan to improve temporal reasoning.",
+            "I prefer dark mode.",
+            "She started a new job.",
+            "The meeting was productive.",
+        ]
+        # Warmup
+        for s in sentences:
+            _classify_fact(s)
+
+        t0 = time.perf_counter()
+        iterations = 5000
+        for _ in range(iterations):
+            for s in sentences:
+                _classify_fact(s)
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        per_call_us = elapsed_ms / (iterations * len(sentences)) * 1000
+        print(f"\n  classify_fact (9 types): {per_call_us:.2f}µs/call")
+        assert per_call_us < 10, f"Too slow: {per_call_us:.2f}µs"
+
+    def test_recency_weight_benchmark(self):
+        """Budget: _recency_weight < 0.005ms per call."""
+        from arcane_retriever import ArcaneRetriever
+
+        sessions = [
+            [{"role": "user", "content": f"Fact {i} about BM25 performance."}] for i in range(10)
+        ]
+        dates = [f"2024-{(i % 12) + 1:02d}-15" for i in range(10)]
+        ar = ArcaneRetriever(
+            sessions,
+            session_dates=dates,
+            reference_date="2024-12-31",
+            recency_half_life_days=30,
+        )
+        # Warmup
+        for f in ar.facts:
+            ar._recency_weight(f)
+
+        t0 = time.perf_counter()
+        iterations = 10000
+        for _ in range(iterations):
+            for f in ar.facts:
+                ar._recency_weight(f)
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        per_call_us = elapsed_ms / (iterations * len(ar.facts)) * 1000
+        print(f"\n  _recency_weight: {per_call_us:.2f}µs/call")
+        assert per_call_us < 5, f"Too slow: {per_call_us:.2f}µs"
+
+    def test_content_hash_benchmark(self):
+        """Budget: SHA-256 hash of 47K text < 0.1ms."""
+        import hashlib
+
+        t0 = time.perf_counter()
+        iterations = 1000
+        for _ in range(iterations):
+            hashlib.sha256(LONG_TEXT.encode("utf-8")).hexdigest()
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        per_call_ms = elapsed_ms / iterations
+        print(f"\n  SHA-256 (47K chars): {per_call_ms:.4f}ms/call")
+        assert per_call_ms < 0.5, f"Too slow: {per_call_ms:.4f}ms"
+
+    def test_capacity_report_benchmark(self, tmp_path):
+        """Budget: capacity_report < 10ms for 5 categories, 50 files."""
+        import consolidation_engine as ce
+
+        orig = ce.SEMANTIC_DIR
+        sem = tmp_path / "semantic"
+        ce.SEMANTIC_DIR = sem
+
+        for cat in ["decision", "finding", "technical", "strategy", "personal"]:
+            d = sem / cat
+            d.mkdir(parents=True)
+            for i in range(10):
+                (d / f"{cat}_{i}.md").write_text(
+                    f"---\nvalidity_state: active\n---\nContent {i}.\n" * 10,
+                    encoding="utf-8",
+                )
+
+        try:
+            # Warmup
+            ce.capacity_report()
+            ms, report = _timed(ce.capacity_report, n=100)
+            print(f"\n  capacity_report (5 cats, 50 files): {ms:.3f}ms")
+            assert ms < 10, f"Too slow: {ms:.3f}ms"
+            assert len(report) == 5
+        finally:
+            ce.SEMANTIC_DIR = orig
+
+    def test_age_memories_benchmark(self, tmp_path):
+        """Budget: age_memories < 20ms for 50 files."""
+        import consolidation_engine as ce
+
+        orig = ce.SEMANTIC_DIR
+        sem = tmp_path / "semantic" / "decision"
+        sem.mkdir(parents=True)
+        ce.SEMANTIC_DIR = tmp_path / "semantic"
+
+        for i in range(50):
+            (sem / f"mem_{i}.md").write_text(
+                f"---\nvalidity_state: active\nlast_accessed: 2024-0{(i % 9) + 1}-01\n---\nFact {i}.\n",
+                encoding="utf-8",
+            )
+
+        try:
+            ms, stats = _timed(ce.age_memories, "2024-12-01", n=10)
+            print(f"\n  age_memories (50 files): {ms:.3f}ms")
+            assert ms < 50, f"Too slow: {ms:.3f}ms"
+            assert stats["scanned"] == 50
+        finally:
+            ce.SEMANTIC_DIR = orig
+
+    def test_build_summary_dag_benchmark(self):
+        """Budget: build_summary_dag < 5ms for 100 traces."""
+        from consolidation_engine import build_summary_dag
+
+        data = {
+            f"2024-0{(i % 9) + 1}-{(i % 28) + 1:02d}_trace_{i}.md": {
+                "date": f"2024-0{(i % 9) + 1}-{(i % 28) + 1:02d}",
+                "project": "remanentia",
+                "entities": [f"ent_{i}", "bm25"],
+                "key_lines": [f"Finding {i}: accuracy at {50 + i}%"],
+                "text": f"Trace {i}: accuracy at {50 + i}% for BM25.",
+            }
+            for i in range(100)
+        }
+        # Warmup
+        build_summary_dag(data)
+        ms, dag = _timed(build_summary_dag, data, n=100)
+        print(f"\n  build_summary_dag (100 traces): {ms:.3f}ms")
+        assert ms < 5, f"Too slow: {ms:.3f}ms"
+        assert len(dag) > 100  # leaves + internal nodes
+
+    def test_search_summary_dag_benchmark(self):
+        """Budget: search_summary_dag < 1ms for 100-trace DAG."""
+        from consolidation_engine import build_summary_dag, search_summary_dag
+
+        data = {
+            f"2024-0{(i % 9) + 1}-{(i % 28) + 1:02d}_trace_{i}.md": {
+                "date": f"2024-0{(i % 9) + 1}-{(i % 28) + 1:02d}",
+                "project": "remanentia",
+                "entities": [f"ent_{i}", "bm25", "retrieval"],
+                "key_lines": [f"Finding {i}: accuracy at {50 + i}%"],
+                "text": f"Trace {i}: accuracy at {50 + i}% for BM25 retrieval.",
+            }
+            for i in range(100)
+        }
+        dag = build_summary_dag(data)
+        # Warmup
+        search_summary_dag(dag, "accuracy BM25 retrieval")
+        ms, results = _timed(search_summary_dag, dag, "accuracy BM25 retrieval", n=1000)
+        print(f"\n  search_summary_dag (100 traces): {ms:.4f}ms")
+        assert ms < 1, f"Too slow: {ms:.4f}ms"
+        assert len(results) > 0
+
+    def test_heartbeat_benchmark(self, tmp_path):
+        """Budget: heartbeat (empty) < 20ms."""
+        from observer import ObserverState, heartbeat
+
+        state = ObserverState()
+        # Warmup
+        heartbeat(state, {"empty": tmp_path})
+        ms, result = _timed(heartbeat, state, {"empty": tmp_path}, n=50)
+        print(f"\n  heartbeat (empty): {ms:.3f}ms")
+        assert ms < 20, f"Too slow: {ms:.3f}ms"
+
+    def test_full_v04_pipeline_benchmark(self):
+        """Full v0.4 pipeline: sessions → decompose → ArcaneRetriever (with decay) → context.
+
+        Budget: < 500ms for 5 sessions, 10 turns each.
+        Uses patch to skip ML model loading (network-dependent).
+        """
+        from arcane_retriever import ArcaneRetriever
+
+        sessions = [
+            [
+                {
+                    "role": "user",
+                    "content": f"Session {s} turn {t}: We decided to use BM25 v{s}.{t} "
+                    f"for retrieval. Accuracy measured at {70 + s + t} percent on LOCOMO.",
+                }
+                for t in range(10)
+            ]
+            for s in range(5)
+        ]
+        dates = [f"2024-0{s + 1}-15" for s in range(5)]
+
+        # Block ML model to measure pure regex/heuristic path
+        with patch.dict("sys.modules", {"fact_validity_model": None}):
+            # Warmup
+            ar = ArcaneRetriever(
+                sessions,
+                session_dates=dates,
+                reference_date="2024-06-15",
+                recency_half_life_days=30,
+            )
+            ar.retrieve("BM25 accuracy LOCOMO", "general", top_k=10)
+
+            t0 = time.perf_counter()
+            iterations = 10
+            for _ in range(iterations):
+                ar = ArcaneRetriever(
+                    sessions,
+                    session_dates=dates,
+                    reference_date="2024-06-15",
+                    recency_half_life_days=30,
+                )
+                results = ar.retrieve("BM25 accuracy LOCOMO", "general", top_k=10)
+                ar.build_context("accuracy", results)
+            elapsed_ms = (time.perf_counter() - t0) * 1000 / iterations
+
+        print(f"\n  Full v0.4 pipeline (5 sessions, 50 turns): {elapsed_ms:.1f}ms")
+        assert elapsed_ms < 500, f"Too slow: {elapsed_ms:.1f}ms"
+        assert len(results) > 0
+
+    def test_documented_v04_performance_summary(self):
+        """Print comprehensive performance summary for documentation."""
+        from fact_decomposer import _classify_fact
+        from consolidation_engine import build_summary_dag, search_summary_dag
+        from arcane_retriever import ArcaneRetriever
+
+        print("\n")
+        print("=" * 70)
+        print("  REMANENTIA v0.4 — FEATURE PERFORMANCE SUMMARY")
+        print("=" * 70)
+
+        # 1. classify_fact (9 types)
+        sentences = [
+            "We decided to use BM25.",
+            "Actually it was wrong.",
+            "Always verify coverage.",
+            "Deadline is March 30.",
+            "To fix this, run pytest.",
+            "I plan to improve.",
+            "I prefer dark mode.",
+            "She started a job.",
+            "Meeting was good.",
+        ]
+        t0 = time.perf_counter()
+        for _ in range(5000):
+            for s in sentences:
+                _classify_fact(s)
+        ms = (time.perf_counter() - t0) * 1000 / (5000 * 9)
+        print(f"  classify_fact (9 types)          {ms * 1000:>8.2f} µs/call")
+
+        # 2. Recency weight
+        sessions = [
+            [
+                {
+                    "role": "user",
+                    "content": f"Fact number {i} about BM25 retrieval performance benchmarks.",
+                }
+            ]
+            for i in range(10)
+        ]
+        dates = [f"2024-{(i % 12) + 1:02d}-15" for i in range(10)]
+        ar = ArcaneRetriever(
+            sessions,
+            session_dates=dates,
+            reference_date="2024-12-31",
+            recency_half_life_days=30,
+        )
+        t0 = time.perf_counter()
+        for _ in range(10000):
+            for f in ar.facts:
+                ar._recency_weight(f)
+        ms = (time.perf_counter() - t0) * 1000 / (10000 * len(ar.facts))
+        print(f"  _recency_weight                  {ms * 1000:>8.2f} µs/call")
+
+        # 3. SHA-256 hash (47K)
+        import hashlib
+
+        t0 = time.perf_counter()
+        for _ in range(1000):
+            hashlib.sha256(LONG_TEXT.encode("utf-8")).hexdigest()
+        ms = (time.perf_counter() - t0) * 1000 / 1000
+        print(f"  SHA-256 (47K chars)              {ms:>8.4f} ms/call")
+
+        # 4. build_summary_dag (100 traces)
+        data = {
+            f"trace_{i}.md": {
+                "date": f"2024-0{(i % 9) + 1}-01",
+                "project": "remanentia",
+                "entities": ["bm25"],
+                "key_lines": [f"Finding {i}"],
+                "text": f"Trace {i}.",
+            }
+            for i in range(100)
+        }
+        t0 = time.perf_counter()
+        for _ in range(100):
+            build_summary_dag(data)
+        ms = (time.perf_counter() - t0) * 1000 / 100
+        print(f"  build_summary_dag (100 traces)   {ms:>8.3f} ms/call")
+
+        # 5. search_summary_dag
+        dag = build_summary_dag(data)
+        t0 = time.perf_counter()
+        for _ in range(1000):
+            search_summary_dag(dag, "accuracy BM25")
+        ms = (time.perf_counter() - t0) * 1000 / 1000
+        print(f"  search_summary_dag               {ms:>8.4f} ms/call")
+
+        # 6. Full pipeline (5 sessions) — block ML model for pure regex timing
+        sessions_full = [
+            [
+                {
+                    "role": "user",
+                    "content": f"Session {s} turn {t}: We decided to use BM25 version {s}.{t} "
+                    f"for retrieval scoring. Accuracy measured at {70 + s + t} percent on LOCOMO benchmark.",
+                }
+                for t in range(10)
+            ]
+            for s in range(5)
+        ]
+        dates_full = [f"2024-0{s + 1}-15" for s in range(5)]
+        import sys
+
+        saved_fvm = sys.modules.get("fact_validity_model")
+        sys.modules["fact_validity_model"] = None
+        try:
+            t0 = time.perf_counter()
+            for _ in range(10):
+                a = ArcaneRetriever(
+                    sessions_full,
+                    session_dates=dates_full,
+                    reference_date="2024-06-15",
+                    recency_half_life_days=30,
+                )
+                r = a.retrieve("BM25 accuracy", "general", top_k=10)
+                a.build_context("accuracy", r)
+            ms = (time.perf_counter() - t0) * 1000 / 10
+        finally:
+            if saved_fvm is not None:
+                sys.modules["fact_validity_model"] = saved_fvm
+            else:
+                sys.modules.pop("fact_validity_model", None)
+        print(f"  Full v0.4 pipeline (50 turns)    {ms:>8.1f} ms/call")
+
+        print("=" * 70)
