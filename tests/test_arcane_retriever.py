@@ -551,7 +551,7 @@ class TestRecencyDecay:
         assert weight < 0.01, f"Expected near 0, got {weight}"
 
     def test_decay_with_invalid_date_returns_one(self):
-        """Facts with unparseable dates should get weight 1.0 (no penalty)."""
+        """Facts with unparsable dates should get weight 1.0 (no penalty)."""
         from arcane_retriever import ArcaneRetriever
         from fact_decomposer import AtomicFact
 
