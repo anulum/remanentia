@@ -328,9 +328,17 @@ class ArcaneRetriever:
                 return False, "insufficient_count_evidence"
 
         # Check entity coverage: does the question mention entities found in results?
-        q_entities = set(w for w in re.findall(r"\w{4,}", q_lower))
+        try:
+            from remanentia_fact_decomposer import tokenize_words as _rust_tw
+
+            q_entities = set(_rust_tw(q_lower))  # pragma: no cover
+        except ImportError:
+            q_entities = set(re.findall(r"\w{4,}", q_lower))
         result_text = " ".join(r.fact.text.lower() for r in results[:5])
-        result_tokens = set(re.findall(r"\w{4,}", result_text))
+        try:
+            result_tokens = set(_rust_tw(result_text))  # pragma: no cover  # noqa: F821
+        except (ImportError, NameError):
+            result_tokens = set(re.findall(r"\w{4,}", result_text))
         overlap = len(q_entities & result_tokens)
         if overlap < len(q_entities) * 0.3:
             return False, "low_entity_coverage"
@@ -362,7 +370,12 @@ class ArcaneRetriever:
 
         if reason == "low_entity_coverage":
             # Try simpler formulation
-            words = re.findall(r"\w{4,}", original)
+            try:
+                from remanentia_fact_decomposer import tokenize_words as _rust_tw
+
+                words = _rust_tw(original)  # pragma: no cover
+            except ImportError:
+                words = re.findall(r"\w{4,}", original)
             return " ".join(words[:5])
 
         return original

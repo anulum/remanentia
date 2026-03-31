@@ -64,6 +64,12 @@ _DECISION_PATTERNS = [
 
 def extract_decision_points(text: str) -> list[str]:
     """Identify sentences that contain decision points."""
+    try:
+        from remanentia_active_retrieval import extract_decision_points as _rust_dp
+
+        return _rust_dp(text)  # pragma: no cover
+    except ImportError:
+        pass
     sentences = re.split(r"[.!?\n]", text)
     points = []
     for sentence in sentences:

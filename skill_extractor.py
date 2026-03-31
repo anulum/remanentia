@@ -51,6 +51,12 @@ _SKILL_MARKERS = [
 
 
 def _tokenize_lower(text: str) -> list[str]:
+    try:
+        from remanentia_skill_extractor import tokenize_lower as _rust_tok
+
+        return _rust_tok(text)  # pragma: no cover
+    except ImportError:
+        pass
     return re.findall(r"[a-z0-9_]+", text.lower())
 
 
@@ -74,17 +80,24 @@ def extract_skills(traces_dir: Path | None = None) -> list[dict]:
             if not stripped or stripped.startswith("#"):
                 continue
             # Check if this line describes a skill-like pattern
-            lower = stripped.lower()
-            for trigger_re, action_re in _SKILL_MARKERS:
-                if re.search(trigger_re, lower) and re.search(action_re, lower):
-                    entries.append(
-                        {
-                            "text": stripped[:200],
-                            "source": f.name,
-                            "tokens": set(_tokenize_lower(stripped)),
-                        }
-                    )
-                    break
+            try:
+                from remanentia_skill_extractor import matches_skill_marker as _rust_match
+
+                is_skill = _rust_match(stripped)  # pragma: no cover
+            except ImportError:
+                lower = stripped.lower()
+                is_skill = any(
+                    re.search(trigger_re, lower) and re.search(action_re, lower)
+                    for trigger_re, action_re in _SKILL_MARKERS
+                )
+            if is_skill:
+                entries.append(
+                    {
+                        "text": stripped[:200],
+                        "source": f.name,
+                        "tokens": set(_tokenize_lower(stripped)),
+                    }
+                )
 
     if not entries:
         return []
