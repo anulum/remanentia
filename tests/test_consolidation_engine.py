@@ -656,8 +656,7 @@ class TestConsolidationPipeline:
             encoding="utf-8",
         )
         (traces_dir / "2026-03-15_finding.md").write_text(
-            "# Finding\n\n"
-            "BM25 accuracy measured at 85.7% P@1 on the LOCOMO benchmark.\n",
+            "# Finding\n\nBM25 accuracy measured at 85.7% P@1 on the LOCOMO benchmark.\n",
             encoding="utf-8",
         )
 

@@ -538,7 +538,9 @@ class TestMCPPipelineIntegration:
         try:
             with p("mcp_server.BASE", mcp_server.BASE):
                 result = handle_remember("Test memory content for pipeline verification.")
-            assert "stored" in result.lower() or "saved" in result.lower() or isinstance(result, str)
+            assert (
+                "stored" in result.lower() or "saved" in result.lower() or isinstance(result, str)
+            )
         finally:
             mcp_server._UNIFIED_INDEX = old
 
@@ -571,20 +573,26 @@ class TestMCPPipelineIntegration:
 
     def test_graph_query_returns_entities(self):
         """MCP graph tool returns entity relationship text."""
-        resp = handle_request({
-            "jsonrpc": "2.0", "id": 99,
-            "method": "tools/call",
-            "params": {"name": "remanentia_graph", "arguments": {"top": 3}},
-        })
+        resp = handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 99,
+                "method": "tools/call",
+                "params": {"name": "remanentia_graph", "arguments": {"top": 3}},
+            }
+        )
         text = resp["result"]["content"][0]["text"]
         assert isinstance(text, str)
 
     def test_consolidate_via_mcp(self):
         """MCP status call exercises consolidation path."""
-        resp = handle_request({
-            "jsonrpc": "2.0", "id": 99,
-            "method": "tools/call",
-            "params": {"name": "remanentia_status", "arguments": {}},
-        })
+        resp = handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 99,
+                "method": "tools/call",
+                "params": {"name": "remanentia_status", "arguments": {}},
+            }
+        )
         text = resp["result"]["content"][0]["text"]
         assert isinstance(text, str)

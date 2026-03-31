@@ -238,9 +238,12 @@ class TestExtractRelationsEdgeCases:
         assert rels == []
 
     def test_single_entity(self):
-        rels = extract_relations("Just BM25 here.", [
-            Entity(text="BM25", label="algorithm", score=0.9),
-        ])
+        rels = extract_relations(
+            "Just BM25 here.",
+            [
+                Entity(text="BM25", label="algorithm", score=0.9),
+            ],
+        )
         assert rels == []
 
     def test_version_of(self):

@@ -15,7 +15,6 @@ round-trip, file system errors, idempotency, and content validation.
 from __future__ import annotations
 
 
-
 from llm_setup import ModelConfig, recommend_model, write_config
 
 

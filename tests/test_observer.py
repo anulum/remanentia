@@ -267,8 +267,7 @@ class TestExtractNotesEdgeCases:
     def test_no_signal_paragraphs(self, tmp_path):
         f = tmp_path / "chatter.md"
         f.write_text(
-            "Just talking about the weather today.\n\n"
-            "More idle chat without substance.\n",
+            "Just talking about the weather today.\n\nMore idle chat without substance.\n",
             encoding="utf-8",
         )
         notes = extract_notes_from_file(f)

@@ -525,7 +525,14 @@ class TestRustWiring:
     def test_change_verb_detection(self):
         """State-change verbs are detected in facts."""
         facts = decompose_sessions(
-            [[{"role": "user", "content": "I started a new job at Google last month. I switched from Apple."}]]
+            [
+                [
+                    {
+                        "role": "user",
+                        "content": "I started a new job at Google last month. I switched from Apple.",
+                    }
+                ]
+            ]
         )
         # At least one fact should have supersedes or event type
         has_change = any(f.supersedes or f.fact_type == "event" for f in facts)
@@ -582,9 +589,7 @@ class TestFactDecomposerPipeline:
         assert len(results) >= 1
 
     def test_entity_extraction_in_facts(self):
-        sessions = [
-            [{"role": "user", "content": "I bought a Tesla Model 3 last week."}]
-        ]
+        sessions = [[{"role": "user", "content": "I bought a Tesla Model 3 last week."}]]
         facts = decompose_sessions(sessions)
         assert any("tesla" in " ".join(f.entities).lower() for f in facts)
 

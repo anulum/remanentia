@@ -373,8 +373,20 @@ class TestParseDatesEdgeCases:
         assert dates == sorted(dates)
 
     def test_all_months(self):
-        for month in ["January", "February", "March", "April", "May", "June",
-                       "July", "August", "September", "October", "November", "December"]:
+        for month in [
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+        ]:
             dates = parse_dates(f"On {month} 1, 2026.")
             assert len(dates) >= 1, f"Failed for {month}"
 
@@ -413,20 +425,24 @@ class TestTemporalGraphEdgeCases:
         tg = TemporalGraph()
         tg.add_events([TemporalEvent(date="2026-03-10", text="A", source="a.md")])
         assert len(tg.events) == 1
-        tg.add_events([
-            TemporalEvent(date="2026-03-10", text="A2", source="a2.md"),
-            TemporalEvent(date="2026-03-20", text="B", source="b.md"),
-        ])
+        tg.add_events(
+            [
+                TemporalEvent(date="2026-03-10", text="A2", source="a2.md"),
+                TemporalEvent(date="2026-03-20", text="B", source="b.md"),
+            ]
+        )
         assert len(tg.events) == 3
         same_day = [e for e in tg.edges if e.relation == "same_day"]
         assert len(same_day) >= 1  # A and A2 on same day
 
     def test_save_load_roundtrip_preserves_dates(self, tmp_path):
         tg = TemporalGraph()
-        tg.add_events([
-            TemporalEvent(date="2026-03-15", text="Event α", source="α.md", paragraph_idx=3),
-            TemporalEvent(date="2026-03-20", text="Event β", source="β.md", paragraph_idx=7),
-        ])
+        tg.add_events(
+            [
+                TemporalEvent(date="2026-03-15", text="Event α", source="α.md", paragraph_idx=3),
+                TemporalEvent(date="2026-03-20", text="Event β", source="β.md", paragraph_idx=7),
+            ]
+        )
         path = tmp_path / "temporal.jsonl"
         tg.save(path)
 
@@ -449,10 +465,12 @@ class TestTemporalGraphEdgeCases:
 
     def test_query_since(self):
         tg = TemporalGraph()
-        tg.add_events([
-            TemporalEvent(date="2026-03-10", text="Old event with data", source="a.md"),
-            TemporalEvent(date="2026-03-25", text="New event with data", source="b.md"),
-        ])
+        tg.add_events(
+            [
+                TemporalEvent(date="2026-03-10", text="Old event with data", source="a.md"),
+                TemporalEvent(date="2026-03-25", text="New event with data", source="b.md"),
+            ]
+        )
         results = tg.query_temporal("data since 2026-03-20", top_k=5)
         assert all(ev.date >= "2026-03-20" for ev in results)
 
@@ -504,11 +522,13 @@ class TestTemporalPipelineIntegration:
     def test_graph_feeds_search_context(self):
         """Build graph → query → verify temporal events inform results."""
         tg = TemporalGraph()
-        tg.build_from_documents([
-            ("session1.md", "On March 10, 2026 the team decided to use BM25."),
-            ("session2.md", "On March 15, 2026 LOCOMO accuracy was 81.2%."),
-            ("session3.md", "On March 20, 2026 the score improved to 88.5%."),
-        ])
+        tg.build_from_documents(
+            [
+                ("session1.md", "On March 10, 2026 the team decided to use BM25."),
+                ("session2.md", "On March 15, 2026 LOCOMO accuracy was 81.2%."),
+                ("session3.md", "On March 20, 2026 the score improved to 88.5%."),
+            ]
+        )
         assert tg.stats["events"] == 3
 
         # Query temporal range
@@ -521,10 +541,12 @@ class TestTemporalPipelineIntegration:
     def test_temporal_code_execute_with_graph_events(self):
         """Temporal code execution on graph-extracted events."""
         tg = TemporalGraph()
-        tg.build_from_documents([
-            ("a.md", "Bug found on 2026-03-10."),
-            ("b.md", "Fix deployed on 2026-03-15."),
-        ])
+        tg.build_from_documents(
+            [
+                ("a.md", "Bug found on 2026-03-10."),
+                ("b.md", "Fix deployed on 2026-03-15."),
+            ]
+        )
         result = temporal_code_execute("how many days between events", tg.events)
         assert result is not None
         assert "5 days" in result
