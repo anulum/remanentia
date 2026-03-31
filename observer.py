@@ -8,9 +8,16 @@
 
 """Watch project directories for changes, auto-create knowledge notes.
 
-Inspired by Mastra's Observational Memory (94.87% LongMemEval):
-background agents watch conversations and maintain a dense observation log.
-Remanentia's Observer does the same for filesystem artifacts.
+Inspired by Mastra's Observational Memory (94.87% LongMemEval) and
+OpenClaw's Heartbeat component: background agents watch conversations,
+maintain a dense observation log, and perform scheduled maintenance.
+
+Remanentia's Observer does the same for filesystem artifacts, with
+added heartbeat capabilities:
+- Periodic consolidation of episodic traces
+- Memory aging (lifecycle state transitions)
+- Capacity monitoring with consolidation pressure
+- Proactive gap detection (stale topic coverage)
 """
 
 from __future__ import annotations
@@ -200,6 +207,54 @@ def observe_once(state: ObserverState, watched_dirs: dict[str, Path] | None = No
     }
 
 
+def heartbeat(state: ObserverState, watched_dirs: dict[str, Path] | None = None) -> dict:
+    """Run one heartbeat cycle: observe + consolidate + age + capacity check.
+
+    This is the autonomous maintenance tick inspired by OpenClaw's Heartbeat.
+    Returns combined stats from all sub-operations.
+    """
+    result: dict = {"observe": {}, "consolidate": {}, "aging": {}, "capacity": {}}
+
+    # 1. Observe filesystem changes
+    result["observe"] = observe_once(state, watched_dirs)
+
+    # 2. Consolidate any pending traces
+    try:
+        from consolidation_engine import consolidate, get_pending_traces
+
+        pending = get_pending_traces()
+        if pending:
+            result["consolidate"] = consolidate()
+        else:
+            result["consolidate"] = {"status": "nothing_to_consolidate", "pending": 0}
+    except Exception as exc:
+        result["consolidate"] = {"error": str(exc)}
+
+    # 3. Age memories (lifecycle transitions)
+    try:
+        from consolidation_engine import age_memories
+
+        result["aging"] = age_memories()
+    except Exception as exc:
+        result["aging"] = {"error": str(exc)}
+
+    # 4. Capacity monitoring
+    try:
+        from consolidation_engine import capacity_report
+
+        report = capacity_report()
+        over_capacity = {k: v for k, v in report.items() if v.get("needs_consolidation")}
+        result["capacity"] = {
+            "categories_checked": len(report),
+            "categories_over_threshold": len(over_capacity),
+            "over_capacity": list(over_capacity.keys()),
+        }
+    except Exception as exc:
+        result["capacity"] = {"error": str(exc)}
+
+    return result
+
+
 def observe_loop(
     interval: int = 30, watched_dirs: dict[str, Path] | None = None
 ):  # pragma: no cover
@@ -211,17 +266,35 @@ def observe_loop(
     )
     print("Press Ctrl+C to stop.\n")
 
+    heartbeat_every = 10  # run full heartbeat every N cycles (~5 min at 30s)
+    cycle = 0
     try:
         while True:
-            result = observe_once(state, watched_dirs)
-            if result["files_new"] > 0:
+            cycle += 1
+            if cycle % heartbeat_every == 0:
+                # Full heartbeat: observe + consolidate + age + capacity
+                result = heartbeat(state, watched_dirs)
+                obs = result["observe"]
+                cons = result["consolidate"]
+                cap = result["capacity"]
                 print(
-                    f"[{time.strftime('%H:%M:%S')}] "
-                    f"Scanned {result['files_scanned']} files, "
-                    f"{result['files_new']} new, "
-                    f"{result['notes_created']} notes created"
+                    f"[{time.strftime('%H:%M:%S')}] HEARTBEAT: "
+                    f"files_new={obs.get('files_new', 0)}, "
+                    f"consolidated={cons.get('memories_written', 0)}, "
+                    f"over_capacity={cap.get('categories_over_threshold', 0)}"
                 )
                 state.save()
+            else:
+                # Quick observe only
+                result = observe_once(state, watched_dirs)
+                if result["files_new"] > 0:
+                    print(
+                        f"[{time.strftime('%H:%M:%S')}] "
+                        f"Scanned {result['files_scanned']} files, "
+                        f"{result['files_new']} new, "
+                        f"{result['notes_created']} notes created"
+                    )
+                    state.save()
             time.sleep(interval)
     except KeyboardInterrupt:
         print("\nObserver stopped.")

@@ -27,6 +27,7 @@ import json
 import re
 import time
 from collections import Counter, defaultdict
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -340,6 +341,43 @@ def _cluster_traces(traces: dict[str, dict]) -> list[list[str]]:
 # ── Semantic memory writing ──────────────────────────────────────
 
 
+# ── Memory lifecycle states ──────────────────────────────────────
+#
+# Every semantic memory has a validity_state that progresses:
+#   active → validated → stale → archived
+#
+# Transitions:
+#   active → validated : when a later trace confirms the same fact
+#   active/validated → stale : when age exceeds STALE_AFTER_DAYS without access
+#   stale → archived : when age exceeds ARCHIVE_AFTER_DAYS
+#   any → active : when a trace re-references the memory (reset)
+#   any → archived : when contradicted by a newer fact
+#
+VALID_STATES = ("active", "validated", "stale", "archived")
+STALE_AFTER_DAYS = 90
+ARCHIVE_AFTER_DAYS = 365
+
+# ── Bounded memory capacity ─────────────────────────────────────
+#
+# Each semantic memory category has a soft char limit. When a
+# category exceeds CAPACITY_WARN_PERCENT, `capacity_report()`
+# flags it for consolidation.  This mirrors Hermes Agent's
+# bounded MEMORY.md pattern but at per-category granularity.
+#
+CATEGORY_CHAR_LIMITS = {
+    "decision": 50_000,
+    "finding": 100_000,
+    "strategy": 30_000,
+    "technical": 100_000,
+    "continuity": 20_000,
+    "personal": 20_000,
+    "findings": 100_000,  # alias used by consolidate()
+    "general": 50_000,
+}
+DEFAULT_CATEGORY_CHAR_LIMIT = 50_000
+CAPACITY_WARN_PERCENT = 80
+
+
 def _write_semantic_memory(
     category: str,
     topic: str,
@@ -348,8 +386,9 @@ def _write_semantic_memory(
     source_traces: list[str],
     entities: list[str],
     content: str,
+    validity_state: str = "active",
 ) -> Path:
-    """Write a structured semantic memory file."""
+    """Write a structured semantic memory file with lifecycle state."""
     cat_dir = SEMANTIC_DIR / category
     cat_dir.mkdir(parents=True, exist_ok=True)
 
@@ -364,7 +403,9 @@ def _write_semantic_memory(
         "source_traces": source_traces,
         "entities": entities,
         "confidence": 0.8,
+        "validity_state": validity_state,
         "last_validated": datetime.now().strftime("%Y-%m-%d"),
+        "last_accessed": datetime.now().strftime("%Y-%m-%d"),
     }
 
     lines = ["---"]
@@ -672,6 +713,11 @@ def consolidate(force: bool = False) -> dict:
     GRAPH_DIR.mkdir(parents=True, exist_ok=True)
     CLUSTERS_PATH.write_text(json.dumps(clusters, indent=2) + "\n", encoding="utf-8")
 
+    # Build and save hierarchical summary DAG
+    dag_nodes = build_summary_dag(trace_data)
+    if dag_nodes:
+        SUMMARY_DAG_PATH.write_text(json.dumps(dag_nodes, indent=2) + "\n", encoding="utf-8")
+
     # Mark traces as processed
     if PENDING_PATH.exists():  # pragma: no cover
         pending = json.loads(PENDING_PATH.read_text(encoding="utf-8"))
@@ -692,6 +738,340 @@ def consolidate(force: bool = False) -> dict:
     LAST_RUN_PATH.write_text(json.dumps(stats, indent=2) + "\n", encoding="utf-8")
 
     return stats
+
+
+def capacity_report() -> dict[str, dict]:
+    """Report memory capacity usage per semantic category.
+
+    Returns a dict mapping category name to:
+    - chars: total characters in that category
+    - limit: configured char limit
+    - usage_pct: percentage used (0-100+)
+    - needs_consolidation: True if above CAPACITY_WARN_PERCENT
+    - file_count: number of .md files
+    - state_counts: breakdown by validity_state
+    """
+    report: dict[str, dict] = {}
+    if not SEMANTIC_DIR.exists():
+        return report
+
+    for cat_dir in sorted(SEMANTIC_DIR.iterdir()):
+        if not cat_dir.is_dir():
+            continue
+        category = cat_dir.name
+        total_chars = 0
+        file_count = 0
+        state_counts: dict[str, int] = {}
+
+        for md_file in cat_dir.rglob("*.md"):
+            text = md_file.read_text(encoding="utf-8")
+            total_chars += len(text)
+            file_count += 1
+            fm = _parse_frontmatter(text)
+            if fm:
+                state = fm.get("validity_state", "active")
+                state_counts[state] = state_counts.get(state, 0) + 1
+
+        limit = CATEGORY_CHAR_LIMITS.get(category, DEFAULT_CATEGORY_CHAR_LIMIT)
+        usage_pct = round(100 * total_chars / limit, 1) if limit > 0 else 0.0
+
+        report[category] = {
+            "chars": total_chars,
+            "limit": limit,
+            "usage_pct": usage_pct,
+            "needs_consolidation": usage_pct >= CAPACITY_WARN_PERCENT,
+            "file_count": file_count,
+            "state_counts": state_counts,
+        }
+
+    return report
+
+
+# ── Hierarchical summary DAGs ────────────────────────────────────
+#
+# Inspired by Engram's Lossless Context Management (LCM).
+# Multi-level compression of episodic traces:
+#   Level 0 (leaf): individual traces (raw .md files)
+#   Level 1: cluster summaries (~8 traces each)
+#   Level 2: super-summaries (~32 traces = ~4 L1 nodes)
+#   Level 3: meta-summaries (~128 traces = ~4 L2 nodes)
+#
+# Each node stores:
+#   - summary text (heuristic extraction, no LLM needed)
+#   - children (trace filenames or lower-level node IDs)
+#   - date range
+#   - entities mentioned
+#
+# The DAG enables efficient retrieval over long histories
+# by searching at the appropriate depth first, then drilling
+# down to leaf nodes for detail.
+
+SUMMARY_DAG_PATH = CONSOLIDATION_DIR / "summary_dag.json"
+DAG_FANOUT = 4  # number of children per internal node
+
+
+@dataclass
+class DAGNode:
+    """A node in the hierarchical summary DAG."""
+
+    node_id: str
+    level: int  # 0 = leaf (raw trace), 1+ = summary
+    summary: str
+    children: list[str]  # child node_ids or trace filenames
+    date_range: tuple[str, str]  # (earliest, latest) ISO dates
+    entities: list[str]
+    project: str
+
+
+def build_summary_dag(trace_data: dict[str, dict]) -> list[dict]:
+    """Build a hierarchical summary DAG from trace data.
+
+    Args:
+        trace_data: dict mapping trace filename to metadata dict with
+            keys: date, project, entities, key_lines, text
+
+    Returns:
+        List of DAGNode dicts (serialisable).
+    """
+    if not trace_data:
+        return []
+
+    # Level 0: leaf nodes from individual traces
+    leaves: list[DAGNode] = []
+    for name, data in sorted(trace_data.items(), key=lambda x: x[1].get("date", "")):
+        summary_lines = data.get("key_lines", [])[:5]
+        summary = " ".join(summary_lines) if summary_lines else data.get("text", "")[:200]
+        date_str = data.get("date", "")[:10]
+        leaves.append(
+            DAGNode(
+                node_id=f"L0_{name}",
+                level=0,
+                summary=summary,
+                children=[name],
+                date_range=(date_str, date_str),
+                entities=data.get("entities", [])[:20],
+                project=data.get("project", "general"),
+            )
+        )
+
+    all_nodes = list(leaves)
+    current_level_nodes = leaves
+    level = 1
+
+    # Build higher levels by grouping DAG_FANOUT nodes together
+    while len(current_level_nodes) > 1:
+        next_level: list[DAGNode] = []
+        for i in range(0, len(current_level_nodes), DAG_FANOUT):
+            group = current_level_nodes[i : i + DAG_FANOUT]
+            if not group:
+                break
+
+            # Merge summaries: take first sentence from each child
+            merged_summary_parts = []
+            all_entities: set[str] = set()
+            earliest = "9999"
+            latest = "0000"
+            children_ids = []
+            projects: list[str] = []
+
+            for node in group:
+                # Take first 100 chars of each child summary
+                merged_summary_parts.append(node.summary[:100])
+                all_entities.update(node.entities)
+                if node.date_range[0] and node.date_range[0] < earliest:
+                    earliest = node.date_range[0]
+                if node.date_range[1] and node.date_range[1] > latest:
+                    latest = node.date_range[1]
+                children_ids.append(node.node_id)
+                projects.append(node.project)
+
+            # Most common project in group
+            project = max(set(projects), key=projects.count) if projects else "general"
+
+            merged_summary = " | ".join(merged_summary_parts)
+            node_id = f"L{level}_{i // DAG_FANOUT}_{earliest}"
+
+            parent = DAGNode(
+                node_id=node_id,
+                level=level,
+                summary=merged_summary,
+                children=children_ids,
+                date_range=(
+                    earliest if earliest != "9999" else "",
+                    latest if latest != "0000" else "",
+                ),
+                entities=sorted(all_entities)[:30],
+                project=project,
+            )
+            next_level.append(parent)
+
+        all_nodes.extend(next_level)
+        current_level_nodes = next_level
+        level += 1
+
+    return [_dag_node_to_dict(n) for n in all_nodes]
+
+
+def _dag_node_to_dict(node: DAGNode) -> dict:
+    return {
+        "node_id": node.node_id,
+        "level": node.level,
+        "summary": node.summary,
+        "children": node.children,
+        "date_range": list(node.date_range),
+        "entities": node.entities,
+        "project": node.project,
+    }
+
+
+def search_summary_dag(
+    dag_nodes: list[dict],
+    query: str,
+    top_k: int = 10,
+) -> list[dict]:
+    """Search the summary DAG top-down for relevant nodes.
+
+    Starts at the highest level, finds matching nodes, then
+    drills into their children for more detail.
+    """
+    if not dag_nodes:
+        return []
+
+    query_tokens = set(re.findall(r"\w{3,}", query.lower()))
+    if not query_tokens:
+        return []
+
+    # Group nodes by level
+    by_level: dict[int, list[dict]] = {}
+    node_map: dict[str, dict] = {}
+    for n in dag_nodes:
+        level = n["level"]
+        by_level.setdefault(level, []).append(n)
+        node_map[n["node_id"]] = n
+
+    max_level = max(by_level.keys()) if by_level else 0
+
+    # Score at highest level first
+    def _score(node: dict) -> float:
+        text = (node["summary"] + " " + " ".join(node["entities"])).lower()
+        text_tokens = set(re.findall(r"\w{3,}", text))
+        overlap = len(query_tokens & text_tokens)
+        return overlap
+
+    # Top-down search: start from root, expand best matches
+    candidates = by_level.get(max_level, [])
+    scored = [(n, _score(n)) for n in candidates]
+    scored.sort(key=lambda x: -x[1])
+
+    results: list[dict] = []
+    seen: set[str] = set()
+
+    # Expand top matches down to leaves
+    frontier = [n for n, s in scored[:top_k] if s > 0]
+    while frontier:
+        node = frontier.pop(0)
+        if node["node_id"] in seen:
+            continue
+        seen.add(node["node_id"])
+
+        if node["level"] == 0:
+            results.append(node)
+        else:
+            # Expand children, prioritise by score
+            children = [node_map[cid] for cid in node["children"] if cid in node_map]
+            children_scored = [(c, _score(c)) for c in children]
+            children_scored.sort(key=lambda x: -x[1])
+            for c, s in children_scored:
+                if s > 0 and c["node_id"] not in seen:
+                    frontier.append(c)
+
+        if len(results) >= top_k:
+            break
+
+    return results[:top_k]
+
+
+def age_memories(reference_date: str | None = None) -> dict:
+    """Age semantic memories based on last_accessed and last_validated timestamps.
+
+    Transitions:
+    - active/validated → stale after STALE_AFTER_DAYS without access
+    - stale → archived after ARCHIVE_AFTER_DAYS without access
+
+    Returns stats: total scanned, transitioned counts per state.
+    """
+    if reference_date:
+        ref = datetime.strptime(reference_date, "%Y-%m-%d")
+    else:
+        ref = datetime.now()
+
+    stats = {"scanned": 0, "active_to_stale": 0, "validated_to_stale": 0, "stale_to_archived": 0}
+
+    if not SEMANTIC_DIR.exists():
+        return stats
+
+    for md_file in SEMANTIC_DIR.rglob("*.md"):
+        stats["scanned"] += 1
+        text = md_file.read_text(encoding="utf-8")
+
+        # Parse frontmatter
+        fm = _parse_frontmatter(text)
+        if not fm:
+            continue
+
+        state = fm.get("validity_state", "active")
+        last_accessed = fm.get("last_accessed", fm.get("last_validated", ""))
+        if not last_accessed:
+            continue
+
+        try:
+            accessed = datetime.strptime(last_accessed[:10], "%Y-%m-%d")
+        except (ValueError, TypeError):
+            continue
+
+        age_days = (ref - accessed).days
+        new_state = state
+
+        if state in ("active", "validated") and age_days > STALE_AFTER_DAYS:
+            new_state = "stale"
+            key = f"{state}_to_stale"
+            stats[key] = stats.get(key, 0) + 1
+        elif state == "stale" and age_days > ARCHIVE_AFTER_DAYS:
+            new_state = "archived"
+            stats["stale_to_archived"] += 1
+
+        if new_state != state:
+            _update_frontmatter_field(md_file, text, "validity_state", new_state)
+
+    return stats
+
+
+def _parse_frontmatter(text: str) -> dict | None:
+    """Parse YAML-ish frontmatter from a semantic memory file."""
+    if not text.startswith("---"):
+        return None
+    end = text.find("---", 3)
+    if end < 0:
+        return None
+    fm_text = text[3:end].strip()
+    result = {}
+    for line in fm_text.split("\n"):
+        line = line.strip()
+        if ":" in line and not line.startswith("-"):
+            key, _, val = line.partition(":")
+            result[key.strip()] = val.strip()
+    return result
+
+
+def _update_frontmatter_field(path: Path, text: str, field_name: str, value: str):
+    """Update a single field in a frontmatter block and write back."""
+    pattern = re.compile(rf"^{re.escape(field_name)}:\s*.*$", re.MULTILINE)
+    if pattern.search(text):
+        new_text = pattern.sub(f"{field_name}: {value}", text)
+    else:
+        # Insert after the opening ---
+        new_text = text.replace("---\n", f"---\n{field_name}: {value}\n", 1)
+    path.write_text(new_text, encoding="utf-8")
 
 
 if __name__ == "__main__":

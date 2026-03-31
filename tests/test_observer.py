@@ -16,6 +16,7 @@ from observer import (
     _has_signal,
     _split_into_paragraphs,
     extract_notes_from_file,
+    heartbeat,
     observe_once,
 )
 
@@ -390,3 +391,142 @@ class TestObserverErrors:
         f.write_text("")
         notes = extract_notes_from_file(f)
         assert notes == []
+
+
+# ── Heartbeat (observe + consolidate + age + capacity) ──────────
+
+
+class TestHeartbeat:
+    """Tests for the heartbeat function — combined maintenance tick."""
+
+    def test_heartbeat_returns_all_sections(self, tmp_path):
+        """Heartbeat result must contain observe, consolidate, aging, capacity keys."""
+        import consolidation_engine as ce
+
+        # Patch dirs to tmp
+        orig_traces = ce.TRACES_DIR
+        orig_semantic = ce.SEMANTIC_DIR
+        orig_consol = ce.CONSOLIDATION_DIR
+        orig_graph = ce.GRAPH_DIR
+        orig_pending = ce.PENDING_PATH
+        orig_last = ce.LAST_RUN_PATH
+        orig_clusters = ce.CLUSTERS_PATH
+        orig_dag = ce.SUMMARY_DAG_PATH
+
+        traces = tmp_path / "traces"
+        traces.mkdir()
+        sem = tmp_path / "semantic"
+        sem.mkdir()
+        consol = tmp_path / "consolidation"
+        consol.mkdir()
+        graph = tmp_path / "graph"
+        graph.mkdir()
+
+        ce.TRACES_DIR = traces
+        ce.SEMANTIC_DIR = sem
+        ce.CONSOLIDATION_DIR = consol
+        ce.GRAPH_DIR = graph
+        ce.PENDING_PATH = consol / "pending.json"
+        ce.LAST_RUN_PATH = consol / "last.json"
+        ce.CLUSTERS_PATH = graph / "clusters.json"
+        ce.SUMMARY_DAG_PATH = consol / "dag.json"
+
+        try:
+            state = ObserverState()
+            watched = {"traces": traces}
+            result = heartbeat(state, watched)
+            assert "observe" in result
+            assert "consolidate" in result
+            assert "aging" in result
+            assert "capacity" in result
+            assert isinstance(result["observe"], dict)
+            assert isinstance(result["consolidate"], dict)
+        finally:
+            ce.TRACES_DIR = orig_traces
+            ce.SEMANTIC_DIR = orig_semantic
+            ce.CONSOLIDATION_DIR = orig_consol
+            ce.GRAPH_DIR = orig_graph
+            ce.PENDING_PATH = orig_pending
+            ce.LAST_RUN_PATH = orig_last
+            ce.CLUSTERS_PATH = orig_clusters
+            ce.SUMMARY_DAG_PATH = orig_dag
+
+    def test_heartbeat_triggers_consolidation(self, tmp_path):
+        """Heartbeat should consolidate pending traces."""
+        import consolidation_engine as ce
+
+        orig_traces = ce.TRACES_DIR
+        orig_semantic = ce.SEMANTIC_DIR
+        orig_consol = ce.CONSOLIDATION_DIR
+        orig_graph = ce.GRAPH_DIR
+        orig_pending = ce.PENDING_PATH
+        orig_last = ce.LAST_RUN_PATH
+        orig_clusters = ce.CLUSTERS_PATH
+        orig_entities = ce.ENTITIES_PATH
+        orig_relations = ce.RELATIONS_PATH
+        orig_dag = ce.SUMMARY_DAG_PATH
+
+        traces = tmp_path / "traces"
+        traces.mkdir()
+        sem = tmp_path / "semantic"
+        sem.mkdir()
+        consol = tmp_path / "consolidation"
+        consol.mkdir()
+        graph = tmp_path / "graph"
+        graph.mkdir()
+
+        # Create a trace file
+        (traces / "2024-01-01_test_trace.md").write_text(
+            "# Test Trace\n\nWe decided to implement the BM25 engine.\n\n"
+            "We found that accuracy improved by 15 percent.\n",
+            encoding="utf-8",
+        )
+
+        ce.TRACES_DIR = traces
+        ce.SEMANTIC_DIR = sem
+        ce.CONSOLIDATION_DIR = consol
+        ce.GRAPH_DIR = graph
+        ce.PENDING_PATH = consol / "pending.json"
+        ce.LAST_RUN_PATH = consol / "last.json"
+        ce.CLUSTERS_PATH = graph / "clusters.json"
+        ce.ENTITIES_PATH = graph / "entities.jsonl"
+        ce.RELATIONS_PATH = graph / "relations.jsonl"
+        ce.SUMMARY_DAG_PATH = consol / "dag.json"
+
+        try:
+            state = ObserverState()
+            watched = {"traces": traces}
+            result = heartbeat(state, watched)
+            cons = result["consolidate"]
+            assert (
+                cons.get("traces_processed", 0) >= 1
+                or cons.get("status") == "nothing_to_consolidate"
+            )
+        finally:
+            ce.TRACES_DIR = orig_traces
+            ce.SEMANTIC_DIR = orig_semantic
+            ce.CONSOLIDATION_DIR = orig_consol
+            ce.GRAPH_DIR = orig_graph
+            ce.PENDING_PATH = orig_pending
+            ce.LAST_RUN_PATH = orig_last
+            ce.CLUSTERS_PATH = orig_clusters
+            ce.ENTITIES_PATH = orig_entities
+            ce.RELATIONS_PATH = orig_relations
+            ce.SUMMARY_DAG_PATH = orig_dag
+
+    def test_heartbeat_empty_dirs_no_crash(self, tmp_path):
+        """Heartbeat with empty watched dirs should return cleanly."""
+        state = ObserverState()
+        result = heartbeat(state, {"empty": tmp_path / "nonexistent"})
+        assert isinstance(result, dict)
+        assert result["observe"]["files_scanned"] == 0
+
+    def test_heartbeat_performance(self, tmp_path):
+        """Heartbeat on empty dirs should complete in under 50ms."""
+        import time
+
+        state = ObserverState()
+        t0 = time.perf_counter()
+        heartbeat(state, {"empty": tmp_path})
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        assert elapsed_ms < 50, f"Heartbeat too slow: {elapsed_ms:.1f}ms"

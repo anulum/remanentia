@@ -174,6 +174,24 @@ def cmd_status(args):
     print(f"  Entities: {n_entities}")
     print(f"  Relations: {n_relations}")
 
+    # Capacity report per category
+    try:
+        from consolidation_engine import capacity_report
+
+        report = capacity_report()
+        if report:
+            print("\n  Capacity:")
+            for cat, info in sorted(report.items()):
+                bar = "!" if info["needs_consolidation"] else " "
+                state_str = ", ".join(f"{s}={c}" for s, c in sorted(info["state_counts"].items()))
+                print(
+                    f"   {bar} {cat:15s} {info['usage_pct']:5.1f}% "
+                    f"({info['chars']:,} / {info['limit']:,} chars, "
+                    f"{info['file_count']} files) [{state_str}]"
+                )
+    except Exception:  # pragma: no cover
+        pass
+
     # Disk usage
     total = 0
     for d in [STATE_DIR, traces_dir, semantic_dir, GRAPH_DIR]:

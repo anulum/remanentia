@@ -20,12 +20,18 @@ from consolidation_engine import (
     _extract_metadata,
     _extract_paragraphs,
     _extract_typed_relations,
+    _parse_frontmatter,
     _trace_hash,
+    _update_frontmatter_field,
     _update_graph,
     _write_semantic_memory,
+    age_memories,
+    build_summary_dag,
+    capacity_report,
     compute_novelty,
     consolidate,
     get_pending_traces,
+    search_summary_dag,
 )
 
 
@@ -726,3 +732,317 @@ class TestConsolidationErrors:
         with TestConsolidationPipeline._patch_all_paths(tmp_path):
             result = consolidate(force=True)
         assert isinstance(result, dict)
+
+
+# ── Memory lifecycle / aging ────────────────────────────────────
+
+
+class TestMemoryLifecycle:
+    """Tests for validity_state transitions (active→validated→stale→archived)."""
+
+    def test_write_semantic_memory_has_validity_state(self, tmp_path):
+        """New memories should have validity_state=active in frontmatter."""
+        import consolidation_engine as ce
+
+        orig = ce.SEMANTIC_DIR
+        ce.SEMANTIC_DIR = tmp_path / "semantic"
+        try:
+            path = _write_semantic_memory(
+                "decision",
+                "test-topic",
+                "2024-01-01",
+                "remanentia",
+                ["trace1.md"],
+                ["bm25"],
+                "Test content.",
+            )
+            text = path.read_text(encoding="utf-8")
+            assert "validity_state: active" in text
+            assert "last_accessed:" in text
+        finally:
+            ce.SEMANTIC_DIR = orig
+
+    def test_age_memories_active_to_stale(self, tmp_path):
+        """Memories older than STALE_AFTER_DAYS without access → stale."""
+        import consolidation_engine as ce
+
+        orig = ce.SEMANTIC_DIR
+        sem_dir = tmp_path / "semantic" / "decision"
+        sem_dir.mkdir(parents=True)
+        ce.SEMANTIC_DIR = tmp_path / "semantic"
+        try:
+            (sem_dir / "old.md").write_text(
+                "---\nvalidity_state: active\nlast_accessed: 2023-01-01\n---\nOld fact.",
+                encoding="utf-8",
+            )
+            stats = age_memories(reference_date="2024-06-01")
+            assert stats["active_to_stale"] == 1
+            text = (sem_dir / "old.md").read_text(encoding="utf-8")
+            assert "validity_state: stale" in text
+        finally:
+            ce.SEMANTIC_DIR = orig
+
+    def test_age_memories_stale_to_archived(self, tmp_path):
+        """Memories stale for longer than ARCHIVE_AFTER_DAYS → archived."""
+        import consolidation_engine as ce
+
+        orig = ce.SEMANTIC_DIR
+        sem_dir = tmp_path / "semantic" / "finding"
+        sem_dir.mkdir(parents=True)
+        ce.SEMANTIC_DIR = tmp_path / "semantic"
+        try:
+            (sem_dir / "ancient.md").write_text(
+                "---\nvalidity_state: stale\nlast_accessed: 2022-01-01\n---\nAncient.",
+                encoding="utf-8",
+            )
+            stats = age_memories(reference_date="2024-06-01")
+            assert stats["stale_to_archived"] == 1
+            text = (sem_dir / "ancient.md").read_text(encoding="utf-8")
+            assert "validity_state: archived" in text
+        finally:
+            ce.SEMANTIC_DIR = orig
+
+    def test_age_memories_recent_stays_active(self, tmp_path):
+        """Recently accessed memories should remain active."""
+        import consolidation_engine as ce
+
+        orig = ce.SEMANTIC_DIR
+        sem_dir = tmp_path / "semantic" / "decision"
+        sem_dir.mkdir(parents=True)
+        ce.SEMANTIC_DIR = tmp_path / "semantic"
+        try:
+            (sem_dir / "fresh.md").write_text(
+                "---\nvalidity_state: active\nlast_accessed: 2024-05-20\n---\nFresh.",
+                encoding="utf-8",
+            )
+            stats = age_memories(reference_date="2024-06-01")
+            assert stats["active_to_stale"] == 0
+            text = (sem_dir / "fresh.md").read_text(encoding="utf-8")
+            assert "validity_state: active" in text
+        finally:
+            ce.SEMANTIC_DIR = orig
+
+    def test_age_memories_empty_dir(self, tmp_path):
+        """age_memories on nonexistent dir should not crash."""
+        import consolidation_engine as ce
+
+        orig = ce.SEMANTIC_DIR
+        ce.SEMANTIC_DIR = tmp_path / "nonexistent"
+        try:
+            stats = age_memories()
+            assert stats["scanned"] == 0
+        finally:
+            ce.SEMANTIC_DIR = orig
+
+    def test_parse_frontmatter_valid(self):
+        text = "---\ntype: decision\ndate: 2024-01-01\n---\nContent."
+        fm = _parse_frontmatter(text)
+        assert fm is not None
+        assert fm["type"] == "decision"
+
+    def test_parse_frontmatter_no_delimiters(self):
+        assert _parse_frontmatter("Just plain text") is None
+
+    def test_update_frontmatter_field_existing(self, tmp_path):
+        f = tmp_path / "test.md"
+        f.write_text("---\nvalidity_state: active\n---\nContent.", encoding="utf-8")
+        _update_frontmatter_field(f, f.read_text(), "validity_state", "stale")
+        assert "validity_state: stale" in f.read_text()
+
+    def test_update_frontmatter_field_new(self, tmp_path):
+        f = tmp_path / "test.md"
+        f.write_text("---\ntype: decision\n---\nContent.", encoding="utf-8")
+        _update_frontmatter_field(f, f.read_text(), "validity_state", "active")
+        assert "validity_state: active" in f.read_text()
+
+
+# ── Capacity tracking ───────────────────────────────────────────
+
+
+class TestCapacityReport:
+    """Tests for bounded memory capacity monitoring."""
+
+    def test_capacity_report_basic(self, tmp_path):
+        """Capacity report should return per-category stats."""
+        import consolidation_engine as ce
+
+        orig = ce.SEMANTIC_DIR
+        sem_dir = tmp_path / "semantic"
+        dec_dir = sem_dir / "decision"
+        dec_dir.mkdir(parents=True)
+        ce.SEMANTIC_DIR = sem_dir
+        try:
+            (dec_dir / "d1.md").write_text(
+                "---\nvalidity_state: active\n---\n" + "x" * 1000, encoding="utf-8"
+            )
+            report = capacity_report()
+            assert "decision" in report
+            assert report["decision"]["file_count"] == 1
+            assert report["decision"]["chars"] > 0
+            assert isinstance(report["decision"]["usage_pct"], float)
+        finally:
+            ce.SEMANTIC_DIR = orig
+
+    def test_capacity_report_over_threshold(self, tmp_path):
+        """Categories exceeding CAPACITY_WARN_PERCENT should be flagged."""
+        import consolidation_engine as ce
+
+        orig = ce.SEMANTIC_DIR
+        sem_dir = tmp_path / "semantic"
+        dec_dir = sem_dir / "decision"
+        dec_dir.mkdir(parents=True)
+        ce.SEMANTIC_DIR = sem_dir
+        try:
+            # Write enough to exceed 80% of 50_000 char limit
+            (dec_dir / "big.md").write_text(
+                "---\nvalidity_state: active\n---\n" + "x" * 45_000, encoding="utf-8"
+            )
+            report = capacity_report()
+            assert report["decision"]["needs_consolidation"] is True
+            assert report["decision"]["usage_pct"] >= 80.0
+        finally:
+            ce.SEMANTIC_DIR = orig
+
+    def test_capacity_report_empty(self, tmp_path):
+        """Empty or nonexistent dir returns empty report."""
+        import consolidation_engine as ce
+
+        orig = ce.SEMANTIC_DIR
+        ce.SEMANTIC_DIR = tmp_path / "nonexistent"
+        try:
+            report = capacity_report()
+            assert report == {}
+        finally:
+            ce.SEMANTIC_DIR = orig
+
+    def test_capacity_tracks_state_counts(self, tmp_path):
+        """Report should include per-state breakdown."""
+        import consolidation_engine as ce
+
+        orig = ce.SEMANTIC_DIR
+        sem_dir = tmp_path / "semantic"
+        dec_dir = sem_dir / "decision"
+        dec_dir.mkdir(parents=True)
+        ce.SEMANTIC_DIR = sem_dir
+        try:
+            (dec_dir / "a.md").write_text("---\nvalidity_state: active\n---\nA.", encoding="utf-8")
+            (dec_dir / "s.md").write_text("---\nvalidity_state: stale\n---\nS.", encoding="utf-8")
+            report = capacity_report()
+            assert report["decision"]["state_counts"]["active"] == 1
+            assert report["decision"]["state_counts"]["stale"] == 1
+        finally:
+            ce.SEMANTIC_DIR = orig
+
+
+# ── Hierarchical summary DAGs ───────────────────────────────────
+
+
+class TestSummaryDAG:
+    """Tests for multi-level summary DAG construction and search."""
+
+    def _make_trace_data(self, count=8):
+        return {
+            f"2024-0{(i % 9) + 1}-{(i % 28) + 1:02d}_trace_{i}.md": {
+                "date": f"2024-0{(i % 9) + 1}-{(i % 28) + 1:02d}",
+                "project": "remanentia" if i % 2 == 0 else "director-ai",
+                "entities": [f"entity_{i}", "bm25", "retrieval"],
+                "key_lines": [f"Finding {i}: measured accuracy at {50 + i}%"],
+                "text": f"Trace {i}: We measured accuracy at {50 + i}% for BM25 retrieval.",
+            }
+            for i in range(count)
+        }
+
+    def test_build_dag_creates_leaf_nodes(self):
+        data = self._make_trace_data(4)
+        dag = build_summary_dag(data)
+        leaves = [n for n in dag if n["level"] == 0]
+        assert len(leaves) == 4
+        for leaf in leaves:
+            assert leaf["node_id"].startswith("L0_")
+            assert len(leaf["children"]) == 1
+
+    def test_build_dag_creates_hierarchy(self):
+        """With 8+ traces, DAG should have multiple levels."""
+        data = self._make_trace_data(8)
+        dag = build_summary_dag(data)
+        levels = {n["level"] for n in dag}
+        assert len(levels) >= 2  # at least L0 and L1
+
+    def test_build_dag_preserves_all_traces(self):
+        """Every trace must appear as a leaf node."""
+        data = self._make_trace_data(12)
+        dag = build_summary_dag(data)
+        leaves = [n for n in dag if n["level"] == 0]
+        leaf_traces = set()
+        for leaf in leaves:
+            leaf_traces.update(leaf["children"])
+        assert leaf_traces == set(data.keys())
+
+    def test_build_dag_empty(self):
+        assert build_summary_dag({}) == []
+
+    def test_build_dag_single_trace(self):
+        data = self._make_trace_data(1)
+        dag = build_summary_dag(data)
+        assert len(dag) == 1
+        assert dag[0]["level"] == 0
+
+    def test_search_dag_finds_relevant_leaves(self):
+        data = self._make_trace_data(8)
+        dag = build_summary_dag(data)
+        results = search_summary_dag(dag, "accuracy BM25 retrieval")
+        assert len(results) > 0
+        for r in results:
+            assert r["level"] == 0  # should drill down to leaves
+
+    def test_search_dag_empty_query(self):
+        data = self._make_trace_data(4)
+        dag = build_summary_dag(data)
+        results = search_summary_dag(dag, "")
+        assert results == []
+
+    def test_search_dag_empty_dag(self):
+        results = search_summary_dag([], "query")
+        assert results == []
+
+    def test_search_dag_no_match(self):
+        data = self._make_trace_data(4)
+        dag = build_summary_dag(data)
+        results = search_summary_dag(dag, "quantum chromodynamics plasma")
+        assert results == []
+
+    def test_dag_date_ranges_correct(self):
+        data = self._make_trace_data(8)
+        dag = build_summary_dag(data)
+        # L1+ nodes should have date ranges spanning their children
+        for node in dag:
+            if node["level"] > 0:
+                earliest, latest = node["date_range"]
+                assert earliest <= latest or earliest == "" or latest == ""
+
+    def test_dag_performance(self):
+        """Building and searching a 100-trace DAG should be fast."""
+        import time
+
+        data = self._make_trace_data(100)
+        t0 = time.perf_counter()
+        dag = build_summary_dag(data)
+        build_ms = (time.perf_counter() - t0) * 1000
+
+        t0 = time.perf_counter()
+        for _ in range(100):
+            search_summary_dag(dag, "accuracy retrieval BM25")
+        search_ms = (time.perf_counter() - t0) * 1000 / 100
+
+        assert build_ms < 100, f"DAG build too slow: {build_ms:.1f}ms for 100 traces"
+        assert search_ms < 10, f"DAG search too slow: {search_ms:.1f}ms"
+
+    def test_dag_roundtrip_serialisation(self, tmp_path):
+        """DAG should survive JSON serialisation and remain searchable."""
+        data = self._make_trace_data(8)
+        dag = build_summary_dag(data)
+        path = tmp_path / "dag.json"
+        path.write_text(json.dumps(dag), encoding="utf-8")
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+        results = search_summary_dag(loaded, "accuracy BM25")
+        assert len(results) > 0

@@ -92,6 +92,45 @@ _PLAN_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
+# Decision indicators
+_DECISION_PATTERNS = re.compile(
+    r"\b(we (?:decided|chose|picked|selected|agreed|concluded|resolved)|"
+    r"decision was|the verdict|final (?:choice|answer|call)|consensus)\b",
+    re.IGNORECASE,
+)
+
+# Correction indicators — something was wrong, now fixed
+_CORRECTION_PATTERNS = re.compile(
+    r"\b(actually|correction|was wrong|mistake|misunderstood|"
+    r"should have been|turned out|in fact|not true|incorrect|"
+    r"clarification|I was wrong|we were wrong)\b",
+    re.IGNORECASE,
+)
+
+# Principle/rule indicators — general truths or guidelines
+_PRINCIPLE_PATTERNS = re.compile(
+    r"\b(always (?:do|use|check|ensure|verify)|never (?:do|use|skip|delete)|"
+    r"rule(?:s)? (?:is|are|of)|principle|best practice|guideline|"
+    r"must always|must never|invariant|axiom|law of)\b",
+    re.IGNORECASE,
+)
+
+# Commitment indicators — promises, obligations, deadlines
+_COMMITMENT_PATTERNS = re.compile(
+    r"\b(I (?:promise|commit|guarantee|owe|agreed to)|"
+    r"deadline|due (?:by|on|date)|deliverable|"
+    r"committed to|obligation|must (?:deliver|finish|complete) by)\b",
+    re.IGNORECASE,
+)
+
+# Skill/procedure indicators — how-to, recipes, workflows
+_SKILL_PATTERNS = re.compile(
+    r"\b(to (?:do this|fix this|run this|build this|deploy|install|configure|set up)|"
+    r"step (?:1|2|3|one|two)|the (?:command|procedure|workflow|recipe|process) is|"
+    r"how to|run the following|execute|you need to)\b",
+    re.IGNORECASE,
+)
+
 # Sentence splitter (handles abbreviations reasonably)
 _SENT_SPLIT = re.compile(r"(?<=[.!?])\s+(?=[A-Z])")
 
@@ -104,7 +143,7 @@ class AtomicFact:
     session_idx: int
     turn_idx: int
     role: str  # "user" or "assistant"
-    fact_type: str  # "state", "event", "preference", "plan"
+    fact_type: str  # state|event|preference|plan|decision|correction|principle|commitment|skill
     valid_from: str = ""  # ISO date or ""
     valid_until: str = ""  # ISO date or "" (still valid)
     entities: list[str] = field(default_factory=list)
@@ -419,13 +458,35 @@ def _build_fact(
 
 
 def _classify_fact(sentence: str) -> str:
-    """Classify a sentence into fact type."""
+    """Classify a sentence into fact type.
+
+    Extended taxonomy (10 types):
+    - decision: explicit group/individual decisions
+    - correction: retractions, fixes to prior beliefs
+    - principle: rules, guidelines, invariants
+    - commitment: promises, deadlines, obligations
+    - skill: procedures, how-to, workflows
+    - plan: future intentions
+    - preference: likes, dislikes, favourites
+    - state: state changes (supersedes prior facts)
+    - event: everything else (default)
+    """
+    if _DECISION_PATTERNS.search(sentence):
+        return "decision"
+    if _CORRECTION_PATTERNS.search(sentence):
+        return "correction"
+    if _PRINCIPLE_PATTERNS.search(sentence):
+        return "principle"
+    if _COMMITMENT_PATTERNS.search(sentence):
+        return "commitment"
+    if _SKILL_PATTERNS.search(sentence):
+        return "skill"
     if _PLAN_PATTERNS.search(sentence):
         return "plan"
     if _PREFERENCE_PATTERNS.search(sentence):
         return "preference"
     if _CHANGE_VERBS.search(sentence):
-        return "state"  # state change = new state
+        return "state"
     return "event"
 
 

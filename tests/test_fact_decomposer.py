@@ -146,6 +146,12 @@ class TestExtractEntities:
 
 
 class TestClassifyFact:
+    """Extended taxonomy: 9 types (decision, correction, principle, commitment,
+    skill, plan, preference, state, event).  Priority order matters — decision
+    beats preference when both patterns match.
+    """
+
+    # ── Original 4 types (regression guard) ─────────────────────
     def test_plan(self):
         assert _classify_fact("I plan to visit Tokyo next summer.") == "plan"
 
@@ -163,6 +169,192 @@ class TestClassifyFact:
 
     def test_favourite_is_preference(self):
         assert _classify_fact("My favourite book is Dune.") == "preference"
+
+    # ── 5 new types ─────────────────────────────────────────────
+    def test_decision_we_decided(self):
+        assert _classify_fact("We decided to use BM25 for primary retrieval.") == "decision"
+
+    def test_decision_consensus(self):
+        assert _classify_fact("The consensus was to drop the SNN approach entirely.") == "decision"
+
+    def test_decision_chose(self):
+        assert _classify_fact("We chose the AGPL licence for maximum openness.") == "decision"
+
+    def test_correction_actually(self):
+        assert (
+            _classify_fact("Actually, the STDP approach was wrong from the start.") == "correction"
+        )
+
+    def test_correction_turned_out(self):
+        assert _classify_fact("It turned out the measurements were off by 2x.") == "correction"
+
+    def test_correction_was_wrong(self):
+        assert _classify_fact("I was wrong about the GPU memory requirements.") == "correction"
+
+    def test_principle_always(self):
+        assert _classify_fact("Always verify coverage before pushing to main.") == "principle"
+
+    def test_principle_never(self):
+        assert _classify_fact("Never delete failed CI runs without asking.") == "principle"
+
+    def test_principle_best_practice(self):
+        assert _classify_fact("The best practice is to test at 100% coverage.") == "principle"
+
+    def test_commitment_deadline(self):
+        assert _classify_fact("The deadline for the paper submission is April 15.") == "commitment"
+
+    def test_commitment_promise(self):
+        assert (
+            _classify_fact("I promise to deliver the benchmark results by Friday.") == "commitment"
+        )
+
+    def test_commitment_committed_to(self):
+        assert (
+            _classify_fact("We committed to shipping v0.4 before the conference.") == "commitment"
+        )
+
+    def test_skill_how_to(self):
+        assert _classify_fact("To fix this, run the following pytest command.") == "skill"
+
+    def test_skill_step(self):
+        assert _classify_fact("Step 1: install the Rust toolchain via rustup.") == "skill"
+
+    def test_skill_procedure(self):
+        assert _classify_fact("The procedure is to rebuild with maturin develop.") == "skill"
+
+    # ── Priority/edge cases ─────────────────────────────────────
+    def test_decision_beats_state_when_both_match(self):
+        # "decided" is both a change verb and a decision pattern
+        result = _classify_fact("We decided to switch from Anthropic to local LLM.")
+        assert result == "decision"  # decision has higher priority
+
+    def test_correction_beats_state(self):
+        # "was wrong" + "started" — correction should win
+        result = _classify_fact("Actually I was wrong when I started with that approach.")
+        assert result == "correction"
+
+    def test_empty_string_returns_event(self):
+        assert _classify_fact("") == "event"
+
+    def test_gibberish_returns_event(self):
+        assert _classify_fact("asdfghjkl qwerty 12345.") == "event"
+
+    def test_all_nine_types_reachable(self):
+        """Verify every type in the taxonomy is reachable."""
+        all_types = set()
+        sentences = [
+            "We decided to adopt BM25 as primary retrieval.",
+            "Actually, the previous result was wrong.",
+            "Always check test coverage before merging.",
+            "The deadline is next Friday, I committed to deliver.",
+            "To do this, run pytest with the -x flag.",
+            "I plan to implement temporal reasoning next week.",
+            "I prefer British English spelling in all docs.",
+            "She started working at the university last month.",
+            "The conference was held in Zürich.",
+        ]
+        for s in sentences:
+            all_types.add(_classify_fact(s))
+        expected = {
+            "decision",
+            "correction",
+            "principle",
+            "commitment",
+            "skill",
+            "plan",
+            "preference",
+            "state",
+            "event",
+        }
+        assert all_types == expected
+
+    # ── Pipeline integration: fact types flow through FactIndex ──
+    def test_new_types_flow_through_pipeline(self):
+        """All 9 fact types must survive decompose → FactIndex → query."""
+        sessions = [
+            [
+                {
+                    "role": "user",
+                    "content": "We decided to use BM25 for retrieval instead of embeddings.",
+                },
+                {
+                    "role": "assistant",
+                    "content": "Actually the previous STDP measurements were wrong by a factor.",
+                },
+                {
+                    "role": "user",
+                    "content": "Always verify full test coverage before any push to main branch.",
+                },
+                {
+                    "role": "assistant",
+                    "content": "The deadline for paper submission is April 15 and I committed.",
+                },
+                {
+                    "role": "user",
+                    "content": "To fix this issue you need to run the following pytest command.",
+                },
+                {
+                    "role": "assistant",
+                    "content": "I plan to add multi-session temporal reasoning improvements soon.",
+                },
+                {
+                    "role": "user",
+                    "content": "I prefer dark mode interfaces and minimal UI designs always.",
+                },
+                {
+                    "role": "assistant",
+                    "content": "She started a new position at Google headquarters in January.",
+                },
+                {
+                    "role": "user",
+                    "content": "The annual team offsite was held at the mountain resort last week.",
+                },
+            ]
+        ]
+        facts = decompose_sessions(sessions)
+        idx = FactIndex(facts)
+        types_found = {f.fact_type for f in facts}
+        assert "decision" in types_found
+        assert "correction" in types_found
+        assert "principle" in types_found
+        assert "commitment" in types_found
+        assert "skill" in types_found
+        assert "plan" in types_found
+        assert "preference" in types_found
+        # Query should return typed facts
+        results = idx.query("what did we decide about retrieval", top_k=5)
+        assert len(results) > 0
+        top_fact = results[0][0]
+        assert top_fact.fact_type == "decision"
+
+    # ── Performance: classify_fact must be sub-microsecond ───────
+    def test_classify_fact_performance(self):
+        """Classification of a single sentence should be under 0.1ms."""
+        import time
+
+        sentences = [
+            "We decided to use BM25 for retrieval.",
+            "Actually the previous approach was wrong.",
+            "Always verify coverage before pushing.",
+            "The deadline is March 30.",
+            "To fix this, run pytest.",
+            "I plan to improve temporal reasoning.",
+            "I prefer dark mode.",
+            "She started a new job.",
+            "The meeting was productive.",
+        ]
+        # Warm up
+        for s in sentences:
+            _classify_fact(s)
+        # Measure
+        t0 = time.perf_counter()
+        iterations = 1000
+        for _ in range(iterations):
+            for s in sentences:
+                _classify_fact(s)
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        per_call_ms = elapsed_ms / (iterations * len(sentences))
+        assert per_call_ms < 0.1, f"classify_fact too slow: {per_call_ms:.4f}ms/call"
 
 
 # ── Parse date string ────────────────────────────────────────────

@@ -442,3 +442,169 @@ class TestArcaneRetrieverRoundtrip:
             ctx = ar.build_context("food preferences", results, max_facts=5)
             assert isinstance(ctx, str)
             assert len(ctx) > 0
+
+
+# ── Temporal recency decay ──────────────────────────────────────
+
+
+class TestRecencyDecay:
+    """Tests for temporal recency decay in RRF fusion.
+
+    Exponential decay: weight = 2^(-age_days / half_life).
+    Recent facts should score higher than old facts, all else equal.
+    """
+
+    def _make_sessions(self):
+        """Two sessions: old (session 0) and recent (session 1), with identical content."""
+        return [
+            [{"role": "user", "content": "The project uses BM25 for retrieval scoring."}],
+            [{"role": "user", "content": "The project uses BM25 for retrieval scoring."}],
+        ]
+
+    def test_recency_boosts_recent_session(self):
+        """With recency decay enabled, session 1 (recent) should outrank session 0 (old)."""
+        from arcane_retriever import ArcaneRetriever
+
+        sessions = self._make_sessions()
+        dates = ["2024-01-01", "2024-06-01"]
+        ar = ArcaneRetriever(
+            sessions,
+            session_dates=dates,
+            reference_date="2024-06-15",
+            recency_half_life_days=30,
+        )
+        results = ar.retrieve("BM25 retrieval", "general", top_k=10)
+        # Find facts from both sessions
+        session_scores = {}
+        for r in results:
+            session_scores.setdefault(r.fact.session_idx, []).append(r.rrf_score)
+        if 0 in session_scores and 1 in session_scores:
+            old_max = max(session_scores[0])
+            new_max = max(session_scores[1])
+            # Recent session should have higher RRF score
+            assert new_max > old_max, f"new={new_max} should beat old={old_max}"
+
+    def test_no_decay_when_half_life_zero(self):
+        """Half-life 0 disables decay — all facts get equal weight."""
+        from arcane_retriever import ArcaneRetriever
+
+        sessions = self._make_sessions()
+        dates = ["2024-01-01", "2024-06-01"]
+        ar = ArcaneRetriever(
+            sessions,
+            session_dates=dates,
+            reference_date="2024-06-15",
+            recency_half_life_days=0,
+        )
+        weight = ar._recency_weight(ar.facts[0])
+        assert weight == 1.0
+
+    def test_no_decay_without_reference_date(self):
+        """Without reference_date, all facts get weight 1.0."""
+        from arcane_retriever import ArcaneRetriever
+
+        sessions = self._make_sessions()
+        ar = ArcaneRetriever(sessions, session_dates=["2024-01-01", "2024-06-01"])
+        for fact in ar.facts:
+            assert ar._recency_weight(fact) == 1.0
+
+    def test_same_day_fact_gets_full_weight(self):
+        """Facts from the reference date itself get weight 1.0."""
+        from arcane_retriever import ArcaneRetriever
+
+        sessions = [[{"role": "user", "content": "Today we benchmarked the pipeline."}]]
+        ar = ArcaneRetriever(
+            sessions,
+            session_dates=["2024-06-15"],
+            reference_date="2024-06-15",
+            recency_half_life_days=30,
+        )
+        weight = ar._recency_weight(ar.facts[0])
+        assert weight == 1.0
+
+    def test_30_day_old_fact_gets_half_weight(self):
+        """A fact exactly half_life days old should get weight ~0.5."""
+        from arcane_retriever import ArcaneRetriever
+
+        sessions = [[{"role": "user", "content": "We measured retrieval accuracy at 81 percent."}]]
+        ar = ArcaneRetriever(
+            sessions,
+            session_dates=["2024-05-16"],
+            reference_date="2024-06-15",
+            recency_half_life_days=30,
+        )
+        weight = ar._recency_weight(ar.facts[0])
+        assert 0.45 <= weight <= 0.55, f"Expected ~0.5, got {weight}"
+
+    def test_very_old_fact_gets_near_zero_weight(self):
+        """A fact 365 days old with 30-day half-life should be negligible."""
+        from arcane_retriever import ArcaneRetriever
+
+        sessions = [[{"role": "user", "content": "Initial prototype was completed last year."}]]
+        ar = ArcaneRetriever(
+            sessions,
+            session_dates=["2023-06-15"],
+            reference_date="2024-06-15",
+            recency_half_life_days=30,
+        )
+        weight = ar._recency_weight(ar.facts[0])
+        assert weight < 0.01, f"Expected near 0, got {weight}"
+
+    def test_decay_with_invalid_date_returns_one(self):
+        """Facts with unparseable dates should get weight 1.0 (no penalty)."""
+        from arcane_retriever import ArcaneRetriever
+        from fact_decomposer import AtomicFact
+
+        sessions = [[{"role": "user", "content": "Some statement without clear dates."}]]
+        ar = ArcaneRetriever(
+            sessions,
+            reference_date="2024-06-15",
+            recency_half_life_days=30,
+        )
+        fake_fact = AtomicFact(
+            text="test",
+            session_idx=999,
+            turn_idx=0,
+            role="user",
+            fact_type="event",
+            valid_from="not-a-date",
+        )
+        assert ar._recency_weight(fake_fact) == 1.0
+
+    def test_empty_sessions_no_crash(self):
+        """Empty sessions should not cause errors in recency computation."""
+        from arcane_retriever import ArcaneRetriever
+
+        ar = ArcaneRetriever(
+            [[]],
+            reference_date="2024-06-15",
+            recency_half_life_days=30,
+        )
+        results = ar.retrieve("anything", "general", top_k=5)
+        assert results == []
+
+    def test_recency_decay_performance(self):
+        """Recency decay computation should add negligible overhead."""
+        import time
+        from arcane_retriever import ArcaneRetriever
+
+        sessions = [
+            [{"role": "user", "content": f"Fact number {i} about BM25 retrieval performance."}]
+            for i in range(20)
+        ]
+        dates = [f"2024-{(i % 12) + 1:02d}-15" for i in range(20)]
+        ar = ArcaneRetriever(
+            sessions,
+            session_dates=dates,
+            reference_date="2024-12-31",
+            recency_half_life_days=30,
+        )
+        # Warm up
+        ar.retrieve("BM25 performance", "general", top_k=10)
+        # Measure
+        t0 = time.perf_counter()
+        for _ in range(100):
+            ar.retrieve("BM25 performance", "general", top_k=10)
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        per_call_ms = elapsed_ms / 100
+        assert per_call_ms < 50, f"retrieve with decay too slow: {per_call_ms:.1f}ms"

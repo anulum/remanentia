@@ -1904,3 +1904,158 @@ class TestTemporalCodeInjectionDirect:
                 assert "69 days" in results[0].answer
         finally:
             memory_index.SOURCES = original_sources
+
+
+# ── Content-hash incremental indexing ───────────────────────────
+
+
+class TestContentHashIndexing:
+    """Tests for SHA-256 content-hash based incremental build."""
+
+    def test_hash_cache_save_load_roundtrip(self, tmp_path):
+        """Hash cache should survive save → load roundtrip."""
+        from memory_index import MemoryIndex
+
+        hashes = {"file1.md": "abc123", "file2.py": "def456"}
+        cache_path = tmp_path / "hashes.json"
+        MemoryIndex._save_content_hashes(hashes, cache_path)
+        loaded = MemoryIndex._load_content_hashes(cache_path)
+        assert loaded == hashes
+
+    def test_hash_cache_load_nonexistent(self, tmp_path):
+        """Loading from nonexistent path returns empty dict."""
+        from memory_index import MemoryIndex
+
+        result = MemoryIndex._load_content_hashes(tmp_path / "nope.json")
+        assert result == {}
+
+    def test_hash_cache_load_corrupt(self, tmp_path):
+        """Corrupt JSON returns empty dict, not crash."""
+        from memory_index import MemoryIndex
+
+        bad = tmp_path / "bad.json"
+        bad.write_text("{invalid json", encoding="utf-8")
+        result = MemoryIndex._load_content_hashes(bad)
+        assert result == {}
+
+    def test_build_populates_hash_stats(self, tmp_path):
+        """Build should report hash_hits and hash_misses in stats."""
+        import memory_index
+
+        original_sources = memory_index.SOURCES
+        original_hash_path = memory_index.HASH_CACHE_PATH
+
+        traces = tmp_path / "traces"
+        traces.mkdir()
+        (traces / "test.md").write_text(
+            "# Test Trace for Indexing\n\nWe found that retrieval accuracy improved significantly after switching to BM25 with cross-encoder reranking.\n"
+        )
+
+        memory_index.SOURCES = {"traces": traces}
+        memory_index.HASH_CACHE_PATH = tmp_path / "hashes.json"
+
+        try:
+            idx = memory_index.MemoryIndex()
+            stats = idx.build(use_gpu_embeddings=False, use_gliner=False, incremental=True)
+            assert "hash_hits" in stats
+            assert "hash_misses" in stats
+            assert stats["hash_misses"] >= 1  # first build, all are misses
+            assert stats["hash_hits"] == 0
+        finally:
+            memory_index.SOURCES = original_sources
+            memory_index.HASH_CACHE_PATH = original_hash_path
+
+    def test_second_build_skips_unchanged(self, tmp_path):
+        """Second build with same files should have hash_hits > 0."""
+        import memory_index
+
+        original_sources = memory_index.SOURCES
+        original_hash_path = memory_index.HASH_CACHE_PATH
+
+        traces = tmp_path / "traces"
+        traces.mkdir()
+        (traces / "test.md").write_text(
+            "# Test Trace for Indexing\n\nWe found that retrieval accuracy improved by 15 percent after implementing the BM25 scoring engine.\n"
+        )
+
+        memory_index.SOURCES = {"traces": traces}
+        memory_index.HASH_CACHE_PATH = tmp_path / "hashes.json"
+
+        try:
+            idx = memory_index.MemoryIndex()
+            # First build
+            stats1 = idx.build(use_gpu_embeddings=False, use_gliner=False, incremental=True)
+            assert stats1["hash_misses"] >= 1
+
+            # Second build — file unchanged, should be skipped
+            idx2 = memory_index.MemoryIndex()
+            stats2 = idx2.build(use_gpu_embeddings=False, use_gliner=False, incremental=True)
+            assert stats2["hash_hits"] >= 1
+            # No files indexed on second build (all hits)
+            assert stats2["documents"] == 0
+        finally:
+            memory_index.SOURCES = original_sources
+            memory_index.HASH_CACHE_PATH = original_hash_path
+
+    def test_changed_file_detected(self, tmp_path):
+        """Modified file should be re-indexed (hash_misses on second build)."""
+        import memory_index
+
+        original_sources = memory_index.SOURCES
+        original_hash_path = memory_index.HASH_CACHE_PATH
+
+        traces = tmp_path / "traces"
+        traces.mkdir()
+        f = traces / "test.md"
+        f.write_text(
+            "# Test Trace for Indexing\n\nWe found that retrieval accuracy measured at 80 percent on the LOCOMO benchmark dataset.\n"
+        )
+
+        memory_index.SOURCES = {"traces": traces}
+        memory_index.HASH_CACHE_PATH = tmp_path / "hashes.json"
+
+        try:
+            idx = memory_index.MemoryIndex()
+            idx.build(use_gpu_embeddings=False, use_gliner=False, incremental=True)
+
+            # Modify file
+            f.write_text(
+                "# Test Trace for Indexing\n\nWe found that retrieval accuracy improved to 95 percent after the cross-encoder reranking fix was applied.\n"
+            )
+
+            idx2 = memory_index.MemoryIndex()
+            stats2 = idx2.build(use_gpu_embeddings=False, use_gliner=False, incremental=True)
+            assert stats2["hash_misses"] >= 1  # changed file re-indexed
+        finally:
+            memory_index.SOURCES = original_sources
+            memory_index.HASH_CACHE_PATH = original_hash_path
+
+    def test_non_incremental_build_skips_hash_check(self, tmp_path):
+        """With incremental=False, all files should be indexed regardless."""
+        import memory_index
+
+        original_sources = memory_index.SOURCES
+        original_hash_path = memory_index.HASH_CACHE_PATH
+
+        traces = tmp_path / "traces"
+        traces.mkdir()
+        (traces / "test.md").write_text(
+            "# Test Trace for Indexing\n\nWe decided to use BM25 retrieval as the primary scoring mechanism for all knowledge sources.\n"
+        )
+
+        memory_index.SOURCES = {"traces": traces}
+        memory_index.HASH_CACHE_PATH = tmp_path / "hashes.json"
+
+        try:
+            idx = memory_index.MemoryIndex()
+            # First build (saves hashes)
+            idx.build(use_gpu_embeddings=False, use_gliner=False, incremental=True)
+
+            # Non-incremental rebuild should NOT skip
+            idx2 = memory_index.MemoryIndex()
+            stats = idx2.build(use_gpu_embeddings=False, use_gliner=False, incremental=False)
+            assert stats["hash_hits"] == 0  # no skipping
+            assert stats["documents"] >= 1
+        finally:
+            memory_index.SOURCES = original_sources
+            memory_index.HASH_CACHE_PATH = original_hash_path

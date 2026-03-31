@@ -41,9 +41,11 @@ Architecture::
 
 from __future__ import annotations
 
+import math
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
+from datetime import date
 
 from fact_decomposer import AtomicFact, FactIndex, decompose_sessions
 
@@ -79,13 +81,19 @@ class ArcaneRetriever:
     """
 
     RRF_K = 60  # RRF constant (standard value)
+    DEFAULT_DECAY_HALF_LIFE_DAYS = 30  # recency half-life in days
 
     def __init__(
         self,
         sessions: list[list[dict]],
         session_dates: list[str] | None = None,
+        recency_half_life_days: int = DEFAULT_DECAY_HALF_LIFE_DAYS,
+        reference_date: str | None = None,
     ):
         self.sessions = sessions
+        self.session_dates = session_dates or []
+        self.recency_half_life_days = recency_half_life_days
+        self._reference_date = reference_date
         self.facts = decompose_sessions(sessions, session_dates=session_dates)
         self.fact_index = FactIndex(self.facts)
 
@@ -211,14 +219,53 @@ class ArcaneRetriever:
             for i, (f, s) in enumerate(hits)
         ]
 
+    def _recency_weight(self, fact: AtomicFact) -> float:
+        """Compute recency decay weight for a fact.
+
+        Uses exponential decay: weight = 2^(-age_days / half_life).
+        Facts without dates get weight 1.0 (no penalty).
+        """
+        if self.recency_half_life_days <= 0:
+            return 1.0
+
+        ref_str = self._reference_date
+        if not ref_str:
+            return 1.0
+
+        # Parse reference date
+        try:
+            ref = date.fromisoformat(ref_str)
+        except (ValueError, TypeError):
+            return 1.0
+
+        # Use fact's valid_from, or try session date, or fallback to no decay
+        fact_date_str = fact.valid_from
+        if not fact_date_str and self.session_dates and fact.session_idx < len(self.session_dates):
+            fact_date_str = self.session_dates[fact.session_idx]
+        if not fact_date_str:
+            return 1.0
+
+        try:
+            fact_date = date.fromisoformat(fact_date_str[:10])
+        except (ValueError, TypeError):
+            return 1.0
+
+        age_days = (ref - fact_date).days
+        if age_days <= 0:
+            return 1.0  # future or same-day facts: full weight
+
+        return math.pow(2.0, -age_days / self.recency_half_life_days)
+
     def _rrf_fusion(
         self,
         channel_results: dict[str, list[RetrievalResult]],
         top_k: int = 20,
     ) -> list[FusedResult]:
-        """Reciprocal Rank Fusion across all channels.
+        """Reciprocal Rank Fusion across all channels with recency decay.
 
-        score(f) = Σ 1/(K + rank_i(f)) for each channel i
+        score(f) = recency_weight(f) * Σ 1/(K + rank_i(f)) for each channel i
+
+        Recency weight uses exponential decay with configurable half-life.
         """
         # Map fact text → aggregated data (dedup by text)
         fact_map: dict[str, dict] = {}
@@ -237,15 +284,17 @@ class ArcaneRetriever:
                 fact_map[key]["channels"].append(ch_name)
                 fact_map[key]["ranks"][ch_name] = r.rank
 
-        fused = [
-            FusedResult(
-                fact=v["fact"],
-                rrf_score=v["rrf_score"],
-                channels=list(set(v["channels"])),
-                per_channel_ranks=v["ranks"],
+        fused = []
+        for v in fact_map.values():
+            recency = self._recency_weight(v["fact"])
+            fused.append(
+                FusedResult(
+                    fact=v["fact"],
+                    rrf_score=v["rrf_score"] * recency,
+                    channels=list(set(v["channels"])),
+                    per_channel_ranks=v["ranks"],
+                )
             )
-            for v in fact_map.values()
-        ]
         fused.sort(key=lambda x: -x.rrf_score)
         return fused[:top_k]
 
