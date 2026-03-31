@@ -10,6 +10,7 @@ Contact: www.anulum.li | protoscience@anulum.li
 [![CodeQL](https://github.com/anulum/remanentia/actions/workflows/codeql.yml/badge.svg)](https://github.com/anulum/remanentia/actions/workflows/codeql.yml)
 [![Docs](https://github.com/anulum/remanentia/actions/workflows/docs.yml/badge.svg)](https://github.com/anulum/remanentia/actions/workflows/docs.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/anulum/remanentia/badge)](https://securityscorecards.dev/viewer/?uri=github.com/anulum/remanentia)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12340/badge)](https://www.bestpractices.dev/projects/12340)
 [![Version](https://img.shields.io/badge/version-0.3.1-blue)](https://github.com/anulum/remanentia)
 [![Tests](https://img.shields.io/badge/tests-1343_passed-brightgreen)](VALIDATION.md)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](VALIDATION.md)
