@@ -72,6 +72,8 @@ nav:
     - temporal_relation: api/temporal_relation.md
     - fact_validity_model: api/fact_validity_model.md
     - api_server: api/api_server.md
+    - skill_extractor: api/skill_extractor.md
+    - active_retrieval: api/active_retrieval.md
     - CLI: api/cli.md
   - Architecture:
     - Overview: architecture/architecture.md
