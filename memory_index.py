@@ -1736,7 +1736,7 @@ def _decompose_query(query: str) -> list[str] | None:
 
     # "What X does the person who Y have/do?"
     m = re.match(
-        r"what\s+(.+?)\s+(?:does|did|do)\s+the\s+(?:person|one|guy|woman|man)\s+who\s+(.+?)(?:\s+have|\s+do|\s+like|\?|$)",
+        r"what\s+([^?]{1,80}?)\s+(?:does|did|do)\s+the\s+(?:person|one|guy|woman|man)\s+who\s+([^?]{1,80}?)(?:\s+have|\s+do|\s+like|\?|$)",
         q,
         re.I,
     )
@@ -1745,13 +1745,15 @@ def _decompose_query(query: str) -> list[str] | None:
 
     # "Does the person who X also Y?"
     m = re.match(
-        r"(?:does|did|do)\s+the\s+(?:person|one)\s+who\s+(.+?)\s+(?:also\s+)?(.+?)(?:\?|$)", q, re.I
+        r"(?:does|did|do)\s+the\s+(?:person|one)\s+who\s+([^?]{1,80}?)\s+(?:also\s+)?([^?]{1,80}?)(?:\?|$)",
+        q,
+        re.I,
     )
     if m:
         return [f"who {m.group(1).strip()}", m.group(2).strip()]
 
     # "What happened before/after X did Y?"
-    m = re.match(r"what\s+happened\s+(before|after)\s+(.+?)(?:\?|$)", q, re.I)
+    m = re.match(r"what\s+happened\s+(before|after)\s+([^?]{1,80}?)(?:\?|$)", q, re.I)
     if m:
         return [m.group(2).strip(), f"what happened {m.group(1)} {m.group(2).strip()}"]
 
