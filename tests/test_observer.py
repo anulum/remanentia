@@ -406,7 +406,7 @@ class TestHeartbeat:
         # Patch dirs to tmp
         orig_traces = ce.TRACES_DIR
         orig_semantic = ce.SEMANTIC_DIR
-        orig_consol = ce.CONSOLIDATION_DIR
+        orig_con_dir = ce.CONSOLIDATION_DIR
         orig_graph = ce.GRAPH_DIR
         orig_pending = ce.PENDING_PATH
         orig_last = ce.LAST_RUN_PATH
@@ -444,7 +444,7 @@ class TestHeartbeat:
         finally:
             ce.TRACES_DIR = orig_traces
             ce.SEMANTIC_DIR = orig_semantic
-            ce.CONSOLIDATION_DIR = orig_consol
+            ce.CONSOLIDATION_DIR = orig_con_dir
             ce.GRAPH_DIR = orig_graph
             ce.PENDING_PATH = orig_pending
             ce.LAST_RUN_PATH = orig_last
@@ -457,7 +457,7 @@ class TestHeartbeat:
 
         orig_traces = ce.TRACES_DIR
         orig_semantic = ce.SEMANTIC_DIR
-        orig_consol = ce.CONSOLIDATION_DIR
+        orig_con_dir = ce.CONSOLIDATION_DIR
         orig_graph = ce.GRAPH_DIR
         orig_pending = ce.PENDING_PATH
         orig_last = ce.LAST_RUN_PATH
@@ -505,7 +505,7 @@ class TestHeartbeat:
         finally:
             ce.TRACES_DIR = orig_traces
             ce.SEMANTIC_DIR = orig_semantic
-            ce.CONSOLIDATION_DIR = orig_consol
+            ce.CONSOLIDATION_DIR = orig_con_dir
             ce.GRAPH_DIR = orig_graph
             ce.PENDING_PATH = orig_pending
             ce.LAST_RUN_PATH = orig_last
