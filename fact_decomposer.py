@@ -426,7 +426,12 @@ def _build_fact(
     entities = _extract_entities_simple(sentence)
 
     fact_type = _classify_fact(sentence)
-    supersedes = bool(_CHANGE_VERBS.search(sentence))
+    try:
+        from remanentia_fact_decomposer import has_change_verb as _rust_change
+
+        supersedes = _rust_change(sentence)  # pragma: no cover
+    except ImportError:
+        supersedes = bool(_CHANGE_VERBS.search(sentence))
 
     # C5: ML-based fact classification — only override when regex gives
     # the catch-all "event" type (no explicit pattern match)
@@ -460,7 +465,7 @@ def _build_fact(
 def _classify_fact(sentence: str) -> str:
     """Classify a sentence into fact type.
 
-    Extended taxonomy (10 types):
+    Extended taxonomy (9 types):
     - decision: explicit group/individual decisions
     - correction: retractions, fixes to prior beliefs
     - principle: rules, guidelines, invariants
@@ -471,6 +476,12 @@ def _classify_fact(sentence: str) -> str:
     - state: state changes (supersedes prior facts)
     - event: everything else (default)
     """
+    try:
+        from remanentia_fact_decomposer import classify_fact_type as _rust_classify
+
+        return _rust_classify(sentence)  # pragma: no cover
+    except ImportError:
+        pass
     if _DECISION_PATTERNS.search(sentence):
         return "decision"
     if _CORRECTION_PATTERNS.search(sentence):
@@ -570,6 +581,12 @@ def _extract_entities_simple(text: str) -> list[str]:
 
 def _split_sentences(text: str) -> list[str]:
     """Split text into sentences."""
+    try:
+        from remanentia_fact_decomposer import split_sentences as _rust_split
+
+        return _rust_split(text)  # pragma: no cover
+    except ImportError:
+        pass
     parts = _SENT_SPLIT.split(text)
     result = []
     for part in parts:

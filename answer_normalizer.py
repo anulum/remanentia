@@ -84,9 +84,13 @@ def extract_answer_items(text: str) -> set[str]:
     >>> sorted(extract_answer_items("running and pottery"))
     ['pottery', 'running']
     """
+    try:
+        from remanentia_answer_normalizer import extract_answer_items as _rust_items
+
+        return set(_rust_items(text))  # pragma: no cover
+    except ImportError:
+        pass
     text = normalize_answer(text)
-    # Split on comma, "and", "or"
-    # Split comma first, then "and"/"or" within each part
     items = re.split(r"\s*,\s+(?:and\s+)?|\s*,\s*|\s+and\s+|\s+or\s+", text)
     return {item.strip().lower() for item in items if item.strip()}
 
@@ -108,6 +112,12 @@ def answers_match(predicted: str, ground_truth: str, threshold: float = 0.25) ->
     >>> answers_match("completely unrelated answer", "The actual answer")
     False
     """
+    try:
+        from remanentia_answer_normalizer import answers_match as _rust_match
+
+        return _rust_match(predicted, ground_truth, threshold)  # pragma: no cover
+    except ImportError:
+        pass
     p_norm = normalize_answer(predicted)
     g_norm = normalize_answer(ground_truth)
 

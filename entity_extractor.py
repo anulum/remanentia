@@ -183,6 +183,17 @@ def _regex_entities(text: str) -> list[Entity]:
 
 def extract_relations(text: str, entities: list[Entity]) -> list[Relation]:
     """Extract typed relations between entities from connecting text."""
+    try:
+        from remanentia_entity_extractor import extract_relations as _rust_rels
+
+        entity_names = [e.text for e in entities]
+        rust_results = _rust_rels(text, entity_names)  # pragma: no cover
+        return [  # pragma: no cover
+            Relation(source=s, target=t, relation_type=rt, evidence=ev)
+            for s, t, rt, ev in rust_results
+        ]
+    except ImportError:
+        pass
     relations = []
     entity_texts = [(e.text, e) for e in entities]
 

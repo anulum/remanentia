@@ -55,6 +55,12 @@ _NEGATIVE_ACTIONS = {
 
 
 def _tokenize(text: str) -> set[str]:
+    try:
+        from remanentia_knowledge_store import tokenize as _rust_tok
+
+        return _rust_tok(text)  # pragma: no cover
+    except ImportError:
+        pass
     return set(re.findall(r"[a-z0-9][a-z0-9_]{2,}", text.lower()))
 
 
@@ -63,21 +69,30 @@ def _note_id(content: str, source: str) -> str:
 
 
 def _extract_keywords(text: str) -> list[str]:
+    try:
+        from remanentia_knowledge_store import extract_keywords as _rust_kw
+
+        return _rust_kw(text)  # pragma: no cover
+    except ImportError:
+        pass
     tokens = re.findall(r"[a-z0-9_]{4,}", text.lower())
-    # Frequency-based: keep tokens appearing 2+ times, or capitalized terms
     freq = defaultdict(int)
     for t in tokens:
         freq[t] += 1
     keywords = [t for t, c in freq.items() if c >= 2]
-    # Add capitalized terms (likely names/concepts)
     caps = re.findall(r"[A-Z][a-z]+(?:[A-Z][a-z]+)*", text)
     keywords.extend(c.lower() for c in caps if len(c) > 3)
-    # Add version numbers
     keywords.extend(re.findall(r"v\d+\.\d+(?:\.\d+)?", text))
     return sorted(set(keywords))[:20]
 
 
 def _extract_entities(text: str) -> set[str]:
+    try:
+        from remanentia_knowledge_store import extract_entities as _rust_ents
+
+        return _rust_ents(text)  # pragma: no cover
+    except ImportError:
+        pass
     entities = set()
     text_lower = text.lower()
     known = [
@@ -107,7 +122,6 @@ def _extract_entities(text: str) -> set[str]:
         entities.add(m.group())
     for m in re.finditer(r"\d+\.?\d*%", text):
         entities.add(m.group())
-    # Person names (capitalized words not at sentence start)
     for m in re.finditer(r"(?<=[.!?\n] |\: )[A-Z][a-z]{2,}", text):
         entities.add(m.group().lower())
     return entities
@@ -115,8 +129,13 @@ def _extract_entities(text: str) -> set[str]:
 
 def extract_person_names(text: str) -> set[str]:
     """Extract person names from text (capitalized words in conversational context)."""
+    try:
+        from remanentia_knowledge_store import extract_person_names as _rust_names
+
+        return _rust_names(text)  # pragma: no cover
+    except ImportError:
+        pass
     names = set()
-    # "Person:" pattern (common in chat transcripts)
     for m in re.finditer(r"^([A-Z][a-z]{2,}):", text, re.MULTILINE):
         names.add(m.group(1).lower())
     # Standalone capitalized names after common prefixes
