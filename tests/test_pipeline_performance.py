@@ -41,6 +41,7 @@ from datetime import date
 from unittest.mock import patch
 
 import numpy as np
+import pytest
 
 # ── Test data ────────────────────────────────────────────────
 
@@ -370,6 +371,292 @@ class TestFullPipelinePerformance:
         assert len(results) > 0
 
 
+# ── Rust vs Python benchmarks ─────────────────────────────────
+
+
+class TestRustVsPythonBenchmarks:
+    """Measure Rust-accelerated path vs Python fallback for every wired module.
+
+    Rust modules:
+    - remanentia_temporal → temporal_graph.parse_dates, date_normalizer
+    - remanentia_answer_extractor → answer_extractor.extract_answer, fuzzy_match, normalize_number
+    - remanentia_answer_normalizer → answer_normalizer.normalize_answer
+    - remanentia_entity_extractor → entity_extractor._regex_entities
+    - remanentia_search → memory_index BM25 (if installed)
+    """
+
+    @staticmethod
+    def _measure_both(py_fn, rust_fn, py_args, rust_args=None, n=200):
+        """Measure Python and Rust paths, return (py_ms, rust_ms, speedup)."""
+        if rust_args is None:
+            rust_args = py_args
+        # Warmup
+        py_fn(*py_args)
+        rust_fn(*rust_args)
+        # Python
+        t0 = time.perf_counter()
+        for _ in range(n):
+            py_fn(*py_args)
+        py_ms = (time.perf_counter() - t0) * 1000 / n
+        # Rust
+        t0 = time.perf_counter()
+        for _ in range(n):
+            rust_fn(*rust_args)
+        rust_ms = (time.perf_counter() - t0) * 1000 / n
+        speedup = py_ms / rust_ms if rust_ms > 0 else 0
+        return py_ms, rust_ms, speedup
+
+    def test_parse_dates_rust_vs_python(self):
+        """temporal_graph.parse_dates: Rust remanentia_temporal vs Python."""
+        try:
+            import remanentia_temporal as rt
+        except ImportError:
+            pytest.skip("remanentia_temporal not installed")
+
+        # Python path — reimport with Rust blocked
+        import sys
+        import importlib
+
+        saved = sys.modules.get("remanentia_temporal")
+        sys.modules["remanentia_temporal"] = None
+        import temporal_graph
+
+        importlib.reload(temporal_graph)
+        py_parse = temporal_graph.parse_dates
+
+        sys.modules["remanentia_temporal"] = saved
+        importlib.reload(temporal_graph)
+
+        py_ms, rust_ms, speedup = self._measure_both(
+            py_parse,
+            lambda t, r: rt.parse_dates(t, r),
+            (LONG_TEXT, REF_DATE),
+            (LONG_TEXT, REF_DATE.isoformat()),
+        )
+        print(f"\n  parse_dates: Python={py_ms:.3f}ms Rust={rust_ms:.3f}ms Speedup={speedup:.1f}×")
+        # On cached/warm paths, Rust and Python are close; just verify no major regression
+        assert rust_ms < py_ms * 3, f"Rust unexpectedly slow (py={py_ms:.3f} rust={rust_ms:.3f})"
+
+    def test_extract_answer_rust_vs_python(self):
+        """answer_extractor.extract_answer: Rust vs Python."""
+        try:
+            import remanentia_answer_extractor as rae
+        except ImportError:
+            pytest.skip("remanentia_answer_extractor not installed")
+
+        import sys
+        import importlib
+
+        saved = sys.modules.get("remanentia_answer_extractor")
+        sys.modules["remanentia_answer_extractor"] = None
+        import answer_extractor
+
+        importlib.reload(answer_extractor)
+        py_extract = answer_extractor.extract_answer
+
+        sys.modules["remanentia_answer_extractor"] = saved
+        importlib.reload(answer_extractor)
+
+        py_ms, rust_ms, speedup = self._measure_both(
+            py_extract,
+            rae.extract_answer,
+            (QUERY, LONG_TEXT),
+        )
+        print(
+            f"\n  extract_answer: Python={py_ms:.3f}ms Rust={rust_ms:.3f}ms Speedup={speedup:.1f}×"
+        )
+        assert rust_ms < py_ms * 3, f"Rust unexpectedly slow (py={py_ms:.3f} rust={rust_ms:.3f})"
+
+    def test_normalize_answer_rust_vs_python(self):
+        """answer_normalizer.normalize_answer: Rust vs Python."""
+        try:
+            import remanentia_answer_normalizer as ran
+        except ImportError:
+            pytest.skip("remanentia_answer_normalizer not installed")
+
+        import sys
+        import importlib
+
+        saved = sys.modules.get("remanentia_answer_normalizer")
+        sys.modules["remanentia_answer_normalizer"] = None
+        import answer_normalizer
+
+        importlib.reload(answer_normalizer)
+        py_norm = answer_normalizer.normalize_answer
+
+        sys.modules["remanentia_answer_normalizer"] = saved
+        importlib.reload(answer_normalizer)
+
+        text = "Likely yes, because she enjoys reading and outdoor activities"
+        py_ms, rust_ms, speedup = self._measure_both(
+            py_norm,
+            ran.normalize_answer,
+            (text,),
+            n=5000,
+        )
+        print(
+            f"\n  normalize_answer: Python={py_ms:.4f}ms Rust={rust_ms:.4f}ms Speedup={speedup:.1f}×"
+        )
+        # Small strings may not show speedup due to PyO3 overhead
+        assert rust_ms < 1, f"Rust should be under 1ms (got {rust_ms:.4f}ms)"
+
+    def test_regex_entities_rust_vs_python(self):
+        """entity_extractor._regex_entities: Rust vs Python."""
+        try:
+            import remanentia_entity_extractor as ree
+        except ImportError:
+            pytest.skip("remanentia_entity_extractor not installed")
+
+        import sys
+        import importlib
+
+        saved = sys.modules.get("remanentia_entity_extractor")
+        sys.modules["remanentia_entity_extractor"] = None
+        import entity_extractor
+
+        importlib.reload(entity_extractor)
+        py_ents = entity_extractor._regex_entities
+
+        sys.modules["remanentia_entity_extractor"] = saved
+        importlib.reload(entity_extractor)
+
+        py_ms, rust_ms, speedup = self._measure_both(
+            lambda t: py_ents(t),
+            lambda t: ree.regex_entities(t),
+            (LONG_TEXT,),
+        )
+        print(
+            f"\n  regex_entities: Python={py_ms:.3f}ms Rust={rust_ms:.3f}ms Speedup={speedup:.1f}×"
+        )
+
+    def test_full_pipeline_rust_vs_python(self):
+        """Full regex pipeline: Rust-accelerated vs pure Python."""
+        try:
+            import remanentia_temporal as rt
+            import remanentia_answer_extractor as rae
+            import remanentia_answer_normalizer as ran
+            import remanentia_entity_extractor as ree
+        except ImportError:
+            pytest.skip("Rust modules not installed")
+
+        ref_str = REF_DATE.isoformat()
+
+        def rust_pipeline():
+            dates = rt.parse_dates(LONG_TEXT, ref_str)
+            ents = ree.regex_entities(LONG_TEXT)
+            ans = rae.extract_answer(QUERY, LONG_TEXT)
+            if ans:
+                ran.normalize_answer(ans)
+            return dates, ents, ans
+
+        # Python pipeline — block all Rust imports
+        import sys
+        import importlib
+
+        rust_mods = [
+            "remanentia_temporal",
+            "remanentia_answer_extractor",
+            "remanentia_answer_normalizer",
+            "remanentia_entity_extractor",
+        ]
+        saved = {m: sys.modules.get(m) for m in rust_mods}
+        for m in rust_mods:
+            sys.modules[m] = None
+
+        import temporal_graph
+        import answer_extractor
+        import answer_normalizer
+        import entity_extractor
+
+        importlib.reload(temporal_graph)
+        importlib.reload(answer_extractor)
+        importlib.reload(answer_normalizer)
+        importlib.reload(entity_extractor)
+
+        py_parse = temporal_graph.parse_dates
+        py_extract = answer_extractor.extract_answer
+        py_norm = answer_normalizer.normalize_answer
+        py_ents = entity_extractor._regex_entities
+
+        for m in rust_mods:
+            sys.modules[m] = saved[m]
+        importlib.reload(temporal_graph)
+        importlib.reload(answer_extractor)
+        importlib.reload(answer_normalizer)
+        importlib.reload(entity_extractor)
+
+        def python_pipeline():
+            dates = py_parse(LONG_TEXT, REF_DATE)
+            ents = py_ents(LONG_TEXT)
+            ans = py_extract(QUERY, LONG_TEXT)
+            if ans:
+                py_norm(ans)
+            return dates, ents, ans
+
+        # Warmup
+        rust_pipeline()
+        python_pipeline()
+
+        n = 100
+        t0 = time.perf_counter()
+        for _ in range(n):
+            python_pipeline()
+        py_ms = (time.perf_counter() - t0) * 1000 / n
+
+        t0 = time.perf_counter()
+        for _ in range(n):
+            rust_pipeline()
+        rust_ms = (time.perf_counter() - t0) * 1000 / n
+
+        speedup = py_ms / rust_ms if rust_ms > 0 else 0
+        print(
+            f"\n  FULL PIPELINE: Python={py_ms:.2f}ms Rust={rust_ms:.2f}ms Speedup={speedup:.1f}×"
+        )
+        # Speedup varies by workload size; on short texts PyO3 overhead can dominate
+        # On 47K+ texts with many regex matches, expect consistent improvement
+        assert rust_ms < py_ms * 2, (
+            f"Rust should not be 2× slower than Python (py={py_ms:.2f} rust={rust_ms:.2f})"
+        )
+
+    def test_rust_python_results_identical(self):
+        """Verify Rust and Python produce identical results."""
+        try:
+            import remanentia_temporal as rt
+            import remanentia_answer_extractor as rae
+        except ImportError:
+            pytest.skip("Rust modules not installed")
+
+        import sys
+        import importlib
+
+        # Get Python results
+        saved_t = sys.modules.get("remanentia_temporal")
+        saved_a = sys.modules.get("remanentia_answer_extractor")
+        sys.modules["remanentia_temporal"] = None
+        sys.modules["remanentia_answer_extractor"] = None
+
+        import temporal_graph
+        import answer_extractor
+
+        importlib.reload(temporal_graph)
+        importlib.reload(answer_extractor)
+
+        py_dates = temporal_graph.parse_dates(SHORT_TEXT, REF_DATE)
+        py_answer = answer_extractor.extract_answer(QUERY, SHORT_TEXT)
+
+        sys.modules["remanentia_temporal"] = saved_t
+        sys.modules["remanentia_answer_extractor"] = saved_a
+        importlib.reload(temporal_graph)
+        importlib.reload(answer_extractor)
+
+        # Get Rust results
+        rust_dates = rt.parse_dates(SHORT_TEXT, REF_DATE.isoformat())
+        rust_answer = rae.extract_answer(QUERY, SHORT_TEXT)
+
+        assert py_dates == rust_dates, f"Dates differ: py={py_dates} rust={rust_dates}"
+        assert py_answer == rust_answer, f"Answers differ: py={py_answer} rust={rust_answer}"
+
+
 class TestDocumentedPerformanceSummary:
     """Collect and print all performance metrics as documentation."""
 
@@ -426,3 +713,48 @@ class TestDocumentedPerformanceSummary:
         total = sum(m for _, m in metrics)
         print(f"{'TOTAL (regex pipeline)':<35} {total:>9.3f}ms")
         print("=" * 60)
+
+        # Rust vs Python comparison (if Rust modules installed)
+        try:
+            import remanentia_temporal as rt
+            import remanentia_answer_extractor as rae
+            import remanentia_entity_extractor as ree
+
+            print("\n" + "=" * 70)
+            print("RUST vs PYTHON ACCELERATION")
+            print("=" * 70)
+            print(f"{'Function':<30} {'Python':>10} {'Rust':>10} {'Speedup':>10}")
+            print("-" * 62)
+
+            rust_benches = [
+                (
+                    "parse_dates (47K)",
+                    parse_dates,
+                    lambda: rt.parse_dates(LONG_TEXT, REF_DATE.isoformat()),
+                    (LONG_TEXT, REF_DATE),
+                ),
+                (
+                    "extract_answer (47K)",
+                    extract_answer,
+                    lambda: rae.extract_answer(QUERY, LONG_TEXT),
+                    (QUERY, LONG_TEXT),
+                ),
+                (
+                    "regex_entities (47K)",
+                    _regex_entities,
+                    lambda: ree.regex_entities(LONG_TEXT),
+                    (LONG_TEXT,),
+                ),
+            ]
+            for name, py_fn, rust_fn, py_args in rust_benches:
+                py_ms, _ = _timed(py_fn, *py_args)
+                t0 = time.perf_counter()
+                for _ in range(100):
+                    rust_fn()
+                rust_ms = (time.perf_counter() - t0) * 1000 / 100
+                sp = py_ms / rust_ms if rust_ms > 0 else 0
+                print(f"{name:<30} {py_ms:>9.3f}ms {rust_ms:>9.3f}ms {sp:>9.1f}×")
+
+            print("=" * 70)
+        except ImportError:
+            print("\n(Rust modules not installed — skipping Rust comparison)")
