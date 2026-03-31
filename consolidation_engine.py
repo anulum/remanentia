@@ -102,6 +102,12 @@ def _extract_entities(text: str) -> list[str]:
     3. Dynamic extraction: version numbers, file paths, function names,
        numeric results, person names
     """
+    try:
+        from remanentia_consolidation import extract_entities as _rust_ents
+
+        return _rust_ents(text)  # pragma: no cover
+    except ImportError:
+        pass
     entities = set()
     text_lower = text.lower()
 
@@ -236,6 +242,12 @@ def _extract_key_lines(text: str) -> list[str]:
     Expanded trigger set + multi-line capture: when a trigger fires,
     grab the next 2 non-empty lines as context.
     """
+    try:
+        from remanentia_consolidation import extract_key_lines as _rust_kl
+
+        return _rust_kl(text)  # pragma: no cover
+    except ImportError:
+        pass
     lines = text.split("\n")
     key_lines = []
     triggers = [
@@ -538,6 +550,13 @@ _TYPED_RELATION_PATTERNS = [
 
 def _extract_typed_relations(text: str, entities: list[str]) -> dict[tuple[str, str], str]:
     """Extract typed relations between entity pairs from their connecting text."""
+    try:
+        from remanentia_consolidation import extract_typed_relations as _rust_rels
+
+        rust_result = _rust_rels(text, entities)  # pragma: no cover
+        return {(s, t): r for s, t, r in rust_result}  # pragma: no cover
+    except ImportError:
+        pass
     text_lower = text.lower()
     typed: dict[tuple[str, str], str] = {}
     for i, e1 in enumerate(entities):
@@ -1049,6 +1068,13 @@ def age_memories(reference_date: str | None = None) -> dict:
 
 def _parse_frontmatter(text: str) -> dict | None:
     """Parse YAML-ish frontmatter from a semantic memory file."""
+    try:
+        from remanentia_consolidation import parse_frontmatter as _rust_fm
+
+        result = _rust_fm(text)  # pragma: no cover
+        return result if result else None  # pragma: no cover
+    except ImportError:
+        pass
     if not text.startswith("---"):
         return None
     end = text.find("---", 3)
