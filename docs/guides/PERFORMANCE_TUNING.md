@@ -1,6 +1,6 @@
 # Performance Tuning
 
-Measured on AMD Ryzen 5 3600, 32 GB DDR4, NTFS disk. All benchmarks use
+Measured on Intel Core i5-11600K @ 3.90GHz, 32 GB DDR4, NTFS disk. All benchmarks use
 `time.perf_counter()` and are asserted in CI via budget tests in
 `tests/test_pipeline_performance.py` (43 tests).
 
@@ -227,47 +227,48 @@ Install `arcane_stdp` wheel for automatic Rust acceleration.
 
 ## Complete Rust Function Benchmark (11 crates, 27 functions)
 
-All functions measured on AMD Ryzen 5 3600, 1,000 iterations, `time.perf_counter()`.
+All functions measured on Intel Core i5-11600K @ 3.90GHz, 1,000 iterations,
+`time.perf_counter()`. Measured 2026-03-31.
 
 ### Crate 1: remanentia_temporal
 
 | Function | Measured | Wired into |
 |----------|---------|------------|
-| `parse_dates` (short text) | 11.8 µs | temporal_graph.parse_dates |
-| `normalise_vague_date` | 5.1 µs | date_normalizer._rule_based_normalise |
+| `parse_dates` (short text) | 11.5 µs | temporal_graph.parse_dates |
+| `normalise_vague_date` | 7.6 µs | date_normalizer._rule_based_normalise |
 
 ### Crate 2: remanentia_answer_extractor
 
 | Function | Measured | Wired into |
 |----------|---------|------------|
-| `extract_answer` (short) | 3.2 µs | answer_extractor.extract_answer |
+| `extract_answer` (short) | 7.2 µs | answer_extractor.extract_answer |
 | `fuzzy_match` | 0.3 µs | answer_extractor.fuzzy_match |
-| `normalize_number` | 5.8 µs | answer_extractor.normalize_number |
-| `extract_best_sentence` | — | answer_extractor.extract_best_sentence |
+| `normalize_number` | 7.7 µs | answer_extractor.normalize_number |
+| `extract_best_sentence` | 7.0 µs | answer_extractor.extract_best_sentence |
 
 ### Crate 3: remanentia_answer_normalizer
 
 | Function | Measured | Wired into |
 |----------|---------|------------|
-| `normalize_answer` | 0.4 µs | answer_normalizer.normalize_answer |
+| `normalize_answer` | 0.5 µs | answer_normalizer.normalize_answer |
 | `answers_match` | 0.7 µs | answer_normalizer.answers_match |
-| `extract_answer_items` | 1.6 µs | answer_normalizer.extract_answer_items |
+| `extract_answer_items` | 3.8 µs | answer_normalizer.extract_answer_items |
 
 ### Crate 4: remanentia_entity_extractor
 
 | Function | Measured | Wired into |
 |----------|---------|------------|
-| `regex_entities` (short) | 7.2 µs | entity_extractor._regex_entities |
-| `extract_relations` | — | entity_extractor.extract_relations |
+| `regex_entities` (short) | 5.1 µs | entity_extractor._regex_entities |
+| `extract_relations` | 4.5 µs | entity_extractor.extract_relations |
 
 ### Crate 5: remanentia_fact_decomposer
 
 | Function | Measured | Wired into |
 |----------|---------|------------|
 | `classify_fact_type` (9 types) | 0.3 µs | fact_decomposer._classify_fact |
-| `split_sentences` | 0.3 µs | fact_decomposer._split_sentences |
+| `split_sentences` | 0.4 µs | fact_decomposer._split_sentences |
 | `has_change_verb` | 0.2 µs | fact_decomposer._build_fact |
-| `tokenize_words` | 7.4 µs | arcane_retriever._check_sufficiency |
+| `tokenize_words` | 1.6 µs | arcane_retriever._check_sufficiency |
 
 ### Crate 6: remanentia_search
 
@@ -275,8 +276,8 @@ All functions measured on AMD Ryzen 5 3600, 1,000 iterations, `time.perf_counter
 |----------|---------|------------|
 | `BM25Index.search` | 1-5 ms (20K paras) | memory_index.search (≥50K) |
 | `cosine_batch` | — | memory_index._compute_embeddings |
-| `tokenize` | 1.6 µs | memory_index._tokenize |
-| `classify_paragraph` | 6.1 µs | memory_index._classify_paragraph |
+| `tokenize` | 1.7 µs | memory_index._tokenize |
+| `classify_paragraph` | 0.3 µs | memory_index._classify_paragraph |
 | `split_paragraphs` | — | (available, Python windowing used) |
 | `token_counts` | — | (available) |
 
@@ -291,33 +292,92 @@ All functions measured on AMD Ryzen 5 3600, 1,000 iterations, `time.perf_counter
 
 | Function | Measured | Wired into |
 |----------|---------|------------|
-| `tokenize` | 1.5 µs | knowledge_store._tokenize |
-| `extract_keywords` | 13.2 µs | knowledge_store._extract_keywords |
-| `extract_entities` | 1.7 µs | knowledge_store._extract_entities |
-| `extract_person_names` | 7.1 µs | knowledge_store.extract_person_names |
+| `tokenize` | 2.0 µs | knowledge_store._tokenize |
+| `extract_keywords` | 3.3 µs | knowledge_store._extract_keywords |
+| `extract_entities` | 2.4 µs | knowledge_store._extract_entities |
+| `extract_person_names` | 11.5 µs | knowledge_store.extract_person_names |
 
 ### Crate 9: remanentia_consolidation
 
 | Function | Measured | Wired into |
 |----------|---------|------------|
-| `extract_entities` | 15.7 µs | consolidation_engine._extract_entities |
-| `extract_key_lines` | 1.6 µs | consolidation_engine._extract_key_lines |
-| `extract_typed_relations` | — | consolidation_engine._extract_typed_relations |
-| `parse_frontmatter` | 6.8 µs | consolidation_engine._parse_frontmatter |
+| `extract_entities` | 9.6 µs | consolidation_engine._extract_entities |
+| `extract_key_lines` | 1.4 µs | consolidation_engine._extract_key_lines |
+| `extract_typed_relations` | 1.2 µs | consolidation_engine._extract_typed_relations |
+| `parse_frontmatter` | 1.9 µs | consolidation_engine._parse_frontmatter |
 
 ### Crate 10: remanentia_skill_extractor
 
 | Function | Measured | Wired into |
 |----------|---------|------------|
-| `tokenize_lower` | 1.9 µs | skill_extractor._tokenize_lower |
-| `matches_skill_marker` | 2.9 µs | skill_extractor.extract_skills |
+| `tokenize_lower` | 1.7 µs | skill_extractor._tokenize_lower |
+| `matches_skill_marker` | 1.6 µs | skill_extractor.extract_skills |
 | `rank_skills_by_overlap` | — | (available for query_skills) |
 
 ### Crate 11: remanentia_active_retrieval
 
 | Function | Measured | Wired into |
 |----------|---------|------------|
-| `extract_decision_points` | 1.0 µs | active_retrieval.extract_decision_points |
+| `extract_decision_points` | 4.1 µs | active_retrieval.extract_decision_points |
+
+## End-to-End Pipeline Benchmarks
+
+Measured 2026-03-31 on Intel Core i5-11600K @ 3.90GHz with all 11 Rust crates installed.
+ML model loading excluded (measured regex/heuristic path only).
+
+### Per-pipeline timings
+
+| Pipeline | Workload | Time |
+|----------|---------|-----:|
+| Regex pipeline (parse+entities+extract+normalise) | 47K chars | **1.3 ms** |
+| Decompose + FactIndex + query | 50 turns (5 sessions) | **17.0 ms** |
+| ArcaneRetriever (with recency decay) | 5 sessions | **13.5 ms** |
+| Summary DAG build | 100 traces | **0.7 ms** |
+| Summary DAG search | 100-trace DAG | **1.6 ms** |
+| KnowledgeStore.add_note | per note | **0.6 ms** |
+| KnowledgeStore.search | 50 notes | **0.03 ms** |
+| Heartbeat (observe+consolidate+age+capacity) | empty dirs | **30 ms** |
+| **Full end-to-end** (retrieve+store+search) | 5 sessions | **17.2 ms** |
+
+### Full end-to-end pipeline
+
+The full pipeline exercises every major subsystem:
+
+```
+Sessions (5 × 10 turns)
+    │
+    ▼
+ArcaneRetriever(sessions, recency_decay=30d)
+    ├── decompose_sessions() [Rust: classify_fact_type, split_sentences, has_change_verb]
+    ├── FactIndex() [keyword + entity index]
+    ├── _parallel_retrieve() [4 channels: BM25, entity, temporal, session]
+    ├── _rrf_fusion() [with recency_weight per fact]
+    │
+    ▼
+build_context() → LLM-ready context string
+    │
+    ▼
+KnowledgeStore.add_note() × 5 [Rust: tokenize, extract_keywords, extract_entities]
+    │
+    ▼
+KnowledgeStore.search() [token overlap scoring]
+    │
+    ▼
+Total: 17.2 ms (50 conversation turns → ranked context + stored notes)
+```
+
+### Interpretation
+
+- The **17.2 ms end-to-end** time means Remanentia can handle ~58 queries/second
+  on a single core, without any GPU or LLM involvement.
+- The regex pipeline (1.3 ms on 47K chars) is dominated by `parse_dates` and
+  `regex_entities` — both Rust-accelerated.
+- The ArcaneRetriever's 4-channel parallel retrieval takes 13.5 ms for 50 turns,
+  including the recency decay computation (0.5 µs per fact = negligible).
+- KnowledgeStore operations are sub-millisecond — adding and searching notes
+  does not bottleneck the pipeline.
+- The heartbeat (30 ms) is designed to run every ~5 minutes in background —
+  its cost is amortised over hundreds of queries.
 
 ## Test Coverage
 
