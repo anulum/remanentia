@@ -35,9 +35,28 @@ Measured on same 47K-character workload.
 | `regex_entities` (47K) | 0.125ms | 0.061ms | **2.1×** |
 | Full pipeline (470K, large) | 9.07ms | 0.60ms | **14.1×** |
 
-On small workloads (47K), PyO3 FFI overhead and Python regex caching
-neutralise the Rust advantage. On large workloads (470K+), Rust's compiled
-regex engine dominates — 14.1× speedup.
+On short texts (<100 chars), PyO3 FFI overhead neutralises the Rust
+advantage — most functions show 0.8-1.3× (effectively parity). On large
+workloads (470K+ chars), Rust's compiled regex engine dominates because
+FFI overhead is amortised across thousands of regex matches — 14.1×
+measured speedup on full pipeline.
+
+### Rust vs Python on short texts (measured 2026-03-31)
+
+| Function | Python µs | Rust µs | Speedup |
+|----------|----------|---------|---------|
+| `parse_dates` | 42.9 | 13.6 | **3.1×** |
+| `classify_fact_type` (9 types) | 5.4 | 2.8 | **1.9×** |
+| `ks._extract_entities` | 29.0 | 17.0 | **1.7×** |
+| `ks._extract_keywords` | 43.5 | 34.3 | **1.3×** |
+| `regex_entities` | 57.6 | 45.7 | **1.3×** |
+| `extract_answer` | 26.8 | 30.0 | 0.9× |
+| `normalize_answer` | 8.4 | 10.0 | 0.8× |
+| `_tokenize` | 5.0 | 6.4 | 0.8× |
+
+The functions showing <1× on short texts still benefit from Rust on large
+workloads. The cross-over point is typically ~1K-5K characters where FFI
+overhead becomes negligible relative to regex work.
 
 ### All Rust crates
 
@@ -50,10 +69,10 @@ regex engine dominates — 14.1× speedup.
 | `remanentia_search` | memory_index (BM25, Rayon) | ~3-5× |
 | `arcane_stdp` | snn_backend | ~2-3× |
 | `remanentia_entity_extractor` | entity_extractor | ~2× |
-| `remanentia_knowledge_store` | knowledge_store | NEW |
-| `remanentia_consolidation` | consolidation_engine | NEW |
-| `remanentia_skill_extractor` | skill_extractor | NEW |
-| `remanentia_active_retrieval` | active_retrieval | NEW |
+| `remanentia_knowledge_store` | knowledge_store | 1.0-1.7× (short), scales on large |
+| `remanentia_consolidation` | consolidation_engine | 1.0-1.1× (short), scales on large |
+| `remanentia_skill_extractor` | skill_extractor | ~1.0× (short) |
+| `remanentia_active_retrieval` | active_retrieval | ~1.0× (short) |
 
 ## v0.4 Feature Performance
 
