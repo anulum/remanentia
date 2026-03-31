@@ -757,10 +757,36 @@ def _filename_bonus(query: str, name_lower: str, idf: dict[str, float]) -> float
 
 
 def related_traces(trace_name: str, top_k: int = 3, traces_dir: Path | None = None) -> list[dict]:
-    """Find traces most similar to the given trace by keyword overlap."""
-    tdir = traces_dir or TRACES_DIR
-    target = tdir / trace_name
-    if not target.exists():
+    """Find traces most similar to the given trace by keyword overlap.
+
+    The `trace_name` is expected to be the name of a markdown trace file
+    located directly in `TRACES_DIR` (for example, a value previously
+    returned from `_list_traces`). To avoid directory traversal or
+    unintended file access, the resolved path is constrained to the
+    traces directory before being used.
+    """
+    # Resolve the base traces directory
+    tdir = (traces_dir or TRACES_DIR).resolve()
+
+    # Basic validation of the trace name: non-empty, no path separators,
+    # and must look like a markdown file.
+    if not trace_name:
+        return []
+    if "/" in trace_name or "\\" in trace_name:
+        # Disallow any attempt to specify subdirectories or absolute paths.
+        return []
+    if not trace_name.endswith(".md"):
+        return []
+
+    # Construct and resolve the target path, then ensure it is inside tdir.
+    target = (tdir / trace_name).resolve()
+    try:
+        # Ensure the target is within the traces directory.
+        target.relative_to(tdir)
+    except ValueError:
+        return []
+
+    if not target.exists() or not target.is_file():
         return []
 
     target_text = target.read_text(encoding="utf-8")
