@@ -1327,6 +1327,12 @@ def _classify_query(query: str) -> dict:
 
 def _classify_paragraph(text: str, is_code: bool = False) -> str:
     """Tag paragraph with its semantic type."""
+    try:
+        from remanentia_search import classify_paragraph as _rust_cls
+
+        return _rust_cls(text, is_code)  # pragma: no cover
+    except ImportError:
+        pass
     t = text.lower()
 
     if is_code:
@@ -1668,6 +1674,12 @@ def _extract_python_block(lines: list[str], node: ast.AST) -> str:
 
 def _tokenize(text: str) -> list[str]:
     """Tokenize text for BM25. Lowercase, 3+ char words."""
+    try:
+        from remanentia_search import tokenize as _rust_tok
+
+        return _rust_tok(text)  # pragma: no cover
+    except ImportError:
+        pass
     return re.findall(r"[a-z0-9][a-z0-9_]{2,}", text.lower())
 
 
