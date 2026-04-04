@@ -194,7 +194,7 @@ class TestRecall:
             },
         )()
 
-        with patch("api.recall_endpoint") as mock_endpoint:
+        with patch("api.recall_endpoint"):
             # Actually patch the import inside
             pass
 

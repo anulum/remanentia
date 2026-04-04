@@ -6,19 +6,9 @@
 # Contact: www.anulum.li | protoscience@anulum.li
 # Remanentia — Unified memory index
 
-"""Unified index over all project-workspace knowledge sources.
-
-BM25 first pass + optional GPU embedding rerank.
-
-Usage::
-    from memory_index import MemoryIndex
-    idx = MemoryIndex()
-    idx.build()
-    results = idx.search("STDP learning rule fix", top_k=5)
-"""
+"""Unified index over all project-workspace knowledge sources."""
 
 from __future__ import annotations
-
 import ast
 import json
 import math
@@ -29,104 +19,67 @@ import time
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
-
 import numpy as np
-
 import hashlib as _hashlib
 
 BASE = Path(__file__).parent
-project-workspace_ROOT = BASE.parent
+project-workspace_ROOT = BASE.parent.parent
 INDEX_PATH = BASE / "snn_state" / "memory_index.pkl"
 HASH_CACHE_PATH = BASE / "snn_state" / "content_hashes.json"
 GRAPH_DIR = BASE / "memory" / "graph"
 
-# All knowledge sources to index
 SOURCES = {
-    # Arcane Sapience core
     "traces": BASE / "reasoning_traces",
     "paper": BASE / "paper",
     "semantic": BASE / "memory" / "semantic",
     "disposition": BASE / "disposition",
-    # Coordination
-    "sessions_as": project-workspace_ROOT / ".coordination" / "sessions" / "arcane-sapience",
-    "sessions_codex": project-workspace_ROOT / ".coordination" / "sessions" / "CODEX",
-    "handovers_as": project-workspace_ROOT / ".coordination" / "handovers" / "arcane-sapience",
-    "handovers_codex": project-workspace_ROOT / ".coordination" / "handovers" / "codex",
-    # Cross-repo research
-    "qc_research": project-workspace_ROOT / ".coordination" / "handovers" / "scpn-quantum-control",
-    "po_research": project-workspace_ROOT / ".coordination" / "handovers" / "scpn-phase-orchestrator",
-    "nc_research": project-workspace_ROOT / "03_CODE" / "sc-neurocore" / "docs" / "internal",
-    # Claude memory
-    "claude_memory": Path.home()
-    / ".claude"
-    / "projects"
-    / "C--aaa-God-of-the-Math-Collection"
-    / "memory",
-    # INDEXER catalog
-    "indexer": project-workspace_ROOT / "INDEXER",
-    # Code: Remanentia
-    "code_remanentia": BASE,
-    # Code: key repos (top-level Python files only, not venvs/node_modules)
-    "code_orchestrator": project-workspace_ROOT / "03_CODE" / "scpn-phase-orchestrator" / "src",
-    "code_quantum": project-workspace_ROOT / "03_CODE" / "scpn-quantum-control" / "src",
-    "code_neurocore": project-workspace_ROOT / "03_CODE" / "sc-neurocore" / "src",
-    "code_director": project-workspace_ROOT / "03_CODE" / "DIRECTOR_AI" / "src",
+    "00_DATASETS": project-workspace_ROOT / "00_DATASETS",
+    "01_MANUSCRIPTS": project-workspace_ROOT / "01_MANUSCRIPTS",
+    "02_MEDIA": project-workspace_ROOT / "02_MEDIA",
+    "03_CODE": project-workspace_ROOT / "03_CODE",
+    "workspace-internal": project-workspace_ROOT / "workspace-internal",
+    "04_MISC": project-workspace_ROOT / "04_MISC",
+    "aaa_ANULUM_LI": project-workspace_ROOT / "aaa_ANULUM.LI",
+    "INDEXER_GLOBAL": project-workspace_ROOT / "INDEXER",
+    "project-workspace_Trompe": project-workspace_ROOT / "project-workspace_Trompe_Project",
+    "project-workspace_ROOT_FILES": project-workspace_ROOT,
 }
 
-# File extensions to index per source type
 SOURCE_EXTENSIONS = {
-    "code_remanentia": {".py"},
-    "code_orchestrator": {".py", ".rs"},
-    "code_quantum": {".py", ".rs"},
-    "code_neurocore": {".py", ".rs"},
-    "code_director": {".py"},
-    "indexer": {".md", ".yaml"},
+    "traces": {".md", ".jsonl"},
+    "paper": {".md", ".tex", ".txt"},
+    "semantic": {".md", ".jsonl"},
+    "disposition": {".md", ".txt"},
+    "00_DATASETS": {".json", ".jsonl", ".csv", ".md", ".txt"},
+    "01_MANUSCRIPTS": {".md", ".txt", ".tex"},
+    "02_MEDIA": {".md", ".txt", ".json"},
+    "03_CODE": {
+        ".py",
+        ".rs",
+        ".md",
+        ".json",
+        ".txt",
+        ".toml",
+        ".yaml",
+        ".yml",
+        ".c",
+        ".cpp",
+        ".h",
+        ".hpp",
+        ".js",
+        ".ts",
+        ".html",
+        ".css",
+        ".sh",
+        ".ps1",
+    },
+    "workspace-internal": {".md", ".txt", ".json", ".jsonl", ".py", ".rs"},
+    "04_MISC": {".md", ".txt", ".json"},
+    "aaa_ANULUM_LI": {".txt", ".md", ".json", ".py", ".html", ".js", ".css"},
+    "INDEXER_GLOBAL": {".md", ".yaml", ".yml", ".json", ".txt"},
+    "project-workspace_Trompe": {".md", ".txt", ".py", ".json"},
+    "project-workspace_ROOT_FILES": {".md", ".txt", ".json", ".yml", ".yaml"},
 }
-
-SKIP_PATH_PARTS = (
-    ".venv",
-    "venv",
-    "node_modules",
-    "__pycache__",
-    ".git",
-    "target",
-    "dist",
-    ".egg",
-)
-MIN_FILE_CHARS = 50
-MAX_FILE_CHARS = 1_000_000
-MAX_TEXT_PARAGRAPH_CHARS = 10_000
-MAX_FALLBACK_TEXT_CHARS = 2_000
-MAX_CODE_CHUNK_CHARS = 1000
-MAX_CODE_CHUNKS = 200
-GRAPH_BOOST_QUERY_TYPES = {"general", "decision", "debugging", "explanation"}
-RUST_BM25_MIN_PARAGRAPHS = 50_000
-LOCATION_STOPWORDS = {
-    "where",
-    "what",
-    "which",
-    "file",
-    "find",
-    "locate",
-    "defined",
-    "definition",
-    "implemented",
-    "implementation",
-    "method",
-    "function",
-    "class",
-    "module",
-    "work",
-    "works",
-    "does",
-    "code",
-    "source",
-    "path",
-    "show",
-}
-
-_RUST_BM25_CLASS = None
-_RUST_BM25_IMPORT_ATTEMPTED = False
 
 
 @dataclass
@@ -214,6 +167,16 @@ class MemoryIndex:
         new_hashes: dict[str, str] = {}
         self._hash_hits = 0
         self._hash_misses = 0
+
+        # GLiNER model (load once, reuse)
+        gliner_model = None
+        if use_gliner:  # pragma: no cover
+            try:
+                from entity_extractor import _load_gliner
+
+                gliner_model = _load_gliner()
+            except Exception:
+                pass
 
         # Scan all sources
         for source_name, source_dir in SOURCES.items():
@@ -1349,6 +1312,7 @@ def _generate_prospective_queries(text: str, doc_name: str, para_type: str) -> l
     becomes lookup. Expanded to 12 pattern categories.
     """
     queries = []
+    text_lower = text.lower()
 
     # 1. Named entities (capitalised phrases)
     caps = re.findall(r"[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*", text)
@@ -1767,12 +1731,6 @@ def _reciprocal_rank_fusion(
     Scale-invariant — no need to normalise heterogeneous score distributions.
     k=60 is the standard constant from Cormack et al. (2009).
     """
-    try:
-        from remanentia_retrieve import reciprocal_rank_fusion as _rust_rrf
-
-        return _rust_rrf(ranked_lists, k)  # pragma: no cover
-    except ImportError:
-        pass
     rrf_scores: dict[int, float] = {}
     for ranked in ranked_lists:
         for rank, (para_idx, _score) in enumerate(ranked):
@@ -1800,7 +1758,7 @@ def _iter_source_files(source_name: str, source_dir: Path):
     for ext in exts:
         files.extend(source_dir.rglob(f"*{ext}"))
     for f in sorted(set(files)):
-        if any(skip in str(f) for skip in SKIP_PATH_PARTS):
+        if any(part.startswith(".") or part in SKIP_PATH_PARTS for part in f.parts):
             continue
         yield f
 
@@ -1828,7 +1786,7 @@ def auto_rebuild_if_needed(use_gpu: bool = True) -> MemoryIndex:
     idx = MemoryIndex()
     if idx.load() and not needs_rebuild():
         return idx
-    idx.build(use_gpu_embeddings=use_gpu, use_gliner=False)
+    stats = idx.build(use_gpu_embeddings=use_gpu, use_gliner=False)
     idx.save()
     return idx
 

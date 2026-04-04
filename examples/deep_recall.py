@@ -20,7 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from memory_recall import recall, MemoryContext
+from memory_recall import recall
 
 # recall() is the main entry point — combines all retrieval channels
 ctx = recall("what did we decide about BM25 scoring", top_k=3)

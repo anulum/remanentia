@@ -8,7 +8,10 @@
 
 # Experiment 1: BM25 baseline on LOCOMO
 from __future__ import annotations
-import math, re, time, json
+import math
+import re
+import time
+import json
 from collections import Counter
 from pathlib import Path
 

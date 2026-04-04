@@ -345,7 +345,6 @@ class TestRetrieve:
         ar = ArcaneRetriever(SESSIONS)
         # Force insufficiency on first iteration by making check return False
         call_count = [0]
-        original = ar._check_sufficiency
 
         def mock_check(q, qt, results):
             call_count[0] += 1
@@ -354,7 +353,7 @@ class TestRetrieve:
             return True, ""
 
         with patch.object(ar, "_check_sufficiency", side_effect=mock_check):
-            results = ar.retrieve("test query", "general", top_k=5, max_iterations=3)
+            ar.retrieve("test query", "general", top_k=5, max_iterations=3)
         assert call_count[0] >= 2
 
 

@@ -705,7 +705,7 @@ class TestConsolidationPipeline:
         )
 
         with self._patch_all_paths(tmp_path):
-            r1 = consolidate(force=True)
+            consolidate(force=True)
             r2 = consolidate(force=False)
 
         assert r2.get("status") == "nothing_to_consolidate"

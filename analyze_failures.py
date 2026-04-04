@@ -7,8 +7,10 @@
 # Remanentia — Failure analysis
 
 from __future__ import annotations
-import math, os, re, time, json
-import numpy as np
+import math
+import re
+import time
+import json
 from collections import Counter
 from pathlib import Path
 
@@ -29,7 +31,7 @@ ce_model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", device=device)
 from datasets import load_dataset
 
 ds = load_dataset("KhangPTT373/locomo_preprocess", split="test")
-from answer_extractor import extract_answer, fuzzy_match, extract_best_sentence
+from answer_extractor import extract_answer, fuzzy_match
 
 
 def precompute_conv(turns):

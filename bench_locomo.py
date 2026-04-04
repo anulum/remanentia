@@ -168,7 +168,6 @@ def bm25_search(query, paragraphs, top_k=10):
     # Embedding scoring (hybrid fusion)
     embed = _get_embed_model()
     if embed is not None:
-        import numpy as np
 
         q_emb = embed.encode(query, normalize_embeddings=True, convert_to_numpy=True)
         p_embs = embed.encode(

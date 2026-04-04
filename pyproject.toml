@@ -125,6 +125,7 @@ omit = [
     "skill_extractor.py",
     "__init__.py",
     "extractors/*",
+    "build_memory_standalone.py",
     # Benchmarks and experiment runners (not product code)
     "bench_locomo.py",
     "bench_experiments.py",
@@ -164,7 +165,6 @@ ignore = [
     "E402",
     "I001",
     "UP006", "UP031", "UP035", "UP037", "UP045",
-    "F841",
     "SIM102", "SIM103", "SIM105", "SIM108", "SIM117",
     "E741",
     "F541",
@@ -172,5 +172,5 @@ ignore = [
 ]
 
 [tool.bandit]
-skips = ["B101", "B311", "B404", "B603", "B607"]
+skips = ["B101", "B311", "B404", "B603", "B607", "B615"]
 exclude_dirs = ["tests", "experimental"]

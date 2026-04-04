@@ -209,7 +209,7 @@ class TestContradictionDetection:
 
     def test_contradiction_tracked_in_links(self):
         store = KnowledgeStore()
-        n1 = store.add_note("We enabled the GPU daemon for faster processing.", source="a.md")
+        store.add_note("We enabled the GPU daemon for faster processing.", source="a.md")
         n2 = store.add_note("We disabled the GPU daemon to free memory.", source="b.md")
         supersedes_links = [l for l in n2.links if l["type"] == "supersedes"]
         assert len(supersedes_links) >= 1
@@ -255,7 +255,7 @@ class TestGetRelated:
         n1 = store.add_note(
             "BM25 retrieval scoring improved accuracy on LOCOMO benchmark.", source="a.md"
         )
-        n2 = store.add_note(
+        store.add_note(
             "BM25 LOCOMO benchmark accuracy reached 83.1% with LLM synthesis.", source="b.md"
         )
         related = store.get_related(n1.id, depth=1)
@@ -268,10 +268,8 @@ class TestGetRelated:
     def test_depth_2(self):
         store = KnowledgeStore()
         n1 = store.add_note("BM25 retrieval is the core scoring algorithm.", source="a.md")
-        n2 = store.add_note("BM25 scoring uses TF-IDF term weighting internally.", source="b.md")
-        n3 = store.add_note(
-            "TF-IDF term weighting was the original retrieval method.", source="c.md"
-        )
+        store.add_note("BM25 scoring uses TF-IDF term weighting internally.", source="b.md")
+        store.add_note("TF-IDF term weighting was the original retrieval method.", source="c.md")
         related = store.get_related(n1.id, depth=2)
         # Should find n2 (depth 1) and potentially n3 (depth 2)
         assert len(related) >= 1
@@ -514,7 +512,7 @@ class TestGraphSearch:
     def test_typed_edge_filter(self):
         store = KnowledgeStore()
         n1 = store.add_note("Base concept for BM25 retrieval algorithm.", source="a.md")
-        n2 = store.add_note("BM25 scoring uses TF-IDF weighting retrieval.", source="b.md")
+        store.add_note("BM25 scoring uses TF-IDF weighting retrieval.", source="b.md")
         # Only follow "related" edges
         related = store.get_related(n1.id, depth=1, edge_types={"related"})
         # n2 should be found via "related" type
@@ -597,7 +595,7 @@ class TestAutoEntityLinking:
 
     def test_no_link_without_shared_entities(self):
         store = KnowledgeStore()
-        n1 = store.add_note("PyTorch CUDA acceleration for training models.", source="a.md")
+        store.add_note("PyTorch CUDA acceleration for training models.", source="a.md")
         n2 = store.add_note("The weather in Prague was surprisingly warm today.", source="b.md")
         # No shared entities — auto entity linking shouldn't fire
         # (may still have similarity links if tokens overlap)
@@ -740,7 +738,7 @@ class TestKnowledgeStorePipeline:
             patch("knowledge_store.TRIGGERS_PATH", triggers_path),
         ):
             store = KnowledgeStore()
-            n1 = store.add_note("STDP learning rule with 0.0 weight.", source="a.md")
+            store.add_note("STDP learning rule with 0.0 weight.", source="a.md")
             n2 = store.add_note("BM25 scoring replaced STDP for retrieval.", source="b.md")
             store.save()
 

@@ -26,7 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from mcp_server import TOOLS, handle_recall, handle_status, handle_graph
+from mcp_server import TOOLS, handle_status, handle_graph
 
 # Show available tools and their schemas
 print("=== MCP Tools ===\n")

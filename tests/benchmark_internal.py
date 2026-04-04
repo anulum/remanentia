@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import json
 import sys
-import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -257,9 +256,7 @@ def run_benchmark(use_gpu: bool = False):
         gold = entry["gold"]
         cat = entry["cat"]
 
-        t0 = time.monotonic()
         results = idx.search(q, top_k=5)
-        elapsed_ms = (time.monotonic() - t0) * 1000
 
         # Check if any gold answer substring appears in top-5 results
         combined_text = " ".join(r.snippet + " " + r.name for r in results).lower()

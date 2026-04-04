@@ -243,8 +243,6 @@ class TestReflectOnce:
         notes_path = tmp_path / "notes.jsonl"
         triggers_path = tmp_path / "triggers.jsonl"
         store.save(notes_path, triggers_path)
-        digest_dir = tmp_path / "digests"
-
         with (
             patch("knowledge_store.STORE_PATH", notes_path),
             patch("knowledge_store.TRIGGERS_PATH", triggers_path),

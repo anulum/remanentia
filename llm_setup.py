@@ -157,7 +157,6 @@ def cmd_setup_llm(args) -> None:  # pragma: no cover
     print(f"  Download: ~{rec.download_gb:.1f} GB")
 
     model_name = getattr(args, "model", None) or rec.name
-    device = getattr(args, "device", None) or rec.device
 
     # Write config
     local_url = "http://localhost:8080/v1"

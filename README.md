@@ -28,6 +28,8 @@ Contact: www.anulum.li | protoscience@anulum.li
 
 **Persistent AI memory with SNN-orchestrated consolidation, entity graphs, and deep contextual recall.**
 
+> **Active Development** — Remanentia is under intensive development. The core memory engine, BM25+embedding hybrid retrieval, SNN-orchestrated consolidation, temporal reasoning, and the MCP server are fully functional, tested (1,599 passing tests, 100% coverage), and deployable. We are currently completing Rust rustification of remaining hot paths (12 crates, 23 functions wired) and expanding temporal reasoning accuracy. APIs may evolve as this work progresses.
+
 BM25+embedding hybrid retrieval with RRF | 11 typed entity relation types | temporal reasoning with date arithmetic | async consolidation | thread-safe MCP server
 
 [remanentia.com](https://www.remanentia.com) | [GitHub](https://github.com/anulum/remanentia) | [ANULUM Ecosystem](https://www.anulum.li)

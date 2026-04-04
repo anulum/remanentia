@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import json
 import os
-import signal
 import subprocess
 import sys
 import time
@@ -167,8 +166,7 @@ def _run_benchmark(limit: int) -> dict:
     if limit:
         data = data[:limit]
 
-    from collections import Counter, defaultdict
-    import re
+    from collections import defaultdict
 
     type_correct = defaultdict(int)
     type_total = defaultdict(int)

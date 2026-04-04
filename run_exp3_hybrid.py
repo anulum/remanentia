@@ -8,8 +8,10 @@
 
 # Experiment 3: BM25(0.4) + Embedding(0.6) hybrid on LOCOMO
 from __future__ import annotations
-import math, re, time, json
-import numpy as np
+import math
+import re
+import time
+import json
 from collections import Counter
 from pathlib import Path
 

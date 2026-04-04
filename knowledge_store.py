@@ -504,7 +504,6 @@ class KnowledgeStore:
         - Same entity + opposite action verbs
         - Same metric entity + different numeric value
         """
-        content_lower = content.lower()
         content_actions = _POSITIVE_ACTIONS & _tokenize(content)
         content_neg_actions = _NEGATIVE_ACTIONS & _tokenize(content)
         content_entities = set(entities)
@@ -517,7 +516,6 @@ class KnowledgeStore:
             if not shared_entities:
                 continue
 
-            note_lower = note.content.lower()
             note_actions = _POSITIVE_ACTIONS & _tokenize(note.content)
             note_neg_actions = _NEGATIVE_ACTIONS & _tokenize(note.content)
 

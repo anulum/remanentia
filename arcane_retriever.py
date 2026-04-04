@@ -125,8 +125,6 @@ class ArcaneRetriever:
 
     def _gate(self, question: str, qtype: str) -> list[str]:
         """Classify which retrieval channels to activate based on question type."""
-        q_lower = question.lower()
-
         if qtype == "temporal-reasoning":
             return ["bm25", "temporal", "entity"]
         if qtype == "multi-session":

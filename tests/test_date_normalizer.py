@@ -436,7 +436,7 @@ class TestModelLoading:
 
             date_normalizer._model = None
             date_normalizer._tokenizer = None
-            result = date_normalizer._load_model()
+            date_normalizer._load_model()
             # Model dir check happens inside, but we test the fallback
             # When model is None and loading fails, normalize returns None
             r = date_normalizer._model_normalise("test", date(2023, 1, 1))
@@ -548,7 +548,7 @@ class TestSimpleResolverException:
         date_normalizer._SIMPLE_RE = broken_re
         try:
             # "earlier this month" would normally match; now it raises
-            r = _rule_based_normalise("earlier this month", date(2023, 6, 15))
+            _rule_based_normalise("earlier this month", date(2023, 6, 15))
             # Should either be None (if no other pattern matches)
             # or match a different pattern
             # The test verifies no exception escapes

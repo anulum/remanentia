@@ -310,8 +310,8 @@ class TestFullPipelinePerformance:
             entities = _regex_entities(LONG_TEXT)
             answer = extract_answer(QUERY, LONG_TEXT)
             if answer:
-                normed = normalize_answer(answer)
-                matched = answers_match(answer, "88.5%", 0.25)
+                normalize_answer(answer)
+                answers_match(answer, "88.5%", 0.25)
         ms = (time.perf_counter() - t0) * 1000 / 10
 
         assert ms < 200, f"Full regex pipeline: {ms:.2f}ms exceeds 200ms budget"

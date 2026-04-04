@@ -9,8 +9,11 @@
 # Experiment 5: Hybrid BM25+Embedding + LLM answering
 # Combines best retrieval (exp3) with LLM fallback (exp4)
 from __future__ import annotations
-import math, os, re, time, json
-import numpy as np
+import math
+import os
+import re
+import time
+import json
 from collections import Counter
 from pathlib import Path
 

@@ -9,7 +9,11 @@
 # Experiment 4: BM25 retrieval + LLM (Haiku) answering on LOCOMO
 # This is the expensive experiment (~1986 API calls, ~$0.50)
 from __future__ import annotations
-import math, os, re, time, json
+import math
+import os
+import re
+import time
+import json
 from collections import Counter
 from pathlib import Path
 

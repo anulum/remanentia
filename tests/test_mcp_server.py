@@ -490,7 +490,7 @@ class TestMCPProtocolRemember:
                     "arguments": {"query": "test", "llm": True},
                 },
             }
-            resp = handle_request(req)
+            handle_request(req)
         mock.assert_called_once()
         call_kwargs = mock.call_args
         assert call_kwargs[1].get("llm") is True

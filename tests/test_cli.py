@@ -408,7 +408,7 @@ class TestCmdDaemon:
     def test_daemon_start(self, capsys):
         from cli import cmd_daemon
 
-        with patch("subprocess.Popen") as mock_popen:
+        with patch("subprocess.Popen"):
             cmd_daemon(type("Args", (), {"action": "start"})())
         out = capsys.readouterr().out
         assert "start requested" in out

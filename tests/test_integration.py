@@ -97,7 +97,6 @@ class TestEndToEndSearch:
 
     def test_answer_extraction_fires(self, index_with_data):
         results = index_with_data.search("What accuracy did LOCOMO achieve?", top_k=3)
-        has_answer = any(r.answer for r in results)
         # Answer extraction may or may not fire depending on import availability
         # At minimum, results should exist
         assert len(results) > 0

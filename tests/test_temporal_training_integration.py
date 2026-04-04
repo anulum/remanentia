@@ -238,28 +238,7 @@ class TestChTemporalC3:
     """Test arcane_retriever._ch_temporal with temporal relation classifier."""
 
     def _make_retriever(self):
-        from fact_decomposer import AtomicFact
 
-        facts = [
-            AtomicFact(
-                text="I bought a car last month",
-                session_idx=0,
-                turn_idx=0,
-                role="user",
-                fact_type="event",
-                entities=["car"],
-                date_mentions=["2023-03-15"],
-            ),
-            AtomicFact(
-                text="I visited the dentist yesterday",
-                session_idx=0,
-                turn_idx=1,
-                role="user",
-                fact_type="event",
-                entities=["dentist"],
-                date_mentions=["2023-04-09"],
-            ),
-        ]
         from arcane_retriever import ArcaneRetriever
 
         sessions = [

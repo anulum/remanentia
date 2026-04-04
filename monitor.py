@@ -105,8 +105,6 @@ def _weight_heatmap(bins: int = 50) -> dict:
     if data is None:
         return {"error": error or "no retrieval checkpoint"}
     try:
-        import numpy as np
-
         w = data["w"]
         n = w.shape[0]
         block = max(1, n // bins)
@@ -216,7 +214,7 @@ def _query_suggestions(prefix: str) -> list[str]:
         from retrieve import query_suggestions
 
         return query_suggestions(prefix)
-    except Exception as e:
+    except Exception:
         return []
 
 

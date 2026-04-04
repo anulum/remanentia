@@ -753,7 +753,7 @@ def main():
         if cycle % 5 == 0:
             n_replayed = _replay_traces(net, TRACES_DIR, processed_traces)
             if n_replayed > 0:
-                replay_spikes = net.run(0.2, arcane_neurons=arcane_neurons or None)
+                net.run(0.2, arcane_neurons=arcane_neurons or None)
 
         # Complementary learning: consolidate fast W into slow W (every 20 cycles)
         if cycle % 20 == 0:

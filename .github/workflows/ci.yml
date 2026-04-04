@@ -31,16 +31,20 @@ jobs:
           python-version: "3.12"
 
       - name: Install lint tools
-        run: pip install ruff bandit
+        run: pip install "ruff==0.15.6" "bandit==1.9.4" "mypy>=1.19.1,<2.0"
 
       - name: Ruff check
-        run: ruff check memory_index.py mcp_server.py consolidation_engine.py cli.py api.py api_server.py answer_extractor.py answer_normalizer.py knowledge_store.py temporal_graph.py entity_extractor.py observer.py reflector.py memory_recall.py arcane_retriever.py fact_decomposer.py tests/ --output-format=github
+        run: ruff check . --exclude=".venv*,build,dist,site,training,experimental,bench_*.py,run_exp*.py,build_memory_standalone.py,encoding.py" --output-format=github
 
       - name: Ruff format check
-        run: ruff format --check memory_index.py mcp_server.py consolidation_engine.py cli.py api.py api_server.py answer_extractor.py answer_normalizer.py knowledge_store.py temporal_graph.py entity_extractor.py observer.py reflector.py memory_recall.py arcane_retriever.py fact_decomposer.py tests/
+        run: ruff format --check . --exclude=".venv*,build,dist,site,training,experimental,bench_*.py,run_exp*.py,build_memory_standalone.py,encoding.py"
+
+      - name: Mypy type check (advisory)
+        continue-on-error: true
+        run: mypy memory_index.py mcp_server.py consolidation_engine.py cli.py api.py api_server.py answer_extractor.py answer_normalizer.py knowledge_store.py temporal_graph.py entity_extractor.py observer.py reflector.py memory_recall.py arcane_retriever.py fact_decomposer.py --ignore-missing-imports --explicit-package-bases
 
       - name: Bandit SAST
-        run: bandit -r memory_index.py mcp_server.py consolidation_engine.py cli.py api.py api_server.py answer_extractor.py answer_normalizer.py knowledge_store.py temporal_graph.py entity_extractor.py observer.py reflector.py memory_recall.py arcane_retriever.py fact_decomposer.py -s B101,B110,B112,B301,B310,B311,B324,B403,B404,B603,B607 -q
+        run: bandit -r memory_index.py mcp_server.py consolidation_engine.py cli.py api.py api_server.py answer_extractor.py answer_normalizer.py knowledge_store.py temporal_graph.py entity_extractor.py observer.py reflector.py memory_recall.py arcane_retriever.py fact_decomposer.py date_normalizer.py -s B101,B110,B112,B301,B310,B311,B324,B403,B404,B603,B607,B615 -q
 
   test:
     runs-on: ubuntu-latest

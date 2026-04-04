@@ -107,13 +107,112 @@ _QUERY_FEATURE_CACHE_LOADED = False
 
 # Common words that carry no discriminating signal
 _STOPWORDS = frozenset(
-    "the a an and or but in on at to for of is it by as with from was were "
-    "be been have has had this that these those are not no its the into can "
-    "will would should could may also so if when then than more most all any "
-    "each every both few many much some such only just about over after before "
-    "between through during up down out off did do does how what which who whom "
-    "where why here there their them they we our us you your he she his her "
-    "i me my we us being now very".split()
+    [
+        "the",
+        "a",
+        "an",
+        "and",
+        "or",
+        "but",
+        "in",
+        "on",
+        "at",
+        "to",
+        "for",
+        "of",
+        "is",
+        "it",
+        "by",
+        "as",
+        "with",
+        "from",
+        "was",
+        "were",
+        "be",
+        "been",
+        "have",
+        "has",
+        "had",
+        "this",
+        "that",
+        "these",
+        "those",
+        "are",
+        "not",
+        "no",
+        "its",
+        "the",
+        "into",
+        "can",
+        "will",
+        "would",
+        "should",
+        "could",
+        "may",
+        "also",
+        "so",
+        "if",
+        "when",
+        "then",
+        "than",
+        "more",
+        "most",
+        "all",
+        "any",
+        "each",
+        "every",
+        "both",
+        "few",
+        "many",
+        "much",
+        "some",
+        "such",
+        "only",
+        "just",
+        "about",
+        "over",
+        "after",
+        "before",
+        "between",
+        "through",
+        "during",
+        "up",
+        "down",
+        "out",
+        "off",
+        "did",
+        "do",
+        "does",
+        "how",
+        "what",
+        "which",
+        "who",
+        "whom",
+        "where",
+        "why",
+        "here",
+        "there",
+        "their",
+        "them",
+        "they",
+        "we",
+        "our",
+        "us",
+        "you",
+        "your",
+        "he",
+        "she",
+        "his",
+        "her",
+        "i",
+        "me",
+        "my",
+        "we",
+        "us",
+        "being",
+        "now",
+        "very",
+    ]
 )
 
 
@@ -121,6 +220,7 @@ def _tokenize(text: str) -> list[str]:
     """Split text into lowercase word tokens, stripping stopwords."""
     try:
         from remanentia_retrieve import tokenize as _rust_tok
+
         return _rust_tok(text, _STOPWORDS)  # pragma: no cover
     except ImportError:
         pass
@@ -162,6 +262,7 @@ def _stem(word: str) -> str:
     """Minimal suffix-stripping stemmer."""
     try:
         from remanentia_retrieve import stem as _rust_stem
+
         return _rust_stem(word)  # pragma: no cover
     except ImportError:
         pass
@@ -179,6 +280,7 @@ def _expand_query(query: str) -> str:
     """
     try:
         from remanentia_retrieve import expand_query as _rust_eq
+
         return _rust_eq(query, _STOPWORDS)  # pragma: no cover
     except ImportError:
         pass
@@ -194,6 +296,7 @@ def _bigrams(tokens: list[str]) -> list[str]:
     """Generate bigrams from token list."""
     try:
         from remanentia_retrieve import bigrams as _rust_bg
+
         return _rust_bg(tokens)  # pragma: no cover
     except ImportError:
         pass
@@ -215,6 +318,7 @@ def _encode(text: str, n_neurons: int) -> np.ndarray:
     # Rust hash encoding (identical logic, 3-10x faster)
     try:
         from remanentia_retrieve import hash_encode as _rust_enc
+
         return _rust_enc(text, n_neurons, list(_HASH_PRIMES), _STOPWORDS)  # pragma: no cover
     except ImportError:
         pass
@@ -251,6 +355,7 @@ def _build_idf(trace_texts: dict[str, str]) -> dict[str, float]:
     """
     try:
         from remanentia_retrieve import build_idf as _rust_idf
+
         return _rust_idf(trace_texts, _STOPWORDS)  # pragma: no cover
     except ImportError:
         pass
@@ -274,6 +379,7 @@ def _tfidf_score(query: str, doc_name: str, doc_text: str, idf: dict[str, float]
     """
     try:
         from remanentia_retrieve import tfidf_score as _rust_tfidf
+
         return _rust_tfidf(query, doc_name, doc_text, idf, _STOPWORDS)  # pragma: no cover
     except ImportError:
         pass
@@ -427,7 +533,7 @@ def _load_network(state_path: Path | None = None) -> dict:
         if not isinstance(data, dict):
             raise ValueError(f"Unexpected network payload in {path}")
         signature = hashlib.md5(
-            f"{path}:{stat.st_mtime_ns}:{stat.st_size}:{config['encoding_backend']}".encode("utf-8")
+            f"{path}:{stat.st_mtime_ns}:{stat.st_size}:{config['encoding_backend']}".encode()
         ).hexdigest()
         cached = dict(data)
         cached["_checkpoint_path"] = str(path)
@@ -444,6 +550,7 @@ def _load_network(state_path: Path | None = None) -> dict:
 def _cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
     try:
         from remanentia_retrieve import cosine_sim as _rust_cos
+
         return _rust_cos(a.astype(np.float64), b.astype(np.float64))  # pragma: no cover
     except ImportError:
         pass
@@ -458,6 +565,7 @@ def _spike_feature(w: np.ndarray, stim: np.ndarray, steps: int = 50) -> np.ndarr
     """Deterministic spike-count feature for a stimulus under fixed weights."""
     try:
         from remanentia_retrieve import spike_feature as _rust_sf
+
         return _rust_sf(  # pragma: no cover
             w.astype(np.float64), stim.astype(np.float64), steps
         )
@@ -487,6 +595,7 @@ def _snn_affinity(w: np.ndarray, query_stim: np.ndarray, trace_stim: np.ndarray)
     """Compare deterministic query/trace spike-count features."""
     try:
         from remanentia_retrieve import snn_affinity as _rust_aff
+
         return _rust_aff(  # pragma: no cover
             w.astype(np.float64),
             query_stim.astype(np.float64),
@@ -778,8 +887,11 @@ def _entity_graph_score(query: str, trace_name: str) -> float:
 
     try:
         from remanentia_retrieve import entity_graph_score as _rust_egs
-        rels = [(r.get("source", ""), r.get("target", ""), float(r.get("weight", 1)))
-                for r in _GRAPH_RELATIONS]
+
+        rels = [
+            (r.get("source", ""), r.get("target", ""), float(r.get("weight", 1)))
+            for r in _GRAPH_RELATIONS
+        ]
         return _rust_egs(q_entities, t_entities, rels)  # pragma: no cover
     except ImportError:
         pass
@@ -791,9 +903,7 @@ def _entity_graph_score(query: str, trace_name: str) -> float:
         w = r.get("weight", 1)
         if (src in q_entities and tgt in t_entities) or (tgt in q_entities and src in t_entities):
             score += w
-        elif src in q_entities and src in t_entities:
-            score += w * 0.5
-        elif tgt in q_entities and tgt in t_entities:
+        elif src in q_entities and src in t_entities or tgt in q_entities and tgt in t_entities:
             score += w * 0.5
 
     # Normalize by max possible
@@ -810,6 +920,7 @@ def _filename_bonus(query: str, name_lower: str, idf: dict[str, float]) -> float
     """
     try:
         from remanentia_retrieve import filename_bonus as _rust_fb
+
         return _rust_fb(query, name_lower, idf, _STOPWORDS)  # pragma: no cover
     except ImportError:
         pass
@@ -1021,7 +1132,7 @@ def _retrieve_via_live_service(
         return None
 
     request_id = hashlib.md5(
-        f"{query}:{top_k}:{include_content}:{time.time_ns()}".encode("utf-8")
+        f"{query}:{top_k}:{include_content}:{time.time_ns()}".encode()
     ).hexdigest()
     request_path = config["request_dir"] / f"{request_id}.json"
     response_path = config["response_dir"] / f"{request_id}.json"
@@ -1198,8 +1309,7 @@ def retrieve(
     trace_spikes = trace_index["trace_spikes"]
     trace_names_lower = trace_index["trace_names_lower"]
     idf = trace_index["idf"]
-    query_features = _get_query_features(query, data)
-    query_spikes = query_features["spikes"]
+    _get_query_features(query, data)
 
     scored = []
     for trace_name, text in trace_texts.items():

@@ -965,7 +965,7 @@ class TestBuildEdgeCases:
         idx = MemoryIndex()
         with patch("memory_index.SOURCES", {"test": docs_dir}):
             with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md", ".py"}}):
-                stats = idx.build(use_gpu_embeddings=False, use_gliner=False)
+                idx.build(use_gpu_embeddings=False, use_gliner=False)
         names = [d.name for d in idx.documents]
         assert "module.py" not in names
 
@@ -980,7 +980,7 @@ class TestBuildEdgeCases:
             patch("memory_index.SOURCES", {"test": docs_dir}),
             patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}),
         ):
-            results = idx.search("automated build", top_k=3)
+            idx.search("automated build", top_k=3)
         assert idx._built is True
 
     def test_add_file_short_content(self, tmp_path):

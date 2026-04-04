@@ -70,7 +70,6 @@ def _generate_summary_heuristic(notes: list) -> str:
     """Generate a summary from a cluster of notes without LLM."""
     if not notes:
         return ""
-    titles = [n.title for n in notes if n.title]
     entities = sorted(set(e for n in notes for e in n.entities))[:10]
     first_content = notes[0].content[:200]
 

@@ -209,7 +209,6 @@ def _build_context(question: str, idx, results, sessions: list, qtype: str) -> s
 def _extract_temporal_facts(sessions: list) -> str:
     """Extract dates and temporal references from sessions for pre-computation."""
     import re
-    from datetime import datetime, timedelta
 
     events = []
     date_patterns = [

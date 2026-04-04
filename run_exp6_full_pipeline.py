@@ -10,8 +10,11 @@
 # + LLM synthesis with 10-turn context
 # This is the "everything we've built" experiment.
 from __future__ import annotations
-import math, os, re, time, json
-import numpy as np
+import math
+import os
+import re
+import time
+import json
 from collections import Counter
 from pathlib import Path
 

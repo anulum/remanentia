@@ -163,7 +163,6 @@ class TestExtractRelations:
             Entity(text="Embedding", label="concept", score=0.8),
         ]
         rels = extract_relations(text, entities)
-        co = [r for r in rels if r.relation_type == "co_occurs"]
         # Entities are >500 chars apart, so no co_occurs
         # But might still match a relation pattern
         # Just check it doesn't crash

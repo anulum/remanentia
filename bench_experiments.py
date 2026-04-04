@@ -53,7 +53,6 @@ def embed_search(query, paragraphs, model, top_k=20):
 
 def hybrid_search(query, paragraphs, model, top_k=20, bm25_weight=0.4):
     """BM25 + embedding fusion."""
-    import numpy as np
 
     # BM25
     q_tokens = tokenize(query)

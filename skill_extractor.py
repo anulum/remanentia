@@ -32,7 +32,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import time
 from collections import Counter
 from pathlib import Path
 

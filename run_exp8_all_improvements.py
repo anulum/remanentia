@@ -10,8 +10,11 @@
 # + LLM synthesis with 10-turn context
 # This is the "everything we've built" experiment.
 from __future__ import annotations
-import math, os, re, time, json
-import numpy as np
+import math
+import os
+import re
+import time
+import json
 from collections import Counter
 from pathlib import Path
 
@@ -359,9 +362,7 @@ for ci, conv in enumerate(ds):
             llm_calls += 1
             if llm_ans:
                 la = llm_ans.lower().strip()
-                if a_lower in la or la in a_lower:
-                    hit = True
-                elif normalized_match(llm_ans, a):
+                if a_lower in la or la in a_lower or normalized_match(llm_ans, a):
                     hit = True
                 else:
                     la_tokens = tokenize(llm_ans)
