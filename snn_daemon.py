@@ -36,6 +36,7 @@ import hashlib
 import json
 import logging
 import pickle
+import re
 import signal
 import sys
 import time
@@ -474,7 +475,10 @@ def drop_stimulus(text: str, source: str = "unknown"):
     # Derive a filesystem-safe token from the source identifier
     tmp = source.replace("/", "_").replace("\\", "_")
     safe_source = "".join(ch for ch in tmp if ch.isalnum() or ch in ("_", "-")) or "unknown"
-    path = STIMULUS_DIR / f"{safe_source}_{ts}.json"
+    fname = f"{safe_source}_{ts}.json"
+    if not re.fullmatch(r"[A-Za-z0-9_\-]+\.json", fname):
+        raise ValueError("invalid stimulus filename")
+    path = (STIMULUS_DIR / fname).resolve()
     # Store text only — daemon re-encodes at its own neuron count
     data = {
         "text": text,

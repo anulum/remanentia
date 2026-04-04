@@ -949,17 +949,11 @@ def related_traces(trace_name: str, top_k: int = 3, traces_dir: Path | None = No
     # Resolve the base traces directory
     tdir = (traces_dir or TRACES_DIR).resolve()
 
-    # Basic validation of the trace name: non-empty, no path separators,
-    # and must look like a markdown file.
-    if not trace_name:
-        return []
-    if "/" in trace_name or "\\" in trace_name:
-        # Disallow any attempt to specify subdirectories or absolute paths.
-        return []
-    if not trace_name.endswith(".md"):
+    # Allowlist: only alphanumeric, hyphens, underscores, dots, ending in .md
+    if not trace_name or not re.fullmatch(r"[A-Za-z0-9_.\-]+\.md", trace_name):
         return []
 
-    # Construct and resolve the target path, then ensure it is inside tdir.
+    # Construct path from validated name (no separators possible after regex)
     target = (tdir / trace_name).resolve()
     try:
         # Ensure the target is within the traces directory.
