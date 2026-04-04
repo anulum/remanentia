@@ -34,8 +34,7 @@ def _cluster_notes(notes: list) -> list[list]:
         from remanentia_consolidation import cluster_notes as _rust_cn  # pragma: no cover
 
         tuples = [  # pragma: no cover
-            (list(note.keywords), list(note.entities))
-            for note in notes
+            (list(note.keywords), list(note.entities)) for note in notes
         ]
         return _rust_cn(tuples, 2)  # pragma: no cover
     except ImportError:

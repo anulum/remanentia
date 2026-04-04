@@ -49,7 +49,9 @@ class TestRustFactIndex:
         idx = fd.RustFactIndex(
             ["Alpha works at Beta Corp.", "Gamma uses Delta."],
             [["Alpha", "Beta Corp"], ["Gamma", "Delta"]],
-            ["", ""], [0.0, 0.0], [False, False],
+            ["", ""],
+            [0.0, 0.0],
+            [False, False],
         )
         results = idx.query("What does Alpha do at Beta Corp?", "", False, 5)
         assert len(results) > 0
@@ -61,7 +63,8 @@ class TestRustFactIndex:
             ["Old fact.", "New fact."],
             [[], []],
             ["2024-01-01", ""],  # first fact expired
-            [0.0, 1.0], [False, False],
+            [0.0, 1.0],
+            [False, False],
         )
         results = idx.query("fact", "2025-01-01", True, 10)
         fact_indices = [r[0] for r in results]
@@ -112,9 +115,15 @@ class TestFactIndexQuery:
         kw = {"plasma": [0, 1], "reactor": [1, 2]}
         ent = {"tokamak": [0]}
         results = fd.fact_index_query(
-            kw, ent, "plasma reactor at tokamak",
-            ["", "", ""], [0.0, 0.0, 0.0], [False, False, False],
-            "", False, 5,
+            kw,
+            ent,
+            "plasma reactor at tokamak",
+            ["", "", ""],
+            [0.0, 0.0, 0.0],
+            [False, False, False],
+            "",
+            False,
+            5,
         )
         assert len(results) > 0
         indices = [r[0] for r in results]
@@ -194,7 +203,10 @@ class TestScoreTemporalQuery:
     def test_date_filter_after(self):
         events = self._events()
         indices = tp.score_temporal_query(
-            events, "experiments after 2025-06-01", ["2025-06-01"], 10,
+            events,
+            "experiments after 2025-06-01",
+            ["2025-06-01"],
+            10,
         )
         for i in indices:
             assert events[i][0] >= "2025-06-01"
@@ -202,7 +214,10 @@ class TestScoreTemporalQuery:
     def test_date_filter_before(self):
         events = self._events()
         indices = tp.score_temporal_query(
-            events, "events before 2025-04-01", ["2025-04-01"], 10,
+            events,
+            "events before 2025-04-01",
+            ["2025-04-01"],
+            10,
         )
         for i in indices:
             assert events[i][0] <= "2025-04-01"
@@ -218,7 +233,12 @@ class TestScoreTemporalQuery:
 
     def test_performance(self):
         events = [
-            (f"2025-{(i%12)+1:02d}-{(i%28)+1:02d}", f"Event {i} plasma tokamak density", "doc", i)
+            (
+                f"2025-{(i % 12) + 1:02d}-{(i % 28) + 1:02d}",
+                f"Event {i} plasma tokamak density",
+                "doc",
+                i,
+            )
             for i in range(1000)
         ]
         t0 = time.perf_counter()
@@ -242,7 +262,11 @@ class TestKnowledgeSearch:
 
     def test_basic_search(self):
         results = ks.knowledge_search(
-            self._token_index(), set(), {"plasma", "density"}, 5, True,
+            self._token_index(),
+            set(),
+            {"plasma", "density"},
+            5,
+            True,
         )
         assert len(results) >= 2
         ids = [r[0] for r in results]
@@ -251,7 +275,11 @@ class TestKnowledgeSearch:
 
     def test_exclude_superseded(self):
         results = ks.knowledge_search(
-            self._token_index(), {"n1"}, {"plasma", "density"}, 5, True,
+            self._token_index(),
+            {"n1"},
+            {"plasma", "density"},
+            5,
+            True,
         )
         ids = [r[0] for r in results]
         assert "n1" not in ids
@@ -259,26 +287,42 @@ class TestKnowledgeSearch:
 
     def test_include_superseded(self):
         results = ks.knowledge_search(
-            self._token_index(), {"n1"}, {"plasma", "density"}, 5, False,
+            self._token_index(),
+            {"n1"},
+            {"plasma", "density"},
+            5,
+            False,
         )
         ids = [r[0] for r in results]
         assert "n1" in ids
 
     def test_no_match(self):
         results = ks.knowledge_search(
-            self._token_index(), set(), {"xyzzy", "frobnicator"}, 5, True,
+            self._token_index(),
+            set(),
+            {"xyzzy", "frobnicator"},
+            5,
+            True,
         )
         assert results == []
 
     def test_top_k(self):
         results = ks.knowledge_search(
-            self._token_index(), set(), {"plasma", "tokamak"}, 1, True,
+            self._token_index(),
+            set(),
+            {"plasma", "tokamak"},
+            1,
+            True,
         )
         assert len(results) == 1
 
     def test_score_ordering(self):
         results = ks.knowledge_search(
-            self._token_index(), set(), {"plasma", "density"}, 5, True,
+            self._token_index(),
+            set(),
+            {"plasma", "density"},
+            5,
+            True,
         )
         scores = [s for _, s in results]
         assert scores == sorted(scores, reverse=True)
@@ -298,32 +342,52 @@ class TestGetRelatedIds:
 
     def test_depth_1(self):
         ids = ks.get_related_ids(
-            self._links(), "n1", 1, set(), {"n1", "n2", "n3", "n4"},
+            self._links(),
+            "n1",
+            1,
+            set(),
+            {"n1", "n2", "n3", "n4"},
         )
         assert set(ids) == {"n2", "n3"}
 
     def test_depth_2(self):
         ids = ks.get_related_ids(
-            self._links(), "n1", 2, set(), {"n1", "n2", "n3", "n4"},
+            self._links(),
+            "n1",
+            2,
+            set(),
+            {"n1", "n2", "n3", "n4"},
         )
         assert "n4" in ids
 
     def test_edge_type_filter(self):
         ids = ks.get_related_ids(
-            self._links(), "n1", 1, {"related"}, {"n1", "n2", "n3", "n4"},
+            self._links(),
+            "n1",
+            1,
+            {"related"},
+            {"n1", "n2", "n3", "n4"},
         )
         assert "n2" in ids
         assert "n3" not in ids
 
     def test_invalid_start(self):
         ids = ks.get_related_ids(
-            self._links(), "nonexistent", 1, set(), {"n1", "n2", "n3", "n4"},
+            self._links(),
+            "nonexistent",
+            1,
+            set(),
+            {"n1", "n2", "n3", "n4"},
         )
         assert ids == []
 
     def test_no_links(self):
         ids = ks.get_related_ids(
-            self._links(), "n4", 2, set(), {"n1", "n2", "n3", "n4"},
+            self._links(),
+            "n4",
+            2,
+            set(),
+            {"n1", "n2", "n3", "n4"},
         )
         assert ids == []
 
@@ -344,8 +408,13 @@ class TestGraphSearch:
             "n3": [],
         }
         results = ks.graph_search(
-            token_index, set(), note_links, {"n1", "n2", "n3"},
-            {"plasma", "tokamak"}, 5, 2,
+            token_index,
+            set(),
+            note_links,
+            {"n1", "n2", "n3"},
+            {"plasma", "tokamak"},
+            5,
+            2,
         )
         assert len(results) >= 1
         ids = [r[0] for r in results]
@@ -353,15 +422,25 @@ class TestGraphSearch:
 
     def test_empty_query(self):
         results = ks.graph_search(
-            {"n1": {"a", "b"}}, set(), {"n1": []}, {"n1"},
-            set(), 5, 2,
+            {"n1": {"a", "b"}},
+            set(),
+            {"n1": []},
+            {"n1"},
+            set(),
+            5,
+            2,
         )
         assert results == []
 
     def test_no_match(self):
         results = ks.graph_search(
-            {"n1": {"a", "b"}}, set(), {"n1": []}, {"n1"},
-            {"xyz"}, 5, 2,
+            {"n1": {"a", "b"}},
+            set(),
+            {"n1": []},
+            {"n1"},
+            {"xyz"},
+            5,
+            2,
         )
         assert results == []
 
@@ -382,7 +461,10 @@ class TestRustKnowledgeIndex:
             "n3": [],
         }
         return ks.RustKnowledgeIndex(
-            token_index, set(), note_links, {"n1", "n2", "n3"},
+            token_index,
+            set(),
+            note_links,
+            {"n1", "n2", "n3"},
         )
 
     def test_search(self):
@@ -405,7 +487,7 @@ class TestRustKnowledgeIndex:
 
     def test_search_performance(self):
         token_index = {f"n{i}": {"plasma", "tokamak", f"kw_{i}"} for i in range(500)}
-        note_links = {f"n{i}": [(f"n{(i+1)%500}", "related")] for i in range(500)}
+        note_links = {f"n{i}": [(f"n{(i + 1) % 500}", "related")] for i in range(500)}
         valid_ids = {f"n{i}" for i in range(500)}
         idx = ks.RustKnowledgeIndex(token_index, set(), note_links, valid_ids)
         t0 = time.perf_counter()

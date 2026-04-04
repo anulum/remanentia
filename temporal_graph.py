@@ -212,9 +212,7 @@ class TemporalGraph:
         try:
             from remanentia_temporal import score_temporal_query as _rust_stq
 
-            ev_tuples = [
-                (e.date, e.text, e.source, e.paragraph_idx) for e in self.events
-            ]
+            ev_tuples = [(e.date, e.text, e.source, e.paragraph_idx) for e in self.events]
             indices = _rust_stq(ev_tuples, query, dates_in_query, top_k)
             return [self.events[i] for i in indices]  # pragma: no cover
         except ImportError:

@@ -195,7 +195,10 @@ class FactIndex:
         """
         if self._rust_index is not None:
             ranked = self._rust_index.query(
-                question, reference_date, filter_expired, top_k,
+                question,
+                reference_date,
+                filter_expired,
+                top_k,
             )
             return [(self.facts[idx], score) for idx, score in ranked]  # pragma: no cover
         q_tokens = _tokenize(question)

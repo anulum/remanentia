@@ -1780,6 +1780,7 @@ def _reciprocal_rank_fusion(
     """
     try:
         from remanentia_retrieve import reciprocal_rank_fusion as _rust_rrf
+
         return _rust_rrf(ranked_lists, k)  # pragma: no cover
     except ImportError:
         pass

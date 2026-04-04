@@ -90,10 +90,9 @@ class TestClusterTraces:
         }
         # Run via Python path (Rust is used if available, but let's compare structure)
         py_result = _cluster_traces(trace_data)
-        rust_result = rc.cluster_traces([
-            (n, m["project"], m.get("date", "")[:10])
-            for n, m in trace_data.items()
-        ])
+        rust_result = rc.cluster_traces(
+            [(n, m["project"], m.get("date", "")[:10]) for n, m in trace_data.items()]
+        )
         # Both should produce 3 clusters: 2 from proj-x split, 1 from proj-y
         assert len(py_result) == len(rust_result)
 
@@ -162,11 +161,16 @@ class TestBuildSummaryDag:
         assert root["date_range"][0] <= root["date_range"][1]
 
     def test_entities_truncated(self):
-        data = [(
-            "t.md", "2026-03-01", "proj",
-            [f"e{i}" for i in range(50)],
-            ["key line"], "text",
-        )]
+        data = [
+            (
+                "t.md",
+                "2026-03-01",
+                "proj",
+                [f"e{i}" for i in range(50)],
+                ["key line"],
+                "text",
+            )
+        ]
         nodes = rc.build_summary_dag(data, 4)
         assert len(nodes[0]["entities"]) <= 20
 
@@ -222,9 +226,9 @@ class TestClusterNotes:
     def test_greedy_expansion(self):
         """When note 0 absorbs note 1, its keywords expand to catch note 2."""
         notes = [
-            (["a", "b"], []),       # shares a,b with note 1
+            (["a", "b"], []),  # shares a,b with note 1
             (["a", "b", "c"], []),  # absorbed → keywords now include c
-            (["c", "b"], []),       # shares c,b with expanded set
+            (["c", "b"], []),  # shares c,b with expanded set
         ]
         clusters = rc.cluster_notes(notes, 2)
         assert len(clusters) == 1
@@ -247,10 +251,7 @@ class TestClusterNotes:
 
     def test_performance(self):
         """500 notes clustering in < 10 ms."""
-        notes = [
-            ([f"kw{i % 20}", f"kw{(i + 7) % 20}"], [f"ent{i % 15}"])
-            for i in range(500)
-        ]
+        notes = [([f"kw{i % 20}", f"kw{(i + 7) % 20}"], [f"ent{i % 15}"]) for i in range(500)]
         start = time.perf_counter()
         for _ in range(20):
             rc.cluster_notes(notes, 2)

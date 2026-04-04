@@ -1471,6 +1471,7 @@ class TestRustBm25Paths:
         finally:
             memory_index._RUST_BM25_IMPORT_ATTEMPTED = old_attempted
             memory_index._RUST_BM25_CLASS = old_cls
+
     def test_get_rust_bm25_class_already_attempted(self):
         """Covers early return when import already attempted."""
         import memory_index

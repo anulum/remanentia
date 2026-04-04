@@ -322,8 +322,7 @@ def _cluster_traces(traces: dict[str, dict]) -> list[list[str]]:
         from remanentia_consolidation import cluster_traces as _rust_ct  # pragma: no cover
 
         tuples = [  # pragma: no cover
-            (name, meta["project"], meta.get("date", "")[:10])
-            for name, meta in traces.items()
+            (name, meta["project"], meta.get("date", "")[:10]) for name, meta in traces.items()
         ]
         return _rust_ct(tuples)  # pragma: no cover
     except ImportError:

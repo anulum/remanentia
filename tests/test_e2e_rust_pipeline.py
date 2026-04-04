@@ -24,21 +24,39 @@ SESSIONS = [
         {"role": "user", "content": "When was the STDP bug fixed?"},
         {"role": "assistant", "content": "The STDP bug was fixed on 2026-03-15 in sc-neurocore."},
         {"role": "user", "content": "What was the LOCOMO accuracy?"},
-        {"role": "assistant", "content": "The LOCOMO benchmark showed 66.4% accuracy, with multi-hop at 75.4%."},
+        {
+            "role": "assistant",
+            "content": "The LOCOMO benchmark showed 66.4% accuracy, with multi-hop at 75.4%.",
+        },
         {"role": "user", "content": "Tell me about Alice's hobbies"},
-        {"role": "assistant", "content": "Alice enjoys pottery, hiking, and reading science fiction."},
+        {
+            "role": "assistant",
+            "content": "Alice enjoys pottery, hiking, and reading science fiction.",
+        },
     ],
     [
         {"role": "user", "content": "What is the pricing for Director-AI?"},
-        {"role": "assistant", "content": "Director-AI uses founding member pricing with a free 30-day pilot."},
+        {
+            "role": "assistant",
+            "content": "Director-AI uses founding member pricing with a free 30-day pilot.",
+        },
         {"role": "user", "content": "How many companies were contacted?"},
-        {"role": "assistant", "content": "265 emails were sent to 264 companies across 40+ countries."},
+        {
+            "role": "assistant",
+            "content": "265 emails were sent to 264 companies across 40+ countries.",
+        },
     ],
     [
         {"role": "user", "content": "What Rust crates exist for Remanentia?"},
-        {"role": "assistant", "content": "There are 12 Rust crates including remanentia_retrieve, arcane_stdp, and remanentia_consolidation."},
+        {
+            "role": "assistant",
+            "content": "There are 12 Rust crates including remanentia_retrieve, arcane_stdp, and remanentia_consolidation.",
+        },
         {"role": "user", "content": "What speedup does hash_encode get?"},
-        {"role": "assistant", "content": "hash_encode achieves a 26.7x speedup over the Python implementation."},
+        {
+            "role": "assistant",
+            "content": "hash_encode achieves a 26.7x speedup over the Python implementation.",
+        },
     ],
 ]
 
@@ -234,9 +252,13 @@ class TestTier2KnowledgeE2E:
         tg = TemporalGraph()
         events = [
             TemporalEvent(date="2026-03-15", text="STDP bug fixed in sc-neurocore", source="t1.md"),
-            TemporalEvent(date="2026-03-20", text="Director-AI revenue report sent", source="t2.md"),
+            TemporalEvent(
+                date="2026-03-20", text="Director-AI revenue report sent", source="t2.md"
+            ),
             TemporalEvent(date="2026-03-22", text="LOCOMO benchmark result 66.4%", source="t3.md"),
-            TemporalEvent(date="2026-03-25", text="Tier 1-3 rustification complete", source="t4.md"),
+            TemporalEvent(
+                date="2026-03-25", text="Tier 1-3 rustification complete", source="t4.md"
+            ),
         ]
         tg.add_events(events)
         results = tg.query_temporal("STDP bug fixed", top_k=3)
@@ -274,6 +296,7 @@ class TestTier3ConsolidationE2E:
             patch.object(ce, "GRAPH_DIR", traces_dir / "graph"),
             patch.object(ce, "ENTITIES_PATH", traces_dir / "graph" / "entities.jsonl"),
             patch.object(ce, "RELATIONS_PATH", traces_dir / "graph" / "relations.jsonl"),
+            patch.object(ce, "CLUSTERS_PATH", traces_dir / "graph" / "trace_clusters.json"),
             patch.object(ce, "PENDING_PATH", traces_dir / "consolidation" / "pending.json"),
         ):
             (traces_dir / "graph").mkdir(exist_ok=True)
@@ -441,16 +464,22 @@ class TestCrossTierPipeline:
 
         store = KnowledgeStore()
         store.add_note(
-            title="Rust perf 1", content="hash_encode 26.7x speedup",
-            source="a.md", keywords=["rust", "speedup", "hash"],
+            title="Rust perf 1",
+            content="hash_encode 26.7x speedup",
+            source="a.md",
+            keywords=["rust", "speedup", "hash"],
         )
         store.add_note(
-            title="Rust perf 2", content="cluster_traces 76.1x speedup",
-            source="b.md", keywords=["rust", "speedup", "cluster"],
+            title="Rust perf 2",
+            content="cluster_traces 76.1x speedup",
+            source="b.md",
+            keywords=["rust", "speedup", "cluster"],
         )
         store.add_note(
-            title="Django web", content="Django deployment for parazit.sk",
-            source="c.md", keywords=["django", "web"],
+            title="Django web",
+            content="Django deployment for parazit.sk",
+            source="c.md",
+            keywords=["django", "web"],
         )
 
         notes_list = list(store.notes.values())
@@ -573,10 +602,18 @@ class TestRustPathVerification:
         """remanentia_retrieve exports all Tier 1 functions."""
         rr = pytest.importorskip("remanentia_retrieve")
         expected = [
-            "tokenize", "stem", "expand_query", "bigrams",
-            "build_idf", "tfidf_score", "spike_feature",
-            "snn_affinity", "cosine_sim", "hash_encode",
-            "reciprocal_rank_fusion", "entity_graph_score",
+            "tokenize",
+            "stem",
+            "expand_query",
+            "bigrams",
+            "build_idf",
+            "tfidf_score",
+            "spike_feature",
+            "snn_affinity",
+            "cosine_sim",
+            "hash_encode",
+            "reciprocal_rank_fusion",
+            "entity_graph_score",
             "filename_bonus",
         ]
         for fn_name in expected:
