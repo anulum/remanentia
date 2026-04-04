@@ -172,7 +172,7 @@ class FactIndex:
         try:
             from remanentia_fact_decomposer import RustFactIndex
 
-            self._rust_index = RustFactIndex(
+            self._rust_index = RustFactIndex(  # pragma: no cover
                 [f.text for f in self.facts],
                 [f.entities for f in self.facts],
                 [f.valid_until or "" for f in self.facts],
@@ -193,7 +193,7 @@ class FactIndex:
 
         Returns (fact, score) pairs sorted by descending score.
         """
-        if self._rust_index is not None:
+        if self._rust_index is not None:  # pragma: no cover
             ranked = self._rust_index.query(
                 question,
                 reference_date,

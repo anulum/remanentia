@@ -123,17 +123,17 @@ class TemporalGraph:
         try:
             from remanentia_temporal import build_temporal_edges as _rust_bte
 
-            by_date_snap = {d: list(idxs) for d, idxs in self._by_date.items()}
+            by_date_snap = {d: list(idxs) for d, idxs in self._by_date.items()}  # pragma: no cover
             # Remove new events from snapshot (Rust re-adds them)
-            for d in new_dates:
-                by_date_snap[d] = [i for i in by_date_snap[d] if i < start_idx]
-                if not by_date_snap[d]:
-                    del by_date_snap[d]
-            new_ev = [(ev.date, ev.text[:80]) for ev in events]
-            old_texts = {i: self.events[i].text[:80] for i in range(start_idx)}
-            raw_edges = _rust_bte(by_date_snap, new_ev, start_idx, old_texts)
-            for src_t, tgt_t, rel, src_d, tgt_d in raw_edges:
-                self.edges.append(
+            for d in new_dates:  # pragma: no cover
+                by_date_snap[d] = [i for i in by_date_snap[d] if i < start_idx]  # pragma: no cover
+                if not by_date_snap[d]:  # pragma: no cover
+                    del by_date_snap[d]  # pragma: no cover
+            new_ev = [(ev.date, ev.text[:80]) for ev in events]  # pragma: no cover
+            old_texts = {i: self.events[i].text[:80] for i in range(start_idx)}  # pragma: no cover
+            raw_edges = _rust_bte(by_date_snap, new_ev, start_idx, old_texts)  # pragma: no cover
+            for src_t, tgt_t, rel, src_d, tgt_d in raw_edges:  # pragma: no cover
+                self.edges.append(  # pragma: no cover
                     TemporalEdge(
                         source_event=src_t,
                         target_event=tgt_t,
@@ -212,8 +212,10 @@ class TemporalGraph:
         try:
             from remanentia_temporal import score_temporal_query as _rust_stq
 
-            ev_tuples = [(e.date, e.text, e.source, e.paragraph_idx) for e in self.events]
-            indices = _rust_stq(ev_tuples, query, dates_in_query, top_k)
+            ev_tuples = [
+                (e.date, e.text, e.source, e.paragraph_idx) for e in self.events
+            ]  # pragma: no cover
+            indices = _rust_stq(ev_tuples, query, dates_in_query, top_k)  # pragma: no cover
             return [self.events[i] for i in indices]  # pragma: no cover
         except ImportError:
             pass

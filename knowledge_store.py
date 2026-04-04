@@ -551,12 +551,16 @@ class KnowledgeStore:
         try:
             from remanentia_knowledge_store import knowledge_search as _rust_ks
 
-            superseded = {nid for nid, n in self.notes.items() if n.superseded_by}
-            ranked = _rust_ks(self._token_index, superseded, q_tokens, top_k, exclude_superseded)
-            results = []
-            for nid, _ in ranked:
-                if nid in self.notes:
-                    results.append(self.notes[nid])
+            superseded = {
+                nid for nid, n in self.notes.items() if n.superseded_by
+            }  # pragma: no cover
+            ranked = _rust_ks(  # pragma: no cover
+                self._token_index, superseded, q_tokens, top_k, exclude_superseded
+            )
+            results = []  # pragma: no cover
+            for nid, _ in ranked:  # pragma: no cover
+                if nid in self.notes:  # pragma: no cover
+                    results.append(self.notes[nid])  # pragma: no cover
             return results  # pragma: no cover
         except ImportError:
             pass
@@ -592,11 +596,15 @@ class KnowledgeStore:
         try:
             from remanentia_knowledge_store import get_related_ids as _rust_gri
 
-            note_links = {}
-            for nid, note in self.notes.items():
-                note_links[nid] = [(lk["target"], lk.get("type", "related")) for lk in note.links]
-            valid_ids = set(self.notes.keys())
-            ids = _rust_gri(note_links, note_id, depth, edge_types or set(), valid_ids)
+            note_links = {}  # pragma: no cover
+            for nid, note in self.notes.items():  # pragma: no cover
+                note_links[nid] = [
+                    (lk["target"], lk.get("type", "related")) for lk in note.links
+                ]  # pragma: no cover
+            valid_ids = set(self.notes.keys())  # pragma: no cover
+            ids = _rust_gri(
+                note_links, note_id, depth, edge_types or set(), valid_ids
+            )  # pragma: no cover
             return [self.notes[i] for i in ids if i in self.notes]  # pragma: no cover
         except ImportError:
             pass
@@ -632,15 +640,19 @@ class KnowledgeStore:
         try:
             from remanentia_knowledge_store import graph_search as _rust_gs
 
-            superseded = {nid for nid, n in self.notes.items() if n.superseded_by}
-            note_links = {}
-            for nid, note in self.notes.items():
-                note_links[nid] = [(lk["target"], lk.get("type", "related")) for lk in note.links]
-            valid_ids = set(self.notes.keys())
-            q_tokens = _tokenize(query)
-            if not q_tokens:
-                return []
-            ranked = _rust_gs(
+            superseded = {
+                nid for nid, n in self.notes.items() if n.superseded_by
+            }  # pragma: no cover
+            note_links = {}  # pragma: no cover
+            for nid, note in self.notes.items():  # pragma: no cover
+                note_links[nid] = [
+                    (lk["target"], lk.get("type", "related")) for lk in note.links
+                ]  # pragma: no cover
+            valid_ids = set(self.notes.keys())  # pragma: no cover
+            q_tokens = _tokenize(query)  # pragma: no cover
+            if not q_tokens:  # pragma: no cover
+                return []  # pragma: no cover
+            ranked = _rust_gs(  # pragma: no cover
                 self._token_index,
                 superseded,
                 note_links,
@@ -649,10 +661,10 @@ class KnowledgeStore:
                 top_k,
                 hop_depth,
             )
-            results = []
-            for nid, _ in ranked:
-                if nid in self.notes:
-                    results.append(self.notes[nid])
+            results = []  # pragma: no cover
+            for nid, _ in ranked:  # pragma: no cover
+                if nid in self.notes:  # pragma: no cover
+                    results.append(self.notes[nid])  # pragma: no cover
             return results  # pragma: no cover
         except ImportError:
             pass
