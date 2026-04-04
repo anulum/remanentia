@@ -12,7 +12,7 @@ crates) and for development convenience.
 
 ---
 
-## Existing Rust crates (11)
+## Existing Rust crates (12)
 
 | # | Crate | Python module(s) | Functions | Short-text speedup |
 |---|-------|-------------------|-----------|-------------------|
@@ -88,18 +88,23 @@ from remanentia_retrieve import (
 
 ---
 
-## Tier 2 — HIGH: index build + knowledge graph
+## Tier 2 — HIGH: index build + knowledge graph ✅ DONE
 
-Extend existing crates with new functions.
+Extended existing crates with new functions + `#[pyclass]` persistent indices.
 
-| # | Function | File:line | Target crate |
-|---|----------|-----------|-------------|
-| 14 | `FactIndex.query()` | fact_decomposer.py:172 | remanentia_fact_decomposer |
-| 15 | `TemporalGraph.add_events()` | temporal_graph.py:108 | remanentia_temporal |
-| 16 | `TemporalGraph.query_temporal()` | temporal_graph.py:178 | remanentia_temporal |
-| 17 | `KnowledgeStore.search()` | knowledge_store.py:538 | remanentia_knowledge_store |
-| 18 | `KnowledgeStore.get_related()` | knowledge_store.py:567 | remanentia_knowledge_store |
-| 19 | `KnowledgeStore.graph_search()` | knowledge_store.py:601 | remanentia_knowledge_store |
+| # | Function | Target crate | Status | Speedup |
+|---|----------|-------------|--------|---------|
+| 14 | `FactIndex.query()` | remanentia_fact_decomposer (`RustFactIndex` pyclass) | ✅ | **8.8×** |
+| 15 | `TemporalGraph.add_events()` | remanentia_temporal (`build_temporal_edges`) | ✅ | ~0.8× (FFI) |
+| 16 | `TemporalGraph.query_temporal()` | remanentia_temporal (`score_temporal_query`) | ✅ | **2.3×** |
+| 17 | `KnowledgeStore.search()` | remanentia_knowledge_store (`knowledge_search` + `RustKnowledgeIndex`) | ✅ | ~1.0× stateless |
+| 18 | `KnowledgeStore.get_related()` | remanentia_knowledge_store (`get_related_ids`) | ✅ | ~1.0× stateless |
+| 19 | `KnowledgeStore.graph_search()` | remanentia_knowledge_store (`graph_search`) | ✅ | ~1.0× stateless |
+
+**Key finding:** Stateful `#[pyclass]` objects (RustFactIndex, RustKnowledgeIndex)
+avoid per-call FFI serialisation and deliver real speedups. Stateless functions
+passing complex dicts pay FFI cost that dominates for <10K items. Both paths
+are wired with correct Python fallbacks for CI.
 
 ---
 

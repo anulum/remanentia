@@ -135,6 +135,23 @@ Key wins: `hash_encode` (called per trace during index build) and
 `reciprocal_rank_fusion` (called per query in multi-source search)
 are the dominant hot-path accelerations.
 
+### Tier 2 extensions (added 2026-04-04)
+
+Measured 2026-04-04. Tier 2 uses `#[pyclass]` persistent Rust objects
+to avoid FFI serialisation overhead on each query.
+
+| Function | Scale | Python µs | Rust µs | Speedup |
+|----------|-------|----------|---------|---------|
+| `FactIndex.query` (RustFactIndex pyclass) | 2000 facts | 9024 | 1025 | **8.8×** |
+| `score_temporal_query` | 1000 events | 11410 | 4946 | **2.3×** |
+| `build_temporal_edges` | 500 events | 18402 | 23546 | ~0.8× (FFI overhead) |
+| `knowledge_search` (stateless) | 500 notes | ~7000 | ~7400 | ~1.0× (FFI overhead) |
+
+Key lesson: stateful class methods benefit from `#[pyclass]` (index
+built once, queried many times). Stateless one-shot functions with
+complex data structures (dict-of-sets, dict-of-lists) pay FFI
+serialisation cost that dominates for <10K items.
+
 ## End-to-End Pipeline Benchmarks
 
 Full pipeline exercising every major subsystem, ML model excluded

@@ -162,12 +162,25 @@ class FactIndex:
     def __post_init__(self):
         self._entity_to_facts = {}
         self._keyword_to_facts = {}
+        self._rust_index = None
         for i, fact in enumerate(self.facts):
             for ent in fact.entities:
                 key = ent.lower()
                 self._entity_to_facts.setdefault(key, []).append(i)
             for word in _tokenize(fact.text):
                 self._keyword_to_facts.setdefault(word, []).append(i)
+        try:
+            from remanentia_fact_decomposer import RustFactIndex
+
+            self._rust_index = RustFactIndex(
+                [f.text for f in self.facts],
+                [f.entities for f in self.facts],
+                [f.valid_until or "" for f in self.facts],
+                [float(f.session_idx) for f in self.facts],
+                [bool(f.supersedes) for f in self.facts],
+            )
+        except ImportError:
+            pass
 
     def query(
         self,
@@ -180,6 +193,11 @@ class FactIndex:
 
         Returns (fact, score) pairs sorted by descending score.
         """
+        if self._rust_index is not None:
+            ranked = self._rust_index.query(
+                question, reference_date, filter_expired, top_k,
+            )
+            return [(self.facts[idx], score) for idx, score in ranked]  # pragma: no cover
         q_tokens = _tokenize(question)
         q_entities = _extract_entities_simple(question)
 
