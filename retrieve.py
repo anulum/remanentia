@@ -119,6 +119,11 @@ _STOPWORDS = frozenset(
 
 def _tokenize(text: str) -> list[str]:
     """Split text into lowercase word tokens, stripping stopwords."""
+    try:
+        from remanentia_retrieve import tokenize as _rust_tok
+        return _rust_tok(text, _STOPWORDS)  # pragma: no cover
+    except ImportError:
+        pass
     return [
         w for w in re.findall(r"[a-z0-9_]+", text.lower()) if w not in _STOPWORDS and len(w) > 1
     ]
@@ -155,6 +160,11 @@ _STEM_SUFFIXES = [
 
 def _stem(word: str) -> str:
     """Minimal suffix-stripping stemmer."""
+    try:
+        from remanentia_retrieve import stem as _rust_stem
+        return _rust_stem(word)  # pragma: no cover
+    except ImportError:
+        pass
     for suffix in _STEM_SUFFIXES:
         if word.endswith(suffix) and len(word) - len(suffix) >= 3:
             return word[: -len(suffix)]
@@ -167,6 +177,11 @@ def _expand_query(query: str) -> str:
     "gyrokinetic transport saturation" →
     "gyrokinetic transport saturation gyrokinet transport saturat"
     """
+    try:
+        from remanentia_retrieve import expand_query as _rust_eq
+        return _rust_eq(query, _STOPWORDS)  # pragma: no cover
+    except ImportError:
+        pass
     tokens = _tokenize(query)
     stems = {_stem(t) for t in tokens}
     extra = stems - set(tokens)
@@ -177,6 +192,11 @@ def _expand_query(query: str) -> str:
 
 def _bigrams(tokens: list[str]) -> list[str]:
     """Generate bigrams from token list."""
+    try:
+        from remanentia_retrieve import bigrams as _rust_bg
+        return _rust_bg(tokens)  # pragma: no cover
+    except ImportError:
+        pass
     return [f"{tokens[i]}_{tokens[i + 1]}" for i in range(len(tokens) - 1)]
 
 
@@ -192,7 +212,13 @@ def _encode(text: str, n_neurons: int) -> np.ndarray:
         return encode_text(text, n_neurons)
     except ImportError:
         pass
-    # Fallback to inline hash encoding if encoding.py not available
+    # Rust hash encoding (identical logic, 3-10x faster)
+    try:
+        from remanentia_retrieve import hash_encode as _rust_enc
+        return _rust_enc(text, n_neurons, list(_HASH_PRIMES), _STOPWORDS)  # pragma: no cover
+    except ImportError:
+        pass
+    # Fallback to inline Python hash encoding
     import hashlib
 
     pattern = np.zeros(n_neurons)
@@ -223,6 +249,11 @@ def _build_idf(trace_texts: dict[str, str]) -> dict[str, float]:
     Terms appearing in every document get IDF ≈ 0 (no discrimination).
     Terms unique to one document get IDF ≈ log(N) (high discrimination).
     """
+    try:
+        from remanentia_retrieve import build_idf as _rust_idf
+        return _rust_idf(trace_texts, _STOPWORDS)  # pragma: no cover
+    except ImportError:
+        pass
     n_docs = len(trace_texts)
     df: Counter[str] = Counter()
     for name, text in trace_texts.items():
@@ -241,6 +272,11 @@ def _tfidf_score(query: str, doc_name: str, doc_text: str, idf: dict[str, float]
     Filename terms get 3x boost (the filename is the most condensed
     description of a trace's topic).
     """
+    try:
+        from remanentia_retrieve import tfidf_score as _rust_tfidf
+        return _rust_tfidf(query, doc_name, doc_text, idf, _STOPWORDS)  # pragma: no cover
+    except ImportError:
+        pass
     q_tokens = _tokenize(query)
     if not q_tokens:
         return 0.0
@@ -406,6 +442,11 @@ def _load_network(state_path: Path | None = None) -> dict:
 
 
 def _cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
+    try:
+        from remanentia_retrieve import cosine_sim as _rust_cos
+        return _rust_cos(a.astype(np.float64), b.astype(np.float64))  # pragma: no cover
+    except ImportError:
+        pass
     na = np.linalg.norm(a)
     nb = np.linalg.norm(b)
     if na < 1e-12 or nb < 1e-12:
@@ -415,6 +456,13 @@ def _cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
 
 def _spike_feature(w: np.ndarray, stim: np.ndarray, steps: int = 50) -> np.ndarray:
     """Deterministic spike-count feature for a stimulus under fixed weights."""
+    try:
+        from remanentia_retrieve import spike_feature as _rust_sf
+        return _rust_sf(  # pragma: no cover
+            w.astype(np.float64), stim.astype(np.float64), steps
+        )
+    except ImportError:
+        pass
     n = len(stim)
     dt_ms = 1.0
     v_rest, v_thresh, v_reset, tau_m = -65.0, -55.0, -70.0, 10.0
@@ -437,6 +485,15 @@ def _spike_feature(w: np.ndarray, stim: np.ndarray, steps: int = 50) -> np.ndarr
 
 def _snn_affinity(w: np.ndarray, query_stim: np.ndarray, trace_stim: np.ndarray) -> float:
     """Compare deterministic query/trace spike-count features."""
+    try:
+        from remanentia_retrieve import snn_affinity as _rust_aff
+        return _rust_aff(  # pragma: no cover
+            w.astype(np.float64),
+            query_stim.astype(np.float64),
+            trace_stim.astype(np.float64),
+        )
+    except ImportError:
+        pass
     return _cosine_sim(_spike_feature(w, query_stim), _spike_feature(w, trace_stim))
 
 
@@ -719,6 +776,14 @@ def _entity_graph_score(query: str, trace_name: str) -> float:
     if not t_entities:
         return 0.0
 
+    try:
+        from remanentia_retrieve import entity_graph_score as _rust_egs
+        rels = [(r.get("source", ""), r.get("target", ""), float(r.get("weight", 1)))
+                for r in _GRAPH_RELATIONS]
+        return _rust_egs(q_entities, t_entities, rels)  # pragma: no cover
+    except ImportError:
+        pass
+
     # Count weighted connections between query entities and trace entities
     score = 0.0
     for r in _GRAPH_RELATIONS:
@@ -743,6 +808,11 @@ def _filename_bonus(query: str, name_lower: str, idf: dict[str, float]) -> float
     rewards rare discriminative matches such as `daemon` or `dimits` more than
     generic terms, and avoids overvaluing long queries with many unmatched words.
     """
+    try:
+        from remanentia_retrieve import filename_bonus as _rust_fb
+        return _rust_fb(query, name_lower, idf, _STOPWORDS)  # pragma: no cover
+    except ImportError:
+        pass
     q_tokens = _tokenize(query)
     if not q_tokens:
         return 0.0

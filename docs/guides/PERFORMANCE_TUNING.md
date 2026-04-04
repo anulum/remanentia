@@ -6,7 +6,7 @@ All benchmarks measured 2026-03-31 on verified hardware:
 - **RAM:** 31 GB DDR4 (from `free -h`)
 - **Disk:** 1.8 TB NTFS (project-workspace partition, `df -h [legacy-storage]`)
 - **Kernel:** 6.17.0-19-generic (from `uname -r`)
-- **Rust:** 11 PyO3 crates installed, Python fallback NOT exercised
+- **Rust:** 11 PyO3 crates installed locally (built via maturin from `workspace-internal/rust_*/`); CI uses Python fallbacks
 - **Method:** `time.perf_counter()`, budget assertions in CI
 
 ## Regex Pipeline (core retrieval path)
@@ -63,7 +63,7 @@ regex matches. Previously measured (2026-03-31 morning session):
 The cross-over point where Rust beats Python is typically ~1K-5K
 characters per call.
 
-### All 11 Rust crates
+### All 12 Rust crates
 
 | Crate | Module(s) | Short-text speedup |
 |-------|-----------|-------------------|
@@ -78,6 +78,7 @@ characters per call.
 | `remanentia_consolidation` | consolidation_engine | **8.3×** |
 | `remanentia_skill_extractor` | skill_extractor | ~1.0× |
 | `remanentia_active_retrieval` | active_retrieval | ~1.0× |
+| `remanentia_retrieve` | retrieve, memory_index | **26.7×** hash_encode, **7.9×** RRF |
 
 ## Per-Function Rust Benchmarks (36 exported functions)
 
@@ -116,6 +117,23 @@ Absolute Rust call times, 1000 iterations each.
 
 All measured functions under 9 µs per call. 36 functions exported total
 (28 measured individually, 8 via class methods or untested paths).
+
+### remanentia_retrieve (12th crate, added 2026-04-04)
+
+Measured 2026-04-04, 2000 iterations per function.
+
+| Function | Python µs | Rust µs | Speedup |
+|----------|----------|---------|---------|
+| `hash_encode` (1000 neurons) | 1468 | 55 | **26.7×** |
+| `reciprocal_rank_fusion` (5×100) | 571 | 72 | **7.9×** |
+| `stem` | 0.50 | 0.18 | **2.7×** |
+| `spike_feature` (100 neurons, 50 steps) | 2934 | 1719 | **1.7×** |
+| `tokenize` (short text) | 22 | 27 | ~1.0× (FFI overhead) |
+| `bigrams` (50 tokens) | 9 | 63 | 0.1× (FFI overhead) |
+
+Key wins: `hash_encode` (called per trace during index build) and
+`reciprocal_rank_fusion` (called per query in multi-source search)
+are the dominant hot-path accelerations.
 
 ## End-to-End Pipeline Benchmarks
 
