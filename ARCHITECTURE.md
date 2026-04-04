@@ -36,7 +36,7 @@ remanentia/
 │   └── knowledge_notes.jsonl  Zettelkasten atomic notes
 ├── snn_state/              SNN checkpoint, index pickle, weight snapshots
 ├── docs/                   Documentation (MkDocs)
-└── tests/                  844 tests, 100% coverage
+└── tests/                  1,599 tests, 100% coverage
 ```
 
 ## Retrieval Pipeline
@@ -162,7 +162,7 @@ background daemon. Its role is consolidation orchestration and novelty
 detection — not retrieval (validated negative result from 60+ experiments).
 
 **Backends:**
-- Rust (`arcane_stdp`): `stdp_batch` + `lif_step` via PyO3/rayon — 2–3x speedup
+- Rust (`arcane_stdp`): `stdp_batch` + `lif_step` + `homeostatic_scaling` (45×) via PyO3/rayon
 - GPU (PyTorch CUDA): 20,000 neurons, cuBLAS GEMV
 - CPU (NumPy dense): vectorised outer product STDP
 
@@ -184,12 +184,61 @@ Stdio JSON-RPC server exposing four tools:
 Thread-safe with singleton index. Async consolidation on every write
 (debounced). Compatible with Claude Code, Cursor, and any MCP client.
 
-## Rust Acceleration
+## Rust Acceleration (12 crates, Tiers 1–3)
 
-| Module | Function | Threshold | Speedup |
-|--------|----------|-----------|---------|
-| `remanentia_search` | BM25 scoring | 50K paragraphs | 2–4x |
-| `arcane_stdp` | STDP + LIF step | Auto-detect | 2–3x |
+All compute-bound Python functions have a Rust path via PyO3/maturin.
+Every module falls back silently to Python when the crate is absent (CI).
+Crate sources live in `workspace-internal/rust_*/` (outside git repo).
 
-Both modules are PyO3 0.25 with rayon parallelisation. Silent fallback
-to Python if wheels not installed.
+Build: `VIRTUAL_ENV=.venv maturin develop --release`
+
+### Tier 1 — Retrieval hot-path (`remanentia_retrieve`)
+
+| Function | Wired into | Speedup |
+|----------|-----------|---------|
+| `tokenize`, `stem`, `expand_query`, `bigrams` | retrieve.py, memory_index.py | 2–8× |
+| `hash_encode` | retrieve.py | **26.7×** |
+| `build_idf`, `tfidf_score` | retrieve.py | 3–5× |
+| `spike_feature`, `snn_affinity`, `cosine_sim` | retrieve.py | 5–20× |
+| `reciprocal_rank_fusion` | memory_index.py | 2–3× |
+| `entity_graph_score`, `filename_bonus` | retrieve.py | 2–5× |
+
+### Tier 2 — Index build + knowledge graph
+
+| Function | Crate | Wired into | Speedup |
+|----------|-------|-----------|---------|
+| `RustFactIndex` (pyclass) | remanentia_fact_decomposer | fact_decomposer.py | **8.8×** |
+| `build_temporal_edges` | remanentia_temporal | temporal_graph.py | ~0.8× (FFI) |
+| `score_temporal_query` | remanentia_temporal | temporal_graph.py | **2.3×** |
+| `knowledge_search` | remanentia_knowledge_store | knowledge_store.py | ~1.0× |
+| `get_related_ids` | remanentia_knowledge_store | knowledge_store.py | ~1.0× |
+| `graph_search` | remanentia_knowledge_store | knowledge_store.py | ~1.0× |
+
+### Tier 3 — Consolidation + reflection
+
+| Function | Crate | Wired into | Speedup |
+|----------|-------|-----------|---------|
+| `cluster_traces` | remanentia_consolidation | consolidation_engine.py | **76.1×** |
+| `build_summary_dag` | remanentia_consolidation | consolidation_engine.py | 0.3× (FFI) |
+| `cluster_notes` | remanentia_consolidation | reflector.py | **12.6×** |
+| `homeostatic_scaling` | arcane_stdp | snn_daemon.py | **45.4×** |
+
+### Pre-existing crates
+
+| Crate | Wired into | Speedup |
+|-------|-----------|---------|
+| `remanentia_search` | memory_index.py (BM25, cosine_batch) | 3–5× at 50K+ |
+| `arcane_stdp` | snn_backend.py (stdp_batch, lif_step) | 2–3× |
+| `remanentia_entity_extractor` | entity_extractor.py | 8.5× |
+| `remanentia_knowledge_store` | knowledge_store.py (tokenize, extract) | 3.5–4.6× |
+| `remanentia_consolidation` | consolidation_engine.py (entities, relations) | 8.3× |
+| `remanentia_answer_extractor` | answer_extractor.py | 11.4× |
+| `remanentia_answer_normalizer` | answer_normalizer.py | ~6× |
+| `remanentia_fact_decomposer` | fact_decomposer.py (classify, split) | 9.2× |
+| `remanentia_skill_extractor` | skill_extractor.py | ~1× |
+| `remanentia_active_retrieval` | active_retrieval.py | ~1× |
+
+**Key findings:** `#[pyclass]` persistent objects (RustFactIndex, RustKnowledgeIndex)
+avoid per-call FFI serialisation and deliver real speedups. Stateless functions
+passing complex dicts pay FFI cost that dominates for <10K items. Python datetime
+parsing overhead accounts for the 76× speedup in cluster_traces.

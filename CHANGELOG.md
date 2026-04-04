@@ -6,6 +6,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Tier 1–3 Rust rustification (12 crates, 23 functions)**:
+  - `remanentia_retrieve` (new crate): 13 hot-path functions — tokenize, stem, hash_encode (26.7×),
+    tfidf_score, spike_feature, snn_affinity, cosine_sim, RRF, entity_graph_score, filename_bonus
+  - `remanentia_fact_decomposer`: `RustFactIndex` persistent pyclass (8.8×)
+  - `remanentia_temporal`: `build_temporal_edges`, `score_temporal_query` (2.3×)
+  - `remanentia_knowledge_store`: `knowledge_search`, `get_related_ids`, `graph_search`,
+    `RustKnowledgeIndex` pyclass
+  - `remanentia_consolidation`: `cluster_traces` (76.1×), `build_summary_dag`, `cluster_notes` (12.6×)
+  - `arcane_stdp`: `homeostatic_scaling` (45.4×)
+  - Key finding: `#[pyclass]` persistent objects >> stateless FFI for class methods;
+    Python datetime parsing overhead accounts for 76× in cluster_traces;
+    FFI dict construction overhead makes build_summary_dag slower in Rust (0.3×)
+- **26 end-to-end tests** (`test_e2e_rust_pipeline.py`): full pipeline coverage across Tiers 1–3
+  — ingest → retrieve → consolidate → DAG, cross-tier integration, Rust path verification
+- **31 Tier 3 unit tests** (`test_tier3_rust.py`): cluster_traces, homeostatic_scaling,
+  cluster_notes, build_summary_dag — exact parity with Python paths
+- **41 Tier 2 unit tests** (`test_tier2_rust.py`): RustFactIndex, temporal edges,
+  temporal query, knowledge search/graph/related
+- **65 Tier 1 retrieval tests** in `test_remanentia_retrieve.py`
 - **Temporal training pipeline (C1–C5)**: 5 models trained on 5x RX 6600 XT (ROCm 6.2)
   - C1: fine-tuned `all-MiniLM-L6-v2` embedding model for temporal-aware retrieval
   - C2: fine-tuned `ms-marco-MiniLM-L-6-v2` cross-encoder (AP=84.57%)
@@ -35,7 +54,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - MkDocs documentation site with 4 guides, 9 API refs, benchmarks, research
 - GitHub issue/PR templates, dependabot, CodeQL, Scorecard, stale bot workflows
 - README badges, header image, branding footer
-- **100% test coverage**: 1,041 tests across 19 modules (zero lines missing)
+- **100% test coverage**: 1,599 tests across 19 modules (zero lines missing)
 - Tests for api_server.py, arcane_retriever.py, fact_decomposer.py (3 new test files)
 - api_server, arcane_retriever, fact_decomposer added to py-modules
 

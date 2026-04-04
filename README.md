@@ -12,7 +12,7 @@ Contact: www.anulum.li | protoscience@anulum.li
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/anulum/remanentia/badge)](https://securityscorecards.dev/viewer/?uri=github.com/anulum/remanentia)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12340/badge)](https://www.bestpractices.dev/projects/12340)
 [![Version](https://img.shields.io/badge/version-0.3.1-blue)](https://github.com/anulum/remanentia)
-[![Tests](https://img.shields.io/badge/tests-1343_passed-brightgreen)](VALIDATION.md)
+[![Tests](https://img.shields.io/badge/tests-1599_passed-brightgreen)](VALIDATION.md)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](VALIDATION.md)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
@@ -187,10 +187,11 @@ Results with snippets + extracted answers
 | knowledge-update | 87.2% (68/78) |
 | single-session-user | 82.9% (58/70) |
 | multi-session | 61.7% (82/133) |
-| temporal-reasoning | 45.9% (61/133) |
+| temporal-reasoning | 60.2% (80/133) |
 | **Overall** | **69.0% (345/500)** |
 
-Temporal-reasoning is the weakest category — the primary target for improvement. Hindsight (SOTA with GPT-4 extraction) reports 91.4% on this benchmark.
+Temporal-reasoning improved from 45.9% to 60.2% (+14.3pp) via C1–C5 temporal training.
+Hindsight (SOTA with GPT-4 extraction) reports 91.4% on this benchmark.
 
 ### LOCOMO (historical, not committed)
 
@@ -275,19 +276,28 @@ for r in results:
 
 ## Rust Acceleration
 
-7 PyO3 crates built with maturin. Python fallback preserved in every module.
+12 PyO3 crates built with maturin. Python fallback preserved in every module.
+Tiers 1–3 complete — all compute-bound functions have a Rust path.
 
-| Crate | Speedup | Wired into |
-|-------|--------:|------------|
-| remanentia_temporal | 14.2× | temporal_graph, date_normalizer |
+| Crate | Peak speedup | Wired into |
+|-------|------------:|------------|
+| remanentia_retrieve (new) | **26.7×** | retrieve.py, memory_index.py (13 functions) |
+| remanentia_consolidation | **76.1×** | consolidation_engine.py (cluster_traces) |
+| arcane_stdp | **45.4×** | snn_daemon.py (homeostatic_scaling) |
+| remanentia_consolidation | **12.6×** | reflector.py (cluster_notes) |
 | remanentia_answer_extractor | 11.4× | answer_extractor |
-| remanentia_fact_decomposer | ~7× | fact_decomposer |
+| remanentia_fact_decomposer | **8.8×** | fact_decomposer (RustFactIndex pyclass) |
+| remanentia_entity_extractor | 8.5× | entity_extractor |
+| remanentia_search | 3–5× | memory_index (BM25, Rayon) |
+| remanentia_knowledge_store | 3.5–4.6× | knowledge_store |
+| remanentia_temporal | 2.3× | temporal_graph (score_temporal_query) |
 | remanentia_answer_normalizer | ~6× | answer_normalizer |
-| remanentia_search | ~3-5× | memory_index (BM25, Rayon) |
-| arcane_stdp | ~2-3× | snn_backend |
-| remanentia_entity_extractor | ~2× | entity_extractor |
+| remanentia_skill_extractor | ~1× | skill_extractor |
+| remanentia_active_retrieval | ~1× | active_retrieval |
 
 Full regex pipeline: **0.60ms** (Rust) vs 9.07ms (Python) on 470K chars = **14.1× on large workloads**.
+
+Details: [RUSTIFICATION_PLAN.md](docs/guides/RUSTIFICATION_PLAN.md) | [PERFORMANCE_TUNING.md](docs/guides/PERFORMANCE_TUNING.md)
 
 ## Research (Negative Results)
 
@@ -302,7 +312,7 @@ pip install -e ".[dev]"
 pytest tests/ -q
 ```
 
-1,343 tests, 100% coverage (19 modules, zero lines missing).
+1,599 tests, 100% coverage (19 modules, zero lines missing).
 
 ## License
 
