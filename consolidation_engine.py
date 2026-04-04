@@ -568,11 +568,15 @@ def _extract_typed_relations(text: str, entities: list[str]) -> dict[tuple[str, 
             start = min(pos1, pos2)
             end = max(pos1 + len(e1), pos2 + len(e2))
             between = text[start:end]
+            pair = tuple(sorted([e1, e2]))
+            matched = False
             for pattern, rel_type in _TYPED_RELATION_PATTERNS:
                 if pattern.search(between):
-                    pair = tuple(sorted([e1, e2]))
                     typed[pair] = rel_type
+                    matched = True
                     break
+            if not matched:
+                typed[pair] = "co_occurs"
     return typed
 
 

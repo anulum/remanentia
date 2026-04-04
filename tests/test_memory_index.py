@@ -1458,7 +1458,6 @@ class TestRustBm25Paths:
         from memory_index import _get_rust_bm25_class
         import memory_index
         from unittest.mock import patch
-        import sys
 
         old_attempted = memory_index._RUST_BM25_IMPORT_ATTEMPTED
         old_cls = memory_index._RUST_BM25_CLASS

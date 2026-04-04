@@ -14,7 +14,6 @@ negative cases, performance benchmarks, and roundtrip consistency.
 
 from __future__ import annotations
 
-import math
 import time
 
 import numpy as np
@@ -22,15 +21,18 @@ import pytest
 
 rr = pytest.importorskip("remanentia_retrieve")
 
-STOPWORDS = frozenset(
-    "the a an and or but in on at to for of is it by as with from was were "
-    "be been have has had this that these those are not no its the into can "
-    "will would should could may also so if when then than more most all any "
-    "each every both few many much some such only just about over after before "
-    "between through during up down out off did do does how what which who whom "
-    "where why here there their them they we our us you your he she his her "
-    "i me my we us being now very".split()
-)
+STOPWORDS = frozenset([
+    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of",
+    "is", "it", "by", "as", "with", "from", "was", "were", "be", "been", "have",
+    "has", "had", "this", "that", "these", "those", "are", "not", "no", "its",
+    "the", "into", "can", "will", "would", "should", "could", "may", "also", "so",
+    "if", "when", "then", "than", "more", "most", "all", "any", "each", "every",
+    "both", "few", "many", "much", "some", "such", "only", "just", "about", "over",
+    "after", "before", "between", "through", "during", "up", "down", "out", "off",
+    "did", "do", "does", "how", "what", "which", "who", "whom", "where", "why",
+    "here", "there", "their", "them", "they", "we", "our", "us", "you", "your",
+    "he", "she", "his", "her", "i", "me", "my", "we", "us", "being", "now", "very",
+])
 
 
 # ── Tokenize ────────────────────────────────────────────────────
