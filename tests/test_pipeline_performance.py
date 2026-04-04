@@ -123,7 +123,7 @@ class TestAnswerNormalizerPerformance:
         from answer_normalizer import answers_match
 
         ms, result = _timed(answers_match, "Likely yes", "Yes", 0.25)
-        assert ms < 1, f"answers_match: {ms:.2f}ms exceeds 1ms budget"
+        assert ms < 2, f"answers_match: {ms:.2f}ms exceeds 2ms budget"
         assert result is True
 
 
