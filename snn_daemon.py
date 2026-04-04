@@ -537,6 +537,13 @@ def _homeostatic_scaling(w: np.ndarray, target_mean: float = 0.3, rate: float = 
     Reference: Turrigiano & Nelson (2004), "Homeostatic plasticity in
     the developing nervous system," Nature Reviews Neuroscience.
     """
+    try:
+        from arcane_stdp import homeostatic_scaling as _rust_hs  # pragma: no cover
+
+        _rust_hs(w, target_mean, rate)  # pragma: no cover
+        return  # pragma: no cover
+    except ImportError:
+        pass
     for i in range(w.shape[0]):
         row = w[i]
         active = row > 0.001

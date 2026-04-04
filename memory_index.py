@@ -1778,6 +1778,12 @@ def _reciprocal_rank_fusion(
     Scale-invariant — no need to normalise heterogeneous score distributions.
     k=60 is the standard constant from Cormack et al. (2009).
     """
+    try:
+        from remanentia_retrieve import reciprocal_rank_fusion as _rust_rrf
+
+        return _rust_rrf(ranked_lists, k)  # pragma: no cover
+    except ImportError:
+        pass
     rrf_scores: dict[int, float] = {}
     for ranked in ranked_lists:
         for rank, (para_idx, _score) in enumerate(ranked):

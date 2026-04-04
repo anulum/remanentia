@@ -548,6 +548,23 @@ class KnowledgeStore:
         if not q_tokens:
             return []
 
+        try:
+            from remanentia_knowledge_store import knowledge_search as _rust_ks
+
+            superseded = {
+                nid for nid, n in self.notes.items() if n.superseded_by
+            }  # pragma: no cover
+            ranked = _rust_ks(  # pragma: no cover
+                self._token_index, superseded, q_tokens, top_k, exclude_superseded
+            )
+            results = []  # pragma: no cover
+            for nid, _ in ranked:  # pragma: no cover
+                if nid in self.notes:  # pragma: no cover
+                    results.append(self.notes[nid])  # pragma: no cover
+            return results  # pragma: no cover
+        except ImportError:
+            pass
+
         scored = []
         for nid, tokens in self._token_index.items():
             if exclude_superseded and nid in self.notes and self.notes[nid].superseded_by:
@@ -575,6 +592,22 @@ class KnowledgeStore:
         """
         if note_id not in self.notes:
             return []
+
+        try:
+            from remanentia_knowledge_store import get_related_ids as _rust_gri
+
+            note_links = {}  # pragma: no cover
+            for nid, note in self.notes.items():  # pragma: no cover
+                note_links[nid] = [
+                    (lk["target"], lk.get("type", "related")) for lk in note.links
+                ]  # pragma: no cover
+            valid_ids = set(self.notes.keys())  # pragma: no cover
+            ids = _rust_gri(
+                note_links, note_id, depth, edge_types or set(), valid_ids
+            )  # pragma: no cover
+            return [self.notes[i] for i in ids if i in self.notes]  # pragma: no cover
+        except ImportError:
+            pass
 
         visited = {note_id}
         frontier = [note_id]
@@ -604,6 +637,38 @@ class KnowledgeStore:
         Combines BM25 seed retrieval with structural graph traversal.
         This finds composite answers scattered across linked notes.
         """
+        try:
+            from remanentia_knowledge_store import graph_search as _rust_gs
+
+            superseded = {
+                nid for nid, n in self.notes.items() if n.superseded_by
+            }  # pragma: no cover
+            note_links = {}  # pragma: no cover
+            for nid, note in self.notes.items():  # pragma: no cover
+                note_links[nid] = [
+                    (lk["target"], lk.get("type", "related")) for lk in note.links
+                ]  # pragma: no cover
+            valid_ids = set(self.notes.keys())  # pragma: no cover
+            q_tokens = _tokenize(query)  # pragma: no cover
+            if not q_tokens:  # pragma: no cover
+                return []  # pragma: no cover
+            ranked = _rust_gs(  # pragma: no cover
+                self._token_index,
+                superseded,
+                note_links,
+                valid_ids,
+                q_tokens,
+                top_k,
+                hop_depth,
+            )
+            results = []  # pragma: no cover
+            for nid, _ in ranked:  # pragma: no cover
+                if nid in self.notes:  # pragma: no cover
+                    results.append(self.notes[nid])  # pragma: no cover
+            return results  # pragma: no cover
+        except ImportError:
+            pass
+
         seeds = self.search(query, top_k=min(top_k, 3))
         if not seeds:
             return []

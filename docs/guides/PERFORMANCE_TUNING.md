@@ -6,7 +6,7 @@ All benchmarks measured 2026-03-31 on verified hardware:
 - **RAM:** 31 GB DDR4 (from `free -h`)
 - **Disk:** 1.8 TB NTFS (project-workspace partition, `df -h [legacy-storage]`)
 - **Kernel:** 6.17.0-19-generic (from `uname -r`)
-- **Rust:** 11 PyO3 crates installed, Python fallback NOT exercised
+- **Rust:** 11 PyO3 crates installed locally (built via maturin from `workspace-internal/rust_*/`); CI uses Python fallbacks
 - **Method:** `time.perf_counter()`, budget assertions in CI
 
 ## Regex Pipeline (core retrieval path)
@@ -63,7 +63,7 @@ regex matches. Previously measured (2026-03-31 morning session):
 The cross-over point where Rust beats Python is typically ~1K-5K
 characters per call.
 
-### All 11 Rust crates
+### All 12 Rust crates
 
 | Crate | Module(s) | Short-text speedup |
 |-------|-----------|-------------------|
@@ -78,6 +78,7 @@ characters per call.
 | `remanentia_consolidation` | consolidation_engine | **8.3×** |
 | `remanentia_skill_extractor` | skill_extractor | ~1.0× |
 | `remanentia_active_retrieval` | active_retrieval | ~1.0× |
+| `remanentia_retrieve` | retrieve, memory_index | **26.7×** hash_encode, **7.9×** RRF |
 
 ## Per-Function Rust Benchmarks (36 exported functions)
 
@@ -116,6 +117,57 @@ Absolute Rust call times, 1000 iterations each.
 
 All measured functions under 9 µs per call. 36 functions exported total
 (28 measured individually, 8 via class methods or untested paths).
+
+### remanentia_retrieve (12th crate, added 2026-04-04)
+
+Measured 2026-04-04, 2000 iterations per function.
+
+| Function | Python µs | Rust µs | Speedup |
+|----------|----------|---------|---------|
+| `hash_encode` (1000 neurons) | 1468 | 55 | **26.7×** |
+| `reciprocal_rank_fusion` (5×100) | 571 | 72 | **7.9×** |
+| `stem` | 0.50 | 0.18 | **2.7×** |
+| `spike_feature` (100 neurons, 50 steps) | 2934 | 1719 | **1.7×** |
+| `tokenize` (short text) | 22 | 27 | ~1.0× (FFI overhead) |
+| `bigrams` (50 tokens) | 9 | 63 | 0.1× (FFI overhead) |
+
+Key wins: `hash_encode` (called per trace during index build) and
+`reciprocal_rank_fusion` (called per query in multi-source search)
+are the dominant hot-path accelerations.
+
+### Tier 2 extensions (added 2026-04-04)
+
+Measured 2026-04-04. Tier 2 uses `#[pyclass]` persistent Rust objects
+to avoid FFI serialisation overhead on each query.
+
+| Function | Scale | Python µs | Rust µs | Speedup |
+|----------|-------|----------|---------|---------|
+| `FactIndex.query` (RustFactIndex pyclass) | 2000 facts | 9024 | 1025 | **8.8×** |
+| `score_temporal_query` | 1000 events | 11410 | 4946 | **2.3×** |
+| `build_temporal_edges` | 500 events | 18402 | 23546 | ~0.8× (FFI overhead) |
+| `knowledge_search` (stateless) | 500 notes | ~7000 | ~7400 | ~1.0× (FFI overhead) |
+
+Key lesson: stateful class methods benefit from `#[pyclass]` (index
+built once, queried many times). Stateless one-shot functions with
+complex data structures (dict-of-sets, dict-of-lists) pay FFI
+serialisation cost that dominates for <10K items.
+
+### Tier 3: consolidation + reflection + SNN (added 2026-04-04)
+
+Measured 2026-04-04.
+
+| Function | Scale | Python µs | Rust µs | Speedup |
+|----------|-------|----------|---------|---------|
+| `cluster_traces` | 500 traces | 42043 | 553 | **76.1×** |
+| `homeostatic_scaling` | 200×200 | 25705 | 566 | **45.4×** |
+| `cluster_notes` | 300 notes | 19471 | 1548 | **12.6×** |
+| `build_summary_dag` | 100 traces | 1448 | 4525 | 0.3× (FFI overhead) |
+
+Key findings: `cluster_traces` massive win from avoiding Python datetime
+parsing. `homeostatic_scaling` eliminates numpy row-loop overhead.
+`cluster_notes` benefits from HashSet intersection in Rust.
+`build_summary_dag` loses due to FFI cost of constructing ~130 Python
+dicts with nested lists — the actual computation is minimal.
 
 ## End-to-End Pipeline Benchmarks
 

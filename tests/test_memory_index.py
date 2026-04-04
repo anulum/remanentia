@@ -1457,14 +1457,16 @@ class TestRustBm25Paths:
         """Covers lines 1711-1719: _get_rust_bm25_class import failure."""
         from memory_index import _get_rust_bm25_class
         import memory_index
+        from unittest.mock import patch
 
         old_attempted = memory_index._RUST_BM25_IMPORT_ATTEMPTED
         old_cls = memory_index._RUST_BM25_CLASS
         memory_index._RUST_BM25_IMPORT_ATTEMPTED = False
         memory_index._RUST_BM25_CLASS = None
         try:
-            result = _get_rust_bm25_class()
-            # Without the actual Rust extension, import fails → returns None
+            with patch.dict("sys.modules", {"remanentia_search": None}):
+                result = _get_rust_bm25_class()
+            # Without the actual Rust extension, import fails u2192 returns None
             assert result is None
         finally:
             memory_index._RUST_BM25_IMPORT_ATTEMPTED = old_attempted

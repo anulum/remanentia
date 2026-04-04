@@ -394,8 +394,8 @@ class TestTypedRelationsInGraph:
         text = "We used BM25 and embedding for retrieval."
         entities = ["bm25", "embedding"]
         typed = _extract_typed_relations(text, entities)
-        # No typed pattern matches "and", so should return empty
-        assert len(typed) == 0
+        # Rust crate detects co_occurs for entities in the same sentence
+        assert typed == {("bm25", "embedding"): "co_occurs"}
 
     def test_update_graph_with_typed_relations(self, tmp_path):
         from consolidation_engine import _update_graph, _load_relations

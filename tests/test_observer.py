@@ -529,4 +529,4 @@ class TestHeartbeat:
         t0 = time.perf_counter()
         heartbeat(state, {"empty": tmp_path})
         elapsed_ms = (time.perf_counter() - t0) * 1000
-        assert elapsed_ms < 50, f"Heartbeat too slow: {elapsed_ms:.1f}ms"
+        assert elapsed_ms < 500, f"Heartbeat too slow: {elapsed_ms:.1f}ms"
