@@ -152,6 +152,23 @@ built once, queried many times). Stateless one-shot functions with
 complex data structures (dict-of-sets, dict-of-lists) pay FFI
 serialisation cost that dominates for <10K items.
 
+### Tier 3: consolidation + reflection + SNN (added 2026-04-04)
+
+Measured 2026-04-04.
+
+| Function | Scale | Python µs | Rust µs | Speedup |
+|----------|-------|----------|---------|---------|
+| `cluster_traces` | 500 traces | 42043 | 553 | **76.1×** |
+| `homeostatic_scaling` | 200×200 | 25705 | 566 | **45.4×** |
+| `cluster_notes` | 300 notes | 19471 | 1548 | **12.6×** |
+| `build_summary_dag` | 100 traces | 1448 | 4525 | 0.3× (FFI overhead) |
+
+Key findings: `cluster_traces` massive win from avoiding Python datetime
+parsing. `homeostatic_scaling` eliminates numpy row-loop overhead.
+`cluster_notes` benefits from HashSet intersection in Rust.
+`build_summary_dag` loses due to FFI cost of constructing ~130 Python
+dicts with nested lists — the actual computation is minimal.
+
 ## End-to-End Pipeline Benchmarks
 
 Full pipeline exercising every major subsystem, ML model excluded

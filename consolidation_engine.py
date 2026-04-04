@@ -318,6 +318,16 @@ def _cluster_traces(traces: dict[str, dict]) -> list[list[str]]:
     Traces from the same project within 2 days of each other are grouped.
     A gap > 2 days starts a new cluster.
     """
+    try:
+        from remanentia_consolidation import cluster_traces as _rust_ct  # pragma: no cover
+
+        tuples = [  # pragma: no cover
+            (name, meta["project"], meta.get("date", "")[:10])
+            for name, meta in traces.items()
+        ]
+        return _rust_ct(tuples)  # pragma: no cover
+    except ImportError:
+        pass
     by_project = defaultdict(list)
     for name, meta in traces.items():
         by_project[meta["project"]].append(name)
@@ -859,6 +869,24 @@ def build_summary_dag(trace_data: dict[str, dict]) -> list[dict]:
     """
     if not trace_data:
         return []
+
+    try:
+        from remanentia_consolidation import build_summary_dag as _rust_dag  # pragma: no cover
+
+        tuples = [  # pragma: no cover
+            (
+                name,
+                data.get("date", ""),
+                data.get("project", "general"),
+                data.get("entities", []),
+                data.get("key_lines", []),
+                data.get("text", ""),
+            )
+            for name, data in sorted(trace_data.items(), key=lambda x: x[1].get("date", ""))
+        ]
+        return _rust_dag(tuples, DAG_FANOUT)  # pragma: no cover
+    except ImportError:
+        pass
 
     # Level 0: leaf nodes from individual traces
     leaves: list[DAGNode] = []

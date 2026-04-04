@@ -108,14 +108,20 @@ are wired with correct Python fallbacks for CI.
 
 ---
 
-## Tier 3 — MEDIUM: consolidation + reflection
+## Tier 3 — MEDIUM: consolidation + reflection ✅ DONE
 
-| # | Function | File:line | Target crate |
-|---|----------|-----------|-------------|
-| 20 | `_cluster_traces()` | consolidation_engine.py:315 | remanentia_consolidation |
-| 21 | `build_summary_dag()` | consolidation_engine.py:846 | remanentia_consolidation |
-| 22 | `_cluster_notes()` | reflector.py:28 | remanentia_consolidation |
-| 23 | `_homeostatic_scaling()` | snn_daemon.py:530 | arcane_stdp |
+| # | Function | Target crate | Status | Speedup |
+|---|----------|-------------|--------|---------|
+| 20 | `_cluster_traces()` | remanentia_consolidation (`cluster_traces`) | ✅ | **76.1×** |
+| 21 | `build_summary_dag()` | remanentia_consolidation (`build_summary_dag`) | ✅ | 0.3× (FFI) |
+| 22 | `_cluster_notes()` | remanentia_consolidation (`cluster_notes`) | ✅ | **12.6×** |
+| 23 | `_homeostatic_scaling()` | arcane_stdp (`homeostatic_scaling`) | ✅ | **45.4×** |
+
+Key findings: `cluster_traces` 76× from eliminating Python datetime
+parsing overhead. `homeostatic_scaling` 45× from replacing numpy row
+loop with direct Rust iteration. `build_summary_dag` 0.3× due to FFI
+cost of constructing Python dicts — computation is trivial, output
+serialisation dominates.
 
 ---
 
