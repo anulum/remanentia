@@ -11,7 +11,7 @@
 
 ## Test Suite
 
-- **1,049 tests** across 28 test files
+- **1,599 tests** across 35 test files
 - **100% coverage** — 19 product modules, zero lines missing
 - **Config:** `pyproject.toml` `[tool.coverage.report] fail_under = 100`
 
@@ -19,26 +19,28 @@
 
 | Module | Stmts | Cover |
 |--------|------:|:-----:|
-| memory_index.py | 888 | 100% |
-| knowledge_store.py | 357 | 100% |
-| consolidation_engine.py | 294 | 100% |
-| answer_extractor.py | 217 | 100% |
-| fact_decomposer.py | 216 | 100% |
+| memory_index.py | 928 | 100% |
+| consolidation_engine.py | 486 | 100% |
+| knowledge_store.py | 395 | 100% |
+| fact_decomposer.py | 266 | 100% |
+| answer_extractor.py | 245 | 100% |
+| temporal_graph.py | 222 | 100% |
 | memory_recall.py | 207 | 100% |
-| temporal_graph.py | 197 | 100% |
-| mcp_server.py | 185 | 100% |
-| cli.py | 173 | 100% |
-| arcane_retriever.py | 138 | 100% |
+| cli.py | 196 | 100% |
+| mcp_server.py | 192 | 100% |
+| arcane_retriever.py | 179 | 100% |
+| date_normalizer.py | 141 | 100% |
+| llm_backend.py | 141 | 100% |
+| reflector.py | 127 | 100% |
 | api_server.py | 117 | 100% |
-| reflector.py | 108 | 100% |
+| observer.py | 104 | 100% |
 | api.py | 95 | 100% |
-| observer.py | 86 | 100% |
-| entity_extractor.py | 73 | 100% |
-| answer_normalizer.py | 72 | 100% |
-| date_normalizer.py | 139 | 100% |
 | temporal_relation.py | 88 | 100% |
+| answer_normalizer.py | 78 | 100% |
+| entity_extractor.py | 77 | 100% |
 | fact_validity_model.py | 69 | 100% |
-| **Total** | **~3,720** | **100%** |
+| llm_setup.py | 33 | 100% |
+| **Total** | **~4,229** | **100%** |
 
 ## Excluded from Coverage
 
@@ -56,7 +58,7 @@ Legacy/experimental modules (not part of the product surface):
 
 | Gate | Requirement |
 |------|-------------|
-| pytest | 844 tests pass (3.10, 3.11, 3.12) |
+| pytest | 1,447 tests pass (3.10, 3.11, 3.12) — CI excludes Rust crate tests |
 | coverage | 100% fail-under on product modules |
 | ruff check | Zero lint errors across 16 modules + tests |
 | ruff format | All files formatted |

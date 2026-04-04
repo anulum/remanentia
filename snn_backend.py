@@ -78,8 +78,9 @@ def detect_backend() -> str:
     except ImportError:
         pass
     try:
-        from scipy import sparse as _sp  # noqa: F401
+        from scipy import sparse  # used for CSR backend detection
 
+        del sparse
         logger.info("Sparse CPU backend (scipy CSR)")
         return "sparse_cpu"
     except ImportError:

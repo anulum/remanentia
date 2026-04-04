@@ -30,3 +30,5 @@ training/*_hypotheses.jsonl
 training/*_results.json
 site/
 checkpoints/
+CLAUDE.md
+.claude/

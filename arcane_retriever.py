@@ -330,14 +330,17 @@ class ArcaneRetriever:
         # Check entity coverage: does the question mention entities found in results?
         try:
             from remanentia_fact_decomposer import tokenize_words as _rust_tw
-
-            q_entities = set(_rust_tw(q_lower))  # pragma: no cover
         except ImportError:
+            _rust_tw = None
+
+        if _rust_tw is not None:  # pragma: no cover
+            q_entities = set(_rust_tw(q_lower))
+        else:
             q_entities = set(re.findall(r"\w{4,}", q_lower))
         result_text = " ".join(r.fact.text.lower() for r in results[:5])
-        try:
-            result_tokens = set(_rust_tw(result_text))  # pragma: no cover  # noqa: F821
-        except (ImportError, NameError):
+        if _rust_tw is not None:  # pragma: no cover
+            result_tokens = set(_rust_tw(result_text))
+        else:
             result_tokens = set(re.findall(r"\w{4,}", result_text))
         overlap = len(q_entities & result_tokens)
         if overlap < len(q_entities) * 0.3:
