@@ -170,7 +170,19 @@ def _search_semantic(query: str, top_k: int = 5) -> list[dict]:
     if not SEMANTIC_DIR.exists():
         return []
 
-    q_tokens = set(re.findall(r"\w+", query.lower()))
+    try:
+        from remanentia_recall import (
+            tokenize_words as _rust_tok,
+            token_overlap_score as _rust_score,
+        )
+
+        _tok = _rust_tok  # pragma: no cover
+        _score = _rust_score  # pragma: no cover
+    except ImportError:
+        _tok = lambda text: set(re.findall(r"\w+", text.lower()))  # noqa: E731
+        _score = None
+
+    q_tokens = _tok(query)
     results = []
 
     for md_file in SEMANTIC_DIR.rglob("*.md"):
@@ -187,12 +199,14 @@ def _search_semantic(query: str, top_k: int = 5) -> list[dict]:
                         meta[k.strip()] = v.strip()
                 content = parts[2].strip()
 
-        text_tokens = set(re.findall(r"\w+", text.lower()))
-        overlap = len(q_tokens & text_tokens)
-        if overlap == 0:
+        text_tokens = _tok(text)
+        if _score is not None:
+            score = _score(q_tokens, text_tokens)  # pragma: no cover
+        else:
+            overlap = len(q_tokens & text_tokens)
+            score = overlap / max(len(q_tokens), 1)
+        if score == 0.0:
             continue
-
-        score = overlap / max(len(q_tokens), 1)
 
         # Extract first key point
         key_point = ""
@@ -281,12 +295,19 @@ def _assess_novelty(query: str, entities: dict) -> float:
     """How novel is this query relative to known entities?
     High novelty = query mentions things we haven't seen before.
     """
-    q_tokens = set(re.findall(r"\w{4,}", query.lower()))
-    known_tokens = set()
+    known_tokens: set[str] = set()
     for eid, edata in entities.items():
         known_tokens.add(eid)
         known_tokens.update(re.findall(r"\w{4,}", edata.get("label", "").lower()))
 
+    try:
+        from remanentia_recall import assess_novelty as _rust_nov
+
+        return _rust_nov(query, known_tokens)  # pragma: no cover
+    except ImportError:
+        pass
+
+    q_tokens = set(re.findall(r"\w{4,}", query.lower()))
     if not q_tokens:
         return 0.0
 

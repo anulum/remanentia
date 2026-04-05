@@ -6,6 +6,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Recall + SNN Rust rustification (13th crate, 52 functions total)**:
+  - `remanentia_recall` (new crate): tokenize_words (1.4×), tokenize_words_min,
+    token_overlap_score, assess_novelty — wired into memory_recall.py
+  - `arcane_stdp.encode_text`: hash-based unigram+bigram SNN encoding — wired
+    into snn_backend.py (3rd Rust function alongside stdp_batch, lif_step)
+  - Key finding: assess_novelty 0.03× due to HashSet FFI overhead on 500+ tokens;
+    encode_text 0.9× due to numpy array FFI. Both document the pyclass-vs-stateless
+    boundary. tokenize_words achieves 1.4× on 3.8K char input.
+  - 38 new tests (24 recall parity + 14 SNN encode parity/performance)
 - **Tier 1–3 Rust rustification (12 crates, 23 functions)**:
   - `remanentia_retrieve` (new crate): 13 hot-path functions — tokenize, stem, hash_encode (26.7×),
     tfidf_score, spike_feature, snn_affinity, cosine_sim, RRF, entity_graph_score, filename_bonus

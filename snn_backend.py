@@ -41,13 +41,15 @@ import numpy as np
 
 logger = logging.getLogger("ArcSap.Backend")
 
-# Rust STDP/LIF acceleration (optional, ~10-50x speedup on CPU)
+# Rust STDP/LIF/encode acceleration (optional, ~10-50x speedup on CPU)
 _RUST_STDP = None
 _RUST_LIF = None
+_RUST_ENCODE = None
 try:
     from arcane_stdp import stdp_batch as _RUST_STDP, lif_step as _RUST_LIF
+    from arcane_stdp import encode_text as _RUST_ENCODE
 
-    logger.info("Rust STDP/LIF loaded (arcane_stdp)")
+    logger.info("Rust STDP/LIF/encode loaded (arcane_stdp)")
 except ImportError:
     pass
 
@@ -89,7 +91,14 @@ def detect_backend() -> str:
 
 
 def encode_text(text: str, n_neurons: int) -> np.ndarray:
-    """Hash-based unigram+bigram encoding (matches retrieve.py)."""
+    """Hash-based unigram+bigram encoding (matches retrieve.py).
+
+    Rust path uses FNV hash (faster, same distribution quality for SNN scatter).
+    Python path uses MD5. Both produce valid activation patterns.
+    """
+    if _RUST_ENCODE is not None:
+        return np.asarray(_RUST_ENCODE(text, n_neurons), dtype=np.float32)  # pragma: no cover
+
     pattern = np.zeros(n_neurons)
     tokens = [w for w in re.findall(r"[a-z0-9_]+", text.lower()) if len(w) > 1]
 

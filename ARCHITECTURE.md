@@ -184,7 +184,7 @@ Stdio JSON-RPC server exposing four tools:
 Thread-safe with singleton index. Async consolidation on every write
 (debounced). Compatible with Claude Code, Cursor, and any MCP client.
 
-## Rust Acceleration (12 crates, Tiers 1–3)
+## Rust Acceleration (13 crates, Tiers 1–3 + recall)
 
 All compute-bound Python functions have a Rust path via PyO3/maturin.
 Every module falls back silently to Python when the crate is absent (CI).
@@ -223,12 +223,21 @@ Build: `VIRTUAL_ENV=.venv maturin develop --release`
 | `cluster_notes` | remanentia_consolidation | reflector.py | **12.6×** |
 | `homeostatic_scaling` | arcane_stdp | snn_daemon.py | **45.4×** |
 
+### Recall pipeline
+
+| Function | Crate | Wired into | Speedup |
+|----------|-------|-----------|---------|
+| `tokenize_words` | remanentia_recall | memory_recall.py | **1.4×** |
+| `token_overlap_score` | remanentia_recall | memory_recall.py | ~1× |
+| `assess_novelty` | remanentia_recall | memory_recall.py | 0.03× (FFI) |
+| `encode_text` | arcane_stdp | snn_backend.py | ~0.9× (FFI) |
+
 ### Pre-existing crates
 
 | Crate | Wired into | Speedup |
 |-------|-----------|---------|
 | `remanentia_search` | memory_index.py (BM25, cosine_batch) | 3–5× at 50K+ |
-| `arcane_stdp` | snn_backend.py (stdp_batch, lif_step) | 2–3× |
+| `arcane_stdp` | snn_backend.py (stdp_batch, lif_step, encode_text) | 2–50× |
 | `remanentia_entity_extractor` | entity_extractor.py | 8.5× |
 | `remanentia_knowledge_store` | knowledge_store.py (tokenize, extract) | 3.5–4.6× |
 | `remanentia_consolidation` | consolidation_engine.py (entities, relations) | 8.3× |

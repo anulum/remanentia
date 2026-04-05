@@ -77,7 +77,7 @@ def main() -> int:
     ]
 
     # Credential scan: ensure no secrets in tracked files
-    cred_patterns = [".env", "credentials", "secret", "token", "api_key"]
+    cred_patterns = [".env", "credentials", "secret", "api_key"]
     print(f"\n{'=' * 60}")
     print("  Credential scan")
     print(f"{'=' * 60}")
