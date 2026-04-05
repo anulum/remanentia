@@ -40,6 +40,6 @@ The following are out of scope:
 ## Security Design
 
 - No LLM calls in core retrieval path — no prompt injection vector
-- Temporal code execution (`temporal_graph.py`) runs in restricted sandbox
+- Temporal code execution (`temporal_graph.py`) limited to datetime arithmetic — no eval/exec
 - No network access from retrieval pipeline
 - AGPL-3.0 license ensures source availability for audit

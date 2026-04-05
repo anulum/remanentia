@@ -11,8 +11,8 @@
 
 ## Test Suite
 
-- **1,599 tests** across 35 test files
-- **100% coverage** — 19 product modules, zero lines missing
+- **1,625 tests** across 37 test files
+- **100% coverage** — product modules, zero lines missing
 - **Config:** `pyproject.toml` `[tool.coverage.report] fail_under = 100`
 
 ## Coverage by Module

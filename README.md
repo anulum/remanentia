@@ -12,7 +12,7 @@ Contact: www.anulum.li | protoscience@anulum.li
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/anulum/remanentia/badge)](https://securityscorecards.dev/viewer/?uri=github.com/anulum/remanentia)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12340/badge)](https://www.bestpractices.dev/projects/12340)
 [![Version](https://img.shields.io/badge/version-0.3.1-blue)](https://github.com/anulum/remanentia)
-[![Tests](https://img.shields.io/badge/tests-1599_passed-brightgreen)](VALIDATION.md)
+[![Tests](https://img.shields.io/badge/tests-1625_passed-brightgreen)](VALIDATION.md)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](VALIDATION.md)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
@@ -28,7 +28,7 @@ Contact: www.anulum.li | protoscience@anulum.li
 
 **Persistent AI memory with SNN-orchestrated consolidation, entity graphs, and deep contextual recall.**
 
-> **Active Development** — Remanentia is under intensive development. The core memory engine, BM25+embedding hybrid retrieval, SNN-orchestrated consolidation, temporal reasoning, and the MCP server are fully functional, tested (1,599 passing tests, 100% coverage), and deployable. We are currently completing Rust rustification of remaining hot paths (12 crates, 23 functions wired) and expanding temporal reasoning accuracy. APIs may evolve as this work progresses.
+> **Active Development** — Remanentia is under intensive development. The core memory engine, BM25+embedding hybrid retrieval, SNN-orchestrated consolidation, temporal reasoning, and the MCP server are fully functional, tested (1,625 passing tests, 100% coverage), and deployable. Rust rustification is complete across all compute/regex modules (13 crates, 52 functions wired). We are currently expanding temporal reasoning accuracy. APIs may evolve as this work progresses.
 
 BM25+embedding hybrid retrieval with RRF | 11 typed entity relation types | temporal reasoning with date arithmetic | async consolidation | thread-safe MCP server
 
@@ -278,8 +278,8 @@ for r in results:
 
 ## Rust Acceleration
 
-12 PyO3 crates built with maturin. Python fallback preserved in every module.
-Tiers 1–3 complete — all compute-bound functions have a Rust path.
+13 PyO3 crates (52 functions) built with maturin. Python fallback preserved in every module.
+Tiers 1–3 + recall pipeline complete — all compute-bound functions have a Rust path.
 
 | Crate | Peak speedup | Wired into |
 |-------|------------:|------------|
