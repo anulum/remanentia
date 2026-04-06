@@ -227,14 +227,30 @@ def _schedule_consolidation():
 
 _RECALL_INDEX: dict[str, tuple[set, str]] | None = None
 
+_rust_mcp_tok = None
+try:
+    from remanentia_search import tokenize as _rust_mcp_tok_fn
+
+    _rust_mcp_tok = _rust_mcp_tok_fn  # pragma: no cover
+except ImportError:
+    pass
+
+
+def _mcp_tok(text: str) -> set[str]:
+    """Tokenise text into 3+ char words. Uses Rust when available."""
+    if _rust_mcp_tok is not None:
+        return set(_rust_mcp_tok(text))  # pragma: no cover
+    import re
+
+    return set(re.findall(r"\w{3,}", text.lower()))
+
 
 def _build_recall_index() -> dict[str, tuple[set, str]]:
     """Build in-memory token index of all traces and semantic memories.
 
     Called once, cached for the process lifetime.
+    Uses Rust (remanentia_search) when available.
     """
-    import re
-
     global _RECALL_INDEX
     if _RECALL_INDEX is not None:
         return _RECALL_INDEX
@@ -246,13 +262,13 @@ def _build_recall_index() -> dict[str, tuple[set, str]]:
     if traces_dir.exists():
         for f in traces_dir.glob("*.md"):
             text = f.read_text(encoding="utf-8")
-            tokens = set(re.findall(r"\w{3,}", text.lower()))
+            tokens = _mcp_tok(text)
             index[f.name] = (tokens, text[:500])
 
     if semantic_dir.exists():
         for f in semantic_dir.rglob("*.md"):
             text = f.read_text(encoding="utf-8")
-            tokens = set(re.findall(r"\w{3,}", text.lower()))
+            tokens = _mcp_tok(text)
             rel = str(f.relative_to(semantic_dir))
             index[f"[semantic] {rel}"] = (tokens, text[:500])
 
@@ -265,9 +281,7 @@ def _lightweight_recall(query: str, top_k: int = 3) -> str:
 
     First call: ~2s (reads files). Subsequent calls: <50ms.
     """
-    import re
-
-    q_tokens = set(re.findall(r"\w{3,}", query.lower()))
+    q_tokens = _mcp_tok(query)
     if not q_tokens:
         return "Empty query."
 

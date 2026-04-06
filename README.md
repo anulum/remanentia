@@ -12,7 +12,7 @@ Contact: www.anulum.li | protoscience@anulum.li
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/anulum/remanentia/badge)](https://securityscorecards.dev/viewer/?uri=github.com/anulum/remanentia)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12340/badge)](https://www.bestpractices.dev/projects/12340)
 [![Version](https://img.shields.io/badge/version-0.3.1-blue)](https://github.com/anulum/remanentia)
-[![Tests](https://img.shields.io/badge/tests-1625_passed-brightgreen)](VALIDATION.md)
+[![Tests](https://img.shields.io/badge/tests-1677_passed-brightgreen)](VALIDATION.md)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](VALIDATION.md)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
@@ -28,7 +28,7 @@ Contact: www.anulum.li | protoscience@anulum.li
 
 **Persistent AI memory with SNN-orchestrated consolidation, entity graphs, and deep contextual recall.**
 
-> **Active Development** — Remanentia is under intensive development. The core memory engine, BM25+embedding hybrid retrieval, SNN-orchestrated consolidation, temporal reasoning, and the MCP server are fully functional, tested (1,625 passing tests, 100% coverage), and deployable. Rust rustification is complete across all compute/regex modules (13 crates, 52 functions wired). We are currently expanding temporal reasoning accuracy. APIs may evolve as this work progresses.
+> **Active Development** — Remanentia is under intensive development. The core memory engine, BM25+embedding hybrid retrieval, SNN-orchestrated consolidation, temporal reasoning, and the MCP server are fully functional, tested (1,677 passing tests, 100% coverage), and deployable. Rust rustification is complete across all compute/regex modules (13 crates, 54 functions wired). We are currently expanding temporal reasoning accuracy. APIs may evolve as this work progresses.
 
 BM25+embedding hybrid retrieval with RRF | 11 typed entity relation types | temporal reasoning with date arithmetic | async consolidation | thread-safe MCP server
 
@@ -189,10 +189,10 @@ Results with snippets + extracted answers
 | knowledge-update | 87.2% (68/78) |
 | single-session-user | 82.9% (58/70) |
 | multi-session | 61.7% (82/133) |
-| temporal-reasoning | 60.2% (80/133) |
+| temporal-reasoning | 45.9% (61/133) |
 | **Overall** | **69.0% (345/500)** |
 
-Temporal-reasoning improved from 45.9% to 60.2% (+14.3pp) via C1–C5 temporal training.
+Temporal-reasoning at 45.9% — active target for improvement via UPDE resonance and temporal training.
 Hindsight (SOTA with GPT-4 extraction) reports 91.4% on this benchmark.
 
 ### LOCOMO (historical, not committed)
@@ -278,7 +278,7 @@ for r in results:
 
 ## Rust Acceleration
 
-13 PyO3 crates (52 functions) built with maturin. Python fallback preserved in every module.
+13 PyO3 crates (54 functions) built with maturin. Python fallback preserved in every module.
 Tiers 1–3 + recall pipeline complete — all compute-bound functions have a Rust path.
 
 | Crate | Peak speedup | Wired into |
@@ -314,7 +314,7 @@ pip install -e ".[dev]"
 pytest tests/ -q
 ```
 
-1,599 tests, 100% coverage (19 modules, zero lines missing).
+1,677 tests, 100% coverage (19 modules, zero lines missing).
 
 ## License
 

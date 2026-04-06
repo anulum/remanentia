@@ -34,14 +34,14 @@ pytest tests/ --cov=. --cov-config=pyproject.toml -q
 
 ## Testing
 
-- 1,625 tests across 37 files, 100% coverage gate on product modules
+- 1,677 tests across 38 files, 100% coverage gate on product modules
 - Tests in `tests/` with `pytest`
 - New code = new tests. No exceptions.
 - Run with CI's Python version (3.12)
 
 ## Rust Modules
 
-13 PyO3 crates (52 functions). Sources live in `workspace-internal/rust_*/` (external)
+13 PyO3 crates (54 functions). Sources live in `workspace-internal/rust_*/` (external)
 and `rust_recall/`, `rust_search/` (in-repo). Build with maturin:
 
 ```bash

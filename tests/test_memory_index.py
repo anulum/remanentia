@@ -774,6 +774,90 @@ class TestSaveLoadEmbeddings:
         idx = MemoryIndex()
         assert idx.load(path) is False
 
+    def test_save_without_embeddings_cleans_old_npz(self, tmp_path):
+        """When embeddings are None, save removes any stale companion npz."""
+        idx = MemoryIndex()
+        idx.documents = []
+        idx.paragraph_index = []
+        idx.paragraph_tokens = []
+        idx.paragraph_token_counts = []
+        idx.paragraph_types = []
+        idx.idf = {}
+        idx._df = {}
+        idx.embeddings = None
+        idx._built = True
+        path = tmp_path / "test.gz"
+        # Create a fake companion npz that should be cleaned up
+        emb_path = path.with_name("test_embeddings.npz")
+        emb_path.write_bytes(b"fake")
+        assert emb_path.exists()
+        idx.save(path)
+        assert not emb_path.exists()
+
+    def test_load_nonexistent_path(self, tmp_path):
+        """Loading from a path that doesn't exist returns False."""
+        idx = MemoryIndex()
+        assert idx.load(tmp_path / "nonexistent.gz") is False
+
+    def test_load_corrupt_gzip(self, tmp_path):
+        """Corrupt gzip file (valid magic, invalid content) returns False."""
+        import gzip
+
+        path = tmp_path / "bad.gz"
+        with gzip.open(path, "wb") as f:
+            f.write(b"not valid json {{{")
+        idx = MemoryIndex()
+        assert idx.load(path) is False
+
+    def test_load_unreadable_file(self, tmp_path):
+        """File that can't be read (e.g. directory) returns False."""
+        path = tmp_path / "dir_as_file"
+        path.mkdir()
+        idx = MemoryIndex()
+        assert idx.load(path) is False
+
+    def test_load_malformed_data(self, tmp_path):
+        """Valid gzip JSON but with wrong structure triggers except in load."""
+        import gzip
+
+        path = tmp_path / "bad_struct.gz"
+        raw = json.dumps({"documents": "not_a_list"}).encode("utf-8")
+        with gzip.open(path, "wb") as f:
+            f.write(raw)
+        idx = MemoryIndex()
+        assert idx.load(path) is False
+
+    def test_load_legacy_fallback_path(self, tmp_path):
+        """When default INDEX_PATH doesn't exist but legacy pkl does, load from legacy."""
+        import memory_index
+        import pickle
+
+        data = {
+            "documents": [("test.md", "src", "/test.md", ["para1"], "", "text")],
+            "paragraph_index": [(0, 0)],
+            "paragraph_tokens": [["test", "para"]],
+            "paragraph_token_counts": [{"test": 1, "para": 1}],
+            "paragraph_types": ["text"],
+            "idf": {"test": 1.0, "para": 1.0},
+            "_df": {"test": 1, "para": 1},
+            "embeddings": None,
+        }
+        legacy_path = tmp_path / "memory_index.pkl"
+        with open(legacy_path, "wb") as f:
+            pickle.dump(data, f)
+        new_path = tmp_path / "memory_index.json.gz"
+        orig_index = memory_index.INDEX_PATH
+        orig_legacy = memory_index._LEGACY_INDEX_PATH
+        memory_index.INDEX_PATH = new_path
+        memory_index._LEGACY_INDEX_PATH = legacy_path
+        try:
+            idx = MemoryIndex()
+            assert idx.load() is True
+            assert len(idx.documents) == 1
+        finally:
+            memory_index.INDEX_PATH = orig_index
+            memory_index._LEGACY_INDEX_PATH = orig_legacy
+
     def test_load_legacy_4tuple_format(self, tmp_path):
         """Load index saved with old 4-tuple document format."""
         import pickle
@@ -1134,6 +1218,46 @@ class TestEntityGraphHelpers:
             assert len(g["relations"]) == 1
         finally:
             memory_index.GRAPH_DIR = original
+            memory_index._ENTITY_GRAPH = None
+
+    def test_search_with_entity_graph_boost(self, tmp_path):
+        """Entity graph boost path in search (covers lines 671-685)."""
+        import memory_index
+
+        # Build a minimal index
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "trace.md").write_text(
+            "# STDP\n\nSTDP removal was a key decision for BM25 retrieval.",
+            encoding="utf-8",
+        )
+        idx = MemoryIndex()
+        with patch("memory_index.SOURCES", {"test": docs_dir}):
+            with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}):
+                idx.build(use_gpu_embeddings=False, use_gliner=False)
+
+        # Setup entity graph
+        graph_dir = tmp_path / "graph"
+        graph_dir.mkdir()
+        (graph_dir / "entities.jsonl").write_text(
+            json.dumps({"id": "e1", "type": "concept", "label": "stdp"})
+            + "\n"
+            + json.dumps({"id": "e2", "type": "concept", "label": "bm25"})
+            + "\n",
+            encoding="utf-8",
+        )
+        (graph_dir / "relations.jsonl").write_text(
+            json.dumps({"source": "e1", "target": "e2", "weight": 1.0}) + "\n",
+            encoding="utf-8",
+        )
+        original_graph = memory_index.GRAPH_DIR
+        memory_index.GRAPH_DIR = graph_dir
+        memory_index._ENTITY_GRAPH = None
+        try:
+            results = idx.search("STDP decision", top_k=3)
+            assert len(results) >= 1
+        finally:
+            memory_index.GRAPH_DIR = original_graph
             memory_index._ENTITY_GRAPH = None
 
 

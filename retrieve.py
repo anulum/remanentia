@@ -60,10 +60,12 @@ import hashlib
 import json
 import logging
 import math
-import pickle
+import gzip
+import pickle  # legacy format detection only — new saves use JSON/npz
 import re
 import sys
 import time
+import zipfile
 from collections import Counter
 from pathlib import Path
 
@@ -79,13 +81,52 @@ SEMANTIC_DIR = BASE_DIR / "memory" / "semantic"
 RETRIEVAL_STATE_PATH = STATE_DIR / "retrieval_state.json"
 DEFAULT_NETWORK_PATH = STATE_DIR / "identity_net.pkl"
 EMBED_NETWORK_PATH = STATE_DIR / "identity_net_embedding_trained.pkl"
-EMBED_CACHE_PATH = STATE_DIR / "embedding_cache.pkl"
+EMBED_CACHE_PATH = STATE_DIR / "embedding_cache.npz"
 FINGERPRINT_PATH = STATE_DIR / "trace_fingerprints.json"
-TRACE_INDEX_CACHE_PATH = STATE_DIR / "trace_index_cache.pkl"
-QUERY_FEATURE_CACHE_PATH = STATE_DIR / "query_feature_cache.pkl"
+TRACE_INDEX_CACHE_PATH = STATE_DIR / "trace_index_cache.json.gz"
+QUERY_FEATURE_CACHE_PATH = STATE_DIR / "query_feature_cache.json.gz"
+# Legacy paths for backward-compatible loading
+_LEGACY_EMBED_CACHE = STATE_DIR / "embedding_cache.pkl"
+_LEGACY_TRACE_CACHE = STATE_DIR / "trace_index_cache.pkl"
+_LEGACY_QUERY_CACHE = STATE_DIR / "query_feature_cache.pkl"
 HISTORY_PATH = STATE_DIR / "retrieval_history.jsonl"
 LIVE_REQUESTS_DIR = STATE_DIR / "live_retrieval_requests"
 LIVE_RESPONSES_DIR = STATE_DIR / "live_retrieval_responses"
+
+
+def _save_json_gz(path: Path, data: dict) -> None:
+    """Save dict as gzipped JSON."""
+    raw = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    with gzip.open(path, "wb") as f:
+        f.write(raw)
+
+
+def _load_json_gz(path: Path) -> dict | None:
+    """Load dict from gzipped JSON, returning None on failure."""
+    try:
+        with gzip.open(path, "rb") as f:
+            return json.loads(f.read())
+    except Exception:
+        return None
+
+
+def _load_pickle_safe(path: Path) -> dict | None:
+    """Load legacy pickle, returning None on failure."""
+    try:
+        with open(path, "rb") as f:
+            return pickle.load(f)  # noqa: S301 — legacy format migration
+    except Exception:
+        return None
+
+
+def _load_npz_dict(path: Path) -> dict | None:
+    """Load npz as dict[str, ndarray], returning None on failure."""
+    try:
+        data = np.load(path, allow_pickle=False)
+        return dict(data)
+    except Exception:
+        return None
+
 
 _PROBE_DURATION = 0.1
 _PROBE_DT = 0.001
@@ -516,6 +557,21 @@ def _resolve_network_config(state_path: Path | None = None) -> dict:
     )
 
 
+def _load_checkpoint(path: Path) -> dict:
+    """Load network checkpoint from npz or legacy pickle."""
+    npz_path = path.with_suffix(".npz") if path.suffix != ".npz" else path
+    for candidate in (npz_path, path):
+        if not candidate.exists():
+            continue
+        if zipfile.is_zipfile(candidate):
+            data = np.load(candidate, allow_pickle=False)
+            return dict(data)
+    # Legacy pickle fallback
+    logger.warning("Loading legacy pickle checkpoint %s — will auto-migrate on next save", path)
+    with open(path, "rb") as f:
+        return pickle.load(f)  # noqa: S301 — legacy format migration
+
+
 def _load_network(state_path: Path | None = None) -> dict:
     config = _resolve_network_config(state_path)
     path = config["checkpoint_path"]
@@ -528,8 +584,7 @@ def _load_network(state_path: Path | None = None) -> dict:
     )
     cached = _NETWORK_CACHE.get(cache_key)
     if cached is None:
-        with open(path, "rb") as f:
-            data = pickle.load(f)
+        data = _load_checkpoint(path)
         if not isinstance(data, dict):
             raise ValueError(f"Unexpected network payload in {path}")
         signature = hashlib.md5(
@@ -617,29 +672,31 @@ def _trace_fingerprint(trace_files: list[Path]) -> str:
 
 
 def _load_trace_index_cache(cache_key: str) -> dict | None:
-    if not TRACE_INDEX_CACHE_PATH.exists():
-        return None
-    try:
-        with open(TRACE_INDEX_CACHE_PATH, "rb") as f:
-            cached = pickle.load(f)
-    except Exception:
-        return None
-    if not isinstance(cached, dict) or cached.get("cache_key") != cache_key:
-        return None
-    trace_spikes = cached.get("trace_spikes")
-    trace_names_lower = cached.get("trace_names_lower")
-    idf = cached.get("idf")
-    if (
-        not isinstance(trace_spikes, dict)
-        or not isinstance(trace_names_lower, dict)
-        or not isinstance(idf, dict)
+    # Try new JSON+gzip format first, then legacy pickle
+    for path, loader in (
+        (TRACE_INDEX_CACHE_PATH, _load_json_gz),
+        (_LEGACY_TRACE_CACHE, _load_pickle_safe),
     ):
-        return None
-    return {
-        "trace_spikes": trace_spikes,
-        "trace_names_lower": trace_names_lower,
-        "idf": idf,
-    }
+        if not path.exists():
+            continue
+        cached = loader(path)
+        if not isinstance(cached, dict) or cached.get("cache_key") != cache_key:
+            continue
+        trace_spikes = cached.get("trace_spikes")
+        trace_names_lower = cached.get("trace_names_lower")
+        idf = cached.get("idf")
+        if (
+            not isinstance(trace_spikes, dict)
+            or not isinstance(trace_names_lower, dict)
+            or not isinstance(idf, dict)
+        ):
+            continue
+        return {
+            "trace_spikes": trace_spikes,
+            "trace_names_lower": trace_names_lower,
+            "idf": idf,
+        }
+    return None
 
 
 def _persist_trace_index_cache(cache_key: str, payload: dict) -> None:
@@ -652,8 +709,7 @@ def _persist_trace_index_cache(cache_key: str, payload: dict) -> None:
         "trace_names_lower": payload["trace_names_lower"],
         "idf": payload["idf"],
     }
-    with open(TRACE_INDEX_CACHE_PATH, "wb") as f:
-        pickle.dump(to_store, f)
+    _save_json_gz(TRACE_INDEX_CACHE_PATH, to_store)
 
 
 def _build_trace_index(tdir: Path, data: dict) -> dict:
@@ -717,22 +773,37 @@ def _load_query_feature_cache() -> None:
     global _QUERY_FEATURE_CACHE_LOADED
     if _QUERY_FEATURE_CACHE_LOADED:
         return
-    if QUERY_FEATURE_CACHE_PATH.exists():
-        try:
-            with open(QUERY_FEATURE_CACHE_PATH, "rb") as f:
-                cached = pickle.load(f)
-            if isinstance(cached, dict):
-                _QUERY_FEATURE_CACHE.update(cached)
-        except Exception:
-            pass
+    # Try new JSON+gzip first, then legacy pickle
+    for path, loader in (
+        (QUERY_FEATURE_CACHE_PATH, _load_json_gz),
+        (_LEGACY_QUERY_CACHE, _load_pickle_safe),
+    ):
+        if not path.exists():
+            continue
+        cached = loader(path)
+        if isinstance(cached, dict):
+            # JSON stores string keys; convert back to tuple keys
+            for k, v in cached.items():
+                if isinstance(k, str) and "\0" in k:
+                    sig, query = k.split("\0", 1)
+                    _QUERY_FEATURE_CACHE[(sig, query)] = v
+                else:
+                    _QUERY_FEATURE_CACHE[k] = v
+            break
     _QUERY_FEATURE_CACHE_LOADED = True
 
 
 def _persist_query_feature_cache() -> None:
     QUERY_FEATURE_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    payload = dict(list(_QUERY_FEATURE_CACHE.items())[-256:])
-    with open(QUERY_FEATURE_CACHE_PATH, "wb") as f:
-        pickle.dump(payload, f)
+    items = list(_QUERY_FEATURE_CACHE.items())[-256:]
+    # Convert tuple keys to string keys for JSON serialisation
+    payload = {}
+    for k, v in items:
+        if isinstance(k, tuple):
+            payload[f"{k[0]}\0{k[1]}"] = v
+        else:
+            payload[str(k)] = v
+    _save_json_gz(QUERY_FEATURE_CACHE_PATH, payload)
 
 
 def _get_query_features(query: str, data: dict) -> dict:
@@ -1070,14 +1141,17 @@ def _load_embed_cache() -> None:
     global _EMBED_CACHE_LOADED
     if _EMBED_CACHE_LOADED:
         return
-    if EMBED_CACHE_PATH.exists():
-        try:
-            with open(EMBED_CACHE_PATH, "rb") as f:
-                cached = pickle.load(f)
-            if isinstance(cached, dict):
-                _EMBED_CACHE.update(cached)
-        except Exception:
-            pass
+    # Try new npz first, then legacy pickle
+    for path, loader in (
+        (EMBED_CACHE_PATH, _load_npz_dict),
+        (_LEGACY_EMBED_CACHE, _load_pickle_safe),
+    ):
+        if not path.exists():
+            continue
+        cached = loader(path)
+        if isinstance(cached, dict):
+            _EMBED_CACHE.update(cached)
+            break
     _EMBED_CACHE_LOADED = True
 
 
@@ -1088,8 +1162,7 @@ def _persist_embed_cache() -> None:
         for key, value in _EMBED_CACHE.items()
         if isinstance(value, np.ndarray) and (key.startswith("t:") or key.startswith("q:"))
     }
-    with open(EMBED_CACHE_PATH, "wb") as f:
-        pickle.dump(persistable, f)
+    np.savez_compressed(EMBED_CACHE_PATH, **persistable)
 
 
 def _live_service_config() -> dict | None:
@@ -1177,15 +1250,20 @@ def rebuild_caches(
     global _EMBED_CACHE_LOADED, _QUERY_FEATURE_CACHE_LOADED
     tdir = traces_dir or TRACES_DIR
     data = _load_network(state_path)
-    if TRACE_INDEX_CACHE_PATH.exists():
-        TRACE_INDEX_CACHE_PATH.unlink()
+    # Remove both new and legacy cache files
+    for p in (TRACE_INDEX_CACHE_PATH, _LEGACY_TRACE_CACHE):
+        if p.exists():
+            p.unlink()
     _TRACE_INDEX_CACHE.clear()
     _QUERY_FEATURE_CACHE.clear()
-    if QUERY_FEATURE_CACHE_PATH.exists():
-        QUERY_FEATURE_CACHE_PATH.unlink()
+    for p in (QUERY_FEATURE_CACHE_PATH, _LEGACY_QUERY_CACHE):
+        if p.exists():
+            p.unlink()
     _QUERY_FEATURE_CACHE_LOADED = False
-    if clear_embedding_cache and EMBED_CACHE_PATH.exists():
-        EMBED_CACHE_PATH.unlink()
+    if clear_embedding_cache:
+        for p in (EMBED_CACHE_PATH, _LEGACY_EMBED_CACHE):
+            if p.exists():
+                p.unlink()
         _EMBED_CACHE.clear()
         _EMBED_CACHE_LOADED = False
     started = time.perf_counter()

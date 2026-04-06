@@ -6,7 +6,7 @@ All benchmarks measured 2026-03-31 on verified hardware:
 - **RAM:** 31 GB DDR4 (from `free -h`)
 - **Disk:** 1.8 TB NTFS (project-workspace partition, `df -h [legacy-storage]`)
 - **Kernel:** 6.17.0-19-generic (from `uname -r`)
-- **Rust:** 11 PyO3 crates installed locally (built via maturin from `workspace-internal/rust_*/`); CI uses Python fallbacks
+- **Rust:** 13 PyO3 crates (54 functions) installed locally (built via maturin from `workspace-internal/rust_*/`); CI uses Python fallbacks
 - **Method:** `time.perf_counter()`, budget assertions in CI
 
 ## Regex Pipeline (core retrieval path)

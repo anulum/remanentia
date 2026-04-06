@@ -13,7 +13,8 @@ import ast
 import json
 import math
 import os
-import pickle
+import gzip
+import pickle  # legacy format detection only — new saves use JSON + npz
 import re
 import time
 from collections import Counter
@@ -1030,13 +1031,14 @@ class MemoryIndex:
         path.write_text(json.dumps(hashes), encoding="utf-8")
 
     def save(self, path: Path | None = None, quantize: bool = True):
-        """Save index to disk. Quantizes embeddings to int8 by default (~4x smaller)."""
+        """Save index to disk as JSON+gzip (metadata) + npz (embeddings)."""
         path = path or INDEX_PATH
         path.parent.mkdir(parents=True, exist_ok=True)
 
         emb_data = None
         emb_scale = None
-        if self.embeddings is not None:
+        has_emb = self.embeddings is not None
+        if has_emb:
             if quantize:
                 scale = np.max(np.abs(self.embeddings), axis=1, keepdims=True)
                 scale = np.where(scale == 0, 1.0, scale)
@@ -1045,9 +1047,10 @@ class MemoryIndex:
             else:
                 emb_data = self.embeddings
 
-        data = {
+        meta = {
             "documents": [
-                (d.name, d.source, d.path, d.paragraphs, d.date, d.doc_type) for d in self.documents
+                (d.name, d.source, d.path, d.paragraphs, d.date, d.doc_type)
+                for d in self.documents
             ],
             "paragraph_index": self.paragraph_index,
             "paragraph_tokens": [list(t) for t in self.paragraph_tokens],
@@ -1055,25 +1058,51 @@ class MemoryIndex:
             "paragraph_types": self.paragraph_types,
             "idf": self.idf,
             "_df": self._df,
-            "embeddings": emb_data,
-            "emb_scale": emb_scale,
-            "quantized": quantize and self.embeddings is not None,
+            "quantized": quantize and has_emb,
             "timestamp": time.time(),
         }
-        # Atomic write: temp file + rename
-        tmp = path.with_suffix(".pkl.tmp")
-        with open(tmp, "wb") as f:
-            pickle.dump(data, f)
+
+        tmp = path.with_suffix(".tmp")
+        raw = json.dumps(meta, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        with gzip.open(tmp, "wb") as f:
+            f.write(raw)
         tmp.replace(path)
 
+        emb_path = path.with_name(path.stem.replace(".json", "") + "_embeddings.npz")
+        if emb_data is not None:
+            arrays: dict[str, np.ndarray] = {"embeddings": emb_data}
+            if emb_scale is not None:
+                arrays["emb_scale"] = emb_scale
+            np.savez_compressed(emb_path, **arrays)
+        elif emb_path.exists():
+            emb_path.unlink()
+
     def load(self, path: Path | None = None) -> bool:
-        """Load index from disk."""
+        """Load index from disk (JSON+gzip or legacy pickle)."""
         path = path or INDEX_PATH
-        if not path.exists():
+        data = None
+        # Try new JSON+gzip format
+        if path.exists() and path.suffix == ".gz":
+            try:
+                with gzip.open(path, "rb") as f:
+                    data = json.loads(f.read())
+                emb_path = path.with_name(path.stem.replace(".json", "") + "_embeddings.npz")
+                if emb_path.exists():
+                    emb = np.load(emb_path, allow_pickle=False)
+                    data["embeddings"] = emb.get("embeddings")
+                    data["emb_scale"] = emb.get("emb_scale")
+            except Exception:
+                data = None
+        # Try legacy pickle
+        if data is None and path.exists():
+            try:
+                with open(path, "rb") as f:
+                    data = pickle.load(f)  # noqa: S301 — legacy format migration
+            except Exception:
+                return False
+        if data is None:
             return False
         try:
-            with open(path, "rb") as f:
-                data = pickle.load(f)
             self.documents = []
             for entry in data["documents"]:
                 if len(entry) == 6:
@@ -1096,7 +1125,6 @@ class MemoryIndex:
             self.idf = data["idf"]
             self._df = data.get("_df", {})
             self.paragraph_types = data.get("paragraph_types", [])
-            # Rebuild inverted index from paragraph tokens
             inv: dict[str, list[int]] = {}
             for i, tokens in enumerate(self.paragraph_tokens):
                 for t in tokens:
@@ -1110,7 +1138,6 @@ class MemoryIndex:
             )
             self._rust_bm25_dirty = True
             self._rust_bm25 = None
-            # Dequantize embeddings if needed
             if data.get("quantized") and data.get("emb_scale") is not None:
                 emb_int8 = data["embeddings"]
                 scale = data["emb_scale"]

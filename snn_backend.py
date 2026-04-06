@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import pickle
+import pickle  # legacy format detection only — new saves use numpy.savez
 import re
 from pathlib import Path
 
@@ -66,6 +66,29 @@ STDP_TAU = 20.0  # ms
 STDP_A_PLUS = 0.005
 STDP_A_MINUS = 0.005
 STDP_W_MAX = 2.0
+
+
+def _load_state(path: Path) -> dict:
+    """Load network state from npz (preferred) or legacy pickle.
+
+    Tries numpy.load first. If the file is not a valid ZIP/npz,
+    falls back to pickle for backward compatibility with pre-0.4 saves.
+    """
+    import zipfile
+
+    resolved = Path(str(path))
+    # numpy.savez appends .npz — check both with and without suffix
+    npz_path = resolved.with_suffix(".npz") if resolved.suffix != ".npz" else resolved
+    for candidate in (npz_path, resolved):
+        if not candidate.exists():
+            continue
+        if zipfile.is_zipfile(candidate):
+            data = np.load(candidate, allow_pickle=False)
+            return dict(data)
+    # Legacy pickle fallback
+    logger.warning("Loading legacy pickle state from %s — will re-save as npz", path)
+    with open(resolved, "rb") as f:
+        return pickle.load(f)  # noqa: S301 — legacy format migration
 
 
 def detect_backend() -> str:
@@ -266,38 +289,34 @@ class GPULIFNetwork(_BaseLIFNetwork):
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         w_cpu = self.w.cpu().numpy()
-        with open(path, "wb") as f:
-            pickle.dump(
-                {
-                    "v": self.v.copy(),
-                    "w": w_cpu,
-                    "last_spike": self.last_spike.copy(),
-                    "t": self.t,
-                    "n": self.n,
-                    "dt": self.dt,
-                    "backend": "gpu",
-                },
-                f,
-            )
+        np.savez_compressed(
+            path,
+            v=self.v.copy(),
+            w=w_cpu,
+            last_spike=self.last_spike.copy(),
+            t=np.float64(self.t),
+            n=np.int64(self.n),
+            dt=np.float64(self.dt),
+            backend=np.array("gpu"),
+        )
 
     @classmethod
     def load(cls, path: Path) -> GPULIFNetwork:
         import torch
 
-        with open(path, "rb") as f:
-            data = pickle.load(f)
+        data = _load_state(path)
         net = cls.__new__(cls)
-        net.n = data["n"]
-        net.dt = data["dt"]
-        net.dt_ms = data["dt"] * 1000
+        net.n = int(data["n"])
+        net.dt = float(data["dt"])
+        net.dt_ms = net.dt * 1000
         net.rng = np.random.default_rng(42)
-        net.v = data["v"]
-        net.last_spike = data["last_spike"]
-        net.t = data["t"]
+        net.v = np.asarray(data["v"], dtype=np.float32)
+        net.last_spike = np.asarray(data["last_spike"], dtype=np.float32)
+        net.t = float(data["t"])
         net.i_ext = np.full(net.n, 0.3, dtype=np.float32)
         net.torch = torch
         net.device = torch.device("cuda")
-        net.w = torch.from_numpy(data["w"].astype(np.float32)).to(net.device)
+        net.w = torch.from_numpy(np.asarray(data["w"], dtype=np.float32)).to(net.device)
         net.v_gpu = torch.from_numpy(net.v).to(net.device)
         net._w_np_cache = None
         return net
@@ -431,35 +450,36 @@ class DenseCPULIFNetwork(_BaseLIFNetwork):
 
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "wb") as f:
-            pickle.dump(
-                {
-                    "v": self.v,
-                    "w": self.w,
-                    "mask": self.mask,
-                    "last_spike": self.last_spike,
-                    "t": self.t,
-                    "n": self.n,
-                    "dt": self.dt,
-                    "backend": "dense_cpu",
-                },
-                f,
-            )
+        np.savez_compressed(
+            path,
+            v=self.v,
+            w=self.w,
+            mask=self.mask,
+            last_spike=self.last_spike,
+            t=np.float64(self.t),
+            n=np.int64(self.n),
+            dt=np.float64(self.dt),
+            backend=np.array("dense_cpu"),
+        )
 
     @classmethod
     def load(cls, path: Path) -> DenseCPULIFNetwork:
-        with open(path, "rb") as f:
-            data = pickle.load(f)
+        data = _load_state(path)
         net = cls.__new__(cls)
-        net.n = data["n"]
-        net.dt = data["dt"]
-        net.dt_ms = data["dt"] * 1000
+        net.n = int(data["n"])
+        net.dt = float(data["dt"])
+        net.dt_ms = net.dt * 1000
         net.rng = np.random.default_rng(42)
-        net.v = data["v"]
-        net.w = data["w"]
-        net.mask = data.get("mask", (data["w"] > 0).astype(np.float32))
-        net.last_spike = data["last_spike"]
-        net.t = data["t"]
+        net.v = np.asarray(data["v"], dtype=np.float32)
+        net.w = np.asarray(data["w"], dtype=np.float32)
+        w_arr = np.asarray(data["w"], dtype=np.float32)
+        net.mask = (
+            np.asarray(data["mask"], dtype=np.float32)
+            if "mask" in data
+            else (w_arr > 0).astype(np.float32)
+        )
+        net.last_spike = np.asarray(data["last_spike"], dtype=np.float32)
+        net.t = float(data["t"])
         net.i_ext = np.full(net.n, 0.3, dtype=np.float32)
         return net
 
@@ -490,10 +510,10 @@ def create_network(
 
 def load_network(path: Path, backend: str | None = None) -> GPULIFNetwork | DenseCPULIFNetwork:
     """Load a saved network, using the specified or saved backend."""
-    with open(path, "rb") as f:
-        data = pickle.load(f)
+    data = _load_state(path)
 
-    saved_backend = data.get("backend", "dense_cpu")
+    raw_backend = data.get("backend", "dense_cpu")
+    saved_backend = str(raw_backend) if not isinstance(raw_backend, str) else raw_backend
     target = backend or saved_backend
 
     if target == "gpu":

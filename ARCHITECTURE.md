@@ -34,9 +34,9 @@ remanentia/
 │   ├── semantic/           Consolidated facts with YAML frontmatter
 │   ├── graph/              Entity-entity relations (JSONL)
 │   └── knowledge_notes.jsonl  Zettelkasten atomic notes
-├── snn_state/              SNN checkpoint, index pickle, weight snapshots
+├── snn_state/              SNN checkpoint (npz), index (JSON+gzip), weight snapshots
 ├── docs/                   Documentation (MkDocs)
-└── tests/                  1,599 tests, 100% coverage
+└── tests/                  1,677 tests, 100% coverage
 ```
 
 ## Retrieval Pipeline

@@ -32,6 +32,13 @@ class TestCmdStatus:
         state_dir.mkdir()
         graph_dir = tmp_path / "memory" / "graph"
         graph_dir.mkdir(parents=True)
+        # Create entity/relation files so status reports counts
+        (graph_dir / "entities.jsonl").write_text(
+            '{"id":"e1","type":"concept","label":"test"}\n', encoding="utf-8"
+        )
+        (graph_dir / "relations.jsonl").write_text(
+            '{"source":"e1","target":"e2","weight":1.0}\n', encoding="utf-8"
+        )
         traces_dir = tmp_path / "reasoning_traces"
         traces_dir.mkdir()
         semantic_dir = tmp_path / "memory" / "semantic"

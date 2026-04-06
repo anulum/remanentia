@@ -35,7 +35,7 @@ import argparse
 import hashlib
 import json
 import logging
-import pickle
+import pickle  # legacy format detection only — new saves use numpy.savez
 import re
 import signal
 import sys
@@ -59,6 +59,25 @@ try:
     logger.info("Rust STDP/LIF loaded (arcane_stdp)")
 except ImportError:
     pass
+
+
+def _load_daemon_state(path: Path) -> dict:
+    """Load daemon state from npz (preferred) or legacy pickle."""
+    import zipfile
+
+    resolved = Path(str(path))
+    npz_path = resolved.with_suffix(".npz") if resolved.suffix != ".npz" else resolved
+    for candidate in (npz_path, resolved):
+        if not candidate.exists():
+            continue
+        if zipfile.is_zipfile(candidate):
+            data = np.load(candidate, allow_pickle=False)
+            return dict(data)
+    # Legacy pickle fallback
+    logger.warning("Loading legacy pickle state from %s — will re-save as npz", path)
+    with open(resolved, "rb") as f:
+        return pickle.load(f)  # noqa: S301 — legacy format migration
+
 
 BASE_DIR = Path(__file__).parent
 STATE_DIR = BASE_DIR / "snn_state"
@@ -301,28 +320,24 @@ class SimpleLIFNetwork:
 
     def save(self, path: Path):
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "wb") as f:
-            pickle.dump(
-                {
-                    "v": self.v,
-                    "w": self.w,
-                    "last_spike": self.last_spike,
-                    "t": self.t,
-                    "n": self.n,
-                    "dt": self.dt,
-                },
-                f,
-            )
+        np.savez_compressed(
+            path,
+            v=self.v,
+            w=self.w,
+            last_spike=self.last_spike,
+            t=np.float64(self.t),
+            n=np.int64(self.n),
+            dt=np.float64(self.dt),
+        )
 
     @classmethod
     def load(cls, path: Path) -> SimpleLIFNetwork:
-        with open(path, "rb") as f:
-            data = pickle.load(f)
-        net = cls(n_neurons=data["n"], dt=data["dt"])
-        net.v = data["v"]
-        net.w = data["w"]
-        net.last_spike = data["last_spike"]
-        net.t = data["t"]
+        data = _load_daemon_state(path)
+        net = cls(n_neurons=int(data["n"]), dt=float(data["dt"]))
+        net.v = np.asarray(data["v"], dtype=np.float32)
+        net.w = np.asarray(data["w"], dtype=np.float32)
+        net.last_spike = np.asarray(data["last_spike"], dtype=np.float32)
+        net.t = float(data["t"])
         return net
 
 

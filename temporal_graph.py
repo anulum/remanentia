@@ -16,9 +16,10 @@ reasoning significantly via explicit temporal edges.
 from __future__ import annotations
 
 import json
+import math
 import re
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, date, timedelta
 from pathlib import Path
 
@@ -64,12 +65,51 @@ _DATE_RELATIVE = re.compile(
 )
 
 
+_rust_date_to_phase = None
+_rust_resonance_search = None
+try:
+    from remanentia_temporal import (
+        date_to_phase as _rust_dtp,
+        resonance_search as _rust_rs,
+    )
+
+    _rust_date_to_phase = _rust_dtp  # pragma: no cover
+    _rust_resonance_search = _rust_rs  # pragma: no cover
+except ImportError:
+    pass
+
+
+def date_to_phase(date_str: str) -> float:
+    """Map an ISO date string to a cyclic phase θ ∈ [0, 2π).
+
+    θ(date) = 2π · day_of_year(date) / 365.25
+
+    This is the UPDE (Universal Phase-Date Encoding) used across the
+    SCPN ecosystem for cyclic temporal resonance scoring.
+    Uses Rust (remanentia_temporal) when available.
+    """
+    if _rust_date_to_phase is not None:
+        return _rust_date_to_phase(date_str)  # pragma: no cover
+    try:
+        d = datetime.strptime(date_str[:10], "%Y-%m-%d")
+    except (ValueError, TypeError):
+        return 0.0
+    day_of_year = d.timetuple().tm_yday
+    return 2.0 * math.pi * day_of_year / 365.25
+
+
 @dataclass
 class TemporalEvent:
     date: str  # ISO format YYYY-MM-DD
     text: str  # event description (sentence containing the date)
     source: str  # document name
     paragraph_idx: int = 0
+    phase: float = field(default=0.0, repr=False)
+
+    def calculate_phase(self) -> float:
+        """Calculate and store the UPDE cyclic phase for this event's date."""
+        self.phase = date_to_phase(self.date)
+        return self.phase
 
 
 @dataclass
@@ -86,6 +126,40 @@ class TemporalGraph:
         self.events: list[TemporalEvent] = []
         self.edges: list[TemporalEdge] = []
         self._by_date: dict[str, list[int]] = defaultdict(list)
+
+    def resonance_search(
+        self, query_date: str, tolerance: float = 0.01
+    ) -> list[tuple[TemporalEvent, float]]:
+        """Find events whose cyclic phase resonates with the query date.
+
+        Resonance = cos(θ_event - θ_query). Events with resonance ≥ (1 - tolerance)
+        are returned, sorted by resonance descending.
+        Uses Rust (remanentia_temporal) when available.
+
+        Args:
+            query_date: ISO date string (YYYY-MM-DD).
+            tolerance: Maximum allowed deviation from perfect resonance (1.0).
+                       Default 0.01 ≈ ±5 days of year.
+
+        Returns:
+            List of (event, resonance_score) tuples, sorted descending.
+        """
+        if _rust_resonance_search is not None:  # pragma: no cover
+            dates = [ev.date for ev in self.events]
+            rust_results = _rust_resonance_search(dates, query_date, tolerance)
+            return [(self.events[idx], score) for idx, score in rust_results]
+        # Python fallback
+        query_phase = date_to_phase(query_date)
+        threshold = 1.0 - tolerance
+        results: list[tuple[TemporalEvent, float]] = []
+        for event in self.events:
+            if event.phase == 0.0 and event.date:
+                event.calculate_phase()
+            resonance = math.cos(event.phase - query_phase)
+            if resonance >= threshold:
+                results.append((event, resonance))
+        results.sort(key=lambda x: -x[1])
+        return results
 
     def extract_events(self, text: str, doc_name: str) -> list[TemporalEvent]:
         """Extract dated events from a document."""

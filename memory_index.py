@@ -23,7 +23,8 @@ import ast
 import json
 import math
 import os
-import pickle
+import gzip
+import pickle  # legacy format detection only — new saves use JSON + npz
 import re
 import time
 from collections import Counter
@@ -36,7 +37,9 @@ import hashlib as _hashlib
 
 BASE = Path(__file__).parent
 project-workspace_ROOT = BASE.parent
-INDEX_PATH = BASE / "snn_state" / "memory_index.pkl"
+INDEX_PATH = BASE / "snn_state" / "memory_index.json.gz"
+_LEGACY_INDEX_PATH = BASE / "snn_state" / "memory_index.pkl"
+INDEX_EMB_PATH = BASE / "snn_state" / "memory_index_embeddings.npz"
 HASH_CACHE_PATH = BASE / "snn_state" / "content_hashes.json"
 GRAPH_DIR = BASE / "memory" / "graph"
 
@@ -1067,13 +1070,17 @@ class MemoryIndex:
         path.write_text(json.dumps(hashes), encoding="utf-8")
 
     def save(self, path: Path | None = None, quantize: bool = True):
-        """Save index to disk. Quantizes embeddings to int8 by default (~4x smaller)."""
+        """Save index to disk as JSON+gzip (metadata) + npz (embeddings).
+
+        Quantizes embeddings to int8 by default (~4x smaller).
+        """
         path = path or INDEX_PATH
         path.parent.mkdir(parents=True, exist_ok=True)
 
         emb_data = None
         emb_scale = None
-        if self.embeddings is not None:
+        has_emb = self.embeddings is not None
+        if has_emb:
             if quantize:
                 scale = np.max(np.abs(self.embeddings), axis=1, keepdims=True)
                 scale = np.where(scale == 0, 1.0, scale)
@@ -1082,7 +1089,7 @@ class MemoryIndex:
             else:
                 emb_data = self.embeddings
 
-        data = {
+        meta = {
             "documents": [
                 (d.name, d.source, d.path, d.paragraphs, d.date, d.doc_type) for d in self.documents
             ],
@@ -1092,25 +1099,35 @@ class MemoryIndex:
             "paragraph_types": self.paragraph_types,
             "idf": self.idf,
             "_df": self._df,
-            "embeddings": emb_data,
-            "emb_scale": emb_scale,
-            "quantized": quantize and self.embeddings is not None,
+            "quantized": quantize and has_emb,
             "timestamp": time.time(),
         }
+
         # Atomic write: temp file + rename
-        tmp = path.with_suffix(".pkl.tmp")
-        with open(tmp, "wb") as f:
-            pickle.dump(data, f)
+        tmp = path.with_suffix(".tmp")
+        raw = json.dumps(meta, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        with gzip.open(tmp, "wb") as f:
+            f.write(raw)
         tmp.replace(path)
 
+        # Save embeddings separately as npz
+        stem = path.stem.replace(".json", "")
+        emb_path = path.with_name(stem + "_embeddings.npz")
+        if emb_data is not None:
+            arrays: dict[str, np.ndarray] = {"embeddings": emb_data}
+            if emb_scale is not None:
+                arrays["emb_scale"] = emb_scale
+            np.savez_compressed(emb_path, **arrays)
+        elif emb_path.exists():
+            emb_path.unlink()
+
     def load(self, path: Path | None = None) -> bool:
-        """Load index from disk."""
+        """Load index from disk (JSON+gzip or legacy pickle)."""
         path = path or INDEX_PATH
-        if not path.exists():
+        data = self._load_index_data(path)
+        if data is None:
             return False
         try:
-            with open(path, "rb") as f:
-                data = pickle.load(f)
             self.documents = []
             for entry in data["documents"]:
                 if len(entry) == 6:
@@ -1147,17 +1164,56 @@ class MemoryIndex:
             )
             self._rust_bm25_dirty = True
             self._rust_bm25 = None
-            # Dequantize embeddings if needed
-            if data.get("quantized") and data.get("emb_scale") is not None:
-                emb_int8 = data["embeddings"]
-                scale = data["emb_scale"]
-                self.embeddings = (emb_int8.astype(np.float32) / 127.0) * scale
+            # Load embeddings
+            emb_data = data.get("embeddings")
+            emb_scale = data.get("emb_scale")
+            if data.get("quantized") and emb_scale is not None:
+                self.embeddings = (emb_data.astype(np.float32) / 127.0) * emb_scale
             else:
-                self.embeddings = data.get("embeddings")
+                self.embeddings = emb_data
             self._built = True
             return True
         except Exception:
             return False
+
+    def _load_index_data(self, path: Path) -> dict | None:
+        """Load index data from JSON+gzip (new) or pickle (legacy).
+
+        Format is detected by file magic bytes (gzip = 0x1f8b), not extension.
+        """
+        if not path.exists():
+            # Check legacy path as fallback
+            if path == INDEX_PATH and _LEGACY_INDEX_PATH.exists():
+                path = _LEGACY_INDEX_PATH
+            else:
+                return None
+        # Detect format by magic bytes
+        try:
+            with open(path, "rb") as f:
+                magic = f.read(2)
+        except Exception:
+            return None
+        if magic == b"\x1f\x8b":
+            # gzip JSON format
+            try:
+                with gzip.open(path, "rb") as f:
+                    meta = json.loads(f.read())
+                # Load embeddings from companion npz
+                stem = path.stem.replace(".json", "")
+                emb_path = path.with_name(stem + "_embeddings.npz")
+                if emb_path.exists():
+                    emb = np.load(emb_path, allow_pickle=False)
+                    meta["embeddings"] = emb.get("embeddings")
+                    meta["emb_scale"] = emb.get("emb_scale")
+                return meta
+            except Exception:
+                return None
+        # Legacy pickle
+        try:
+            with open(path, "rb") as f:
+                return pickle.load(f)  # noqa: S301 — legacy format migration
+        except Exception:
+            return None
 
 
 # ── Entity graph for retrieval boosting ──────────────────────────
@@ -1811,9 +1867,10 @@ def _should_index_text(text: str) -> bool:
 
 def needs_rebuild() -> bool:
     """Check if any source has newer files than the index."""
-    if not INDEX_PATH.exists():
+    if not INDEX_PATH.exists() and not _LEGACY_INDEX_PATH.exists():
         return True
-    idx_mtime = INDEX_PATH.stat().st_mtime
+    idx_file = INDEX_PATH if INDEX_PATH.exists() else _LEGACY_INDEX_PATH
+    idx_mtime = idx_file.stat().st_mtime
     for source_name, source_dir in SOURCES.items():
         if not source_dir.exists():  # pragma: no cover
             continue

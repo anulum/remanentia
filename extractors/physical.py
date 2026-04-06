@@ -85,11 +85,22 @@ def _extract_from_arcane(ensemble: list[dict], n: int) -> np.ndarray:
 
 
 def _extract_from_snn(state_path: Path, n: int) -> np.ndarray:
-    """Load SNN state and extract phases."""
+    """Load SNN state and extract phases (npz or legacy pickle)."""
     import pickle
+    import zipfile
 
-    with open(state_path, "rb") as f:
-        state = pickle.load(f)
+    # Try npz first, fall back to pickle
+    npz_path = state_path.with_suffix(".npz") if state_path.suffix != ".npz" else state_path
+    state = None
+    for candidate in (npz_path, state_path):
+        if not candidate.exists():
+            continue
+        if zipfile.is_zipfile(candidate):
+            state = dict(np.load(candidate, allow_pickle=False))
+            break
+    if state is None:
+        with open(state_path, "rb") as f:
+            state = pickle.load(f)  # noqa: S301 — legacy format migration
 
     # Expect state to contain membrane potentials
     if isinstance(state, dict):
