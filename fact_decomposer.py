@@ -149,6 +149,37 @@ class AtomicFact:
     entities: list[str] = field(default_factory=list)
     date_mentions: list[str] = field(default_factory=list)
     supersedes: bool = False  # True if this fact updates a prior one
+    confidence: float = 0.5  # Initial confidence
+    confirmation_count: int = 0  # Times this fact was confirmed
+    contradiction_count: int = 0  # Times this fact was contradicted
+    last_confirmed: str = ""  # ISO datetime of last confirmation
+    source_quality: str = "inferred"  # "stated" | "inferred" | "corrected"
+
+    def update_confidence(self, event: str) -> None:
+        """Update confidence based on evidence events.
+
+        Parameters
+        ----------
+        event : str
+            One of: "confirmed", "contradicted", "accessed", "stale".
+        """
+        from datetime import datetime, timezone
+
+        if event == "confirmed":
+            self.confirmation_count += 1
+            # Asymptotic approach to 1.0: each confirmation adds less
+            self.confidence = min(1.0, self.confidence + 0.1 * (1.0 - self.confidence))
+            self.last_confirmed = datetime.now(timezone.utc).isoformat()
+        elif event == "contradicted":
+            self.contradiction_count += 1
+            # Faster decay: contradictions weigh more than confirmations
+            self.confidence = max(0.0, self.confidence - 0.15)
+        elif event == "accessed":
+            # Small boost for being relevant (retrieved and used)
+            self.confidence = min(1.0, self.confidence + 0.02)
+        elif event == "stale":
+            # Time decay: 0.01 per 30 days of no access
+            self.confidence = max(0.1, self.confidence - 0.01)
 
 
 @dataclass
@@ -200,7 +231,9 @@ class FactIndex:
                 filter_expired,
                 top_k,
             )
-            return [(self.facts[idx], score) for idx, score in ranked]  # pragma: no cover
+            return [
+                (self.facts[idx], score * self.facts[idx].confidence) for idx, score in ranked
+            ]  # pragma: no cover
         q_tokens = _tokenize(question)
         q_entities = _extract_entities_simple(question)
 
@@ -244,7 +277,7 @@ class FactIndex:
                     scores[idx] += 5.0
 
         ranked = sorted(scores.items(), key=lambda x: -x[1])[:top_k]
-        return [(self.facts[idx], score) for idx, score in ranked]
+        return [(self.facts[idx], score * self.facts[idx].confidence) for idx, score in ranked]
 
     def temporal_query(
         self,
@@ -306,7 +339,7 @@ class FactIndex:
                     scores[i] = 2.0
 
         ranked = sorted(scores.items(), key=lambda x: -x[1])[:top_k]
-        return [(self.facts[idx], score) for idx, score in ranked]
+        return [(self.facts[idx], score * self.facts[idx].confidence) for idx, score in ranked]
 
     def cross_session_query(
         self,
@@ -445,6 +478,7 @@ def _build_fact(
     else:
         dates = _extract_dates(sentence, default_year)
     entities = _extract_entities_simple(sentence)
+    confidence = 0.5
 
     fact_type = _classify_fact(sentence)
     try:
@@ -456,15 +490,17 @@ def _build_fact(
 
     # C5: ML-based fact classification — only override when regex gives
     # the catch-all "event" type (no explicit pattern match)
-    if fact_type == "event" and not supersedes:
+    if fact_type == "event" and not supersedes:  # pragma: no cover — requires ML model
         try:
             from fact_validity_model import classify_fact as _ml_classify
 
             prediction = _ml_classify(sentence)
-            if prediction is not None and prediction.confidence > 0.7:  # pragma: no cover
-                fact_type = prediction.fact_type  # pragma: no cover
-                if prediction.supersedes_prob > 0.5:  # pragma: no cover
-                    supersedes = True  # pragma: no cover
+            if prediction is not None:
+                confidence = prediction.confidence
+                if prediction.confidence > 0.7:
+                    fact_type = prediction.fact_type
+                    if prediction.supersedes_prob > 0.5:
+                        supersedes = True
         except ImportError:
             pass
 
@@ -480,6 +516,7 @@ def _build_fact(
         entities=entities,
         date_mentions=dates,
         supersedes=supersedes,
+        confidence=confidence,
     )
 
 

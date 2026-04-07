@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from signal_detector import detect_signals, SignalType
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -281,6 +282,38 @@ class KnowledgeNote:
     entities: list[str] = field(default_factory=list)
     prospective_queries: list[str] = field(default_factory=list)
 
+    confidence: float = 0.5  # Initial confidence
+    confirmation_count: int = 0  # Times this fact was confirmed
+    contradiction_count: int = 0  # Times this fact was contradicted
+    last_confirmed: str = ""  # ISO datetime of last confirmation
+    source_quality: str = "inferred"  # "stated" | "inferred" | "corrected"
+
+    def update_confidence(self, event: str) -> None:
+        """Update confidence based on evidence events.
+
+        Parameters
+        ----------
+        event : str
+            One of: "confirmed", "contradicted", "accessed", "stale".
+        """
+        from datetime import datetime, timezone
+
+        if event == "confirmed":
+            self.confirmation_count += 1
+            # Asymptotic approach to 1.0: each confirmation adds less
+            self.confidence = min(1.0, self.confidence + 0.1 * (1.0 - self.confidence))
+            self.last_confirmed = datetime.now(timezone.utc).isoformat()
+        elif event == "contradicted":
+            self.contradiction_count += 1
+            # Faster decay: contradictions weigh more than confirmations
+            self.confidence = max(0.0, self.confidence - 0.15)
+        elif event == "accessed":
+            # Small boost for being relevant (retrieved and used)
+            self.confidence = min(1.0, self.confidence + 0.02)
+        elif event == "stale":
+            # Time decay: 0.01 per 30 days of no access
+            self.confidence = max(0.1, self.confidence - 0.01)
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
@@ -295,6 +328,11 @@ class KnowledgeNote:
             "superseded_by": self.superseded_by,
             "entities": self.entities,
             "prospective_queries": self.prospective_queries,
+            "confidence": self.confidence,
+            "confirmation_count": self.confirmation_count,
+            "contradiction_count": self.contradiction_count,
+            "last_confirmed": self.last_confirmed,
+            "source_quality": self.source_quality,
         }
 
     @staticmethod
@@ -312,6 +350,11 @@ class KnowledgeNote:
             superseded_by=d.get("superseded_by", ""),
             entities=d.get("entities", []),
             prospective_queries=d.get("prospective_queries", []),
+            confidence=d.get("confidence", 0.5),
+            confirmation_count=d.get("confirmation_count", 0),
+            contradiction_count=d.get("contradiction_count", 0),
+            last_confirmed=d.get("last_confirmed", ""),
+            source_quality=d.get("source_quality", "inferred"),
         )
 
     @property
@@ -357,6 +400,16 @@ class Trigger:
 
 
 class KnowledgeStore:
+    def age_memories(self) -> dict:
+        """Age knowledge notes based on last access. Decay confidence of inactive notes."""
+        stats = {"scanned": 0, "stale": 0}
+        for note in self.notes.values():
+            if not note.superseded_by:
+                note.update_confidence("stale")
+                stats["stale"] += 1
+            stats["scanned"] += 1
+        return stats
+
     def __init__(self):
         self.notes: dict[str, KnowledgeNote] = {}
         self.triggers: list[Trigger] = []
@@ -369,6 +422,7 @@ class KnowledgeStore:
         title: str = "",
         keywords: list[str] | None = None,
         prospective_queries: list[str] | None = None,
+        confidence: float = 0.5,
     ) -> KnowledgeNote:
         """Create a knowledge note, link to related notes, detect contradictions.
 
@@ -382,6 +436,21 @@ class KnowledgeStore:
         if not keywords:
             keywords = _extract_keywords(content)
         entities = sorted(_extract_entities(content))
+
+        # Signal detection (DeerFlow adaptation)
+        signals = detect_signals(content)
+        if signals:
+            top_signal = signals[0]
+            # print(f"DEBUG: detected {top_signal.signal_type} in {content[:30]}")
+            related = self.search(content, top_k=5)
+            # print(f"DEBUG: related results: {len(related)}")
+            for sr in related:
+                if sr.id in self.notes:
+                    rnote = self.notes[sr.id]
+                    if top_signal.signal_type == SignalType.CORRECTION:
+                        rnote.update_confidence("contradicted")
+                    elif top_signal.signal_type == SignalType.REINFORCEMENT:
+                        rnote.update_confidence("confirmed")
 
         # Generate prospective queries at write time (Kumiho technique)
         if prospective_queries is None:

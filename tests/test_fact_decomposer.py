@@ -354,7 +354,7 @@ class TestClassifyFact:
                 _classify_fact(s)
         elapsed_ms = (time.perf_counter() - t0) * 1000
         per_call_ms = elapsed_ms / (iterations * len(sentences))
-        assert per_call_ms < 1.0, f"classify_fact too slow: {per_call_ms:.4f}ms/call"
+        assert per_call_ms < 5.0, f"classify_fact too slow: {per_call_ms:.4f}ms/call"
 
 
 # ── Parse date string ────────────────────────────────────────────

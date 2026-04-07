@@ -48,6 +48,7 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from fact_decomposer import AtomicFact, FactIndex, decompose_sessions
+from context_builder import build_hierarchical_context
 
 
 @dataclass
@@ -81,6 +82,7 @@ class ArcaneRetriever:
     """
 
     RRF_K = 60  # RRF constant (standard value)
+    CHANNEL_WEIGHTS = {"bm25": 1.0, "entity": 1.0, "temporal": 1.0, "session": 2.0}
     DEFAULT_DECAY_HALF_LIFE_DAYS = 30  # recency half-life in days
 
     def __init__(
@@ -121,7 +123,11 @@ class ArcaneRetriever:
                 query = self._rewrite_query(question, query, reason, fused)
             # Last iteration: accept whatever we have
 
-        return fused
+        reranked = self._cross_encoder_rerank(question, fused, top_n=top_k)
+        # Mark top results as accessed to boost confidence
+        for r in reranked[:5]:
+            r.fact.update_confidence("accessed")
+        return reranked[:top_k]
 
     def _gate(self, question: str, qtype: str) -> list[str]:
         """Classify which retrieval channels to activate based on question type."""
@@ -278,7 +284,9 @@ class ArcaneRetriever:
                         "channels": [],
                         "ranks": {},
                     }
-                fact_map[key]["rrf_score"] += 1.0 / (self.RRF_K + r.rank)
+                fact_map[key]["rrf_score"] += self.CHANNEL_WEIGHTS.get(ch_name, 1.0) / (
+                    self.RRF_K + r.rank
+                )
                 fact_map[key]["channels"].append(ch_name)
                 fact_map[key]["ranks"][ch_name] = r.rank
 
@@ -381,18 +389,60 @@ class ArcaneRetriever:
 
         return original
 
+    _ce_model = None
+    _ce_loading = False
+
+    def _load_ce(self):
+        """Lazy-load cross-encoder model in background thread."""
+        if ArcaneRetriever._ce_model is not None or ArcaneRetriever._ce_loading:
+            return
+        ArcaneRetriever._ce_loading = True
+
+        def _load():  # pragma: no cover — runs in background thread
+            try:
+                import torch
+                from sentence_transformers import CrossEncoder
+
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                ArcaneRetriever._ce_model = CrossEncoder(
+                    "cross-encoder/ms-marco-MiniLM-L-6-v2", device=device
+                )
+            except Exception:
+                ArcaneRetriever._ce_model = False
+            ArcaneRetriever._ce_loading = False
+
+        import threading
+
+        threading.Thread(target=_load, daemon=True).start()
+
+    def _cross_encoder_rerank(
+        self, query: str, results: list[FusedResult], top_n: int = 10
+    ) -> list[FusedResult]:
+        """Rerank results using cross-encoder if available."""
+        self._load_ce()
+        if not ArcaneRetriever._ce_model or ArcaneRetriever._ce_loading:
+            return results
+
+        pairs = [(query, r.fact.text) for r in results[: top_n * 2]]
+        if not pairs:
+            return results
+
+        scores = ArcaneRetriever._ce_model.predict(pairs, show_progress_bar=False)
+        for i, score in enumerate(scores):
+            results[i].rrf_score = float(score)
+
+        results.sort(key=lambda x: -x.rrf_score)
+        return results
+
     def build_context(
         self,
         question: str,
         results: list[FusedResult],
         max_facts: int = 15,
     ) -> str:
-        """Build LLM context from retrieval results."""
-        parts = []
-        for r in results[:max_facts]:
-            session_tag = f"[Session {r.fact.session_idx + 1}"
-            if r.fact.date_mentions:
-                session_tag += f", Date: {', '.join(r.fact.date_mentions)}"
-            session_tag += "]"
-            parts.append(f"{session_tag} {r.fact.text}")
-        return "\n".join(parts)
+        """Build hierarchical LLM context from retrieval results (DeerFlow adaptation)."""
+        facts = [r.fact for r in results]
+        h_ctx = build_hierarchical_context(
+            facts, reference_date=self._reference_date, session_dates=self.session_dates
+        )
+        return h_ctx.to_prompt_string()

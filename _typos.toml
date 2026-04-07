@@ -1,3 +1,6 @@
+[files]
+extend-exclude = ["paper/*.txt", "paper/*.log", "consolidation/"]
+
 [default.extend-words]
 # "BA" = Balanced Accuracy (ML metric)
 BA = "BA"
@@ -7,3 +10,8 @@ ure = "ure"
 nd = "nd"
 # HSA = Heterogeneous System Architecture (AMD ROCm env var)
 HSA = "HSA"
+# hash ID fragments in benchmark logs
+abd = "abd"
+ded = "ded"
+caf = "caf"
+aded = "aded"

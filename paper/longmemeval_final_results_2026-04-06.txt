@@ -1,0 +1,338 @@
+Loading LongMemEval from ./data/longmemeval_oracle.json...
+Questions: 300
+LLM mode: False
+Arcane mode: True
+
+[1/300] processed qid=gpt4_2655b836
+[local-home]/venv-rocm/lib/python3.12/site-packages/torch/nn/modules/linear.py:125: UserWarning: Attempting to use hipBLASLt on an unsupported architecture! Overriding blas backend to hipblas (Triggered internally at ../aten/src/ATen/Context.cpp:296.)
+  return F.linear(input, self.weight, self.bias)
+[2/300] processed qid=gpt4_2487a7cb
+[3/300] processed qid=gpt4_76048e76
+[4/300] processed qid=gpt4_2312f94c
+[5/300] processed qid=0bb5a684
+[6/300] processed qid=08f4fc43
+[7/300] processed qid=2c63a862
+[8/300] processed qid=gpt4_385a5000
+[9/300] processed qid=2a1811e2
+[10/300] processed qid=bbf86515
+[11/300] processed qid=gpt4_5dcc0aab
+[12/300] processed qid=gpt4_0b2f1d21
+[13/300] processed qid=f0853d11
+[14/300] processed qid=gpt4_6ed717ea
+[15/300] processed qid=gpt4_70e84552
+[16/300] processed qid=a3838d2b
+[17/300] processed qid=gpt4_93159ced
+[18/300] processed qid=gpt4_2d58bcd6
+[19/300] processed qid=gpt4_65aabe59
+[20/300] processed qid=982b5123
+[21/300] processed qid=b9cfe692
+[22/300] processed qid=gpt4_4edbafa2
+[23/300] processed qid=c8090214
+[24/300] processed qid=gpt4_483dd43c
+[25/300] processed qid=e4e14d04
+[25/300] local_match=3/25 (12.0%) elapsed=611s
+[26/300] processed qid=c9f37c46
+[27/300] processed qid=gpt4_2c50253f
+[28/300] processed qid=dcfa8644
+[29/300] processed qid=gpt4_b4a80587
+[30/300] processed qid=gpt4_9a159967
+[31/300] processed qid=cc6d1ec1
+[32/300] processed qid=gpt4_8c8961ae
+[33/300] processed qid=gpt4_d9af6064
+[34/300] processed qid=gpt4_7de946e7
+[35/300] processed qid=d01c6aa8
+[36/300] processed qid=993da5e2
+[37/300] processed qid=a3045048
+[38/300] processed qid=gpt4_d31cdae3
+[39/300] processed qid=gpt4_cd90e484
+[40/300] processed qid=gpt4_88806d6e
+[41/300] processed qid=gpt4_4cd9eba1
+[42/300] processed qid=gpt4_93f6379c
+[43/300] processed qid=b29f3365
+[44/300] processed qid=gpt4_2f56ae70
+[45/300] processed qid=6613b389
+[46/300] processed qid=gpt4_78cf46a3
+[47/300] processed qid=gpt4_0a05b494
+[48/300] processed qid=gpt4_1a1dc16d
+[49/300] processed qid=gpt4_2f584639
+[50/300] processed qid=gpt4_213fd887
+[50/300] local_match=6/50 (12.0%) elapsed=1038s
+[51/300] processed qid=gpt4_5438fa52
+[52/300] processed qid=gpt4_c27434e8
+[53/300] processed qid=gpt4_fe651585
+[54/300] processed qid=8c18457d
+[55/300] processed qid=gpt4_70e84552_abs
+[56/300] processed qid=gpt4_93159ced_abs
+[57/300] processed qid=982b5123_abs
+[58/300] processed qid=c8090214_abs
+[59/300] processed qid=gpt4_c27434e8_abs
+[60/300] processed qid=gpt4_fe651585_abs
+[61/300] processed qid=0a995998
+[62/300] processed qid=6d550036
+[63/300] processed qid=gpt4_59c863d7
+[64/300] processed qid=b5ef892d
+[65/300] processed qid=e831120c
+[66/300] processed qid=3a704032
+[67/300] processed qid=gpt4_d84a3211
+[68/300] processed qid=aae3761f
+[69/300] processed qid=gpt4_f2262a51
+[70/300] processed qid=dd2973ad
+[71/300] processed qid=c4a1ceb8
+[72/300] processed qid=gpt4_a56e767c
+[73/300] processed qid=6cb6f249
+[74/300] processed qid=46a3abf7
+[75/300] processed qid=36b9f61e
+[75/300] local_match=9/75 (12.0%) elapsed=1290s
+[76/300] processed qid=28dc39ac
+[77/300] processed qid=gpt4_2f8be40d
+[78/300] processed qid=2e6d26dc
+[79/300] processed qid=gpt4_15e38248
+[80/300] processed qid=88432d0a
+[81/300] processed qid=80ec1f4f
+[82/300] processed qid=d23cf73b
+[83/300] processed qid=gpt4_7fce9456
+[84/300] processed qid=d682f1a2
+[85/300] processed qid=7024f17c
+[86/300] processed qid=gpt4_5501fe77
+[87/300] processed qid=gpt4_2ba83207
+[88/300] processed qid=2318644b
+[89/300] processed qid=2ce6a0f2
+[90/300] processed qid=gpt4_d12ceb0e
+[91/300] processed qid=00ca467f
+[92/300] processed qid=b3c15d39
+[93/300] processed qid=gpt4_31ff4165
+[94/300] processed qid=eeda8a6d
+[95/300] processed qid=2788b940
+[96/300] processed qid=60bf93ed
+[97/300] processed qid=9d25d4e0
+[98/300] processed qid=129d1232
+[99/300] processed qid=60472f9c
+[100/300] processed qid=gpt4_194be4b3
+[100/300] local_match=11/100 (11.0%) elapsed=1585s
+[101/300] processed qid=a9f6b44c
+[102/300] processed qid=d851d5ba
+[103/300] processed qid=5a7937c8
+[104/300] processed qid=gpt4_ab202e7f
+[105/300] processed qid=gpt4_e05b82a6
+[106/300] processed qid=gpt4_731e37d7
+[107/300] processed qid=edced276
+[108/300] processed qid=10d9b85a
+[109/300] processed qid=e3038f8c
+[110/300] processed qid=2b8f3739
+[111/300] processed qid=1a8a66a6
+[112/300] processed qid=c2ac3c61
+[113/300] processed qid=bf659f65
+[114/300] processed qid=gpt4_372c3eed
+[115/300] processed qid=gpt4_2f91af09
+[116/300] processed qid=81507db6
+[117/300] processed qid=88432d0a_abs
+[118/300] processed qid=80ec1f4f_abs
+[119/300] processed qid=eeda8a6d_abs
+[120/300] processed qid=60bf93ed_abs
+[121/300] processed qid=edced276_abs
+[122/300] processed qid=gpt4_372c3eed_abs
+[123/300] processed qid=6a1eabeb
+[124/300] processed qid=6aeb4375
+[125/300] processed qid=830ce83f
+[125/300] local_match=12/125 (9.6%) elapsed=1798s
+[126/300] processed qid=852ce960
+[127/300] processed qid=945e3d21
+[128/300] processed qid=d7c942c3
+[129/300] processed qid=71315a70
+[130/300] processed qid=89941a93
+[131/300] processed qid=ce6d2d27
+[132/300] processed qid=9ea5eabc
+[133/300] processed qid=07741c44
+[134/300] processed qid=a1eacc2a
+[135/300] processed qid=184da446
+[136/300] processed qid=031748ae
+[137/300] processed qid=4d6b87c8
+[138/300] processed qid=0f05491a
+[139/300] processed qid=08e075c7
+[140/300] processed qid=f9e8c073
+[141/300] processed qid=41698283
+[142/300] processed qid=2698e78f
+[143/300] processed qid=b6019101
+[144/300] processed qid=45dc21b6
+[145/300] processed qid=5a4f22c0
+[146/300] processed qid=6071bd76
+[147/300] processed qid=e493bb7c
+[148/300] processed qid=618f13b2
+[149/300] processed qid=72e3ee87
+[150/300] processed qid=c4ea545c
+[150/300] local_match=22/150 (14.7%) elapsed=2118s
+[151/300] processed qid=01493427
+[152/300] processed qid=6a27ffc2
+[153/300] processed qid=2133c1b5
+[154/300] processed qid=18bc8abd
+[155/300] processed qid=db467c8c
+[156/300] processed qid=7a87bd0c
+[157/300] processed qid=e61a7584
+[158/300] processed qid=1cea1afa
+[159/300] processed qid=ed4ddc30
+[160/300] processed qid=8fb83627
+[161/300] processed qid=b01defab
+[162/300] processed qid=22d2cb42
+[163/300] processed qid=0e4e4c46
+[164/300] processed qid=4b24c848
+[165/300] processed qid=7e974930
+[166/300] processed qid=603deb26
+[167/300] processed qid=59524333
+[168/300] processed qid=5831f84d
+[169/300] processed qid=eace081b
+[170/300] processed qid=affe2881
+[171/300] processed qid=50635ada
+[172/300] processed qid=e66b632c
+[173/300] processed qid=0ddfec37
+[174/300] processed qid=f685340e
+[175/300] processed qid=cc5ded98
+[175/300] local_match=37/175 (21.1%) elapsed=2292s
+[176/300] processed qid=dfde3500
+[177/300] processed qid=69fee5aa
+[178/300] processed qid=7401057b
+[179/300] processed qid=cf22b7bf
+[180/300] processed qid=a2f3aa27
+[181/300] processed qid=c7dc5443
+[182/300] processed qid=06db6396
+[183/300] processed qid=3ba21379
+[184/300] processed qid=9bbe84a2
+[185/300] processed qid=10e09553
+[186/300] processed qid=dad224aa
+[187/300] processed qid=ba61f0b9
+[188/300] processed qid=42ec0761
+[189/300] processed qid=5c40ec5b
+[190/300] processed qid=c6853660
+[191/300] processed qid=26bdc477
+[192/300] processed qid=0977f2af
+[193/300] processed qid=6aeb4375_abs
+[194/300] processed qid=031748ae_abs
+[195/300] processed qid=2698e78f_abs
+[196/300] processed qid=2133c1b5_abs
+[197/300] processed qid=0ddfec37_abs
+[198/300] processed qid=f685340e_abs
+[199/300] processed qid=89941a94
+[200/300] processed qid=07741c45
+[200/300] local_match=44/200 (22.0%) elapsed=2462s
+[201/300] processed qid=8a2466db
+[202/300] processed qid=06878be2
+[203/300] processed qid=75832dbd
+[204/300] processed qid=0edc2aef
+[205/300] processed qid=35a27287
+[206/300] processed qid=32260d93
+[207/300] processed qid=195a1a1b
+[208/300] processed qid=afdc33df
+[209/300] processed qid=caf03d32
+[210/300] processed qid=54026fce
+[211/300] processed qid=06f04340
+[212/300] processed qid=6b7dfb22
+[213/300] processed qid=1a1907b4
+[214/300] processed qid=09d032c9
+[215/300] processed qid=38146c39
+[216/300] processed qid=d24813b1
+[217/300] processed qid=57f827a0
+[218/300] processed qid=95228167
+[219/300] processed qid=505af2f5
+[220/300] processed qid=75f70248
+[221/300] processed qid=d6233ab6
+[222/300] processed qid=1da05512
+[223/300] processed qid=fca70973
+[224/300] processed qid=b6025781
+[225/300] processed qid=a89d7624
+[225/300] local_match=44/225 (19.6%) elapsed=2522s
+[226/300] processed qid=b0479f84
+[227/300] processed qid=1d4e3b97
+[228/300] processed qid=07b6f563
+[229/300] processed qid=1c0ddc50
+[230/300] processed qid=0a34ad58
+[231/300] processed qid=7161e7e2
+[232/300] processed qid=c4f10528
+[233/300] processed qid=89527b6b
+[234/300] processed qid=e9327a54
+[235/300] processed qid=4c36ccef
+[236/300] processed qid=6ae235be
+[237/300] processed qid=7e00a6cb
+[238/300] processed qid=1903aded
+[239/300] processed qid=ceb54acb
+[240/300] processed qid=f523d9fe
+[241/300] processed qid=0e5e2d1a
+[242/300] processed qid=fea54f57
+[243/300] processed qid=cc539528
+[244/300] processed qid=dc439ea3
+[245/300] processed qid=18dcd5a5
+[246/300] processed qid=488d3006
+[247/300] processed qid=58470ed2
+[248/300] processed qid=8cf51dda
+[249/300] processed qid=1d4da289
+[250/300] processed qid=8464fc84
+[250/300] local_match=49/250 (19.6%) elapsed=2533s
+[251/300] processed qid=8aef76bc
+[252/300] processed qid=71a3fd6b
+[253/300] processed qid=2bf43736
+[254/300] processed qid=70b3e69b
+[255/300] processed qid=8752c811
+[256/300] processed qid=3249768e
+[257/300] processed qid=1b9b7252
+[258/300] processed qid=1568498a
+[259/300] processed qid=6222b6eb
+[260/300] processed qid=e8a79c70
+[261/300] processed qid=d596882b
+[262/300] processed qid=e3fc4d6e
+[263/300] processed qid=51b23612
+[264/300] processed qid=3e321797
+[265/300] processed qid=e982271f
+[266/300] processed qid=352ab8bd
+[267/300] processed qid=fca762bc
+[268/300] processed qid=7a8d0b71
+[269/300] processed qid=a40e080f
+[270/300] processed qid=8b9d4367
+[271/300] processed qid=5809eb10
+[272/300] processed qid=41275add
+[273/300] processed qid=4388e9dd
+[274/300] processed qid=4baee567
+[275/300] processed qid=561fabcd
+[275/300] local_match=55/275 (20.0%) elapsed=2534s
+[276/300] processed qid=b759caee
+[277/300] processed qid=ac031881
+[278/300] processed qid=28bcfaac
+[279/300] processed qid=16c90bf4
+[280/300] processed qid=c8f1aeed
+[281/300] processed qid=eaca4986
+[282/300] processed qid=c7cf7dfd
+[283/300] processed qid=e48988bc
+[284/300] processed qid=1de5cff2
+[285/300] processed qid=65240037
+[286/300] processed qid=778164c6
+[287/300] processed qid=e47becba
+[288/300] processed qid=118b2229
+[289/300] processed qid=51a45a95
+[290/300] processed qid=58bf7951
+[291/300] processed qid=1e043500
+[292/300] processed qid=c5e8278d
+[293/300] processed qid=6ade9755
+[294/300] processed qid=6f9b354f
+[295/300] processed qid=58ef2f1c
+[296/300] processed qid=f8c5f88b
+[297/300] processed qid=5d3d2817
+[298/300] processed qid=7527f7e2
+[299/300] processed qid=c960da58
+[300/300] processed qid=3b6f954b
+[300/300] local_match=59/300 (19.7%) elapsed=2535s
+
+Hypotheses saved to ./data/longmemeval_hypotheses.jsonl
+
+============================================================
+LongMemEval Local Results (fuzzy match, NOT GPT-judge)
+============================================================
+Overall: 59/300 (19.7%)
+
+  knowledge-update              :  32/ 78 (41.0%)
+  multi-session                 :   5/ 62 (8.1%)
+  single-session-assistant      :  12/ 56 (21.4%)
+  single-session-preference     :   0/ 30 (0.0%)
+  single-session-user           :   3/ 14 (21.4%)
+  temporal-reasoning            :   7/ 60 (11.7%)
+
+Time: 2534.8s (8449ms/question)
+
+NOTE: These are local fuzzy-match scores. Run with --evaluate
+for authoritative GPT-judge scoring.
