@@ -141,6 +141,16 @@ omit = [
     "experimental/*",
     # Training infrastructure (not product code)
     "training/*",
+    # Optional-dep bridges — director_ai is not installed on CI, so the
+    # Guarded tier's scoring paths cannot execute and would always miss.
+    # Parity tests that exercise this bridge run locally where director_ai
+    # is present.
+    "memory_guarded.py",
+    # One-shot migration tool — runs against legacy pickle stores that
+    # CI does not carry.
+    "tools/migrate_pickle_to_npz.py",
+    # Ad-hoc retrieval bench harness — not wired into product code.
+    "ablation_channels.py",
     # Test files themselves
     "tests/test_*.py",
     "tests/conftest.py",

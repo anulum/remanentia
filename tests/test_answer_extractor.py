@@ -652,3 +652,238 @@ class TestAnswerExtractorPipeline:
         result = extract_answer("When?", "Meeting on 2026-03-15.")
         assert result is not None
         assert "2026-03-15" in result or "March" in result
+
+
+# ── Duration extraction (Task #27) ──────────────────────────────
+
+
+class TestExtractDuration:
+    def test_days_between_two_dates(self):
+        from answer_extractor import extract_duration
+
+        text = "The trip started on 2023-01-01 and ended on 2023-02-01."
+        result = extract_duration(text, "how many days between start and end")
+        assert result is not None
+        assert "31 days" in result
+
+    def test_weeks_between_dates(self):
+        from answer_extractor import extract_duration
+
+        text = "Project began 2023-03-01 and shipped 2023-03-22."
+        result = extract_duration(text, "how many weeks between start and ship")
+        assert result is not None
+        assert "3 weeks" in result
+
+    def test_months_between_dates(self):
+        from answer_extractor import extract_duration
+
+        text = "Joined on 2023-01-15, left on 2023-04-15."
+        result = extract_duration(text, "how many months between joining and leaving")
+        assert result is not None
+        assert "3 months" in result
+
+    def test_single_date_returns_none(self):
+        from answer_extractor import extract_duration
+
+        text = "Event on 2023-01-01 was great."
+        assert extract_duration(text, "how many days") is None
+
+    def test_no_dates_returns_none(self):
+        from answer_extractor import extract_duration
+
+        text = "No dates here at all."
+        assert extract_duration(text, "how many days") is None
+
+    def test_keyword_proximity_scoring(self):
+        """Picks dates nearest to query keywords, not arbitrary first/last."""
+        from answer_extractor import extract_duration
+
+        # Sessions far enough apart that 80-char windows don't overlap
+        text = (
+            "The gym membership started on 2023-01-01 after months of planning. "
+            + "x" * 100
+            + " I had an unrelated dental appointment on 2023-02-15 at the clinic. "
+            + "x" * 100
+            + " The gym membership ended on 2023-03-01 when I moved away."
+        )
+        result = extract_duration(text, "how many days between gym start and end")
+        assert result is not None
+        assert "59 days" in result  # Jan 1 → Mar 1
+
+    def test_duration_dispatched_from_extract_answer(self):
+        """extract_answer dispatches to extract_duration for duration questions."""
+        from answer_extractor import extract_answer
+
+        text = "Started 2023-01-01, finished 2023-02-01."
+        result = extract_answer("how many days between start and finish", text)
+        assert result is not None
+        assert "31 days" in result
+
+    def test_is_duration_question(self):
+        from answer_extractor import _is_duration_question
+
+        assert _is_duration_question("how many days between x and y")
+        assert _is_duration_question("how many weeks did it take")
+        assert _is_duration_question("how long between the events")
+        assert not _is_duration_question("what is the weather")
+
+    def test_days_dual_format(self):
+        """Task #33: days duration returns both exclusive and inclusive."""
+        from answer_extractor import extract_duration
+
+        text = "The trip started on 2023-01-01 and ended on 2023-02-01."
+        result = extract_duration(text, "how many days between start and end")
+        assert result is not None
+        assert "31 days" in result
+        assert "32 days" in result
+        assert "both endpoints" in result
+
+    def test_weeks_dual_format(self):
+        from answer_extractor import extract_duration
+
+        text = "Project began 2023-03-01 and shipped 2023-03-22."
+        result = extract_duration(text, "how many weeks between start and ship")
+        assert result is not None
+        assert "3 weeks" in result
+        assert "21 days exclusive" in result
+        assert "22 inclusive" in result
+
+    def test_months_dual_format(self):
+        from answer_extractor import extract_duration
+
+        text = "Joined on 2023-01-15, left on 2023-04-15."
+        result = extract_duration(text, "how many months between joining and leaving")
+        assert result is not None
+        assert "3 months" in result
+        assert "90 days exclusive" in result
+        assert "91 inclusive" in result
+
+
+# ── Proximity scoring tuning (Task #35) ─────────────────────────
+
+
+class TestProximityScoring:
+    def test_closer_token_scores_higher(self):
+        from answer_extractor import _proximity_score
+
+        # Date at position ~50; 'gym' right next to it vs 'gym' 100 chars away
+        close = "The gym session happened on 2023-05-22 in the morning."
+        far = (
+            "The gym was opened last year as part of a community project, but this "
+            "is about the 2023-05-22 community meeting."
+        )
+        q_tokens = {"gym", "session"}
+        date_pos_close = close.find("2023-05-22")
+        date_pos_far = far.find("2023-05-22")
+
+        s_close = _proximity_score(close, date_pos_close, 10, q_tokens)
+        s_far = _proximity_score(far, date_pos_far, 10, q_tokens)
+        assert s_close > s_far
+
+    def test_no_tokens_scores_zero(self):
+        from answer_extractor import _proximity_score
+
+        s = _proximity_score("unrelated 2023-05-22 content", 10, 10, {"gym", "session"})
+        assert s == 0.0
+
+    def test_proximity_picks_right_pair(self):
+        """When multiple dates exist, distance-weighted scoring picks the ones
+        closest to query keywords."""
+        from answer_extractor import extract_duration
+
+        text = (
+            "The unrelated event happened on 2022-12-31 long ago. "
+            + "x" * 200
+            + " The gym membership started on 2023-01-01 after months of planning. "
+            + "x" * 200
+            + " I had a dentist appointment on 2023-02-15 at the clinic. "
+            + "x" * 200
+            + " The gym membership ended on 2023-03-01 when I moved away. "
+            + "x" * 200
+            + " Another unrelated event on 2023-12-31."
+        )
+        result = extract_duration(text, "how many days between gym start and end")
+        assert result is not None
+        # Jan 1 → Mar 1 = 59 days exclusive, 60 inclusive
+        assert "59 days" in result
+        assert "60 days" in result
+
+    def test_tighter_window_ignores_distant_matches(self):
+        """Query tokens >60 chars from date should contribute less."""
+        from answer_extractor import _proximity_score
+
+        # Single 'gym' token very far from date
+        text = "gym " + "x" * 200 + " 2023-05-22"
+        s = _proximity_score(text, text.find("2023-05-22"), 10, {"gym"})
+        # Distance ~200 chars — outside 60-char window → score 0
+        assert s == 0.0
+
+
+class TestMultibyteSafety:
+    """Regression for Rust PanicException on non-ASCII proximity slicing.
+
+    Observed 2026-04-17 on LongMemEval Tokyo item where `¥` (2-byte UTF-8)
+    sat on the ±80-byte proximity window edge and `text[s..e]` panicked
+    inside a multi-byte sequence. Fix snaps byte indices to char boundary.
+    """
+
+    TOKYO_YEN = (
+        "Navigating Tokyo's transportation system can be intimidating, but "
+        "don't worry, I'm here to help! While taxis are convenient, they can "
+        "be expensive, especially during peak hours. Fortunately, Tokyo has a "
+        "comprehensive and efficient public transportation system. Subway "
+        "tickets start at ¥170 and day passes cost around ¥800. The JR "
+        "Yamanote line is a convenient circular route through the city. "
+        "Taxis typically charge ¥730 for the first 2 km and then ¥90 per "
+        "additional 280 m. For longer journeys consider an IC card like "
+        "Suica or Pasmo which gives a small fare discount on most trains "
+        "and buses across the metropolitan area so that you do not need to "
+        "buy individual tickets each time you board a vehicle in Tokyo."
+    )
+
+    def test_yen_paragraph_does_not_panic(self):
+        for q in ("how much", "when", "who", "what line"):
+            extract_answer(q, self.TOKYO_YEN)  # must not raise
+
+    def test_cjk_paragraph_does_not_panic(self):
+        text = "東京の地下鉄は便利です。The Tokyo subway costs around ¥170 per ride."
+        for q in ("how much does the subway cost", "when", "who uses"):
+            extract_answer(q, text)
+
+    def test_emoji_paragraph_does_not_panic(self):
+        text = "The 🎯 target was hit on 2026-04-14 when Alice ran a 26.2 mile marathon."
+        assert extract_answer("when was the target hit", text) is not None
+
+    def test_euro_accents_paragraph_does_not_panic(self):
+        text = "Zürich tickets cost €4.40 for short trips and Fräulein Müller confirmed."
+        extract_answer("how much", text)
+        extract_answer("who confirmed", text)
+
+    def test_rust_path_direct(self):
+        """Call Rust extractor directly — bypass Python fallbacks."""
+        try:
+            from remanentia_answer_extractor import extract_answer as r_extract
+        except ImportError:
+            return  # Rust crate not built (CI without maturin build)
+        for q in ("how much", "when", "who"):
+            r_extract(q, self.TOKYO_YEN)  # must not panic
+
+
+class TestExtractDurationDefensive:
+    """Guard the date-parse fallback inside extract_duration."""
+
+    def test_invalid_iso_date_is_skipped(self):
+        """``2020-02-31`` matches ``\\b\\d{4}-\\d{2}-\\d{2}\\b`` but fails
+        ``date(...)`` — the except-branch must drop it silently and not
+        poison the duration. We just need to prove the branch runs.
+        """
+        from answer_extractor import extract_duration
+
+        # A shape-matching-but-calendar-invalid string as the only date:
+        # after the ``except ValueError: continue`` drops it, the function
+        # falls through the ``if len(dates) < 2: return None`` guard.
+        result = extract_duration(
+            "I started the project on 2020-02-31 as the launch date.",
+            "how many days between start and end",
+        )
+        assert result is None

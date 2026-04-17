@@ -29,8 +29,18 @@ def extract_answer(query: str, paragraph: str) -> str | None:
     """Extract a short answer from a paragraph given a query.
 
     Returns the best candidate answer string, or None if no answer found.
-    Uses Rust engine when available (~11× faster).
+    Uses Rust engine when available (~11× faster), except for duration
+    questions which require Python date arithmetic.
     """
+    q = query.lower()
+    p = paragraph
+
+    # Duration questions need Python date arithmetic — check before Rust
+    if _is_duration_question(q):
+        dur = extract_duration(p, query)
+        if dur is not None:
+            return dur
+
     try:
         from remanentia_answer_extractor import extract_answer as _rust_extract
 
@@ -38,12 +48,11 @@ def extract_answer(query: str, paragraph: str) -> str | None:
     except ImportError:
         pass
 
-    q = query.lower()
-    p = paragraph
-
     # Detect question type and dispatch
     if _is_when_question(q):
         return _extract_date_answer(p, query=query)
+    if _is_duration_question(q):
+        return _extract_number_answer(p, q)
     if _is_how_many_question(q):
         return _extract_number_answer(p, q)
     if _is_version_question(q):
@@ -109,6 +118,16 @@ def extract_all_candidates(query: str, paragraph: str) -> list[dict]:
 
 def _is_when_question(q: str) -> bool:
     return bool(re.search(r"\bwhen\b|\bwhat date\b|\bwhat time\b", q))
+
+
+def _is_duration_question(q: str) -> bool:
+    return bool(
+        re.search(
+            r"\bhow many days\b|\bhow many weeks\b|\bhow many months\b"
+            r"|\bhow long between\b|\bhow long did\b|\bduration\b",
+            q,
+        )
+    )
 
 
 def _is_how_many_question(q: str) -> bool:
@@ -253,6 +272,86 @@ def _extract_yes_no(text: str, query: str) -> str | None:
     if neg_hits > pos_hits:
         return "No"
     return "Yes"
+
+
+# ── Duration extraction ─────────────────────────────────────────
+
+
+def _proximity_score(text: str, date_pos: int, date_len: int, q_tokens: set[str]) -> float:
+    """Distance-weighted token proximity score for a date in text.
+
+    Each query token that appears inside the 120-char window around
+    *date_pos* contributes ``1 / (1 + d/20)`` where ``d`` is the absolute
+    distance in characters from the token's start to the date. A match
+    right next to the date counts ~1.0; a match 40 chars away counts
+    ~0.33; a match 80 chars away counts ~0.20.
+
+    Tighter than the flat 80-char "presence" window used before Task #35,
+    and continuous instead of discrete so ties are rare.
+    """
+    window_radius = 60
+    start = max(0, date_pos - window_radius)
+    end = min(len(text), date_pos + date_len + window_radius)
+    window = text[start:end].lower()
+    score = 0.0
+    for tok in q_tokens:
+        idx = window.find(tok)
+        while idx >= 0:
+            # Distance from this token to the date within the window
+            token_abs = start + idx
+            distance = max(0, date_pos - (token_abs + len(tok)), token_abs - (date_pos + date_len))
+            score += 1.0 / (1.0 + distance / 20.0)
+            idx = window.find(tok, idx + 1)
+    return score
+
+
+def extract_duration(text: str, query: str) -> str | None:
+    """Extract a duration answer by finding two dates and computing the difference.
+
+    For "how many days/weeks/months between X and Y" questions, extracts
+    all dates from text, picks the pair most relevant to the query, and
+    returns the computed difference. This replaces LLM mental arithmetic
+    which is error-prone.
+
+    Task #35: uses distance-weighted proximity scoring instead of flat
+    window presence count, so the two closest dates to query keywords
+    are picked rather than random tied candidates.
+    """
+    from datetime import date as _date
+
+    dates = []
+    for m in re.finditer(r"\b(\d{4})-(\d{2})-(\d{2})\b", text):
+        try:
+            d = _date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            dates.append((d, m.start(), m.end() - m.start()))
+        except ValueError:
+            continue
+
+    if len(dates) < 2:
+        return None
+
+    # Distance-weighted proximity scoring
+    q_tokens = set(re.findall(r"\w{3,}", query.lower()))
+    scored = [(_proximity_score(text, pos, dl, q_tokens), d, pos) for d, pos, dl in dates]
+    scored.sort(key=lambda x: -x[0])
+
+    # Use top 2 scored dates (or first/last if no overlap)
+    if scored[0][0] > 0 and scored[1][0] > 0 and scored[0][1] != scored[1][1]:
+        d1, d2 = sorted([scored[0][1], scored[1][1]])
+    else:
+        by_date = sorted(dates, key=lambda x: x[0])
+        d1, d2 = by_date[0][0], by_date[-1][0]
+
+    delta_days = (d2 - d1).days
+    inclusive_days = delta_days + 1
+    q = query.lower()
+    if "week" in q:
+        weeks = delta_days // 7
+        return f"{weeks} weeks ({delta_days} days exclusive, {inclusive_days} inclusive)"
+    if "month" in q:
+        months = (d2.year - d1.year) * 12 + (d2.month - d1.month)
+        return f"{months} months ({delta_days} days exclusive, {inclusive_days} inclusive)"
+    return f"{delta_days} days (or {inclusive_days} days counting both endpoints)"
 
 
 # ── Query-proximity scoring ──────────────────────────────────────

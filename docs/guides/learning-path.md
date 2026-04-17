@@ -47,7 +47,7 @@ Progressive guide from first search to production deployment.
 - Dates are extracted automatically from ISO format, written English, and M/D/Y
 - The temporal graph tracks event ordering (before/after/same_day edges)
 - `temporal_code_execute()` computes answers from dates (durations, ordering, recency)
-- Temporal-reasoning is the weakest benchmark category (45.9% on LongMemEval) — active area of improvement
+- Temporal-reasoning has reached 65.4% on LongMemEval R11 (up from 45.9% in R8) — 65% target achieved. Multi-session is the current bottleneck at 54.1%.
 
 **What you'll have:** Date-aware search with computed temporal answers.
 

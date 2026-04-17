@@ -13,4 +13,8 @@ Rule-based + ML vague date normalisation. Converts expressions like
     options:
       show_source: true
 
+::: date_normalizer.normalise_in_context
+    options:
+      show_source: true
+
 ::: date_normalizer.VAGUE_DATE_RE

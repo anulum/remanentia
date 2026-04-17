@@ -642,3 +642,283 @@ class TestRecencyDecay:
         elapsed_ms = (time.perf_counter() - t0) * 1000
         per_call_ms = elapsed_ms / 100
         assert per_call_ms < 50, f"retrieve with decay too slow: {per_call_ms:.1f}ms"
+
+
+# ── Chronological ordering (Task #28) ────────────────────────────
+
+
+class TestChronologicalOrdering:
+    """Tests for _sort_results_chronologically."""
+
+    def test_sorts_by_valid_from(self):
+        from arcane_retriever import _sort_results_chronologically, FusedResult
+        from fact_decomposer import AtomicFact
+
+        results = [
+            FusedResult(
+                fact=AtomicFact(
+                    text="later",
+                    session_idx=0,
+                    turn_idx=0,
+                    role="user",
+                    fact_type="event",
+                    valid_from="2023-03-01",
+                ),
+                rrf_score=0.9,
+            ),
+            FusedResult(
+                fact=AtomicFact(
+                    text="earlier",
+                    session_idx=0,
+                    turn_idx=0,
+                    role="user",
+                    fact_type="event",
+                    valid_from="2023-01-01",
+                ),
+                rrf_score=0.8,
+            ),
+        ]
+        sorted_r = _sort_results_chronologically(results)
+        assert sorted_r[0].fact.text == "earlier"
+        assert sorted_r[1].fact.text == "later"
+
+    def test_falls_back_to_date_mentions(self):
+        from arcane_retriever import _sort_results_chronologically, FusedResult
+        from fact_decomposer import AtomicFact
+
+        results = [
+            FusedResult(
+                fact=AtomicFact(
+                    text="later",
+                    session_idx=0,
+                    turn_idx=0,
+                    role="user",
+                    fact_type="event",
+                    date_mentions=["2023-06-01"],
+                ),
+                rrf_score=0.9,
+            ),
+            FusedResult(
+                fact=AtomicFact(
+                    text="earlier",
+                    session_idx=0,
+                    turn_idx=0,
+                    role="user",
+                    fact_type="event",
+                    date_mentions=["2023-01-01"],
+                ),
+                rrf_score=0.8,
+            ),
+        ]
+        sorted_r = _sort_results_chronologically(results)
+        assert sorted_r[0].fact.text == "earlier"
+
+    def test_undated_sort_last(self):
+        from arcane_retriever import _sort_results_chronologically, FusedResult
+        from fact_decomposer import AtomicFact
+
+        results = [
+            FusedResult(
+                fact=AtomicFact(
+                    text="undated", session_idx=0, turn_idx=0, role="user", fact_type="event"
+                ),
+                rrf_score=0.9,
+            ),
+            FusedResult(
+                fact=AtomicFact(
+                    text="dated",
+                    session_idx=0,
+                    turn_idx=0,
+                    role="user",
+                    fact_type="event",
+                    valid_from="2023-01-01",
+                ),
+                rrf_score=0.8,
+            ),
+        ]
+        sorted_r = _sort_results_chronologically(results)
+        assert sorted_r[0].fact.text == "dated"
+        assert sorted_r[1].fact.text == "undated"
+
+    def test_empty_list(self):
+        from arcane_retriever import _sort_results_chronologically
+
+        assert _sort_results_chronologically([]) == []
+
+    def test_preserves_all_results(self):
+        from arcane_retriever import _sort_results_chronologically, FusedResult
+        from fact_decomposer import AtomicFact
+
+        results = [
+            FusedResult(
+                fact=AtomicFact(
+                    text=f"fact{i}",
+                    session_idx=0,
+                    turn_idx=0,
+                    role="user",
+                    fact_type="event",
+                    valid_from=f"2023-0{i + 1}-01",
+                ),
+                rrf_score=0.5,
+            )
+            for i in range(5)
+        ]
+        sorted_r = _sort_results_chronologically(results)
+        assert len(sorted_r) == 5
+
+    def test_intraday_tiebreak_via_session_date(self):
+        """Same valid_from date — break tie by session_date HH:MM (Task #32)."""
+        from arcane_retriever import _sort_results_chronologically, FusedResult
+        from fact_decomposer import AtomicFact
+
+        results = [
+            FusedResult(
+                fact=AtomicFact(
+                    text="evening event",
+                    session_idx=1,
+                    turn_idx=0,
+                    role="user",
+                    fact_type="event",
+                    valid_from="2023-05-22",
+                    session_date="2023/05/22 (Mon) 18:30",
+                ),
+                rrf_score=0.5,
+            ),
+            FusedResult(
+                fact=AtomicFact(
+                    text="morning event",
+                    session_idx=0,
+                    turn_idx=0,
+                    role="user",
+                    fact_type="event",
+                    valid_from="2023-05-22",
+                    session_date="2023/05/22 (Mon) 09:38",
+                ),
+                rrf_score=0.9,
+            ),
+        ]
+        sorted_r = _sort_results_chronologically(results)
+        assert sorted_r[0].fact.text == "morning event"
+        assert sorted_r[1].fact.text == "evening event"
+
+    def test_session_date_used_when_no_valid_from(self):
+        """Facts with no valid_from but with session_date sort by session_date."""
+        from arcane_retriever import _sort_results_chronologically, FusedResult
+        from fact_decomposer import AtomicFact
+
+        results = [
+            FusedResult(
+                fact=AtomicFact(
+                    text="later",
+                    session_idx=1,
+                    turn_idx=0,
+                    role="user",
+                    fact_type="event",
+                    session_date="2023/06/15 (Thu) 10:00",
+                ),
+                rrf_score=0.5,
+            ),
+            FusedResult(
+                fact=AtomicFact(
+                    text="earlier",
+                    session_idx=0,
+                    turn_idx=0,
+                    role="user",
+                    fact_type="event",
+                    session_date="2023/01/10 (Tue) 08:00",
+                ),
+                rrf_score=0.9,
+            ),
+        ]
+        sorted_r = _sort_results_chronologically(results)
+        assert sorted_r[0].fact.text == "earlier"
+        assert sorted_r[1].fact.text == "later"
+
+    def test_session_idx_secondary_tiebreak(self):
+        """When session_date is also tied, use session_idx, turn_idx."""
+        from arcane_retriever import _sort_results_chronologically, FusedResult
+        from fact_decomposer import AtomicFact
+
+        results = [
+            FusedResult(
+                fact=AtomicFact(
+                    text="second",
+                    session_idx=2,
+                    turn_idx=0,
+                    role="user",
+                    fact_type="event",
+                    valid_from="2023-05-22",
+                    session_date="2023/05/22 09:00",
+                ),
+                rrf_score=0.5,
+            ),
+            FusedResult(
+                fact=AtomicFact(
+                    text="first",
+                    session_idx=1,
+                    turn_idx=0,
+                    role="user",
+                    fact_type="event",
+                    valid_from="2023-05-22",
+                    session_date="2023/05/22 09:00",
+                ),
+                rrf_score=0.9,
+            ),
+        ]
+        sorted_r = _sort_results_chronologically(results)
+        assert sorted_r[0].fact.text == "first"
+        assert sorted_r[1].fact.text == "second"
+
+
+# ── qtype-aware build_context (Task #32 R10 fix) ────────────────
+
+
+class TestBuildContextChronologicalFlag:
+    """R10 regression fix: chronological sort is opt-in (off by default)."""
+
+    def _make_retriever_with_results(self):
+        from arcane_retriever import ArcaneRetriever, FusedResult
+        from fact_decomposer import AtomicFact
+
+        ar = ArcaneRetriever([[{"role": "user", "content": "seed content here"}]])
+        # Two facts, same date, different rrf_score
+        results = [
+            FusedResult(
+                fact=AtomicFact(
+                    text="high relevance fact",
+                    session_idx=2,
+                    turn_idx=0,
+                    role="user",
+                    fact_type="state",
+                    valid_from="2023-05-22",
+                    session_date="2023/05/22 (Mon) 18:00",
+                ),
+                rrf_score=0.95,
+            ),
+            FusedResult(
+                fact=AtomicFact(
+                    text="low relevance fact",
+                    session_idx=0,
+                    turn_idx=0,
+                    role="user",
+                    fact_type="state",
+                    valid_from="2023-05-22",
+                    session_date="2023/05/22 (Mon) 09:00",
+                ),
+                rrf_score=0.30,
+            ),
+        ]
+        return ar, results
+
+    def test_default_preserves_rrf_order(self):
+        """Default build_context keeps relevance order — RRF best first."""
+        ar, results = self._make_retriever_with_results()
+        ctx = ar.build_context("test question", results)
+        assert ctx.find("high relevance fact") < ctx.find("low relevance fact")
+
+    def test_chronological_flag_enforces_date_order(self):
+        """sort_chronologically=True puts earliest HH:MM first."""
+        ar, results = self._make_retriever_with_results()
+        ctx = ar.build_context("test question", results, sort_chronologically=True)
+        # low relevance fact has 09:00 session_date → sorts first
+        assert ctx.find("low relevance fact") < ctx.find("high relevance fact")

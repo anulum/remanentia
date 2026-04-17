@@ -53,11 +53,16 @@ class LLMBackend(Protocol):
 
 @dataclass
 class LLMConfig:
-    """Centralised LLM configuration."""
+    """Centralised LLM configuration.
+
+    Defaults target a local Ollama server running ``gemma3:4b``. See
+    ``docs/internal/benchmark_2026-04-10_local_llm_evaluation.md`` for the
+    rationale behind this choice over Qwen 2.5 7B and Gemma 4.
+    """
 
     backend: str = "auto"
-    local_url: str = "http://localhost:8080/v1"
-    local_model: str = "qwen2.5-7b-instruct"
+    local_url: str = "http://localhost:11434/v1"
+    local_model: str = "gemma3:4b"
     anthropic_model: str = "claude-haiku-4-5-20251001"
     max_tokens_extract: int = 100
     max_tokens_generate: int = 200
@@ -192,9 +197,9 @@ class LocalLLMBackend:
 
     def __init__(
         self,
-        base_url: str = "http://localhost:8080/v1",
-        model: str = "qwen2.5-7b-instruct",
-        timeout: float = 30.0,
+        base_url: str = "http://localhost:11434/v1",
+        model: str = "gemma3:4b",
+        timeout: float = 60.0,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._model = model

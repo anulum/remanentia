@@ -152,9 +152,10 @@ def extract_skills(traces_dir: Path | None = None) -> list[dict]:
 
 
 def save_skills(skills: list[dict]) -> Path:
-    """Persist extracted skills to JSON."""
-    SKILLS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    SKILLS_PATH.write_text(json.dumps(skills, indent=2) + "\n")
+    """Persist extracted skills to JSON (atomic replace)."""
+    from file_utils import atomic_write_json
+
+    atomic_write_json(SKILLS_PATH, skills, indent=2)
     return SKILLS_PATH
 
 

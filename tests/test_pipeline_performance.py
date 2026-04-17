@@ -36,12 +36,27 @@ Pipeline architecture under test:
 from __future__ import annotations
 
 import math
+import os
 import time
 from datetime import date
 from unittest.mock import patch
 
 import numpy as np
 import pytest
+
+# Slow local hardware (NTFS-backed venv, shared laptop disks) can blow
+# the 10× headroom CI uses. Operators can set
+# ``REMANENTIA_PERF_BUDGET_SCALE=<N>`` to multiply every budget by N;
+# CI keeps the default 1.0. This does not hide regressions — CI is the
+# authoritative check — it only skips failures attributable to
+# local-HW jitter. The scale is clamped to [0.1, 100] for safety.
+_BUDGET_SCALE = max(0.1, min(100.0, float(os.environ.get("REMANENTIA_PERF_BUDGET_SCALE", "1.0"))))
+
+
+def _budget(ms: float) -> float:
+    """Return the effective budget ceiling after applying BUDGET_SCALE."""
+    return ms * _BUDGET_SCALE
+
 
 # ── Test data ────────────────────────────────────────────────
 
@@ -80,7 +95,7 @@ class TestParseDatesPerformance:
         from temporal_graph import parse_dates
 
         ms, dates = _timed(parse_dates, LONG_TEXT, REF_DATE)
-        assert ms < 50, f"parse_dates: {ms:.2f}ms exceeds 50ms budget"
+        assert ms < _budget(50), f"parse_dates: {ms:.2f}ms exceeds 50ms budget"
         assert len(dates) >= 1
         assert "2026-03-15" in dates
 
@@ -92,20 +107,20 @@ class TestExtractAnswerPerformance:
         from answer_extractor import extract_answer
 
         ms, answer = _timed(extract_answer, QUERY, LONG_TEXT)
-        assert ms < 20, f"extract_answer: {ms:.2f}ms exceeds 20ms budget"
+        assert ms < _budget(20), f"extract_answer: {ms:.2f}ms exceeds 20ms budget"
         assert answer is not None
 
     def test_fuzzy_match_budget(self):
         from answer_extractor import fuzzy_match
 
         ms, result = _timed(fuzzy_match, "March 15, 2026", "march 15 2026", 0.5)
-        assert ms < 1, f"fuzzy_match: {ms:.2f}ms exceeds 1ms budget"
+        assert ms < _budget(1), f"fuzzy_match: {ms:.2f}ms exceeds 1ms budget"
 
     def test_normalize_number_budget(self):
         from answer_extractor import normalize_number
 
         ms, result = _timed(normalize_number, "forty-two")
-        assert ms < 1, f"normalize_number: {ms:.2f}ms exceeds 1ms budget"
+        assert ms < _budget(1), f"normalize_number: {ms:.2f}ms exceeds 1ms budget"
         assert result == "42"
 
 
@@ -116,14 +131,14 @@ class TestAnswerNormalizerPerformance:
         from answer_normalizer import normalize_answer
 
         ms, result = _timed(normalize_answer, "Likely yes, because she enjoys reading")
-        assert ms < 1, f"normalize_answer: {ms:.2f}ms exceeds 1ms budget"
+        assert ms < _budget(1), f"normalize_answer: {ms:.2f}ms exceeds 1ms budget"
         assert result == "likely yes"
 
     def test_answers_match_budget(self):
         from answer_normalizer import answers_match
 
         ms, result = _timed(answers_match, "Likely yes", "Yes", 0.25)
-        assert ms < 2, f"answers_match: {ms:.2f}ms exceeds 2ms budget"
+        assert ms < _budget(2), f"answers_match: {ms:.2f}ms exceeds 2ms budget"
         assert result is True
 
 
@@ -134,7 +149,7 @@ class TestEntityExtractorPerformance:
         from entity_extractor import _regex_entities
 
         ms, entities = _timed(_regex_entities, LONG_TEXT)
-        assert ms < 50, f"regex_entities: {ms:.2f}ms exceeds 50ms budget"
+        assert ms < _budget(50), f"regex_entities: {ms:.2f}ms exceeds 50ms budget"
         assert len(entities) >= 1
 
     def test_extract_relations_budget(self):
@@ -143,7 +158,7 @@ class TestEntityExtractorPerformance:
         entities = _regex_entities(SHORT_TEXT)
         if len(entities) >= 2:
             ms, rels = _timed(extract_relations, SHORT_TEXT, entities)
-            assert ms < 5, f"extract_relations: {ms:.2f}ms exceeds 5ms budget"
+            assert ms < _budget(5), f"extract_relations: {ms:.2f}ms exceeds 5ms budget"
 
 
 class TestFactDecomposerPerformance:
@@ -162,7 +177,7 @@ class TestFactDecomposerPerformance:
         decompose_sessions(sessions)  # warmup (may hit network)
         ms, facts = _timed(decompose_sessions, sessions, n=10)
         # Budget generous: model loading + network retries can spike first runs
-        assert ms < 5000, f"decompose_sessions (warm): {ms:.2f}ms exceeds 5000ms budget"
+        assert ms < _budget(5000), f"decompose_sessions (warm): {ms:.2f}ms exceeds 5000ms budget"
         assert len(facts) >= 5
 
 
@@ -179,7 +194,7 @@ class TestKnowledgeStorePerformance:
             source="perf.md",
             n=50,
         )
-        assert ms < 50, f"add_note: {ms:.2f}ms exceeds 50ms budget"
+        assert ms < _budget(50), f"add_note: {ms:.2f}ms exceeds 50ms budget"
 
     def test_search_budget(self):
         from knowledge_store import KnowledgeStore
@@ -188,7 +203,7 @@ class TestKnowledgeStorePerformance:
         for i in range(20):
             store.add_note(f"Fact {i}: unique content about topic {i}.", source=f"s{i}.md")
         ms, results = _timed(store.search, "topic 5", n=50)
-        assert ms < 20, f"search: {ms:.2f}ms exceeds 20ms budget"
+        assert ms < _budget(20), f"search: {ms:.2f}ms exceeds 20ms budget"
 
 
 class TestTemporalGraphPerformance:
@@ -203,7 +218,7 @@ class TestTemporalGraphPerformance:
             for i in range(100)
         ]
         ms, _ = _timed(tg.add_events, events, n=10)
-        assert ms < 100, f"add_events(100): {ms:.2f}ms exceeds 100ms budget"
+        assert ms < _budget(100), f"add_events(100): {ms:.2f}ms exceeds 100ms budget"
 
     def test_query_temporal_budget(self):
         from temporal_graph import TemporalGraph, TemporalEvent
@@ -218,7 +233,7 @@ class TestTemporalGraphPerformance:
             ]
         )
         ms, results = _timed(tg.query_temporal, "data after 2026-03-15", 5)
-        assert ms < 10, f"query_temporal: {ms:.2f}ms exceeds 10ms budget"
+        assert ms < _budget(10), f"query_temporal: {ms:.2f}ms exceeds 10ms budget"
 
 
 class TestLLMBackendPerformance:
@@ -228,14 +243,14 @@ class TestLLMBackendPerformance:
         from llm_backend import resolve_backend
 
         ms, backend = _timed(resolve_backend, "none")
-        assert ms < 5, f"resolve_backend: {ms:.2f}ms exceeds 5ms budget"
+        assert ms < _budget(5), f"resolve_backend: {ms:.2f}ms exceeds 5ms budget"
 
     def test_null_backend_budget(self):
         from llm_backend import NullBackend
 
         b = NullBackend()
         ms, result = _timed(b.complete, "test")
-        assert ms < 0.5, f"NullBackend.complete: {ms:.2f}ms exceeds 0.5ms budget"
+        assert ms < _budget(0.5), f"NullBackend.complete: {ms:.2f}ms exceeds 0.5ms budget"
         assert result is None
 
 
@@ -247,7 +262,7 @@ class TestLLMSetupPerformance:
 
         path = tmp_path / "perf.toml"
         ms, result = _timed(write_config, path=path, n=50)
-        assert ms < 10, f"write_config: {ms:.2f}ms exceeds 10ms budget"
+        assert ms < _budget(10), f"write_config: {ms:.2f}ms exceeds 10ms budget"
 
 
 class TestObserverPerformance:
@@ -273,7 +288,7 @@ class TestObserverPerformance:
             t0 = time.perf_counter()
             observe_once(state, {"traces": d})
             ms = (time.perf_counter() - t0) * 1000
-        assert ms < 500, f"observe_once(10 files): {ms:.2f}ms exceeds 500ms budget"
+        assert ms < _budget(500), f"observe_once(10 files): {ms:.2f}ms exceeds 500ms budget"
 
 
 class TestReflectorPerformance:
@@ -285,7 +300,7 @@ class TestReflectorPerformance:
         t0 = time.perf_counter()
         reflect_once(days=1, use_llm=False)
         ms = (time.perf_counter() - t0) * 1000
-        assert ms < 500, f"reflect_once: {ms:.2f}ms exceeds 500ms budget"
+        assert ms < _budget(500), f"reflect_once: {ms:.2f}ms exceeds 500ms budget"
 
 
 # ── Full pipeline performance ─────────────────────────────────
@@ -314,7 +329,7 @@ class TestFullPipelinePerformance:
                 answers_match(answer, "88.5%", 0.25)
         ms = (time.perf_counter() - t0) * 1000 / 10
 
-        assert ms < 200, f"Full regex pipeline: {ms:.2f}ms exceeds 200ms budget"
+        assert ms < _budget(200), f"Full regex pipeline: {ms:.2f}ms exceeds 200ms budget"
         assert len(dates) >= 1
         assert len(entities) >= 1
         assert answer is not None
@@ -367,7 +382,7 @@ class TestFullPipelinePerformance:
 
         # Measure search
         ms, results = _timed(idx.search, "LOCOMO accuracy benchmark", 3, n=50)
-        assert ms < 20, f"MemoryIndex.search(100 paras): {ms:.2f}ms exceeds 20ms budget"
+        assert ms < _budget(20), f"MemoryIndex.search(100 paras): {ms:.2f}ms exceeds 20ms budget"
         assert len(results) > 0
 
 
@@ -1146,7 +1161,7 @@ class TestV04FeatureBenchmarks:
             ms, report = _timed(ce.capacity_report, n=100)
             print(f"\n  capacity_report (5 cats, 50 files): {ms:.3f}ms")
             # CI disk I/O is slower — generous budget
-            assert ms < 50, f"Too slow: {ms:.3f}ms"
+            assert ms < _budget(50), f"Too slow: {ms:.3f}ms"
             assert len(report) == 5
         finally:
             ce.SEMANTIC_DIR = orig
@@ -1169,7 +1184,7 @@ class TestV04FeatureBenchmarks:
         try:
             ms, stats = _timed(ce.age_memories, "2024-12-01", n=10)
             print(f"\n  age_memories (50 files): {ms:.3f}ms")
-            assert ms < 50, f"Too slow: {ms:.3f}ms"
+            assert ms < _budget(50), f"Too slow: {ms:.3f}ms"
             assert stats["scanned"] == 50
         finally:
             ce.SEMANTIC_DIR = orig
@@ -1192,7 +1207,7 @@ class TestV04FeatureBenchmarks:
         build_summary_dag(data)
         ms, dag = _timed(build_summary_dag, data, n=100)
         print(f"\n  build_summary_dag (100 traces): {ms:.3f}ms")
-        assert ms < 5, f"Too slow: {ms:.3f}ms"
+        assert ms < _budget(5), f"Too slow: {ms:.3f}ms"
         assert len(dag) > 100  # leaves + internal nodes
 
     def test_search_summary_dag_benchmark(self):
@@ -1215,7 +1230,7 @@ class TestV04FeatureBenchmarks:
         ms, results = _timed(search_summary_dag, dag, "accuracy BM25 retrieval", n=1000)
         print(f"\n  search_summary_dag (100 traces): {ms:.4f}ms")
         # CI runners slower — generous budget
-        assert ms < 5, f"Too slow: {ms:.4f}ms"
+        assert ms < _budget(5), f"Too slow: {ms:.4f}ms"
         assert len(results) > 0
 
     def test_heartbeat_benchmark(self, tmp_path):
@@ -1227,7 +1242,7 @@ class TestV04FeatureBenchmarks:
         heartbeat(state, {"empty": tmp_path})
         ms, result = _timed(heartbeat, state, {"empty": tmp_path}, n=50)
         print(f"\n  heartbeat (empty): {ms:.3f}ms")
-        assert ms < 20, f"Too slow: {ms:.3f}ms"
+        assert ms < _budget(20), f"Too slow: {ms:.3f}ms"
 
     def test_full_v04_pipeline_benchmark(self):
         """Full v0.4 pipeline: sessions → decompose → ArcaneRetriever (with decay) → context.

@@ -100,7 +100,10 @@ class TestClusterTraces:
         assert len(py_result) == len(rust_result)
 
     def test_performance(self):
-        """1000 traces should cluster in < 5 ms."""
+        """1000 traces should cluster in < 5 ms. Honours REMANENTIA_PERF_BUDGET_SCALE."""
+        import os
+
+        scale = max(0.1, min(100.0, float(os.environ.get("REMANENTIA_PERF_BUDGET_SCALE", "1.0"))))
         traces = [
             (f"t{i}.md", f"proj-{i % 10}", f"2026-{1 + i // 30:02d}-{1 + i % 28:02d}")
             for i in range(1000)
@@ -109,7 +112,7 @@ class TestClusterTraces:
         for _ in range(100):
             rc.cluster_traces(traces)
         elapsed_us = (time.perf_counter() - start) / 100 * 1e6
-        assert elapsed_us < 5000, f"cluster_traces too slow: {elapsed_us:.0f} µs"
+        assert elapsed_us < 5000 * scale, f"cluster_traces too slow: {elapsed_us:.0f} µs"
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -178,13 +181,16 @@ class TestBuildSummaryDag:
         assert len(nodes[0]["entities"]) <= 20
 
     def test_performance(self):
-        """100 traces DAG in < 5 ms."""
+        """100 traces DAG in < 5 ms. Honours REMANENTIA_PERF_BUDGET_SCALE."""
+        import os
+
+        scale = max(0.1, min(100.0, float(os.environ.get("REMANENTIA_PERF_BUDGET_SCALE", "1.0"))))
         data = self._make_data(100)
         start = time.perf_counter()
         for _ in range(50):
             rc.build_summary_dag(data, 4)
         elapsed_us = (time.perf_counter() - start) / 50 * 1e6
-        assert elapsed_us < 5000, f"build_summary_dag too slow: {elapsed_us:.0f} µs"
+        assert elapsed_us < 5000 * scale, f"build_summary_dag too slow: {elapsed_us:.0f} µs"
 
 
 # ═══════════════════════════════════════════════════════════════

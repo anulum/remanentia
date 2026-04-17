@@ -1,32 +1,47 @@
 # LOCOMO Benchmark Results
 
-## Current Score (without LLM)
+## Committed Result — BM25 + CE rerank + answer extraction + LLM synthesis
 
-**74.7% overall** on 1,986 questions from the LOCOMO multi-session QA dataset.
+**83.1% overall** on 1,986 questions from the LOCOMO multi-session QA dataset.
+Source: [`paper/locomo_results.json`](../../paper/locomo_results.json)
+(committed 2026-04-17; 927 s wall-clock end-to-end).
+
+| Category    | Correct / Total | Accuracy |
+|-------------|----------------:|---------:|
+| Multi-hop   | 285 / 321       | 88.8 %   |
+| Temporal    | 60 / 96         | 62.5 %   |
+| Single-hop  | 207 / 282       | 73.4 %   |
+| Adversarial | 731 / 841       | 86.9 %   |
+| Open-domain | 368 / 446       | 82.5 %   |
+| **Overall** | **1651 / 1986** | **83.1 %** |
+
+**Method:** BM25 + cross-encoder rerank + 4-stage answer extraction
++ LLM synthesis. 10 LOCOMO conversations, preprocessed into
+question-answer pairs.
+
+**Caveat:** The LOCOMO dataset is distributed separately and must be
+obtained by the reproducer; we do not redistribute it. The
+preprocessed form and exact question order used for this run are
+checked into `bench_locomo.py`, so given the LOCOMO source the run
+is reproducible up to the LLM-sampling envelope (`REMANENTIA_SEED`
+pins every local RNG but does not constrain the hosted LLM).
+
+## Historic Score (without LLM, pre-2026-04-17)
+
+Before the current committed run, a no-LLM configuration reached
+74.7 % on the same 1,986 questions. Kept here for reference;
+superseded by the table above.
+
+| Category    | Accuracy |
+|-------------|---------:|
+| Multi-hop   | 82.6 %   |
+| Adversarial | 79.5 %   |
+| Open-domain | 78.7 %   |
+| Single-hop  | 55.7 %   |
+| Temporal    | 42.7 %   |
+| **Overall** | **74.7 %** |
 
 Method: BM25 + token overlap + answer extraction. No embedding rerank, no LLM.
-
-| Category | Accuracy |
-|----------|----------|
-| Multi-hop | 82.6% |
-| Adversarial | 79.5% |
-| Open-domain | 78.7% |
-| Single-hop | 55.7% |
-| Temporal | 42.7% |
-| **Overall** | **74.7%** |
-
-**Caveat:** These numbers are from experiment runs not committed to the repository. The LOCOMO dataset must be obtained separately. Results are not independently reproducible from committed code alone.
-
-## With LLM Synthesis (exp8b, historical)
-
-An experiment run with Haiku LLM synthesis reached 88.5% on 548 questions (a subset). This used:
-
-- BM25(0.4)+Embed(0.6) hybrid retrieval
-- Cross-encoder reranking
-- 4-stage answer extraction with LLM fallback
-- Answer normalisation (hedging strip, polarity match)
-
-This result is not committed and not independently reproducible.
 
 ## What Works
 

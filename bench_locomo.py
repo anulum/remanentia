@@ -42,9 +42,10 @@ def _get_cross_encoder():
         return _CE_MODEL
     try:
         from sentence_transformers import CrossEncoder
-        import torch
 
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        from device_utils import safe_device
+
+        device = safe_device()
         _CE_MODEL = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", device=device)
         return _CE_MODEL
     except Exception:
@@ -60,9 +61,10 @@ def _get_embed_model():
         return _EMBED_MODEL
     try:
         from sentence_transformers import SentenceTransformer
-        import torch
 
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        from device_utils import safe_device
+
+        device = safe_device()
         _EMBED_MODEL = SentenceTransformer("all-MiniLM-L6-v2", device=device)
         return _EMBED_MODEL
     except Exception:
@@ -168,7 +170,6 @@ def bm25_search(query, paragraphs, top_k=10):
     # Embedding scoring (hybrid fusion)
     embed = _get_embed_model()
     if embed is not None:
-
         q_emb = embed.encode(query, normalize_embeddings=True, convert_to_numpy=True)
         p_embs = embed.encode(
             [p[:512] for p in paragraphs],
@@ -475,5 +476,26 @@ def main():
     print(f"\nSaved to paper/locomo_results.json")
 
 
+def _parse_cli() -> None:
+    """Give ``python bench_locomo.py --help`` a real help banner.
+
+    Mirrors the bench_longmemeval.py pattern: argparse runs only to
+    emit help / fail fast on unknown flags, while the module-level
+    ``_USE_LLM = "--llm" in sys.argv`` above remains the source of
+    truth for backward-compat tests.
+    """
+    import argparse
+
+    p = argparse.ArgumentParser(
+        prog="bench_locomo.py",
+        description="Run the LOCOMO benchmark against the configured retriever.",
+    )
+    p.add_argument(
+        "--llm", action="store_true", help="enable LLM synthesis (needs ANTHROPIC_API_KEY)"
+    )
+    p.parse_known_args()
+
+
 if __name__ == "__main__":
+    _parse_cli()
     main()

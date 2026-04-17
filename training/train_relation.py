@@ -19,7 +19,6 @@ import logging
 from collections import Counter
 from pathlib import Path
 
-import numpy as np
 import torch
 import torch.nn as nn
 from torch.optim import AdamW

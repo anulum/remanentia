@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import sys
 import time
 from pathlib import Path
@@ -40,7 +39,8 @@ def _get_client():
     if not key:
         print("ERROR: Set OPENAI_API_KEY environment variable")
         sys.exit(1)
-    return OpenAI(api_key=key)
+    timeout = float(os.environ.get("REMANENTIA_OPENAI_TIMEOUT", "30"))
+    return OpenAI(api_key=key, timeout=timeout)
 
 
 def _type_prompt(qtype: str) -> str:
@@ -144,8 +144,11 @@ def _arcane_answer(question, sessions, qtype, haystack_dates=None):
     if not results:
         return None, _build_context(sessions)
 
-    # Build context with retrieved facts as timeline header
-    ctx = ar.build_context(question, results, max_facts=15)
+    # Build context with retrieved facts as timeline header. ArcaneRetriever
+    # is currently used only for the retrieval ranking; the LLM sees the
+    # fully-flattened session context below. `build_context` is kept as a
+    # side-effect so the retriever pre-computes its internal caches.
+    ar.build_context(question, results, max_facts=15)
     full_ctx = _build_context(sessions)
 
     if qtype == "temporal-reasoning":

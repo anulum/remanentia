@@ -118,7 +118,9 @@ def session_end(
     content += "\n## Key Decisions\n"
     for d in decisions or []:
         content += f"- {d}\n"
-    state_path.write_text(content, encoding="utf-8")
+    from file_utils import atomic_write_text
+
+    atomic_write_text(state_path, content)
     logger.info("Session state saved: %s", state_path.name)
 
     # Generate reasoning trace for SNN daemon pickup
@@ -127,7 +129,7 @@ def session_end(
         trace_content = f"# Reasoning Trace — {project} ({now})\n\n"
         for d in decisions:
             trace_content += f"- {d}\n"
-        trace_path.write_text(trace_content, encoding="utf-8")
+        atomic_write_text(trace_path, trace_content)
         logger.info("Reasoning trace written: %s", trace_path.name)
 
     # Read SNN state for session summary

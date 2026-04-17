@@ -24,8 +24,11 @@ from date_normalizer import (
     VAGUE_DATE_RE,
     DateResult,
     _month_delta,
+    _parse_session_date,
+    _parse_session_datetime,
     _rule_based_normalise,
     extract_and_normalise,
+    normalise_in_context,
     normalize_date_expression,
 )
 
@@ -606,3 +609,318 @@ class TestDateNormalizerPipeline:
             if result is not None:
                 assert len(result.iso_date) == 10
                 assert result.confidence > 0
+
+
+# ── _parse_session_date ───────────────────────────────────────
+
+
+class TestParseSessionDate:
+    def test_longmemeval_format(self):
+        d = _parse_session_date("2023/05/28 (Sun) 21:04")
+        assert d == date(2023, 5, 28)
+
+    def test_iso_format(self):
+        d = _parse_session_date("2023-05-28")
+        assert d == date(2023, 5, 28)
+
+    def test_slash_no_time(self):
+        d = _parse_session_date("2023/05/28")
+        assert d == date(2023, 5, 28)
+
+    def test_empty_string(self):
+        assert _parse_session_date("") is None
+
+    def test_whitespace_only(self):
+        assert _parse_session_date("   ") is None
+
+    def test_invalid_date(self):
+        assert _parse_session_date("2023/13/45") is None
+
+    def test_garbage(self):
+        assert _parse_session_date("not a date at all") is None
+
+    def test_leading_trailing_whitespace(self):
+        d = _parse_session_date("  2023/05/28 (Sun) 21:04  ")
+        assert d == date(2023, 5, 28)
+
+
+# ── _parse_session_datetime (Task #32 — intraday) ──────────────
+
+
+class TestParseSessionDatetime:
+    def test_longmemeval_with_time(self):
+        from datetime import datetime as dt
+
+        d = _parse_session_datetime("2023/05/28 (Sun) 21:04")
+        assert d == dt(2023, 5, 28, 21, 4)
+
+    def test_longmemeval_no_dow(self):
+        from datetime import datetime as dt
+
+        d = _parse_session_datetime("2023/05/28 09:38")
+        assert d == dt(2023, 5, 28, 9, 38)
+
+    def test_iso_with_T(self):
+        from datetime import datetime as dt
+
+        d = _parse_session_datetime("2023-05-28T14:30")
+        assert d == dt(2023, 5, 28, 14, 30)
+
+    def test_date_only_defaults_midnight(self):
+        from datetime import datetime as dt
+
+        d = _parse_session_datetime("2023-05-28")
+        assert d == dt(2023, 5, 28, 0, 0)
+
+    def test_intraday_ordering_via_iso(self):
+        """Same-day timestamps sort correctly via isoformat."""
+        a = _parse_session_datetime("2023/05/22 (Mon) 09:38")
+        b = _parse_session_datetime("2023/05/22 (Mon) 11:58")
+        assert a < b
+        assert a.isoformat() < b.isoformat()
+
+    def test_empty(self):
+        assert _parse_session_datetime("") is None
+
+    def test_whitespace(self):
+        assert _parse_session_datetime("   ") is None
+
+    def test_invalid_date(self):
+        assert _parse_session_datetime("2023/13/45 (Bad) 99:99") is None
+
+    def test_garbage(self):
+        assert _parse_session_datetime("not a date") is None
+
+    def test_leading_trailing_whitespace(self):
+        from datetime import datetime as dt
+
+        d = _parse_session_datetime("  2023/05/28 (Sun) 21:04  ")
+        assert d == dt(2023, 5, 28, 21, 4)
+
+
+# ── normalise_in_context ─────────────────────────────────────
+
+
+class TestNormaliseInContext:
+    def test_yesterday_resolved(self):
+        text = "I went to the gym yesterday"
+        result = normalise_in_context(text, "2023/05/28 (Sun) 21:04")
+        assert "2023-05-27" in result
+        assert "yesterday" in result  # original kept as annotation
+
+    def test_last_saturday(self):
+        text = "I went to the gym last Saturday"
+        result = normalise_in_context(text, "2023/05/28 (Sun) 21:04")
+        assert "2023-05-27" in result  # last Saturday from Sunday 28th = 27th
+        assert "last Saturday" in result
+
+    def test_multiple_expressions(self):
+        text = "I started yesterday and finished 3 days ago"
+        result = normalise_in_context(text, "2023/06/15 (Thu) 10:00")
+        assert "2023-06-14" in result  # yesterday
+        assert "2023-06-12" in result  # 3 days ago
+
+    def test_no_vague_expressions(self):
+        text = "The weather is nice today."
+        # "today" is a vague expression, should be resolved
+        result = normalise_in_context(text, "2023/06/15 (Thu) 10:00")
+        assert "2023-06-15" in result
+
+    def test_plain_text_unchanged(self):
+        text = "The cat sat on the mat."
+        result = normalise_in_context(text, "2023/06/15 (Thu) 10:00")
+        assert result == text
+
+    def test_empty_reference_date(self):
+        text = "I went there yesterday"
+        result = normalise_in_context(text, "")
+        assert result == text  # unchanged
+
+    def test_invalid_reference_date(self):
+        text = "I went there yesterday"
+        result = normalise_in_context(text, "not a date")
+        assert result == text  # unchanged
+
+    def test_iso_reference_date(self):
+        text = "I did it last week"
+        result = normalise_in_context(text, "2023-06-15")
+        assert "2023-06-08" in result
+
+    def test_weeks_ago(self):
+        text = "We met about 3 weeks ago to discuss the project"
+        result = normalise_in_context(text, "2023/04/10 (Mon) 17:50")
+        assert "2023-03-20" in result
+
+    def test_annotation_format(self):
+        """Resolved expressions use 'on YYYY-MM-DD (original)' format."""
+        text = "I visited yesterday"
+        result = normalise_in_context(text, "2023-06-15")
+        assert "on 2023-06-14 (yesterday)" in result
+
+    def test_preserves_surrounding_text(self):
+        text = "Before that, yesterday I went shopping, and it was great."
+        result = normalise_in_context(text, "2023-06-15")
+        assert result.startswith("Before that,")
+        assert result.endswith("and it was great.")
+        assert "2023-06-14" in result
+
+
+# ── Benchmark index carries session dates ─────────────────────
+
+
+class TestBenchIndexSessionDates:
+    def test_documents_carry_session_date(self):
+        from bench_longmemeval import _build_index_for_question
+
+        sessions = [
+            [{"role": "user", "content": "I went to the gym last Saturday and it was great."}],
+            [{"role": "user", "content": "Today I bought a new car from the dealer."}],
+        ]
+        dates = ["2023/05/28 (Sun) 21:04", "2023/06/01 (Thu) 10:00"]
+
+        idx = _build_index_for_question(sessions, haystack_dates=dates)
+        assert len(idx.documents) == 2
+        assert idx.documents[0].date == "2023/05/28 (Sun) 21:04"
+        assert idx.documents[1].date == "2023/06/01 (Thu) 10:00"
+
+    def test_documents_without_dates(self):
+        from bench_longmemeval import _build_index_for_question
+
+        sessions = [
+            [{"role": "user", "content": "I went to the gym last Saturday and it was great."}],
+        ]
+        idx = _build_index_for_question(sessions)
+        assert idx.documents[0].date == ""
+
+    def test_vague_dates_resolved_in_content(self):
+        """Content indexed with resolved dates when haystack_dates provided."""
+        from bench_longmemeval import _build_index_for_question
+
+        sessions = [
+            [{"role": "user", "content": "I went to the gym yesterday and it was great fun."}],
+        ]
+        dates = ["2023/05/28 (Sun) 21:04"]
+
+        idx = _build_index_for_question(sessions, haystack_dates=dates)
+        # The indexed content should contain the resolved date
+        content = idx.documents[0].paragraphs[0]
+        assert "2023-05-27" in content
+
+    def test_build_context_includes_dates(self):
+        """_build_context includes session dates in headers."""
+        from bench_longmemeval import _build_context
+
+        sessions = [
+            [{"role": "user", "content": "Hello world, this is a test message."}],
+        ]
+        dates = ["2023/05/28 (Sun) 21:04"]
+
+        context = _build_context(
+            "test question",
+            None,
+            [],
+            sessions,
+            "temporal-reasoning",
+            haystack_dates=dates,
+        )
+        assert "2023/05/28 (Sun) 21:04" in context
+
+    def test_build_context_without_dates(self):
+        """_build_context works without dates."""
+        from bench_longmemeval import _build_context
+
+        sessions = [
+            [{"role": "user", "content": "Hello world, this is a test message."}],
+        ]
+        context = _build_context(
+            "test question",
+            None,
+            [],
+            sessions,
+            "temporal-reasoning",
+        )
+        assert "Session 1" in context
+
+    def test_sessions_sorted_chronologically(self):
+        """Sessions appear in chronological order regardless of input order."""
+        from bench_longmemeval import _build_context
+
+        sessions = [
+            [{"role": "user", "content": "This is the LATER session content here."}],
+            [{"role": "user", "content": "This is the EARLIER session content here."}],
+        ]
+        dates = ["2023/06/15 (Thu) 10:00", "2023/01/10 (Tue) 08:00"]
+
+        context = _build_context(
+            "which came first",
+            None,
+            [],
+            sessions,
+            "temporal-reasoning",
+            haystack_dates=dates,
+        )
+        # Earlier date should appear before later date in output
+        pos_earlier = context.find("2023/01/10")
+        pos_later = context.find("2023/06/15")
+        assert pos_earlier < pos_later, "Sessions not in chronological order"
+
+    def test_sessions_unsorted_without_dates(self):
+        """Without dates, sessions keep original order."""
+        from bench_longmemeval import _build_context
+
+        sessions = [
+            [{"role": "user", "content": "First input session with enough content."}],
+            [{"role": "user", "content": "Second input session with enough content."}],
+        ]
+        context = _build_context(
+            "test",
+            None,
+            [],
+            sessions,
+            "temporal-reasoning",
+        )
+        pos_first = context.find("First input")
+        pos_second = context.find("Second input")
+        assert pos_first < pos_second
+
+
+# ── temporal_graph.extract_events with reference_date ─────────
+
+
+class TestExtractEventsWithReferenceDate:
+    def test_vague_dates_resolved(self):
+        """extract_events resolves 'yesterday' when reference_date provided."""
+        from temporal_graph import TemporalGraph
+
+        tg = TemporalGraph()
+        events = tg.extract_events(
+            "I went to the gym yesterday.",
+            "session_0",
+            reference_date="2023/05/28 (Sun) 21:04",
+        )
+        # Should find at least the resolved date 2023-05-27
+        dates = [e.date for e in events]
+        assert any("2023-05-27" in d for d in dates)
+
+    def test_no_reference_date(self):
+        """extract_events without reference_date still works for explicit dates."""
+        from temporal_graph import TemporalGraph
+
+        tg = TemporalGraph()
+        events = tg.extract_events(
+            "On 2023-05-20 I went to the gym.",
+            "session_0",
+        )
+        assert any(e.date == "2023-05-20" for e in events)
+
+    def test_empty_reference_date(self):
+        """Empty reference_date string behaves like no reference."""
+        from temporal_graph import TemporalGraph
+
+        tg = TemporalGraph()
+        events = tg.extract_events(
+            "On 2023-05-20 I went to the gym.",
+            "session_0",
+            reference_date="",
+        )
+        assert any(e.date == "2023-05-20" for e in events)

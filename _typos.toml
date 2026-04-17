@@ -1,5 +1,14 @@
 [files]
-extend-exclude = ["paper/*.txt", "paper/*.log", "consolidation/"]
+extend-exclude = [
+    "paper/*.txt",
+    "paper/*.log",
+    "consolidation/",
+    # Benchmark inputs and LLM outputs contain proper nouns (Big Sur,
+    # Yosemite, ...) and hallucinated spellings we must NOT rewrite —
+    # doing so would corrupt ground truth and benchmark parity.
+    "data/*.jsonl",
+    "data/*.json",
+]
 
 [default.extend-words]
 # "BA" = Balanced Accuracy (ML metric)

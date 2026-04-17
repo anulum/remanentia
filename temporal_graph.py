@@ -161,13 +161,50 @@ class TemporalGraph:
         results.sort(key=lambda x: -x[1])
         return results
 
-    def extract_events(self, text: str, doc_name: str) -> list[TemporalEvent]:
-        """Extract dated events from a document."""
+    def extract_events(
+        self,
+        text: str,
+        doc_name: str,
+        reference_date: str = "",
+    ) -> list[TemporalEvent]:
+        """Extract dated events from a document.
+
+        When *reference_date* is provided (e.g. a session timestamp),
+        vague expressions like "last week" are resolved against it
+        before date extraction, yielding concrete ISO dates.
+
+        Task #36: chained relative references like
+        ``"2 weeks after 2023-05-14"`` in the same sentence are also
+        resolved to concrete dates via :func:`_expand_chained_dates`.
+        """
+        # Resolve vague dates against session timestamp when available
+        if reference_date:
+            try:
+                from date_normalizer import normalise_in_context
+
+                text = normalise_in_context(text, reference_date)
+            except ImportError:  # pragma: no cover
+                pass
+
         events = []
         sentences = re.split(r"(?<=[.!?\n])\s+", text)
 
+        ref_date_obj = None
+        if reference_date:
+            try:
+                from date_normalizer import _parse_session_date
+
+                ref_date_obj = _parse_session_date(reference_date)
+            except ImportError:  # pragma: no cover
+                pass
+
         for i, sent in enumerate(sentences):
-            dates = parse_dates(sent)
+            dates = parse_dates(sent, reference_date=ref_date_obj)
+            # Add dates resolved from "N days/weeks/months (after|before) DATE"
+            chained = _expand_chained_dates(sent)
+            for cd in chained:
+                if cd not in dates:
+                    dates.append(cd)
             for d in dates:
                 events.append(
                     TemporalEvent(
@@ -388,18 +425,138 @@ class TemporalGraph:
         }
 
 
-def temporal_code_execute(query: str, events: list[TemporalEvent]) -> str | None:
+_CHAINED_REL_RE = re.compile(
+    r"\b(\d+)\s+(day|days|week|weeks|month|months)\s+(after|before)\s+"
+    r"(\d{4}-\d{2}-\d{2})\b",
+    re.IGNORECASE,
+)
+
+
+def _expand_chained_dates(sentence: str) -> list[str]:
+    """Resolve simple multi-hop date references within a single sentence.
+
+    Detects patterns like::
+
+        "the concert was 2 weeks after 2023-05-14"
+        "I left 3 days before 2024-06-01"
+        "moved in 2 months after 2023-01-10"
+
+    and returns the computed ISO date(s). The anchor must already be an
+    absolute ``YYYY-MM-DD`` — this is intentionally narrow to avoid the
+    complexity of resolving chained named entities, which would require
+    entity linking and is out of scope for Task #36.
+
+    Returns an empty list when no chained reference is found.
+    """
+    out: list[str] = []
+    for m in _CHAINED_REL_RE.finditer(sentence):
+        try:
+            n = int(m.group(1))
+            unit = m.group(2).lower().rstrip("s")
+            direction = m.group(3).lower()
+            anchor = datetime.strptime(m.group(4), "%Y-%m-%d").date()
+        except ValueError:  # pragma: no cover — regex guarantees valid ints
+            continue
+        if unit == "day":
+            delta = timedelta(days=n)
+        elif unit == "week":
+            delta = timedelta(weeks=n)
+        else:  # month — approximate via 30-day step; TReMu arithmetic uses delta_days downstream
+            delta = timedelta(days=n * 30)
+        if direction == "after":
+            resolved = anchor + delta
+        else:
+            resolved = anchor - delta
+        out.append(resolved.isoformat())
+    return out
+
+
+def _score_event_vs_query(
+    event_text: str, query: str, q_tokens: set[str], q_bigrams: set[tuple[str, str]]
+) -> float:
+    """Composite relevance score for a single event against a query.
+
+    Combines three signals:
+
+    1. **Unigram overlap** — |q_tokens ∩ t_tokens|
+    2. **Bigram overlap** — consecutive 2-word phrases from query that
+       also appear in event text, weighted ×2 (phrases are more
+       discriminative than loose tokens)
+    3. **Token density** — overlap divided by event length, so a short
+       event text that fully matches scores higher than a long one that
+       mentions the token in passing
+
+    Returns a float so that multiple events rarely tie exactly.
+    """
+    e_lower = event_text.lower()
+    e_tokens_list = re.findall(r"[a-z]{3,}", e_lower)
+    if not e_tokens_list:
+        return 0.0
+    e_tokens = set(e_tokens_list)
+    e_bigrams = set(zip(e_tokens_list, e_tokens_list[1:]))
+
+    unigram_overlap = len(q_tokens & e_tokens)
+    bigram_overlap = len(q_bigrams & e_bigrams)
+    density = unigram_overlap / max(1, len(e_tokens_list)) ** 0.5
+    return unigram_overlap + 2.0 * bigram_overlap + 0.3 * density
+
+
+def _pick_duration_pair(
+    parsed: list[tuple[date, str]], query: str
+) -> tuple[date, str, date, str] | None:
+    """Select the two events most relevant to a duration query.
+
+    Uses :func:`_score_event_vs_query` to rank events by combined
+    unigram + bigram + density score so ties are rare. When overlap
+    scoring gives no clear winner, falls back to chronological extremes
+    (what "how long between" usually wants).
+
+    Task #35: added bigram phrase matching and density term to break
+    ties that Task #27's simple set-intersection scoring missed.
+    """
+    if len(parsed) < 2:
+        return None
+
+    q_tokens_list = re.findall(r"[a-z]{3,}", query.lower())
+    q_tokens = set(q_tokens_list)
+    q_bigrams = set(zip(q_tokens_list, q_tokens_list[1:]))
+
+    scored = [
+        (_score_event_vs_query(text, query, q_tokens, q_bigrams), d, text) for d, text in parsed
+    ]
+    scored.sort(key=lambda x: -x[0])
+
+    # Both top-2 have meaningful overlap and distinct dates → use them
+    if scored[0][0] > 0 and scored[1][0] > 0 and scored[0][1] != scored[1][1]:
+        pair = sorted([(scored[0][1], scored[0][2]), (scored[1][1], scored[1][2])])
+        return (pair[0][0], pair[0][1], pair[1][0], pair[1][1])
+
+    # Fallback: chronological extremes (full span)
+    by_date = sorted(parsed, key=lambda x: x[0])
+    return (by_date[0][0], by_date[0][1], by_date[-1][0], by_date[-1][1])
+
+
+def temporal_code_execute(
+    query: str,
+    events: list[TemporalEvent],
+    question_date: str = "",
+) -> str | None:
     """Execute temporal arithmetic via Python code instead of LLM guessing.
 
     TReMu technique (ACL 2025): +6pp on temporal questions by replacing
     natural language temporal reasoning with date arithmetic.
 
     Handles:
-    - "How long between X and Y?"
+    - "How long/many days/weeks/months between X and Y?"
     - "What happened N days/weeks/months before/after X?"
     - "Did X happen before or after Y?"
     - "What was the most recent X?"
     - "How many days since X?"
+    - "How many times did X?" (counting)
+
+    When *question_date* is provided, it anchors "how long ago" / "since"
+    queries to the question's reference date instead of ``date.today()``
+    (Task #34 — fixes LLM hallucinating today).
     """
     q = query.lower()
     event_dates = [(e.date, e.text) for e in events if e.date]
@@ -414,20 +571,68 @@ def temporal_code_execute(query: str, events: list[TemporalEvent]) -> str | None
     if not parsed:
         return None
 
-    # "How long between" / "how many days"
+    # "How long between" / "how many days/weeks/months"
     if re.search(r"how (long|many days|many weeks|many months)", q):
-        if len(parsed) >= 2:
-            dates_sorted = sorted(parsed, key=lambda x: x[0])
-            delta = (dates_sorted[-1][0] - dates_sorted[0][0]).days
-            return f"{delta} days (from {dates_sorted[0][0].isoformat()} to {dates_sorted[-1][0].isoformat()})"
+        pair = _pick_duration_pair(parsed, query)
+        if pair:
+            d1, t1, d2, t2 = pair
+            delta_days = (d2 - d1).days
+            inclusive_days = delta_days + 1
+            if "week" in q:
+                weeks = delta_days // 7
+                remainder = delta_days % 7
+                if remainder:
+                    return (
+                        f"{weeks} weeks and {remainder} days "
+                        f"({delta_days} days exclusive, {inclusive_days} inclusive, "
+                        f"from {d1.isoformat()} to {d2.isoformat()})"
+                    )
+                return (
+                    f"{weeks} weeks "
+                    f"({delta_days} days exclusive, {inclusive_days} inclusive, "
+                    f"from {d1.isoformat()} to {d2.isoformat()})"
+                )
+            if "month" in q:
+                months = (d2.year - d1.year) * 12 + (d2.month - d1.month)
+                return (
+                    f"{months} months "
+                    f"({delta_days} days exclusive, {inclusive_days} inclusive, "
+                    f"from {d1.isoformat()} to {d2.isoformat()})"
+                )
+            return (
+                f"{delta_days} days (or {inclusive_days} days counting both endpoints, "
+                f"from {d1.isoformat()} to {d2.isoformat()})"
+            )
+
+    # "how many times" / counting — but NOT "how many X ago" (handled below)
+    if re.search(r"how many times|how often", q) or (
+        re.search(r"how many .* did", q) and "ago" not in q
+    ):
+        q_tokens = set(re.findall(r"[a-z]{3,}", q))
+        matching = []
+        for d, text in parsed:
+            t_tokens = set(re.findall(r"[a-z]{3,}", text.lower()))
+            if len(q_tokens & t_tokens) > 0:
+                matching.append((d, text))
+        if matching:
+            unique_dates = sorted(set(d for d, _ in matching))
+            return (
+                f"{len(unique_dates)} times (on {', '.join(d.isoformat() for d in unique_dates)})"
+            )
 
     # "before or after" comparison
     if "before" in q and "after" in q and len(parsed) >= 2:
         d1, d2 = parsed[0][0], parsed[1][0]
         if d1 < d2:
-            return f"{parsed[0][1][:60]} happened before {parsed[1][1][:60]} ({(d2 - d1).days} days earlier)"
+            return (
+                f"{parsed[0][1][:60]} happened before {parsed[1][1][:60]} "
+                f"({(d2 - d1).days} days earlier)"
+            )
         elif d1 > d2:
-            return f"{parsed[0][1][:60]} happened after {parsed[1][1][:60]} ({(d1 - d2).days} days later)"
+            return (
+                f"{parsed[0][1][:60]} happened after {parsed[1][1][:60]} "
+                f"({(d1 - d2).days} days later)"
+            )
         return f"Both happened on the same day: {d1.isoformat()}"
 
     # "most recent" / "latest"
@@ -440,13 +645,48 @@ def temporal_code_execute(query: str, events: list[TemporalEvent]) -> str | None
         earliest = min(parsed, key=lambda x: x[0])
         return f"{earliest[1][:100]} ({earliest[0].isoformat()})"
 
-    # "how many days since" / "how long ago"
+    # "how many days/weeks/months ago" / "since" / "how long ago"
     if re.search(r"(since|ago|how long)", q) and parsed:
+        # Task #34: use question_date as reference when available
+        today = _resolve_question_date(question_date)
         ref = max(parsed, key=lambda x: x[0])
-        delta = (date.today() - ref[0]).days
-        return f"{delta} days since {ref[1][:60]} ({ref[0].isoformat()})"
+        delta_days = (today - ref[0]).days
+        inclusive_days = delta_days + 1
+        if "week" in q:
+            weeks = delta_days // 7
+            return (
+                f"{weeks} weeks ({delta_days} days, or {inclusive_days} inclusive) "
+                f"since {ref[1][:60]} ({ref[0].isoformat()})"
+            )
+        if "month" in q:
+            months = (today.year - ref[0].year) * 12 + (today.month - ref[0].month)
+            return (
+                f"{months} months ({delta_days} days, or {inclusive_days} inclusive) "
+                f"since {ref[1][:60]} ({ref[0].isoformat()})"
+            )
+        return (
+            f"{delta_days} days (or {inclusive_days} inclusive) "
+            f"since {ref[1][:60]} ({ref[0].isoformat()})"
+        )
 
     return None
+
+
+def _resolve_question_date(question_date_str: str) -> date:
+    """Parse *question_date_str* to a :class:`date`, falling back to today.
+
+    Accepts LongMemEval format ``"2023/04/10 (Mon) 23:07"`` or ISO.
+    Returns ``date.today()`` when empty or unparsable.
+    """
+    if not question_date_str:
+        return date.today()
+    m = re.match(r"(\d{4})[/-](\d{2})[/-](\d{2})", question_date_str.strip())
+    if m:
+        try:
+            return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:  # pragma: no cover — regex shape matches but calendar rejects
+            pass
+    return date.today()  # pragma: no cover — only reached on regex non-match after bool check
 
 
 def parse_dates(text: str, reference_date: date | None = None) -> list[str]:

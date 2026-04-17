@@ -377,3 +377,105 @@ def extract_and_normalise(text: str, ref: date) -> list[DateResult]:
         if result is not None:
             results.append(result)
     return results
+
+
+def _parse_session_date(reference_date_str: str) -> date | None:
+    """Parse a LongMemEval session date string to a :class:`date`.
+
+    Accepted formats::
+
+        2023/05/28 (Sun) 21:04   — LongMemEval haystack_dates
+        2023-05-28               — ISO 8601
+        2023/05/28               — slash-separated
+
+    Returns ``None`` when *reference_date_str* is empty or unparsable.
+    Drops the time component; use :func:`_parse_session_datetime` for
+    HH:MM-precision parsing.
+    """
+    s = reference_date_str.strip()
+    if not s:
+        return None
+    # LongMemEval format: "2023/05/28 (Sun) 21:04"
+    m = re.match(r"(\d{4})[/-](\d{2})[/-](\d{2})", s)
+    if m:
+        try:
+            return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            return None
+    return None
+
+
+def _parse_session_datetime(reference_date_str: str):
+    """Parse a LongMemEval session timestamp to a full :class:`datetime`.
+
+    Accepted formats::
+
+        2023/05/28 (Sun) 21:04   — LongMemEval haystack_dates with HH:MM
+        2023/05/28 21:04         — without day-of-week
+        2023-05-28T21:04         — ISO 8601 with time
+        2023-05-28               — date only (time defaults to 00:00)
+        2023/05/28               — date only
+
+    Returns ``None`` when *reference_date_str* is empty or unparsable.
+    Used for intraday ordering of same-day events (Gemini R9 fix #1).
+    """
+    from datetime import datetime as _dt
+
+    s = reference_date_str.strip()
+    if not s:
+        return None
+    # YYYY/MM/DD or YYYY-MM-DD, optional " (DOW)" wrapper, optional " HH:MM" or "THH:MM"
+    m = re.match(
+        r"(\d{4})[/-](\d{2})[/-](\d{2})(?:\s*\([A-Za-z]{3}\))?(?:[\sT]+(\d{2}):(\d{2}))?",
+        s,
+    )
+    if not m:
+        return None
+    try:
+        year = int(m.group(1))
+        month = int(m.group(2))
+        day = int(m.group(3))
+        hour = int(m.group(4)) if m.group(4) else 0
+        minute = int(m.group(5)) if m.group(5) else 0
+        return _dt(year, month, day, hour, minute)
+    except ValueError:
+        return None
+
+
+def normalise_in_context(text: str, reference_date_str: str) -> str:
+    """Replace vague date expressions with resolved ISO dates in-place.
+
+    Each matched expression is annotated with its resolved date::
+
+        "I went to the gym last Saturday"
+        → "I went to the gym on 2023-05-20 (last Saturday)"
+
+    When *reference_date_str* is empty or unparsable the original text
+    is returned unchanged.
+
+    Args:
+        text: Free-form text containing vague date expressions.
+        reference_date_str: Session timestamp (e.g. ``"2023/05/28 (Sun) 21:04"``
+            or ISO ``"2023-05-28"``).
+
+    Returns:
+        Text with vague expressions annotated with resolved ISO dates.
+    """
+    ref = _parse_session_date(reference_date_str)
+    if ref is None:
+        return text
+
+    # Process matches in reverse order so span offsets stay valid
+    matches = list(VAGUE_DATE_RE.finditer(text))
+    if not matches:
+        return text
+
+    result = text
+    for m in reversed(matches):
+        expr = m.group(0)
+        resolved = normalize_date_expression(expr, ref)
+        if resolved is not None:
+            replacement = f"on {resolved.iso_date} ({expr})"
+            result = result[: m.start()] + replacement + result[m.end() :]
+
+    return result

@@ -30,7 +30,6 @@ import json
 import re
 import sys
 import time
-from datetime import date
 from pathlib import Path
 
 _BASE = Path(__file__).resolve().parent.parent
@@ -194,10 +193,13 @@ def main() -> None:
     """Run baseline vs wired-pipeline comparison."""
     mode = sys.argv[1] if len(sys.argv) > 1 else "--compare"
 
+    # run_eval prints its own per-category summary; we only keep the
+    # return value in the compare branch below where the two results
+    # are diffed.
     if mode == "--without-dates":
-        results = run_eval(use_session_dates=False)
+        run_eval(use_session_dates=False)
     elif mode == "--with-dates":
-        results = run_eval(use_session_dates=True)
+        run_eval(use_session_dates=True)
     else:
         print("=" * 60)
         print("LOCAL TEMPORAL EVALUATION (no API credits needed)")

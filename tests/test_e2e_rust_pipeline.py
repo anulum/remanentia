@@ -179,15 +179,22 @@ class TestTier1RetrievalE2E:
         assert len(results) > 0
 
     def test_retrieval_performance(self):
-        """Full retrieval cycle in < 100 ms."""
+        """Full retrieval cycle in < 100 ms.
+
+        Budget honours ``REMANENTIA_PERF_BUDGET_SCALE`` so slow-HW devs
+        can relax the ceiling; CI defaults to 1.0 and stays strict.
+        """
+        import os
+
         from arcane_retriever import ArcaneRetriever
 
+        scale = max(0.1, min(100.0, float(os.environ.get("REMANENTIA_PERF_BUDGET_SCALE", "1.0"))))
         retriever = ArcaneRetriever(SESSIONS, session_dates=SESSION_DATES)
         start = time.perf_counter()
         for _ in range(10):
             retriever.retrieve("STDP bug", qtype="single-session", top_k=5)
         elapsed_ms = (time.perf_counter() - start) / 10 * 1000
-        assert elapsed_ms < 100, f"Full retrieval too slow: {elapsed_ms:.1f} ms"
+        assert elapsed_ms < 100 * scale, f"Full retrieval too slow: {elapsed_ms:.1f} ms"
 
 
 # ═══════════════════════════════════════════════════════════════

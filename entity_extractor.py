@@ -77,11 +77,12 @@ def _load_gliner():  # pragma: no cover
         return _GLINER_MODEL
     try:
         from gliner import GLiNER
-        import torch
 
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        from device_utils import safe_device
+
+        device = safe_device()
         _GLINER_MODEL = GLiNER.from_pretrained("urchade/gliner_multi-v2.1")
-        if device == "cuda":
+        if device.startswith("cuda"):
             _GLINER_MODEL = _GLINER_MODEL.to(device)
         return _GLINER_MODEL
     except ImportError:

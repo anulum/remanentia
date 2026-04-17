@@ -22,8 +22,16 @@ consolidation/conflicts.json
 memory/graph/*.jsonl
 docs/internal/
 .codex_scratch/
-data/
+data/longmemeval_oracle.json
+data/longmemeval_s.json
+data/*.R8_baseline.jsonl
+data/*.R9_baseline.jsonl
+data/*.R10_broken_sort.jsonl
+data/*.R10_baseline.jsonl
 models/
+# The docs/ subtree holds the published model cards, not weights.
+!docs/models/
+!docs/models/**
 training/datasets/
 training/logs/
 training/*_hypotheses.jsonl
@@ -32,3 +40,16 @@ site/
 checkpoints/
 CLAUDE.md
 .claude/
+
+# Local backups — never committed
+BACKUP/
+ARCHIVE/
+
+# Runtime caches and scratch that REUSE lint walks otherwise.
+.hf_cache/
+.hypothesis/
+consolidation/
+memory/
+gpu_build.pid
+tests/e2e_10x_bench/
+reasoning_traces/*.json

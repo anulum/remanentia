@@ -423,13 +423,25 @@ class KnowledgeStore:
         keywords: list[str] | None = None,
         prospective_queries: list[str] | None = None,
         confidence: float = 0.5,
+        redact_pii: bool = True,
     ) -> KnowledgeNote:
         """Create a knowledge note, link to related notes, detect contradictions.
 
         If content is near-duplicate of existing note (similarity > 0.9), merges instead.
         If content contradicts existing note (same entity + opposite action), tracks supersession.
         Generates prospective queries (Kumiho technique) for write-time indexing.
+
+        PII redaction runs by default: emails, phone numbers, IBAN, credit
+        cards, and API-key-shaped tokens are replaced with
+        ``[REDACTED:TAG]`` placeholders before the note is persisted.
+        Set ``redact_pii=False`` for fixtures or audit trails that
+        require the original text.
         """
+        if redact_pii:
+            from pii_redactor import redact
+
+            content = redact(content).text
+
         now = time.strftime("%Y-%m-%dT%H%M", time.gmtime())
         if not title:
             title = content.split("\n")[0].strip().lstrip("#- ").strip()[:80]
@@ -819,13 +831,20 @@ class KnowledgeStore:
         return trigger
 
     def save(self, notes_path: Path | None = None, triggers_path: Path | None = None):
+        from file_utils import FileLock, atomic_write_text
+
         notes_path = notes_path or STORE_PATH
         triggers_path = triggers_path or TRIGGERS_PATH
         notes_path.parent.mkdir(parents=True, exist_ok=True)
-        lines = [json.dumps(n.to_dict()) for n in self.notes.values()]
-        notes_path.write_text("\n".join(lines) + "\n" if lines else "", encoding="utf-8")
-        tlines = [json.dumps(t.to_dict()) for t in self.triggers]
-        triggers_path.write_text("\n".join(tlines) + "\n" if tlines else "", encoding="utf-8")
+
+        # Serialise concurrent writers via a lock beside the store;
+        # each write is itself atomic so a crash cannot tear a file.
+        lock_path = notes_path.parent / ".knowledge_store.lock"
+        with FileLock(lock_path):
+            lines = [json.dumps(n.to_dict()) for n in self.notes.values()]
+            atomic_write_text(notes_path, "\n".join(lines) + "\n" if lines else "")
+            tlines = [json.dumps(t.to_dict()) for t in self.triggers]
+            atomic_write_text(triggers_path, "\n".join(tlines) + "\n" if tlines else "")
 
     def load(self, notes_path: Path | None = None, triggers_path: Path | None = None) -> bool:
         notes_path = notes_path or STORE_PATH

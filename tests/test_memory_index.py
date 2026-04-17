@@ -827,21 +827,18 @@ class TestSaveLoadEmbeddings:
         idx = MemoryIndex()
         assert idx.load(path) is False
 
-    def test_load_legacy_fallback_path(self, tmp_path):
-        """When default INDEX_PATH doesn't exist but legacy pkl does, load from legacy."""
-        import memory_index
+    def test_load_legacy_pickle_path_refused(self, tmp_path):
+        """Legacy .pkl INDEX_PATH is refused at runtime; load() returns False.
+
+        Production code now points at .json.gz; a leftover .pkl sitting
+        where _LEGACY_INDEX_PATH points is handled by _load_legacy_meta
+        returning None (migrator is the supported upgrade path).
+        """
         import pickle
 
-        data = {
-            "documents": [("test.md", "src", "/test.md", ["para1"], "", "text")],
-            "paragraph_index": [(0, 0)],
-            "paragraph_tokens": [["test", "para"]],
-            "paragraph_token_counts": [{"test": 1, "para": 1}],
-            "paragraph_types": ["text"],
-            "idf": {"test": 1.0, "para": 1.0},
-            "_df": {"test": 1, "para": 1},
-            "embeddings": None,
-        }
+        import memory_index
+
+        data = {"documents": []}
         legacy_path = tmp_path / "memory_index.pkl"
         with open(legacy_path, "wb") as f:
             pickle.dump(data, f)
@@ -852,26 +849,26 @@ class TestSaveLoadEmbeddings:
         memory_index._LEGACY_INDEX_PATH = legacy_path
         try:
             idx = MemoryIndex()
-            assert idx.load() is True
-            assert len(idx.documents) == 1
+            assert idx.load() is False
         finally:
             memory_index.INDEX_PATH = orig_index
             memory_index._LEGACY_INDEX_PATH = orig_legacy
 
-    def test_load_legacy_4tuple_format(self, tmp_path):
-        """Load index saved with old 4-tuple document format."""
-        import pickle
+    def test_load_4tuple_format_via_json_gz(self, tmp_path):
+        """Old 4-tuple document entries still load from json.gz (new format)."""
+        import gzip
+        import json as _json
 
         data = {
-            "documents": [("test.md", "src", "/test.md", ["para1"])],
-            "paragraph_index": [(0, 0)],
+            "documents": [["test.md", "src", "/test.md", ["para1"]]],
+            "paragraph_index": [[0, 0]],
             "paragraph_tokens": [["test", "para"]],
             "idf": {"test": 1.0, "para": 1.0},
             "embeddings": None,
         }
-        path = tmp_path / "legacy.pkl"
-        with open(path, "wb") as f:
-            pickle.dump(data, f)
+        path = tmp_path / "legacy.json.gz"
+        with gzip.open(path, "wb") as f:
+            f.write(_json.dumps(data).encode("utf-8"))
         idx = MemoryIndex()
         assert idx.load(path) is True
         assert idx.documents[0].name == "test.md"

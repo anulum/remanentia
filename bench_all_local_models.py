@@ -91,7 +91,10 @@ def _start_server(model_file: str) -> subprocess.Popen | None:
 
     env = {**os.environ, **GPU_ENV}
     global _SERVER_PROC, _SERVER_LOG
-    _SERVER_LOG = open("/tmp/llama-server-bench.log", "w")
+    # Module-level handle: kept alive for the llama-server subprocess
+    # lifetime; closed in _stop_server. Context manager would close
+    # the log before the child writes to it.
+    _SERVER_LOG = open("/tmp/llama-server-bench.log", "w")  # noqa: SIM115
     proc = subprocess.Popen(
         [
             SERVER_BIN,
@@ -216,7 +219,12 @@ def _run_benchmark(limit: int) -> dict:
 
 
 def main():
-    full_run = "--full" in sys.argv
+    # --full bumps the per-model sample from the default comparison
+    # shortlist (50) to the full oracle (500). Declared at module scope
+    # so the banner and per-model loop both see the override.
+    global LIMIT
+    if "--full" in sys.argv:
+        LIMIT = 500
 
     print("=" * 70)
     print("Remanentia Local Model Comparison — LongMemEval Benchmark")

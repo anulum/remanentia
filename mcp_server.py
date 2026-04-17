@@ -121,12 +121,35 @@ def handle_recall(
         if not results and not trigger_lines:
             return f"No memories found for: {query}"
 
+        # Guarded tier: when enabled and director-ai is available, check
+        # every extracted answer span against the retrieved evidence before
+        # returning it. An answer that falls below the block_below
+        # threshold is silently dropped (snippet-only view), and the
+        # reason is written to the audit log for each filtered hit.
+        guarded_on = bool(os.environ.get("REMANENTIA_GUARDED"))
+        guard_log: list[str] = []
+        if guarded_on and results:
+            from memory_guarded import facts_from_results, is_available, score_memory_answer
+
+            if is_available():  # pragma: no cover — needs optional dep
+                facts = facts_from_results(results)
+                for r in results:
+                    if not r.answer:
+                        continue
+                    gr = score_memory_answer(query, r.answer, facts)
+                    if gr is None:
+                        continue
+                    if gr.blocked:
+                        guard_log.append(f"[guard] blocked {r.name}: {gr.reason}")
+                        r.answer = ""
+
         parts = list(trigger_lines)
         for r in results:
             header = f"[{r.source}] {r.name} (score={r.score:.1f})"
             if r.answer:
                 header += f"\nAnswer: {r.answer}"
             parts.append(f"{header}\n{r.snippet}")
+        parts.extend(guard_log)
 
         # Knowledge store graph search — multi-hop traversal via prospective queries
         try:
@@ -150,8 +173,20 @@ def handle_recall(
 def handle_remember(
     content: str, memory_type: str = "context", project: str = "", trigger: str = ""
 ) -> str:
-    """Persist a memory as a reasoning trace and update the index."""
+    """Persist a memory as a reasoning trace and update the index.
+
+    PII in the supplied content (emails, phone numbers, IBAN, credit
+    cards, API-key-shaped tokens) is redacted before the trace hits
+    disk. The redaction leaves ``[REDACTED:TAG]`` placeholders so the
+    shape of the original text is preserved for retrieval while the
+    raw values never persist.
+    """
     from datetime import datetime
+
+    from file_utils import atomic_write_text
+    from pii_redactor import redact
+
+    content = redact(content).text
 
     traces_dir = BASE / "reasoning_traces"
     traces_dir.mkdir(parents=True, exist_ok=True)
@@ -170,7 +205,8 @@ def handle_remember(
         "",
         content,
     ]
-    path.write_text("\n".join(lines), encoding="utf-8")
+
+    atomic_write_text(path, "\n".join(lines))
 
     # Invalidate lightweight recall cache
     global _RECALL_INDEX
@@ -492,8 +528,60 @@ def handle_request(request: dict) -> dict:
     }
 
 
+def _parse_cli(argv: list[str] | None = None) -> None:
+    """Apply CLI flags to the environment before the server starts.
+
+    Two flags that are pure env-var convenience for a Remanentia
+    client that prefers ``python mcp_server.py --llm --local-llm``
+    over a four-line ``REMANENTIA_...=...`` shell prefix:
+
+    - ``--llm`` / ``--no-llm`` toggles ``REMANENTIA_LLM_ANSWERS``
+      so ``handle_recall`` synthesises an answer rather than
+      returning raw retrieval context.
+    - ``--local-llm`` pins ``REMANENTIA_LLM_BACKEND=local``, which
+      ``resolve_backend`` converts into a ``LocalLLMBackend``
+      pointing at the configured Ollama endpoint.
+
+    The real auth, streaming, and session-id plumbing stays on the
+    MCP protocol layer; these two switches are the minimum needed
+    for a developer to say "use my local model" without editing
+    their shell profile.
+    """
+    import argparse
+
+    p = argparse.ArgumentParser(
+        prog="mcp_server.py",
+        description="Run the Remanentia MCP server on stdio.",
+    )
+    p.add_argument(
+        "--llm",
+        action="store_true",
+        help="synthesise LLM answers for recall (sets REMANENTIA_LLM_ANSWERS=1)",
+    )
+    p.add_argument(
+        "--local-llm",
+        action="store_true",
+        help="route LLM answers through the local Ollama backend "
+        "(sets REMANENTIA_LLM_BACKEND=local)",
+    )
+    p.add_argument(
+        "--guarded",
+        action="store_true",
+        help="enable Director-AI grounding check on every returned answer "
+        "(sets REMANENTIA_GUARDED=1; requires `pip install remanentia[guarded]`)",
+    )
+    args, _unknown = p.parse_known_args(argv)
+    if args.llm:
+        os.environ.setdefault("REMANENTIA_LLM_ANSWERS", "1")
+    if args.local_llm:
+        os.environ["REMANENTIA_LLM_BACKEND"] = "local"
+    if args.guarded:
+        os.environ.setdefault("REMANENTIA_GUARDED", "1")
+
+
 def main():  # pragma: no cover
     """Run MCP server on stdio."""
+    _parse_cli()
     for line in sys.stdin:
         line = line.strip()
         if not line:

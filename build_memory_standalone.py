@@ -14,7 +14,6 @@ import json
 import math
 import os
 import gzip
-import pickle  # legacy format detection only — new saves use JSON + npz
 import re
 import time
 from collections import Counter
@@ -22,6 +21,23 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import numpy as np
 import hashlib as _hashlib
+
+# Shared configuration constants live in memory_index (single source of
+# truth). The build pipeline pulls them here so ingestion uses identical
+# thresholds to the retrieval runtime. Pre-2026-04-17 these were local
+# copies that drifted out of sync; now re-exported.
+from memory_index import (
+    GRAPH_BOOST_QUERY_TYPES,
+    LOCATION_STOPWORDS,
+    MAX_CODE_CHUNK_CHARS,
+    MAX_CODE_CHUNKS,
+    MAX_FALLBACK_TEXT_CHARS,
+    MAX_FILE_CHARS,
+    MAX_TEXT_PARAGRAPH_CHARS,
+    MIN_FILE_CHARS,
+    RUST_BM25_MIN_PARAGRAPHS,
+    SKIP_PATH_PARTS,
+)
 
 BASE = Path(__file__).parent
 project-workspace_ROOT = BASE.parent.parent
@@ -169,13 +185,14 @@ class MemoryIndex:
         self._hash_hits = 0
         self._hash_misses = 0
 
-        # GLiNER model (load once, reuse)
-        gliner_model = None
+        # GLiNER model (load once, reuse). The reference is intentionally
+        # kept alive so downstream extraction calls can re-use it; we drop
+        # the local name since nothing in this scope consumes it.
         if use_gliner:  # pragma: no cover
             try:
                 from entity_extractor import _load_gliner
 
-                gliner_model = _load_gliner()
+                _load_gliner()
             except Exception:
                 pass
 
@@ -314,12 +331,13 @@ class MemoryIndex:
         """Compute paragraph embeddings on GPU via sentence-transformers."""
         try:
             from sentence_transformers import SentenceTransformer
-            import torch
         except ImportError:
             return
 
         if self._embed_model is None:
-            device = "cuda" if torch.cuda.is_available() else "cpu"
+            from device_utils import safe_device
+
+            device = safe_device()
             _local = BASE / "models" / "temporal-embed-v1"
             _model_id = str(_local) if _local.exists() else "all-MiniLM-L6-v2"
             self._embed_model = SentenceTransformer(_model_id, device=device)
@@ -430,9 +448,10 @@ class MemoryIndex:
             def _load_embed():  # pragma: no cover — downloads real model
                 try:
                     from sentence_transformers import SentenceTransformer
-                    import torch
 
-                    device = "cuda" if torch.cuda.is_available() else "cpu"
+                    from device_utils import safe_device
+
+                    device = safe_device()
                     _local = BASE / "models" / "temporal-embed-v1"
                     _model_id = str(_local) if _local.exists() else "all-MiniLM-L6-v2"
                     self._embed_model = SentenceTransformer(_model_id, device=device)
@@ -448,9 +467,10 @@ class MemoryIndex:
             def _load_ce():  # pragma: no cover — downloads real model
                 try:
                     from sentence_transformers import CrossEncoder
-                    import torch
 
-                    device = "cuda" if torch.cuda.is_available() else "cpu"
+                    from device_utils import safe_device
+
+                    device = safe_device()
                     _local_ce = BASE / "models" / "temporal-ce-v1"
                     _ce_id = (
                         str(_local_ce)
@@ -1049,8 +1069,7 @@ class MemoryIndex:
 
         meta = {
             "documents": [
-                (d.name, d.source, d.path, d.paragraphs, d.date, d.doc_type)
-                for d in self.documents
+                (d.name, d.source, d.path, d.paragraphs, d.date, d.doc_type) for d in self.documents
             ],
             "paragraph_index": self.paragraph_index,
             "paragraph_tokens": [list(t) for t in self.paragraph_tokens],
@@ -1093,13 +1112,14 @@ class MemoryIndex:
                     data["emb_scale"] = emb.get("emb_scale")
             except Exception:
                 data = None
-        # Try legacy pickle
-        if data is None and path.exists():
-            try:
-                with open(path, "rb") as f:
-                    data = pickle.load(f)  # noqa: S301 — legacy format migration
-            except Exception:
-                return False
+        # Legacy pickle no longer accepted. Operators with a .pkl index
+        # must run tools/migrate_pickle_to_npz.py before loading.
+        if data is None and path.exists() and path.suffix == ".pkl":
+            raise ValueError(
+                f"{path}: unsupported legacy pickle index. "
+                f"Run `python tools/migrate_pickle_to_npz.py --path {path.parent}` "
+                "to convert pre-0.4 indexes."
+            )
         if data is None:
             return False
         try:
@@ -1339,7 +1359,6 @@ def _generate_prospective_queries(text: str, doc_name: str, para_type: str) -> l
     becomes lookup. Expanded to 12 pattern categories.
     """
     queries = []
-    text_lower = text.lower()
 
     # 1. Named entities (capitalised phrases)
     caps = re.findall(r"[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*", text)
@@ -1813,7 +1832,7 @@ def auto_rebuild_if_needed(use_gpu: bool = True) -> MemoryIndex:
     idx = MemoryIndex()
     if idx.load() and not needs_rebuild():
         return idx
-    stats = idx.build(use_gpu_embeddings=use_gpu, use_gliner=False)
+    idx.build(use_gpu_embeddings=use_gpu, use_gliner=False)
     idx.save()
     return idx
 

@@ -194,8 +194,20 @@ class TestLocalLLMBackend:
             assert b.complete("test") == "padded"
 
     def test_base_url_trailing_slash_stripped(self):
-        b = LocalLLMBackend(base_url="http://localhost:8080/v1/")
-        assert b._base_url == "http://localhost:8080/v1"
+        b = LocalLLMBackend(base_url="http://localhost:11434/v1/")
+        assert b._base_url == "http://localhost:11434/v1"
+
+    def test_default_url_is_ollama(self):
+        b = LocalLLMBackend()
+        assert b._base_url == "http://localhost:11434/v1"
+
+    def test_default_model_is_gemma3_4b(self):
+        b = LocalLLMBackend()
+        assert b._model == "gemma3:4b"
+
+    def test_default_timeout_60s(self):
+        b = LocalLLMBackend()
+        assert b._timeout == 60.0
 
 
 # ── AutoBackend ───────────────────────────────────────────────────
@@ -252,8 +264,8 @@ class TestLLMConfig:
     def test_defaults(self):
         cfg = LLMConfig()
         assert cfg.backend == "auto"
-        assert cfg.local_url == "http://localhost:8080/v1"
-        assert cfg.local_model == "qwen2.5-7b-instruct"
+        assert cfg.local_url == "http://localhost:11434/v1"
+        assert cfg.local_model == "gemma3:4b"
         assert cfg.anthropic_model == "claude-haiku-4-5-20251001"
         assert cfg.max_tokens_extract == 100
         assert cfg.max_tokens_generate == 200
@@ -303,7 +315,7 @@ class TestLoadConfig:
         toml_path.write_text('[llm]\nbackend = "none"\n', encoding="utf-8")
         cfg = load_config(toml_path)
         assert cfg.backend == "none"
-        assert cfg.local_url == "http://localhost:8080/v1"  # default preserved
+        assert cfg.local_url == "http://localhost:11434/v1"  # default preserved
 
 
 # ── _parse_toml ───────────────────────────────────────────────────

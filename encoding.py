@@ -276,13 +276,11 @@ if __name__ == "__main__":
     ]
 
     print("Encoding comparison — semantic similarity:\n")
-    has_embed = False
-    try:
-        from sentence_transformers import SentenceTransformer
+    # Capability probe: sentence-transformers is an optional dep, only
+    # needed here to gate the embedding-backend comparison branch.
+    from importlib.util import find_spec
 
-        has_embed = True
-    except ImportError:
-        pass
+    has_embed = find_spec("sentence_transformers") is not None
 
     for a, b in pairs:
         set_backend("hash")

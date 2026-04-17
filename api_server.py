@@ -28,15 +28,26 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 BASE = Path(__file__).parent
 sys.path.insert(0, str(BASE))
 
+from api_security import (  # noqa: E402 — path inserted above
+    DEFAULT_BODY_LIMIT,
+    DEFAULT_BURST,
+    DEFAULT_RATE_PER_MINUTE,
+    BearerAuth,
+    TokenBucketLimiter,
+    enforce_body_size,
+)
+
 PORT = 8001
+_PUBLIC_PATHS = frozenset({"/health"})  # never require auth or rate-limit
 
 
 def _json_default(obj):
@@ -53,9 +64,57 @@ def _json_default(obj):
 
 
 class RemanentiaHandler(BaseHTTPRequestHandler):
-    """HTTP handler for Remanentia API."""
+    """HTTP handler for Remanentia API.
+
+    Security layers evaluated in order on every request:
+
+    1. Body size (POST only) — 413 if declared Content-Length exceeds
+       ``self.server.body_limit`` bytes.
+    2. Rate limit — 429 if :class:`TokenBucketLimiter` refuses the call.
+    3. Bearer auth — 401 if ``Authorization: Bearer <token>`` mismatches
+       ``self.server.auth``.
+
+    ``/health`` is exempt from all three so external monitors can ping
+    a locked-down server.
+    """
+
+    # ---- security gates -------------------------------------------------
+
+    def _client_ip(self) -> str:
+        # http.server uses (host, port); first element is safe for buckets.
+        return self.client_address[0] if self.client_address else "unknown"
+
+    def _security_gates(self, method: str) -> bool:
+        """Run body/rate/auth checks. Return False if response already sent."""
+        if self.path in _PUBLIC_PATHS:
+            return True
+
+        limiter: TokenBucketLimiter = self.server.limiter  # type: ignore[attr-defined]
+        auth: BearerAuth = self.server.auth  # type: ignore[attr-defined]
+
+        if method == "POST":
+            try:
+                declared = int(self.headers.get("Content-Length", 0))
+                enforce_body_size(declared, self.server.body_limit)  # type: ignore[attr-defined]
+            except ValueError as e:
+                self._json_response({"error": str(e)}, 413)
+                return False
+
+        if not limiter.allow(self._client_ip()):
+            self._json_response({"error": "rate limit exceeded"}, 429)
+            return False
+
+        if not auth.check_header(self.headers.get("Authorization")):
+            self._json_response({"error": "authentication required"}, 401)
+            return False
+
+        return True
+
+    # ---- request dispatch ----------------------------------------------
 
     def do_GET(self):
+        if not self._security_gates("GET"):
+            return
         if self.path == "/health":
             self._json_response({"status": "ok", "timestamp": time.time()})
         elif self.path == "/status":
@@ -64,6 +123,8 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
             self._json_response({"error": f"Unknown path: {self.path}"}, 404)
 
     def do_POST(self):
+        if not self._security_gates("POST"):
+            return
         body = self._read_body()
 
         if self.path == "/recall":
@@ -187,7 +248,7 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
             from knowledge_store import KnowledgeStore
 
             ks = KnowledgeStore()
-            ks.add_note(content=content, tags=[trigger] if trigger else [])
+            ks.add_note(content=content, keywords=[trigger] if trigger else None)
             self._json_response({"status": "ok", "stored": content[:80]})
         except Exception as e:
             self._json_response({"error": str(e)}, 500)
@@ -217,19 +278,71 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
             super().log_message(fmt, *args)
 
 
+def build_server(
+    host: str,
+    port: int,
+    *,
+    auth: BearerAuth | None = None,
+    limiter: TokenBucketLimiter | None = None,
+    body_limit: int = DEFAULT_BODY_LIMIT,
+) -> HTTPServer:
+    """Construct an HTTPServer with security attributes attached.
+
+    Factored out of :func:`main` so tests can drive the handler without
+    starting a blocking process.
+    """
+    server = HTTPServer((host, port), RemanentiaHandler)
+    server.auth = auth if auth is not None else BearerAuth.from_env()  # type: ignore[attr-defined]
+    server.limiter = (  # type: ignore[attr-defined]
+        limiter
+        if limiter is not None
+        else TokenBucketLimiter(
+            rate_per_minute=float(os.environ.get("REMANENTIA_API_RATE", DEFAULT_RATE_PER_MINUTE)),
+            burst=int(os.environ.get("REMANENTIA_API_BURST", DEFAULT_BURST)),
+        )
+    )
+    server.body_limit = body_limit  # type: ignore[attr-defined]
+    return server
+
+
 def main():  # pragma: no cover — blocking server entry point
     p = argparse.ArgumentParser(description="Remanentia HTTP API server")
     p.add_argument("--port", type=int, default=PORT)
     p.add_argument("--host", default="127.0.0.1")
+    p.add_argument(
+        "--token-file",
+        help="path to a file containing the bearer token (overrides REMANENTIA_API_TOKEN)",
+    )
+    p.add_argument(
+        "--require-auth",
+        action="store_true",
+        help="refuse to start if no token is configured",
+    )
+    p.add_argument(
+        "--body-limit",
+        type=int,
+        default=int(os.environ.get("REMANENTIA_API_MAX_BODY", DEFAULT_BODY_LIMIT)),
+        help="max POST body bytes (default 1 MiB)",
+    )
     args = p.parse_args()
 
-    server = HTTPServer((args.host, args.port), RemanentiaHandler)
+    auth = BearerAuth.from_file(args.token_file) if args.token_file else BearerAuth.from_env()
+    if args.require_auth and not auth.enabled:
+        print(
+            "[SECURITY] --require-auth specified but no token configured; refusing to start.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    server = build_server(args.host, args.port, auth=auth, body_limit=args.body_limit)
     print(f"Remanentia API running on http://{args.host}:{args.port}")
-    print(f"  GET  /health")
-    print(f'  POST /recall         {{"query": "...", "top_k": 5}}')
-    print(f"  GET  /status")
-    print(f'  POST /consolidate    {{"force": false}}')
-    print(f'  POST /remember       {{"content": "...", "trigger": "..."}}')
+    print(f"  auth: {'ENABLED (Bearer)' if auth.enabled else 'DISABLED (dev only)'}")
+    print(f"  body limit: {args.body_limit} B")
+    print("  GET  /health")
+    print('  POST /recall         {"query": "...", "top_k": 5}')
+    print("  GET  /status")
+    print('  POST /consolidate    {"force": false}')
+    print('  POST /remember       {"content": "...", "trigger": "..."}')
     try:
         server.serve_forever()
     except KeyboardInterrupt:

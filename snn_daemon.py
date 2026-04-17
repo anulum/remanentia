@@ -35,7 +35,6 @@ import argparse
 import hashlib
 import json
 import logging
-import pickle  # legacy format detection only — new saves use numpy.savez
 import re
 import signal
 import sys
@@ -43,6 +42,8 @@ import time
 from pathlib import Path
 
 import numpy as np
+
+from file_utils import atomic_write_json
 
 logging.basicConfig(
     level=logging.INFO,
@@ -62,7 +63,7 @@ except ImportError:
 
 
 def _load_daemon_state(path: Path) -> dict:
-    """Load daemon state from npz (preferred) or legacy pickle."""
+    """Load daemon state from npz. Legacy pickle no longer accepted."""
     import zipfile
 
     resolved = Path(str(path))
@@ -73,10 +74,13 @@ def _load_daemon_state(path: Path) -> dict:
         if zipfile.is_zipfile(candidate):
             data = np.load(candidate, allow_pickle=False)
             return dict(data)
-    # Legacy pickle fallback
-    logger.warning("Loading legacy pickle state from %s — will re-save as npz", path)
-    with open(resolved, "rb") as f:
-        return pickle.load(f)  # noqa: S301 — legacy format migration
+    if resolved.exists():
+        raise ValueError(
+            f"{resolved}: unsupported legacy pickle format. "
+            f"Run `python tools/migrate_pickle_to_npz.py --path {resolved.parent}` "
+            "to convert pre-0.4 state files to npz."
+        )
+    raise FileNotFoundError(f"No state file at {npz_path} or {resolved}")
 
 
 BASE_DIR = Path(__file__).parent
@@ -413,19 +417,16 @@ def _write_retrieval_state(
     source: str,
     n_neurons: int,
 ) -> None:
-    RETRIEVAL_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    RETRIEVAL_STATE_PATH.write_text(
-        json.dumps(
-            {
-                "checkpoint_path": str(checkpoint_path.resolve()),
-                "encoding_backend": encoding_backend,
-                "source": source,
-                "n_neurons": n_neurons,
-                "updated_at": time.time(),
-            },
-            indent=2,
-        )
-        + "\n"
+    atomic_write_json(
+        RETRIEVAL_STATE_PATH,
+        {
+            "checkpoint_path": str(checkpoint_path.resolve()),
+            "encoding_backend": encoding_backend,
+            "source": source,
+            "n_neurons": n_neurons,
+            "updated_at": time.time(),
+        },
+        indent=2,
     )
 
 
@@ -463,7 +464,7 @@ def heartbeat(agent: str, project: str = "", status: str = "active", detail: str
         "pid": os.getpid(),
         "timestamp": time.time(),
     }
-    path.write_text(json.dumps(data, indent=2) + "\n")
+    atomic_write_json(path, data, indent=2)
     return str(path)
 
 
@@ -500,7 +501,7 @@ def drop_stimulus(text: str, source: str = "unknown"):
         "source": source,
         "timestamp": ts,
     }
-    path.write_text(json.dumps(data, indent=2) + "\n")
+    atomic_write_json(path, data, indent=2)
     logger.info("Stimulus dropped by %s: %s", source, path.name)
     return str(path)
 
@@ -757,7 +758,7 @@ def main():
         # Save ArcaneNeuron ensemble (PyO3 objects can't be pickled)
         if arcane_neurons:
             ensemble_states = [an.get_state() for an in arcane_neurons]
-            arcane_state_path.write_text(json.dumps(ensemble_states, indent=2) + "\n")
+            atomic_write_json(arcane_state_path, ensemble_states, indent=2)
 
         # Save LIF state
         net.save(net_path)
@@ -825,7 +826,7 @@ def main():
             "raster": raster_row,
             "timestamp": time.time(),
         }
-        summary_path.write_text(json.dumps(summary, indent=2) + "\n")
+        atomic_write_json(summary_path, summary, indent=2)
         with open(history_path, "a") as hf:
             hf.write(
                 json.dumps(

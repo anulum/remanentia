@@ -29,3 +29,51 @@ SPDX-License-Identifier = "AGPL-3.0-or-later"
 path = "docs/assets/**"
 SPDX-FileCopyrightText = "2020-2026 Miroslav Šotek"
 SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+# Jupyter notebooks carry their SPDX marker in the first markdown
+# cell; REUSE does not parse ipynb cell content, so the annotation
+# lives here.
+[[annotations]]
+path = "notebooks/**"
+SPDX-FileCopyrightText = "2020-2026 Miroslav Šotek"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+# Benchmark outputs (our runs on public datasets — we redistribute
+# only our hypotheses and judge labels, not the source oracles).
+[[annotations]]
+path = [
+  "data/longmemeval_hypotheses*.jsonl",
+  "paper/locomo_results.json",
+  "paper/autoresearch_retrieval_2026-04-06.log",
+  "paper/longmemeval_final_results_2026-04-06.txt",
+  ".zenodo.json",
+]
+SPDX-FileCopyrightText = "2026 Miroslav Šotek"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+# Repository-root config files without a natural comment syntax for
+# inline SPDX headers (editor config, git config, requirements files,
+# pre-commit config, Dockerfile-ignore, Makefile, pip requirements).
+[[annotations]]
+path = [
+  ".dockerignore",
+  ".editorconfig",
+  ".gitattributes",
+  ".gitignore",
+  ".pre-commit-config.yaml",
+  ".github/CODEOWNERS",
+  "CITATION.cff",
+  "Makefile",
+  "requirements.txt",
+  "requirements-dev.txt",
+  "_typos.toml",
+]
+SPDX-FileCopyrightText = "2020-2026 Miroslav Šotek"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+# Public-facing website artefacts (landing page, its Apache-style
+# backups). Same licence as the repo.
+[[annotations]]
+path = "web/**"
+SPDX-FileCopyrightText = "2020-2026 Miroslav Šotek"
+SPDX-License-Identifier = "AGPL-3.0-or-later"

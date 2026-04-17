@@ -322,7 +322,8 @@ class TestTemporalCodeExecute:
         events = [TemporalEvent(date="2026-03-20", text="Event happened", source="a.md")]
         result = temporal_code_execute("how long since the event", events)
         assert result is not None
-        assert "days since" in result
+        assert "days" in result
+        assert "since" in result
 
     def test_single_event_how_long(self):
         events = [TemporalEvent(date="2026-03-15", text="Only event", source="a.md")]
@@ -712,3 +713,350 @@ class TestResonanceSearch:
         # Rust path computes phase internally; Python path sets ev.phase
         # Either way, the event must be found
         assert results[0][0].text == "auto"
+
+
+# ── Duration arithmetic (Task #27) ──────────────────────────────
+
+
+class TestDurationArithmetic:
+    """Tests for enhanced temporal_code_execute duration handling."""
+
+    def test_how_many_weeks(self):
+        events = [
+            TemporalEvent(date="2023-01-01", text="Start event", source="a"),
+            TemporalEvent(date="2023-01-22", text="End event", source="b"),
+        ]
+        result = temporal_code_execute("how many weeks between start and end", events)
+        assert result is not None
+        assert "3 weeks" in result
+
+    def test_how_many_weeks_with_remainder(self):
+        events = [
+            TemporalEvent(date="2023-01-01", text="Start event", source="a"),
+            TemporalEvent(date="2023-01-25", text="End event", source="b"),
+        ]
+        result = temporal_code_execute("how many weeks between events", events)
+        assert result is not None
+        assert "3 weeks" in result
+        assert "3 days" in result  # 24 days = 3w + 3d
+
+    def test_how_many_months(self):
+        events = [
+            TemporalEvent(date="2023-01-15", text="Start event", source="a"),
+            TemporalEvent(date="2023-04-15", text="End event", source="b"),
+        ]
+        result = temporal_code_execute("how many months between events", events)
+        assert result is not None
+        assert "3 months" in result
+
+    def test_duration_keyword_matching(self):
+        """When query mentions specific events, those events are picked."""
+        events = [
+            TemporalEvent(date="2023-01-01", text="gym session", source="a"),
+            TemporalEvent(date="2023-01-10", text="dentist visit", source="b"),
+            TemporalEvent(date="2023-03-01", text="gym session again", source="c"),
+        ]
+        result = temporal_code_execute("how many days between the gym sessions", events)
+        assert result is not None
+        # Should pick gym (Jan 1) and gym (Mar 1) = 59 days, not dentist
+        assert "59 days" in result
+
+    def test_how_many_times(self):
+        events = [
+            TemporalEvent(date="2023-01-05", text="went to gym", source="a"),
+            TemporalEvent(date="2023-01-12", text="went to gym", source="b"),
+            TemporalEvent(date="2023-01-19", text="went to gym", source="c"),
+        ]
+        result = temporal_code_execute("how many times did I go to the gym", events)
+        assert result is not None
+        assert "3 times" in result
+
+    def test_how_many_times_unique_dates(self):
+        """Counting uses unique dates, not duplicate events."""
+        events = [
+            TemporalEvent(date="2023-01-05", text="went to gym morning", source="a"),
+            TemporalEvent(date="2023-01-05", text="went to gym evening", source="b"),
+            TemporalEvent(date="2023-01-12", text="went to gym", source="c"),
+        ]
+        result = temporal_code_execute("how many times did I go to the gym", events)
+        assert result is not None
+        assert "2 times" in result  # 2 unique dates
+
+    def test_pick_duration_pair_fallback(self):
+        """Falls back to chronological extremes when no keyword match."""
+        from temporal_graph import _pick_duration_pair
+        from datetime import date
+
+        parsed = [
+            (date(2023, 1, 1), "alpha"),
+            (date(2023, 1, 10), "beta"),
+            (date(2023, 1, 20), "gamma"),
+        ]
+        result = _pick_duration_pair(parsed, "unrelated query xyz")
+        assert result is not None
+        assert result[0] == date(2023, 1, 1)
+        assert result[2] == date(2023, 1, 20)
+
+    def test_pick_duration_pair_single_event(self):
+        from temporal_graph import _pick_duration_pair
+        from datetime import date
+
+        assert _pick_duration_pair([(date(2023, 1, 1), "only")], "q") is None
+
+
+# ── Fuzzy inclusive/exclusive durations (Task #33) ──────────────
+
+
+class TestFuzzyInclusiveExclusive:
+    """Dual-format day count output (Gemini R9 follow-up recommendation #2)."""
+
+    def test_days_dual_format(self):
+        """how many days between returns both exclusive (N) and inclusive (N+1)."""
+        events = [
+            TemporalEvent(date="2024-01-02", text="Sunday mass at St. Mary's", source="a"),
+            TemporalEvent(date="2024-02-01", text="Ash Wednesday service at cathedral", source="b"),
+        ]
+        result = temporal_code_execute(
+            "how many days between the Sunday mass and the Ash Wednesday service", events
+        )
+        assert result is not None
+        # Gold: "30 days. 31 days (including the last day) is also acceptable."
+        assert "30 days" in result
+        assert "31 days" in result
+        assert "both endpoints" in result
+
+    def test_days_zero_day_still_shows_one_inclusive(self):
+        events = [
+            TemporalEvent(date="2024-01-02", text="alpha event", source="a"),
+            TemporalEvent(date="2024-01-02", text="beta event", source="b"),
+        ]
+        result = temporal_code_execute("how many days between alpha and beta", events)
+        # Same day → 0 exclusive, 1 inclusive
+        assert result is not None
+        assert "0 days" in result
+        assert "1 days" in result
+
+    def test_weeks_dual_format(self):
+        events = [
+            TemporalEvent(date="2023-01-01", text="project start", source="a"),
+            TemporalEvent(date="2023-01-22", text="project end", source="b"),
+        ]
+        result = temporal_code_execute(
+            "how many weeks between the project start and project end", events
+        )
+        assert result is not None
+        assert "3 weeks" in result
+        assert "21 days exclusive" in result
+        assert "22 inclusive" in result
+
+    def test_months_dual_format(self):
+        events = [
+            TemporalEvent(date="2023-01-15", text="joined company", source="a"),
+            TemporalEvent(date="2023-04-15", text="left company", source="b"),
+        ]
+        result = temporal_code_execute("how many months between joining and leaving", events)
+        assert result is not None
+        assert "3 months" in result
+        assert "90 days exclusive" in result
+        assert "91 inclusive" in result
+
+
+# ── question_date anchoring for "X ago" (Task #34) ──────────────
+
+
+class TestQuestionDateAnchor:
+    """`how many X ago` should use question_date as today, not date.today()."""
+
+    def test_days_ago_with_question_date(self):
+        events = [TemporalEvent(date="2023-04-06", text="Maundy Thursday service", source="a")]
+        result = temporal_code_execute(
+            "how many days ago did I attend the Maundy Thursday service?",
+            events,
+            question_date="2023/04/10 (Mon) 07:43",
+        )
+        assert result is not None
+        assert "4 days" in result
+        assert "5" in result
+
+    def test_weeks_ago_with_question_date(self):
+        events = [TemporalEvent(date="2023-04-16", text="started using Ibotta", source="a")]
+        result = temporal_code_execute(
+            "how many weeks ago did I start using Ibotta?",
+            events,
+            question_date="2023/05/07 (Sun) 12:00",
+        )
+        assert result is not None
+        assert "3 weeks" in result
+
+    def test_months_ago_with_question_date(self):
+        events = [TemporalEvent(date="2022-12-27", text="booked Airbnb in SF", source="a")]
+        result = temporal_code_execute(
+            "how many months ago did I book the Airbnb?",
+            events,
+            question_date="2023/05/27 (Sat) 01:55",
+        )
+        assert result is not None
+        assert "5 months" in result
+
+    def test_empty_question_date_falls_back_to_today(self):
+        events = [TemporalEvent(date="2023-01-01", text="old event", source="a")]
+        result = temporal_code_execute("how many days since the event?", events)
+        assert result is not None
+        assert "days" in result
+        assert "since" in result
+
+    def test_invalid_question_date_falls_back(self):
+        events = [TemporalEvent(date="2023-01-01", text="event", source="a")]
+        result = temporal_code_execute("how many days ago?", events, question_date="not a date")
+        assert result is not None
+        assert "days" in result
+
+    def test_resolve_question_date_helper(self):
+        from temporal_graph import _resolve_question_date
+        from datetime import date as _d
+
+        assert _resolve_question_date("2023/04/10 (Mon) 07:43") == _d(2023, 4, 10)
+        assert _resolve_question_date("2023-04-10") == _d(2023, 4, 10)
+        assert _resolve_question_date("garbage") == _d.today()
+        assert _resolve_question_date("") == _d.today()
+
+
+# ── Multi-event proximity tuning (Task #35) ─────────────────────
+
+
+class TestEventScoring:
+    """Combined unigram+bigram+density scoring (Gemini #4)."""
+
+    def test_bigram_phrase_beats_scattered_unigrams(self):
+        from temporal_graph import _score_event_vs_query
+
+        q = "how many days between the guitar lessons and the amp purchase"
+        q_tokens = {"guitar", "lessons", "amp", "purchase", "between", "many", "days"}
+        q_bigrams = {("guitar", "lessons"), ("amp", "purchase")}
+
+        # Event A: "guitar lessons started" — hits the 'guitar lessons' bigram
+        a = _score_event_vs_query("guitar lessons started", q, q_tokens, q_bigrams)
+        # Event B: "bought a guitar and a new amp" — 2 unigrams but no bigram
+        b = _score_event_vs_query("bought a guitar and a new amp", q, q_tokens, q_bigrams)
+
+        assert a > b, f"bigram-match event should score higher (a={a:.2f}, b={b:.2f})"
+
+    def test_short_dense_match_beats_long_sparse(self):
+        from temporal_graph import _score_event_vs_query
+
+        q = "how many days between the gym sessions"
+        q_tokens = {"gym", "sessions", "between", "many", "days"}
+        q_bigrams = {("gym", "sessions")}
+
+        short = _score_event_vs_query("gym session", q, q_tokens, q_bigrams)
+        long = _score_event_vs_query(
+            "I went to the gym yesterday and then had lunch with my brother at the mall",
+            q,
+            q_tokens,
+            q_bigrams,
+        )
+        assert short > long, (
+            f"dense short match should score higher (short={short:.2f}, long={long:.2f})"
+        )
+
+    def test_zero_overlap_returns_zero(self):
+        from temporal_graph import _score_event_vs_query
+
+        q = "how long did the project take"
+        q_tokens = {"project", "long", "take"}
+        q_bigrams = set()
+        result = _score_event_vs_query("unrelated cooking dinner", q, q_tokens, q_bigrams)
+        assert result == 0.0
+
+    def test_empty_event_text(self):
+        from temporal_graph import _score_event_vs_query
+
+        assert _score_event_vs_query("", "query", set(), set()) == 0.0
+
+
+class TestExpandChainedDates:
+    """Multi-hop temporal chaining (Task #36)."""
+
+    def test_days_after(self):
+        from temporal_graph import _expand_chained_dates
+
+        result = _expand_chained_dates("the concert was 3 days after 2023-05-14")
+        assert result == ["2023-05-17"]
+
+    def test_days_before(self):
+        from temporal_graph import _expand_chained_dates
+
+        result = _expand_chained_dates("I left 5 days before 2023-05-14")
+        assert result == ["2023-05-09"]
+
+    def test_weeks_after(self):
+        from temporal_graph import _expand_chained_dates
+
+        result = _expand_chained_dates("meeting scheduled 2 weeks after 2023-05-14")
+        assert result == ["2023-05-28"]
+
+    def test_weeks_before(self):
+        from temporal_graph import _expand_chained_dates
+
+        result = _expand_chained_dates("started 4 weeks before 2023-06-01")
+        assert result == ["2023-05-04"]
+
+    def test_months_after_approx(self):
+        from temporal_graph import _expand_chained_dates
+
+        # 2 months = 60 days in this implementation
+        result = _expand_chained_dates("followup 2 months after 2023-01-10")
+        assert result == ["2023-03-11"]
+
+    def test_multiple_chained_references_same_sentence(self):
+        from temporal_graph import _expand_chained_dates
+
+        result = _expand_chained_dates(
+            "event A was 3 days after 2023-05-14, event B was 1 week before 2023-06-01"
+        )
+        assert "2023-05-17" in result
+        assert "2023-05-25" in result
+
+    def test_no_chained_reference(self):
+        from temporal_graph import _expand_chained_dates
+
+        assert _expand_chained_dates("the cat sat on the mat") == []
+
+    def test_no_absolute_anchor(self):
+        """Chain with non-ISO anchor is NOT expanded (out of scope)."""
+        from temporal_graph import _expand_chained_dates
+
+        # "3 days after my birthday" has no ISO anchor → skipped
+        assert _expand_chained_dates("3 days after my birthday") == []
+
+    def test_extract_events_picks_up_chained(self):
+        """Full pipeline: TemporalGraph.extract_events sees chained dates."""
+        from temporal_graph import TemporalGraph
+
+        tg = TemporalGraph()
+        events = tg.extract_events(
+            "The concert was 2 weeks after 2023-05-14.",
+            "doc",
+        )
+        dates = [e.date for e in events]
+        assert "2023-05-14" in dates
+        assert "2023-05-28" in dates
+
+
+class TestPickDurationPairBigramTiebreak:
+    def test_bigram_beats_unigram_tie(self):
+        """Two candidates with same unigram count — bigram match wins."""
+        from datetime import date as _d
+        from temporal_graph import _pick_duration_pair
+
+        events = [
+            (_d(2023, 1, 1), "guitar lessons started"),  # has 'guitar lessons' bigram
+            (_d(2023, 2, 1), "bought guitar pick"),  # unigram match only
+            (_d(2023, 4, 1), "guitar lessons ended"),  # has 'guitar lessons' bigram
+        ]
+        result = _pick_duration_pair(events, "how many days between the guitar lessons")
+        assert result is not None
+        d1, t1, d2, t2 = result
+        assert "guitar lessons" in t1.lower() or "guitar lessons" in t2.lower()
+        # Should pick the two bigram-match events (Jan and Apr), span 90 days
+        assert (d2 - d1).days == 90

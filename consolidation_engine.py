@@ -408,8 +408,20 @@ def _write_semantic_memory(
     entities: list[str],
     content: str,
     validity_state: str = "active",
+    redact_pii: bool = True,
 ) -> Path:
-    """Write a structured semantic memory file with lifecycle state."""
+    """Write a structured semantic memory file with lifecycle state.
+
+    PII redaction runs on *content* by default so emails / phones /
+    bank details / API keys do not get indexed into memories.
+    """
+    from file_utils import atomic_write_text
+
+    if redact_pii:
+        from pii_redactor import redact
+
+        content = redact(content).text
+
     cat_dir = SEMANTIC_DIR / category
     cat_dir.mkdir(parents=True, exist_ok=True)
 
@@ -441,7 +453,7 @@ def _write_semantic_memory(
     lines.append("")
     lines.append(content)
 
-    path.write_text("\n".join(lines), encoding="utf-8")
+    atomic_write_text(path, "\n".join(lines))
     return path
 
 

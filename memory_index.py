@@ -24,7 +24,6 @@ import json
 import math
 import os
 import gzip
-import pickle  # legacy format detection only — new saves use JSON + npz
 import re
 import time
 from collections import Counter
@@ -353,12 +352,13 @@ class MemoryIndex:
         """Compute paragraph embeddings on GPU via sentence-transformers."""
         try:
             from sentence_transformers import SentenceTransformer
-            import torch
         except ImportError:
             return
 
         if self._embed_model is None:
-            device = "cuda" if torch.cuda.is_available() else "cpu"
+            from device_utils import safe_device
+
+            device = safe_device()
             _local = BASE / "models" / "temporal-embed-v1"
             _model_id = str(_local) if _local.exists() else "all-MiniLM-L6-v2"
             self._embed_model = SentenceTransformer(_model_id, device=device)
@@ -469,9 +469,10 @@ class MemoryIndex:
             def _load_embed():  # pragma: no cover — downloads real model
                 try:
                     from sentence_transformers import SentenceTransformer
-                    import torch
 
-                    device = "cuda" if torch.cuda.is_available() else "cpu"
+                    from device_utils import safe_device
+
+                    device = safe_device()
                     _local = BASE / "models" / "temporal-embed-v1"
                     _model_id = str(_local) if _local.exists() else "all-MiniLM-L6-v2"
                     self._embed_model = SentenceTransformer(_model_id, device=device)
@@ -487,9 +488,10 @@ class MemoryIndex:
             def _load_ce():  # pragma: no cover — downloads real model
                 try:
                     from sentence_transformers import CrossEncoder
-                    import torch
 
-                    device = "cuda" if torch.cuda.is_available() else "cpu"
+                    from device_utils import safe_device
+
+                    device = safe_device()
                     _local_ce = BASE / "models" / "temporal-ce-v1"
                     _ce_id = (
                         str(_local_ce)
@@ -1208,12 +1210,9 @@ class MemoryIndex:
                 return meta
             except Exception:
                 return None
-        # Legacy pickle
-        try:
-            with open(path, "rb") as f:
-                return pickle.load(f)  # noqa: S301 — legacy format migration
-        except Exception:
-            return None
+        # Legacy pickle no longer accepted. Caller gets None and the
+        # migrator message surfaces in the outer load() diagnostics.
+        return None
 
 
 # ── Entity graph for retrieval boosting ──────────────────────────

@@ -33,7 +33,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import pickle  # legacy format detection only — new saves use numpy.savez
 import re
 from pathlib import Path
 
@@ -69,10 +68,12 @@ STDP_W_MAX = 2.0
 
 
 def _load_state(path: Path) -> dict:
-    """Load network state from npz (preferred) or legacy pickle.
+    """Load network state from npz.
 
-    Tries numpy.load first. If the file is not a valid ZIP/npz,
-    falls back to pickle for backward compatibility with pre-0.4 saves.
+    Legacy pickle format is no longer accepted at runtime (removed
+    2026-04-17 for security — pickle.load is an arbitrary-code-execution
+    primitive). Operators with pre-0.4 pickle files must migrate them
+    with ``python tools/migrate_pickle_to_npz.py``.
     """
     import zipfile
 
@@ -85,10 +86,15 @@ def _load_state(path: Path) -> dict:
         if zipfile.is_zipfile(candidate):
             data = np.load(candidate, allow_pickle=False)
             return dict(data)
-    # Legacy pickle fallback
-    logger.warning("Loading legacy pickle state from %s — will re-save as npz", path)
-    with open(resolved, "rb") as f:
-        return pickle.load(f)  # noqa: S301 — legacy format migration
+    # Non-npz file on disk: refuse to load it as pickle. Direct the
+    # operator at the migrator so they can opt in explicitly.
+    if resolved.exists():
+        raise ValueError(
+            f"{resolved}: unsupported legacy pickle format. "
+            f"Run `python tools/migrate_pickle_to_npz.py --path {resolved.parent}` "
+            "to convert pre-0.4 state files to npz."
+        )
+    raise FileNotFoundError(f"No state file at {npz_path} or {resolved}")
 
 
 def detect_backend() -> str:

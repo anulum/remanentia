@@ -48,12 +48,21 @@ nav:
     - Quick Start: tutorials/quickstart.md
     - Knowledge Store: tutorials/knowledge_store_tutorial.md
     - Temporal Queries: tutorials/temporal_tutorial.md
+    - Notebook Walkthrough: tutorials/notebook_walkthrough.md
   - Guides:
     - Learning Path: guides/learning-path.md
     - Getting Started: guides/getting-started.md
     - User Manual: guides/USER_MANUAL.md
     - Integration Guide: guides/INTEGRATION_GUIDE.md
     - Performance Tuning: guides/PERFORMANCE_TUNING.md
+    - Local LLM Setup: guides/local_llm_setup.md
+  - Model Cards:
+    - Overview: models/README.md
+    - Embedding (C1): models/embedding.md
+    - Cross-Encoder (C2): models/cross_encoder.md
+    - Relation Classifier (C3): models/relation.md
+    - Date Normaliser (C4): models/date_normalizer.md
+    - Fact Validity (C5): models/fact_validity.md
   - API Reference:
     - memory_index: api/memory_index.md
     - memory_recall: api/memory_recall.md
@@ -72,14 +81,30 @@ nav:
     - temporal_relation: api/temporal_relation.md
     - fact_validity_model: api/fact_validity_model.md
     - api_server: api/api_server.md
+    - api_security: api/api_security.md
     - skill_extractor: api/skill_extractor.md
     - active_retrieval: api/active_retrieval.md
+    - aggregate_precompute: api/aggregate_precompute.md
+    - device_utils: api/device_utils.md
+    - file_utils: api/file_utils.md
+    - memory_guarded: api/memory_guarded.md
+    - pii_redactor: api/pii_redactor.md
+    - seed_utils: api/seed_utils.md
     - CLI: api/cli.md
   - Architecture:
     - Overview: architecture/architecture.md
+    - ADR Log:
+      - Index: adr/README.md
+      - Template: adr/0000-template.md
+      - 0001 Use ADR log: adr/0001-use-adr-log.md
+      - 0002 Remove pickle runtime: adr/0002-remove-pickle-runtime.md
+      - 0003 Pluggable LLM backend: adr/0003-pluggable-llm-backend-protocol.md
+      - 0004 Dual retrieval stacks: adr/0004-dual-retrieval-stacks.md
+      - 0005 Rule-based date normalisation: adr/0005-rule-based-date-normalisation.md
   - Benchmarks:
     - LongMemEval: benchmarks/LongMemEval.md
     - LOCOMO: benchmarks/LOCOMO.md
+    - Channel Ablations: benchmarks/CHANNEL_ABLATIONS.md
   - Research:
     - SNN Consolidation: research/snn_consolidation.md
   - Changelog: CHANGELOG.md

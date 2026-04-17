@@ -437,6 +437,24 @@ class TestDecomposeSessions:
         assert 0 in sessions
         assert 1 in sessions
 
+    def test_session_date_propagated(self):
+        """Task #32: session_date should be set on every fact when haystack_dates given."""
+        dates = ["2023/05/22 (Mon) 09:38", "2023/05/22 (Mon) 18:30"]
+        facts = decompose_sessions(self._sessions(), session_dates=dates)
+        assert len(facts) > 0
+        for f in facts:
+            expected = dates[f.session_idx]
+            assert f.session_date == expected, (
+                f"fact at sess_idx={f.session_idx} got session_date={f.session_date!r}, "
+                f"expected {expected!r}"
+            )
+
+    def test_session_date_empty_without_haystack(self):
+        """Without session_dates argument, session_date stays empty."""
+        facts = decompose_sessions(self._sessions())
+        for f in facts:
+            assert f.session_date == ""
+
     def test_supersession_sets_valid_until(self):
         facts = decompose_sessions(self._sessions())
         # "started" is a change verb → supersedes=True

@@ -61,7 +61,6 @@ import json
 import logging
 import math
 import gzip
-import pickle  # legacy format detection only — new saves use JSON/npz
 import re
 import sys
 import time
@@ -111,12 +110,14 @@ def _load_json_gz(path: Path) -> dict | None:
 
 
 def _load_pickle_safe(path: Path) -> dict | None:
-    """Load legacy pickle, returning None on failure."""
-    try:
-        with open(path, "rb") as f:
-            return pickle.load(f)  # noqa: S301 — legacy format migration
-    except Exception:
-        return None
+    """Legacy pickle loader, disabled 2026-04-17 for security.
+
+    Kept as a named function so callers still compile; always returns
+    None. Operators with legacy .pkl files must convert them first via
+    ``python tools/migrate_pickle_to_npz.py``.
+    """
+    del path  # unused: pickle path removed
+    return None
 
 
 def _load_npz_dict(path: Path) -> dict | None:
@@ -558,7 +559,7 @@ def _resolve_network_config(state_path: Path | None = None) -> dict:
 
 
 def _load_checkpoint(path: Path) -> dict:
-    """Load network checkpoint from npz or legacy pickle."""
+    """Load network checkpoint from npz. Legacy pickle no longer accepted."""
     npz_path = path.with_suffix(".npz") if path.suffix != ".npz" else path
     for candidate in (npz_path, path):
         if not candidate.exists():
@@ -566,10 +567,13 @@ def _load_checkpoint(path: Path) -> dict:
         if zipfile.is_zipfile(candidate):
             data = np.load(candidate, allow_pickle=False)
             return dict(data)
-    # Legacy pickle fallback
-    logger.warning("Loading legacy pickle checkpoint %s — will auto-migrate on next save", path)
-    with open(path, "rb") as f:
-        return pickle.load(f)  # noqa: S301 — legacy format migration
+    if path.exists():
+        raise ValueError(
+            f"{path}: unsupported legacy pickle checkpoint. "
+            f"Run `python tools/migrate_pickle_to_npz.py --path {path.parent}` "
+            "to convert pre-0.4 checkpoints to npz."
+        )
+    raise FileNotFoundError(f"No checkpoint at {npz_path} or {path}")
 
 
 def _load_network(state_path: Path | None = None) -> dict:

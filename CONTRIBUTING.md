@@ -34,7 +34,7 @@ pytest tests/ --cov=. --cov-config=pyproject.toml -q
 
 ## Testing
 
-- 1,677 tests across 38 files, 100% coverage gate on product modules
+- 2,005 tests across 53 files, 100% coverage gate on product modules
 - Tests in `tests/` with `pytest`
 - New code = new tests. No exceptions.
 - Run with CI's Python version (3.12)

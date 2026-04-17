@@ -85,13 +85,11 @@ def _extract_from_arcane(ensemble: list[dict], n: int) -> np.ndarray:
 
 
 def _extract_from_snn(state_path: Path, n: int) -> np.ndarray:
-    """Load SNN state and extract phases (npz or legacy pickle)."""
-    import pickle
+    """Load SNN state (npz only; legacy pickle no longer accepted)."""
     import zipfile
 
-    # Try npz first, fall back to pickle
     npz_path = state_path.with_suffix(".npz") if state_path.suffix != ".npz" else state_path
-    state = None
+    state: dict | None = None
     for candidate in (npz_path, state_path):
         if not candidate.exists():
             continue
@@ -99,12 +97,17 @@ def _extract_from_snn(state_path: Path, n: int) -> np.ndarray:
             state = dict(np.load(candidate, allow_pickle=False))
             break
     if state is None:
-        with open(state_path, "rb") as f:
-            state = pickle.load(f)  # noqa: S301 — legacy format migration
+        if state_path.exists():
+            raise ValueError(
+                f"{state_path}: unsupported legacy pickle format. "
+                f"Run `python tools/migrate_pickle_to_npz.py --path {state_path.parent}` "
+                "to convert pre-0.4 state files to npz."
+            )
+        raise FileNotFoundError(f"No SNN state at {npz_path} or {state_path}")
 
     # Expect state to contain membrane potentials
     if isinstance(state, dict):
-        v = state.get("membrane_potentials", state.get("v", None))
+        v = state.get("membrane_potentials", state.get("v"))
     elif hasattr(state, "v"):
         v = state.v
     else:

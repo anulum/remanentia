@@ -18,6 +18,7 @@ Covers:
 from __future__ import annotations
 
 import pickle
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -25,6 +26,11 @@ import pytest
 
 from snn_backend import DenseCPULIFNetwork, _load_state
 from snn_daemon import SimpleLIFNetwork, _load_daemon_state
+
+# Tests still *write* legacy pickle fixtures to verify the migrator
+# correctly promotes them to npz before the runtime loader sees them.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
+import migrate_pickle_to_npz as _mig  # noqa: E402
 
 
 # ── Fixtures ────────────────────────────────────────────────────────
@@ -87,8 +93,18 @@ class TestDenseCPUSaveLoad:
         assert isinstance(loaded.t, float)
         assert isinstance(loaded.n, int)
 
-    def test_legacy_pickle_compat(self, cpu_net: DenseCPULIFNetwork, tmp_path: Path) -> None:
-        """Verify that load() can read old pickle files."""
+    def test_legacy_pickle_rejected_at_runtime(
+        self, cpu_net: DenseCPULIFNetwork, tmp_path: Path
+    ) -> None:
+        """Raw .pkl must be refused — operators run the migrator first."""
+        path = tmp_path / "legacy.pkl"
+        with open(path, "wb") as f:
+            pickle.dump({"v": cpu_net.v, "w": cpu_net.w, "n": cpu_net.n}, f)
+        with pytest.raises(ValueError, match="migrate_pickle_to_npz"):
+            DenseCPULIFNetwork.load(path)
+
+    def test_migrated_pickle_loads(self, cpu_net: DenseCPULIFNetwork, tmp_path: Path) -> None:
+        """End-to-end: pickle → migrator → npz → runtime loader succeeds."""
         path = tmp_path / "legacy.pkl"
         with open(path, "wb") as f:
             pickle.dump(
@@ -104,12 +120,16 @@ class TestDenseCPUSaveLoad:
                 },
                 f,
             )
-        loaded = DenseCPULIFNetwork.load(path)
+        assert _mig.main(["--path", str(tmp_path)]) == 0
+        # Migrator promoted .pkl → .npz; DenseCPULIFNetwork.load finds it.
+        loaded = DenseCPULIFNetwork.load(tmp_path / "legacy.npz")
         np.testing.assert_array_equal(loaded.v, cpu_net.v)
         assert loaded.n == cpu_net.n
 
-    def test_mask_generated_when_absent(self, cpu_net: DenseCPULIFNetwork, tmp_path: Path) -> None:
-        """Verify mask is reconstructed from w when missing (old format)."""
+    def test_mask_generated_after_migration(
+        self, cpu_net: DenseCPULIFNetwork, tmp_path: Path
+    ) -> None:
+        """Mask is reconstructed from w when missing (old format) after migration."""
         path = tmp_path / "no_mask.pkl"
         with open(path, "wb") as f:
             pickle.dump(
@@ -123,7 +143,8 @@ class TestDenseCPUSaveLoad:
                 },
                 f,
             )
-        loaded = DenseCPULIFNetwork.load(path)
+        assert _mig.main(["--path", str(tmp_path)]) == 0
+        loaded = DenseCPULIFNetwork.load(tmp_path / "no_mask.npz")
         expected_mask = (cpu_net.w > 0).astype(np.float32)
         np.testing.assert_array_equal(loaded.mask, expected_mask)
 
@@ -156,7 +177,16 @@ class TestDaemonSaveLoad:
         np.testing.assert_array_equal(net3.v, daemon_net.v)
         np.testing.assert_array_equal(net3.w, daemon_net.w)
 
-    def test_legacy_pickle_compat(self, daemon_net: SimpleLIFNetwork, tmp_path: Path) -> None:
+    def test_legacy_pickle_rejected(self, daemon_net: SimpleLIFNetwork, tmp_path: Path) -> None:
+        """Raw .pkl daemon state is rejected; operators run the migrator."""
+        path = tmp_path / "legacy.pkl"
+        with open(path, "wb") as f:
+            pickle.dump({"v": daemon_net.v, "n": daemon_net.n}, f)
+        with pytest.raises(ValueError, match="migrate_pickle_to_npz"):
+            SimpleLIFNetwork.load(path)
+
+    def test_migrated_pickle_loads(self, daemon_net: SimpleLIFNetwork, tmp_path: Path) -> None:
+        """End-to-end: pickle daemon state → migrator → npz → loader."""
         path = tmp_path / "legacy.pkl"
         with open(path, "wb") as f:
             pickle.dump(
@@ -170,7 +200,8 @@ class TestDaemonSaveLoad:
                 },
                 f,
             )
-        loaded = SimpleLIFNetwork.load(path)
+        assert _mig.main(["--path", str(tmp_path)]) == 0
+        loaded = SimpleLIFNetwork.load(tmp_path / "legacy.npz")
         np.testing.assert_array_equal(loaded.v, daemon_net.v)
         assert loaded.n == daemon_net.n
 
@@ -201,12 +232,13 @@ class TestLoadStateHelper:
         result = _load_state(tmp_path / "test.npz")
         np.testing.assert_array_equal(result["v"], data["v"])
 
-    def test_load_legacy_pickle(self, tmp_path: Path) -> None:
-        path = tmp_path / "old.bin"
+    def test_load_legacy_pickle_rejected(self, tmp_path: Path) -> None:
+        """_load_state refuses raw pickle with migrator-pointing message."""
+        path = tmp_path / "old.pkl"
         with open(path, "wb") as f:
             pickle.dump({"v": np.zeros(5), "n": 5}, f)
-        result = _load_state(path)
-        assert result["n"] == 5
+        with pytest.raises(ValueError, match="migrate_pickle_to_npz"):
+            _load_state(path)
 
     def test_daemon_load_npz(self, tmp_path: Path) -> None:
         data = {"v": np.ones(8), "n": np.int64(8)}
@@ -230,7 +262,10 @@ class TestLoadNetwork:
         assert isinstance(loaded, DenseCPULIFNetwork)
         np.testing.assert_array_equal(loaded.v, cpu_net.v)
 
-    def test_load_network_legacy_pickle(self, cpu_net: DenseCPULIFNetwork, tmp_path: Path) -> None:
+    def test_load_network_after_pickle_migration(
+        self, cpu_net: DenseCPULIFNetwork, tmp_path: Path
+    ) -> None:
+        """load_network reads post-migration npz and rebuilds the class."""
         from snn_backend import load_network
 
         path = tmp_path / "legacy.pkl"
@@ -248,6 +283,7 @@ class TestLoadNetwork:
                 },
                 f,
             )
-        loaded = load_network(path)
+        assert _mig.main(["--path", str(tmp_path)]) == 0
+        loaded = load_network(tmp_path / "legacy.npz")
         assert isinstance(loaded, DenseCPULIFNetwork)
         assert loaded.n == cpu_net.n

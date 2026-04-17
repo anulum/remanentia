@@ -15,7 +15,23 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
+from api_security import DEFAULT_BODY_LIMIT, BearerAuth, TokenBucketLimiter
 from api_server import RemanentiaHandler, _json_default
+
+
+class _StubServer:
+    """Minimal stand-in for the HTTPServer attributes the handler reads."""
+
+    def __init__(
+        self,
+        *,
+        auth: BearerAuth | None = None,
+        limiter: TokenBucketLimiter | None = None,
+        body_limit: int = DEFAULT_BODY_LIMIT,
+    ):
+        self.auth = auth or BearerAuth(None, warn_on_disabled=False)
+        self.limiter = limiter or TokenBucketLimiter(rate_per_minute=6000, burst=1000)
+        self.body_limit = body_limit
 
 
 # ── JSON default handler ─────────────────────────────────────────
@@ -46,14 +62,25 @@ class TestJsonDefault:
 # ── Handler helpers ──────────────────────────────────────────────
 
 
-def _make_handler(path="/", method="GET", body=None):
-    """Create a RemanentiaHandler with mocked I/O."""
+def _make_handler(path="/", method="GET", body=None, *, server=None, headers=None):
+    """Create a RemanentiaHandler with mocked I/O.
+
+    Parameters
+    ----------
+    server:
+        A :class:`_StubServer` providing ``auth``, ``limiter``, ``body_limit``.
+        Defaults to an open-auth server that permits any request.
+    headers:
+        Dict of header overrides. ``Content-Length`` defaults to body size
+        and ``Authorization`` defaults to absent.
+    """
     handler = RemanentiaHandler.__new__(RemanentiaHandler)
     handler.path = path
     handler.command = method
     handler.requestline = f"{method} {path} HTTP/1.1"
     handler.request_version = "HTTP/1.1"
     handler.client_address = ("127.0.0.1", 12345)
+    handler.server = server or _StubServer()
 
     body_bytes = b""
     if body is not None:
@@ -61,8 +88,11 @@ def _make_handler(path="/", method="GET", body=None):
 
     handler.rfile = io.BytesIO(body_bytes)
     handler.wfile = io.BytesIO()
+    header_map = {"Content-Length": str(len(body_bytes))}
+    if headers:
+        header_map.update(headers)
     handler.headers = MagicMock()
-    handler.headers.get = MagicMock(return_value=str(len(body_bytes)))
+    handler.headers.get = MagicMock(side_effect=lambda k, default=None: header_map.get(k, default))
     handler.send_response = MagicMock()
     handler.send_header = MagicMock()
     handler.end_headers = MagicMock()
@@ -315,3 +345,142 @@ class TestAPIServerPipeline:
         handler.end_headers = MagicMock()
         handler.wfile = MagicMock()
         assert True
+
+
+# ── Security gate integration ────────────────────────────────────────
+
+
+class TestSecurityGates:
+    """Exercise BearerAuth / limiter / body-size through the handler path."""
+
+    def test_health_is_public_no_auth_required(self):
+        server = _StubServer(auth=BearerAuth("secret", warn_on_disabled=False))
+        h = _make_handler("/health", server=server)
+        h.do_GET()
+        h.send_response.assert_called_with(200)
+        body = _get_response_body(h)
+        assert body["status"] == "ok"
+
+    def test_status_requires_auth_when_token_set(self):
+        server = _StubServer(auth=BearerAuth("secret", warn_on_disabled=False))
+        h = _make_handler("/status", server=server)  # no Authorization header
+        h.do_GET()
+        h.send_response.assert_called_with(401)
+        body = _get_response_body(h)
+        assert "authentication" in body["error"].lower()
+
+    def test_status_passes_with_valid_bearer(self, tmp_path):
+        server = _StubServer(auth=BearerAuth("secret", warn_on_disabled=False))
+        h = _make_handler(
+            "/status",
+            server=server,
+            headers={"Authorization": "Bearer secret"},
+        )
+        with patch("api_server.BASE", tmp_path):
+            h.do_GET()
+        h.send_response.assert_called_with(200)
+
+    def test_status_rejects_wrong_bearer(self):
+        server = _StubServer(auth=BearerAuth("secret", warn_on_disabled=False))
+        h = _make_handler(
+            "/status",
+            server=server,
+            headers={"Authorization": "Bearer wrong"},
+        )
+        h.do_GET()
+        h.send_response.assert_called_with(401)
+
+    def test_rate_limit_triggers_429(self):
+        # burst=1, rate=60/min, same IP → second request immediately denied
+        server = _StubServer(limiter=TokenBucketLimiter(rate_per_minute=60, burst=1))
+        h1 = _make_handler("/status", server=server)
+        h1.do_GET()
+        assert h1.send_response.call_args[0][0] == 200
+
+        h2 = _make_handler("/status", server=server)  # same client_address
+        h2.do_GET()
+        h2.send_response.assert_called_with(429)
+        assert "rate limit" in _get_response_body(h2)["error"].lower()
+
+    def test_body_size_limit_rejects_413(self):
+        # body limit 10 bytes, sending JSON ~20 bytes
+        server = _StubServer(body_limit=10)
+        h = _make_handler(
+            "/recall",
+            method="POST",
+            body={"query": "hello world"},
+            server=server,
+        )
+        h.do_POST()
+        h.send_response.assert_called_with(413)
+        assert "exceeds" in _get_response_body(h)["error"].lower()
+
+    def test_body_size_permits_small_post(self):
+        server = _StubServer()  # default 1 MiB
+        h = _make_handler(
+            "/recall",
+            method="POST",
+            body={"query": "hi", "top_k": 0},  # top_k=0 short-circuits
+            server=server,
+        )
+        h.do_POST()
+        h.send_response.assert_called_with(200)
+
+    def test_health_bypasses_rate_limit(self):
+        # Exhaust the bucket with /status, then /health still works
+        server = _StubServer(limiter=TokenBucketLimiter(rate_per_minute=60, burst=1))
+        h1 = _make_handler("/status", server=server)
+        h1.do_GET()
+        h2 = _make_handler("/status", server=server)
+        h2.do_GET()  # 429
+        h3 = _make_handler("/health", server=server)
+        h3.do_GET()
+        h3.send_response.assert_called_with(200)
+
+    def test_health_bypasses_body_size(self):
+        # Health is GET so body size doesn't apply, but /health shouldn't even
+        # reach gates — check it stays public even with a hostile Content-Length
+        server = _StubServer(body_limit=0)
+        h = _make_handler(
+            "/health",
+            headers={"Content-Length": "999999999"},
+            server=server,
+        )
+        h.do_GET()
+        h.send_response.assert_called_with(200)
+
+    def test_disabled_auth_allows_all(self):
+        server = _StubServer(auth=BearerAuth(None, warn_on_disabled=False))
+        h = _make_handler("/status", server=server)  # no Authorization
+        h.do_GET()
+        h.send_response.assert_called_with(200)
+
+
+# ── build_server factory ─────────────────────────────────────────────
+
+
+class TestBuildServer:
+    def test_build_server_uses_env_token(self, monkeypatch):
+        from api_server import build_server
+
+        monkeypatch.setenv("REMANENTIA_API_TOKEN", "env-tok")
+        srv = build_server("127.0.0.1", 0)  # port 0 = kernel pick, not bound
+        try:
+            assert srv.auth.enabled
+            assert srv.auth.check_header("Bearer env-tok") is True
+            assert srv.body_limit == DEFAULT_BODY_LIMIT
+        finally:
+            srv.server_close()
+
+    def test_build_server_custom_limits(self):
+        from api_server import build_server
+
+        auth = BearerAuth("x", warn_on_disabled=False)
+        lim = TokenBucketLimiter(rate_per_minute=120, burst=20)
+        srv = build_server("127.0.0.1", 0, auth=auth, limiter=lim, body_limit=512)
+        try:
+            assert srv.body_limit == 512
+            assert srv.auth is auth
+            assert srv.limiter is lim
+        finally:
+            srv.server_close()

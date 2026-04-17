@@ -61,7 +61,7 @@ def llm_answer(question, turns, retrieved_indices):
         if answer.lower() in ("unknown", "i don't know", "not mentioned"):
             return None
         return answer
-    except Exception as e:
+    except Exception:
         return None
 
 

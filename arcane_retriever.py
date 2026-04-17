@@ -400,10 +400,11 @@ class ArcaneRetriever:
 
         def _load():  # pragma: no cover — runs in background thread
             try:
-                import torch
                 from sentence_transformers import CrossEncoder
 
-                device = "cuda" if torch.cuda.is_available() else "cpu"
+                from device_utils import safe_device
+
+                device = safe_device()
                 ArcaneRetriever._ce_model = CrossEncoder(
                     "cross-encoder/ms-marco-MiniLM-L-6-v2", device=device
                 )
@@ -439,10 +440,59 @@ class ArcaneRetriever:
         question: str,
         results: list[FusedResult],
         max_facts: int = 15,
+        sort_chronologically: bool = False,
     ) -> str:
-        """Build hierarchical LLM context from retrieval results (DeerFlow adaptation)."""
+        """Build hierarchical LLM context from retrieval results (DeerFlow adaptation).
+
+        By default, results are kept in RRF/rerank order (relevance-first),
+        which is what knowledge-update, multi-session, and single-session
+        questions need. When *sort_chronologically* is ``True`` (for
+        temporal-reasoning questions), results are sorted by date with
+        intraday HH:MM tiebreaking — critical for ordering and duration
+        questions.
+        """
+        if sort_chronologically:
+            results = _sort_results_chronologically(results)
         facts = [r.fact for r in results]
         h_ctx = build_hierarchical_context(
             facts, reference_date=self._reference_date, session_dates=self.session_dates
         )
         return h_ctx.to_prompt_string()
+
+
+def _sort_results_chronologically(results: list[FusedResult]) -> list[FusedResult]:
+    """Sort fused results by earliest date for chronological context.
+
+    Resolution order for the primary key:
+
+    1. ``valid_from`` (extracted from sentence, ISO ``YYYY-MM-DD``)
+    2. ``date_mentions[0]`` (any explicit date mention)
+    3. ``session_date`` (LongMemEval-format full timestamp with HH:MM)
+
+    Same-day ties are broken by ``session_date`` (which carries HH:MM
+    when available), then by ``(session_idx, turn_idx)`` to preserve the
+    chronological session order established by Fix #3 in
+    bench_longmemeval. Undated results are appended at the end.
+    """
+    from date_normalizer import _parse_session_datetime
+
+    def _normalised_session_dt(s: str) -> str:
+        """Convert ``2023/05/22 (Mon) 09:38`` to ``2023-05-22T09:38`` for sort."""
+        if not s:
+            return ""
+        dt = _parse_session_datetime(s)
+        if dt is None:
+            return s  # pragma: no cover — defensive fallback for unknown date format
+        return dt.isoformat()
+
+    def _date_key(r: FusedResult) -> tuple[str, str, int, int]:
+        primary = (
+            r.fact.valid_from
+            or (r.fact.date_mentions[0] if r.fact.date_mentions else "")
+            or _normalised_session_dt(r.fact.session_date)
+            or "\xff"  # undated → sort last
+        )
+        secondary = _normalised_session_dt(r.fact.session_date)
+        return (primary, secondary, r.fact.session_idx, r.fact.turn_idx)
+
+    return sorted(results, key=_date_key)

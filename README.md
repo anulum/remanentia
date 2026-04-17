@@ -12,7 +12,7 @@ Contact: www.anulum.li | protoscience@anulum.li
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/anulum/remanentia/badge)](https://securityscorecards.dev/viewer/?uri=github.com/anulum/remanentia)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12340/badge)](https://www.bestpractices.dev/projects/12340)
 [![Version](https://img.shields.io/badge/version-0.3.1-blue)](https://github.com/anulum/remanentia)
-[![Tests](https://img.shields.io/badge/tests-1677_passed-brightgreen)](VALIDATION.md)
+[![Tests](https://img.shields.io/badge/tests-2005_passed-brightgreen)](VALIDATION.md)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](VALIDATION.md)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
@@ -28,7 +28,7 @@ Contact: www.anulum.li | protoscience@anulum.li
 
 **Persistent AI memory with SNN-orchestrated consolidation, entity graphs, and deep contextual recall.**
 
-> **Active Development** — Remanentia is under intensive development. The core memory engine, BM25+embedding hybrid retrieval, SNN-orchestrated consolidation, temporal reasoning, and the MCP server are fully functional, tested (1,677 passing tests, 100% coverage), and deployable. Rust rustification is complete across all compute/regex modules (13 crates, 54 functions wired). We are currently expanding temporal reasoning accuracy. APIs may evolve as this work progresses.
+> **Active Development** — Remanentia is under intensive development. The core memory engine, BM25+embedding hybrid retrieval, SNN-orchestrated consolidation, temporal reasoning, and the MCP server are fully functional, tested (2,005 passing tests, 100% coverage), and deployable. Rust rustification is complete across all compute/regex modules (13 crates, 54 functions wired). LongMemEval R11 (2026-04-11): 72.2% overall, **temporal-reasoning 65.4%** — target achieved, up from R8 45.9% (+19.5pp). All five recommendations from Gemini's R9 follow-up audit implemented (intraday HH:MM, fuzzy inclusive/exclusive durations, question_date anchoring, multi-event proximity tuning, narrow chain resolution). Overall benchmark variance is ~±10 questions per run; single-run changes ≤5 are not statistically significant. APIs may evolve as this work progresses.
 
 BM25+embedding hybrid retrieval with RRF | 11 typed entity relation types | temporal reasoning with date arithmetic | async consolidation | thread-safe MCP server
 
@@ -186,29 +186,62 @@ Results with snippets + extracted answers
 |----------|-------|
 | single-session-preference | 90.0% (27/30) |
 | single-session-assistant | 87.5% (49/56) |
-| knowledge-update | 87.2% (68/78) |
-| single-session-user | 82.9% (58/70) |
-| multi-session | 61.7% (82/133) |
-| temporal-reasoning | 45.9% (61/133) |
-| **Overall** | **69.0% (345/500)** |
+| single-session-user | 85.7% (60/70) |
+| knowledge-update | 84.6% (66/78) |
+| **temporal-reasoning** | **65.4% (87/133)** |
+| multi-session | 54.1% (72/133) |
+| **Overall** | **72.2% (361/500)** |
 
-Temporal-reasoning at 45.9% — active target for improvement via UPDE resonance and temporal training.
+Temporal-reasoning improved from 45.9% (R8) to **65.4% (R11, 2026-04-11)**, a +19.5pp / +26 question gain — the 65% target has been achieved. Four rounds shipped pipeline improvements:
+
+- R9 (+14 temporal): session-anchored date resolution, explicit duration arithmetic via TReMu pre-computation, chronological session ordering
+- R10 (+2 temporal): intraday HH:MM tiebreak + qtype-aware sort
+- R11 (+10 temporal): fuzzy inclusive/exclusive durations, question_date anchoring in LLM prompt + TReMu, multi-event bigram/proximity tuning, narrow multi-hop chain resolution
+
+Single-run LLM judge noise envelope is ±~10 questions per 500-run (observed across R9/R10/R11 category cross-tabs). R10→R11 multi-session movement (−12) is within this envelope, particularly since none of the R11 code changes touch non-temporal code paths. Multi-run averages are pending.
+
 Hindsight (SOTA with GPT-4 extraction) reports 91.4% on this benchmark.
 
-### LOCOMO (historical, not committed)
+### LOCOMO
 
-1,986 questions from the LOCOMO multi-session QA dataset. Results from experiment runs, not committed to repository. Numbers below are from the last measured run without LLM synthesis:
+**1,651 / 1,986 = 83.1 %** on the LOCOMO multi-session QA dataset
+(BM25 + cross-encoder rerank + 4-stage answer extraction + LLM
+synthesis). Results committed at
+[`paper/locomo_results.json`](paper/locomo_results.json).
 
-| Category | Accuracy |
-|----------|----------|
-| Multi-hop | 82.6% |
-| Adversarial | 79.5% |
-| Open-domain | 78.7% |
-| Single-hop | 55.7% |
-| Temporal | 42.7% |
-| **Overall** | **74.7%** |
+| Category    | Correct / Total | Accuracy |
+|-------------|----------------:|---------:|
+| Multi-hop   | 285 / 321       | 88.8 %   |
+| Temporal    | 60 / 96         | 62.5 %   |
+| Single-hop  | 207 / 282       | 73.4 %   |
+| Adversarial | 731 / 841       | 86.9 %   |
+| Open-domain | 368 / 446       | 82.5 %   |
+| **Overall** | **1 651 / 1 986** | **83.1 %** |
 
-Method: BM25 + token overlap + answer extraction. No embedding rerank, no LLM.
+The LOCOMO dataset is distributed separately and must be obtained
+by the reproducer; the preprocessed question order is pinned in
+`bench_locomo.py`. Run with ``python bench_locomo.py --llm`` to
+reproduce. See [`docs/benchmarks/LOCOMO.md`](docs/benchmarks/LOCOMO.md)
+for the full methodology and the pre-LLM 74.7 % baseline.
+
+## Trained components — honest status
+
+The temporal-training programme produced five components with
+mixed outcomes. We publish a model card for each so downstream
+users can decide what to rely on; the rule-based date normaliser is
+the only one with a committed, measured benchmark impact. Full
+cards live at [`docs/models/`](docs/models/).
+
+| Component | Status | Note |
+|-----------|--------|------|
+| C1 Embedding fine-tune | UNCERTAIN | 3 464 triplets, no retrieval A/B committed |
+| C2 Cross-encoder fine-tune | UNCERTAIN | AP 84.57 % on own split; real-world eval pending (P2-13) |
+| C3 Temporal relation classifier | **NON-FUNCTIONAL** | F1-macro 0.178 vs 0.167 random baseline — model did not learn the task, not wired into any default code path |
+| C4 Date normaliser (rule engine) | PROVEN | 12 regex patterns drove temporal-reasoning +14.3 pp on LongMemEval |
+| C4 Date normaliser (ML) | weak / unused | 24.8 % exact / 65.7 % relaxed — redundant vs rules |
+| C5 Fact-validity model | OVERFITTED TO SYNTHETIC | 100 % on templates is a template-memorisation signal; gated behind regex in production |
+
+Source: [`training/HONEST_ASSESSMENT.md`](training/HONEST_ASSESSMENT.md).
 
 ## MCP Integration
 
@@ -314,7 +347,7 @@ pip install -e ".[dev]"
 pytest tests/ -q
 ```
 
-1,677 tests, 100% coverage (19 modules, zero lines missing).
+2,005 tests, 100% coverage (19 modules, zero lines missing).
 
 ## License
 

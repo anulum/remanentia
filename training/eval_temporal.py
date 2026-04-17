@@ -128,7 +128,6 @@ def _run_evaluation(config_id: int) -> dict:
         question = q["question"]
         answer = str(q["answer"]).lower()
         sessions = q.get("haystack_sessions", [])
-        haystack_dates = q.get("haystack_dates", [])
 
         # Set reference date from question_date
         ref_date = date.today()

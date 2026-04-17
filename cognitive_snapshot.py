@@ -93,11 +93,16 @@ def snapshot_save(
         "session_summary": session_summary,
     }
 
-    SNAPSHOT_PATH.write_text(json.dumps(state, indent=2) + "\n")
+    from file_utils import FileLock, atomic_write_json
 
-    # Append to history (never delete — all cognitive states persist)
-    with open(SNAPSHOT_HISTORY, "a") as f:
-        f.write(json.dumps(state) + "\n")
+    # Atomic replacement of the current snapshot protects against a
+    # crash mid-write. The append-only history is guarded by a lock
+    # so concurrent writers cannot interleave half-lines.
+    atomic_write_json(SNAPSHOT_PATH, state, indent=2)
+    lock_path = SNAPSHOT_HISTORY.parent / ".snapshot_history.lock"
+    with FileLock(lock_path):
+        with open(SNAPSHOT_HISTORY, "a", encoding="utf-8") as f:
+            f.write(json.dumps(state) + "\n")
 
     # Inject focus into SNN as a strong stimulus so the membrane
     # state carries an echo of the last cognitive direction

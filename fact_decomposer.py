@@ -154,6 +154,9 @@ class AtomicFact:
     contradiction_count: int = 0  # Times this fact was contradicted
     last_confirmed: str = ""  # ISO datetime of last confirmation
     source_quality: str = "inferred"  # "stated" | "inferred" | "corrected"
+    session_date: str = (
+        ""  # Full session timestamp (e.g. "2023/05/22 (Mon) 09:38") for intraday sort
+    )
 
     def update_confidence(self, event: str) -> None:
         """Update confidence based on evidence events.
@@ -402,7 +405,9 @@ def decompose_sessions(
     for sess_idx, session in enumerate(sessions):
         # Resolve per-session reference date for C4 date normaliser
         _ref_date = None
+        _session_date_str = ""
         if session_dates and sess_idx < len(session_dates):
+            _session_date_str = session_dates[sess_idx]
             try:
                 from datetime import date as _dt_date
 
@@ -433,6 +438,7 @@ def decompose_sessions(
                     default_year,
                     reference_date=_ref_date,
                 )
+                fact.session_date = _session_date_str
                 fact_idx = len(all_facts)
 
                 # Detect if this fact supersedes a prior state for the same entity
