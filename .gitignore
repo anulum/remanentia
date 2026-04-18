@@ -40,6 +40,10 @@ site/
 checkpoints/
 CLAUDE.md
 .claude/
+GEMINI.md
+.gemini/
+.codex/
+.coordination/
 
 # Local backups — never committed
 BACKUP/
