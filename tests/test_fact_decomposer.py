@@ -225,7 +225,7 @@ class TestClassifyFact:
     # ── Priority/edge cases ─────────────────────────────────────
     def test_decision_beats_state_when_both_match(self):
         # "decided" is both a change verb and a decision pattern
-        result = _classify_fact("We decided to switch from Anthropic to local LLM.")
+        result = _classify_fact("We decided to switch from the hosted backend to a local LLM.")
         assert result == "decision"  # decision has higher priority
 
     def test_correction_beats_state(self):

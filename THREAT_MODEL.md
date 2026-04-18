@@ -15,7 +15,7 @@ place on each. It is intentionally short; controls live in
 | A3 | Reasoning traces in `reasoning_traces/*.md` | Personal (often richer than A1) |
 | A4 | Model weights under `models/` | Licensing only |
 | A5 | Bearer token for the HTTP API | Secret |
-| A6 | OpenAI / Anthropic keys in the operator's environment | Secret |
+| A6 | Hosted-LLM API keys in the operator's environment | Secret |
 | A7 | SNN state files in `snn_state/` | Low |
 
 ## Adversaries
@@ -33,7 +33,7 @@ place on each. It is intentionally short; controls live in
 ```
 ┌──────────────┐   TLS / mTLS    ┌──────────────┐    stdio   ┌─────────────┐
 │  MCP client  │ ──────────────▶ │  api_server  │ ─────────▶ │ mcp_server  │
-│  (Claude)    │                 │   (HTTP)     │            │ (subprocess)│
+│              │                 │   (HTTP)     │            │ (subprocess)│
 └──────────────┘                 └──────────────┘            └─────────────┘
                                         │                          │
                                         ▼                          ▼
@@ -43,9 +43,9 @@ place on each. It is intentionally short; controls live in
                                   └──────────────────────────────────┘
 ```
 
-Trust is assumed for: local filesystem, operator shell, OpenAI /
-Anthropic endpoints (HTTPS). Untrusted by default: any network peer
-reaching the HTTP API.
+Trust is assumed for: local filesystem, operator shell, configured
+hosted-LLM endpoints over HTTPS. Untrusted by default: any network
+peer reaching the HTTP API.
 
 ## Threat → control mapping
 

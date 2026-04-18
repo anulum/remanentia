@@ -808,7 +808,7 @@ class TestDurationArithmetic:
 
 
 class TestFuzzyInclusiveExclusive:
-    """Dual-format day count output (Gemini R9 follow-up recommendation #2)."""
+    """Dual-format day count output (R9 follow-up audit recommendation #2)."""
 
     def test_days_dual_format(self):
         """how many days between returns both exclusive (N) and inclusive (N+1)."""
@@ -925,7 +925,7 @@ class TestQuestionDateAnchor:
 
 
 class TestEventScoring:
-    """Combined unigram+bigram+density scoring (Gemini #4)."""
+    """Combined unigram+bigram+density scoring (audit #4)."""
 
     def test_bigram_phrase_beats_scattered_unigrams(self):
         from temporal_graph import _score_event_vs_query

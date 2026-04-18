@@ -471,7 +471,7 @@ def heartbeat(agent: str, project: str = "", status: str = "active", detail: str
 def drop_stimulus(text: str, source: str = "unknown"):
     """Write a stimulus file for the daemon to pick up.
 
-    Called by ANY agent (Arcane Sapience, Codex, GPT, Gemini) to
+    Called by any agent (Arcane Sapience or another AI partner) to
     feed reasoning into the shared SNN. The daemon picks up new
     .json files from snn_stimuli/ on its next cycle.
 
@@ -735,7 +735,7 @@ def main():
             )
             processed_traces.add(trace_path.name)
 
-        # Check for explicit stimulus files (from Codex, Gemini, or any agent)
+        # Check for explicit stimulus files (from any agent)
         new_stimuli = check_new_stimuli(STIMULUS_DIR, processed_stimuli)
         for stim_path in new_stimuli:
             data = json.loads(stim_path.read_text())

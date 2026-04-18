@@ -25,8 +25,9 @@ Every write path runs the `pii_redactor` before the bytes hit disk:
 - Phone numbers → `[REDACTED:PHONE]`
 - IBAN → `[REDACTED:IBAN]`
 - Credit-card-shaped digit groups → `[REDACTED:CREDIT_CARD]`
-- API-key-shaped tokens (OpenAI, Anthropic, HuggingFace, GitHub,
-  AWS, Slack, generic 32+ hex) → `[REDACTED:<CATEGORY>]`
+- API-key-shaped tokens from common providers (HuggingFace, GitHub,
+  AWS, Slack, and the two major hosted-LLM vendors) plus a generic
+  32+ hex fallback → `[REDACTED:<CATEGORY>]`
 
 Policy is configurable per call site; operators who want the raw
 text (e.g. audit trails) pass `redact_pii=False` explicitly.
@@ -76,10 +77,10 @@ the file tree themselves and apply OS-level permissions.
 
 ## Third parties
 
-When configured to use hosted LLMs (OpenAI, Anthropic), the contents
-of the retrieved memories that form part of a prompt are transmitted
-to that provider per their terms. Operators should disclose this to
-their users. `LocalLLMBackend` (Ollama) keeps everything on-host.
+When configured to use a hosted LLM, the contents of the retrieved
+memories that form part of a prompt are transmitted to that provider
+per their terms. Operators should disclose this to their users.
+`LocalLLMBackend` (Ollama) keeps everything on-host.
 
 ## Disclosure
 

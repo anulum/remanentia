@@ -12,7 +12,7 @@
 - [x] Enterprise hardening (CI, CodeQL, Scorecard, REUSE, CITATION.cff)
 - [x] Documentation site (MkDocs, 18 API refs, 5 guides, 2 benchmarks)
 - [x] 13 Rust acceleration crates, 54 functions (PyO3 + maturin, up to 76× speedup)
-- [x] Pluggable LLM backend (Auto, Local, Anthropic, Null)
+- [x] Pluggable LLM backend (Auto, Local, hosted, Null)
 - [x] 8-model local LLM benchmark (Qwen 2.5 3B recommended, ROCm)
 - [x] Pipeline performance documented (0.6ms regex pipeline, 27 budget tests)
 - [x] SPDX header standardisation (103 Python files)

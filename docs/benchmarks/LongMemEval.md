@@ -29,9 +29,9 @@ Method: BM25 retrieval + ArcaneRetriever hybrid architecture + GPT-4o-mini gener
 | R5 | 67.2% | +3pp | — | Official protocol (GPT-4o-mini gen+judge) |
 | R6 | regressed | — | — | Counting prompt regressed, reverted |
 | R8 | 69.0% | +1.8pp | 45.9% | ArcaneRetriever hybrid architecture |
-| R9 | 73.0% | +4.0pp | 56.4% | Gemini audit #1-3: session-anchored dates + duration arithmetic + chronological ordering |
-| R10 | 72.8% | −0.2pp | 57.9% | Gemini follow-up #1: intraday HH:MM tiebreak (qtype-aware) |
-| **R11** | **72.2%** | **−0.6pp** | **65.4%** 🎯 | Gemini follow-up #2-5: fuzzy inclusive/exclusive durations, question_date anchoring, multi-event proximity, narrow chain resolution |
+| R9 | 73.0% | +4.0pp | 56.4% | Audit batch #1-3: session-anchored dates + duration arithmetic + chronological ordering |
+| R10 | 72.8% | −0.2pp | 57.9% | R9 follow-up #1: intraday HH:MM tiebreak (qtype-aware) |
+| **R11** | **72.2%** | **−0.6pp** | **65.4%** 🎯 | R9 follow-up #2-5: fuzzy inclusive/exclusive durations, question_date anchoring, multi-event proximity, narrow chain resolution |
 
 ## Bottleneck Analysis
 

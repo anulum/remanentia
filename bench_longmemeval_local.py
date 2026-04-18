@@ -50,12 +50,12 @@ import bench_longmemeval as bench
 
 assert bench._USE_LLM, "bench_longmemeval._USE_LLM must be True"
 
-# Patch: replace OpenAI calls with our local backend
+# Patch: replace hosted-LLM calls with our local backend
 _orig_answer = bench._answer_from_retrieval
 
 
 def _local_answer_from_retrieval(question, idx, sessions, qtype, use_llm=False):
-    """Replacement that uses local LLM backend instead of OpenAI."""
+    """Replacement that uses local LLM backend instead of the hosted endpoint."""
     results = idx.search(question, top_k=10)
     if not results:
         return "I don't have enough information to answer this question."
@@ -79,7 +79,7 @@ def _local_answer_from_retrieval(question, idx, sessions, qtype, use_llm=False):
 
 
 def _local_arcane_answer(question, sessions, qtype, haystack_dates=None):
-    """Replacement that uses local LLM backend instead of OpenAI."""
+    """Replacement that uses local LLM backend instead of the hosted endpoint."""
     from arcane_retriever import ArcaneRetriever
 
     ar = ArcaneRetriever(sessions, session_dates=haystack_dates)

@@ -11,10 +11,10 @@
 
 Provides a ``LLMBackend`` protocol with four implementations:
 
-* **AnthropicBackend** — cloud Anthropic API (existing behaviour)
-* **LocalLLMBackend** — OpenAI-compatible local server (llama.cpp / Ollama)
+* **AnthropicBackend** — hosted LLM via the ``anthropic`` Python SDK
+* **LocalLLMBackend** — local chat-completions-compatible server (llama.cpp / Ollama)
 * **NullBackend** — always returns ``None`` (explicit no-LLM sentinel)
-* **AutoBackend** — tries local → Anthropic → Null in order
+* **AutoBackend** — tries local → hosted → Null in order
 """
 
 from __future__ import annotations
@@ -139,7 +139,10 @@ class NullBackend:
 
 
 class AnthropicBackend:
-    """Cloud Anthropic API backend with lazy import and cached client."""
+    """Hosted-LLM backend using the ``anthropic`` Python SDK.
+
+    Lazy import and cached client — no network call at construction.
+    """
 
     def __init__(
         self,
@@ -151,7 +154,7 @@ class AnthropicBackend:
         self._client: object | None = None
 
     def _get_client(self):
-        """Lazy-initialise the Anthropic client."""
+        """Lazy-initialise the hosted-LLM client."""
         if self._client is not None:
             return self._client
         if not self._api_key:
@@ -251,7 +254,7 @@ class LocalLLMBackend:
 
 
 class AutoBackend:
-    """Tries local → Anthropic → Null, caches the resolved backend."""
+    """Tries local → hosted → Null, caches the resolved backend."""
 
     def __init__(self, config: LLMConfig | None = None) -> None:
         self._config = config or LLMConfig()
@@ -271,10 +274,10 @@ class AutoBackend:
             self._resolved = local
             return local
 
-        # Try Anthropic
+        # Try the hosted backend
         api_key = os.environ.get("ANTHROPIC_API_KEY", "")
         if api_key:
-            log.info("AutoBackend: using Anthropic API")
+            log.info("AutoBackend: using the hosted LLM backend")
             anthropic = AnthropicBackend(
                 model=self._config.anthropic_model,
                 api_key=api_key,

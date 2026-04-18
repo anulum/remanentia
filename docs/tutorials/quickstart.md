@@ -113,7 +113,7 @@ Add to `.mcp.json` in your project:
 }
 ```
 
-Now any MCP-compatible tool (Claude Code, Cursor) can search your memory via `remanentia_recall`.
+Now any MCP-compatible tool (Cursor and others) can search your memory via `remanentia_recall`.
 
 ## Next Steps
 

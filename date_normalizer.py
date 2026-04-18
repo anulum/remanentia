@@ -417,7 +417,7 @@ def _parse_session_datetime(reference_date_str: str):
         2023/05/28               — date only
 
     Returns ``None`` when *reference_date_str* is empty or unparsable.
-    Used for intraday ordering of same-day events (Gemini R9 fix #1).
+    Used for intraday ordering of same-day events (R9 audit fix #1).
     """
     from datetime import datetime as _dt
 

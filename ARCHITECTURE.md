@@ -182,7 +182,7 @@ Stdio JSON-RPC server exposing four tools:
 | `remanentia_graph` | Entity relationship query |
 
 Thread-safe with singleton index. Async consolidation on every write
-(debounced). Compatible with Claude Code, Cursor, and any MCP client.
+(debounced). Compatible with Cursor and any MCP-compatible client.
 
 ## Rust Acceleration (13 crates, Tiers 1–3 + recall)
 

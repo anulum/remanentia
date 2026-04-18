@@ -48,7 +48,7 @@ Subsequent searches use the cached index (~50ms).
 
 ## MCP Integration
 
-Add to your `.mcp.json` (Claude Code, Cursor, or any MCP client):
+Add to your `.mcp.json` (Cursor or any MCP-compatible client):
 
 ```json
 {

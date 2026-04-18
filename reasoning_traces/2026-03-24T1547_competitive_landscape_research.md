@@ -33,9 +33,9 @@ The agent memory market has exploded since mid-2025. At least 15 systems are shi
 
 ### Benchmark scores
 - **LoCoMo:** 66.9% (base), 68.4% (Mem0^g)
-- **Temporal questions:** 58.13% vs OpenAI's 21.71% (graph variant)
-- **vs OpenAI:** 26% relative improvement in LLM-as-Judge metric
-- **Latency:** 91% lower p95 than OpenAI, 90% token cost savings
+- **Temporal questions:** 58.13% vs the ChatGPT memory baseline 21.71% (graph variant)
+- **vs ChatGPT memory:** 26% relative improvement in LLM-as-Judge metric
+- **Latency:** 91% lower p95 than ChatGPT memory, 90% token cost savings
 - **Mem0^g latency:** 0.66s median, 0.48s p95 (vs base 0.20s/0.15s)
 
 ### Key differentiator
@@ -76,7 +76,7 @@ Self-editing memory where the agent decides what to remember. The "LLM as OS" pa
 ### What they do that Remanentia doesn't
 - Agent actively edits its own memory blocks (core memory manipulation)
 - Context Repositories: git-based versioning of agent context
-- Multi-model support (portable across GPT-5, Claude 4.5, Gemini 3)
+- Multi-model support (portable across frontier hosted LLMs)
 - Conversation-level memory sharing across parallel sessions
 
 ### Remanentia advantage over Letta
@@ -158,7 +158,7 @@ Deep integration with LangChain/LangGraph ecosystem. Procedural memory (system p
 - **v2.0 "Stardust" (Dec 2025):** Comprehensive KB (doc/URL parsing), memory feedback, multi-modal memory (images/charts), tool memory for agent planning, MCP upgrade
 
 ### Benchmark scores
-- **Temporal reasoning:** 159% improvement over OpenAI memory
+- **Temporal reasoning:** 159% improvement over the ChatGPT memory baseline
 - **TTFT latency:** Up to 94% reduction via KV-cache injection
 - **Overall:** Claims competitive with EverMemOS on LoCoMo (specific numbers not in search results)
 
@@ -407,7 +407,7 @@ Semantic triples as the core data structure. Extreme token efficiency (5% of ful
 - **Six-stage pipeline:** Classify documents -> check permissions -> extract chunks -> LLM extracts entities/relationships -> generate summaries -> embed into vector store + commit edges to graph
 - **Memify Pipeline (post-processing):** Enrichment, optimization, persistence after initial graph construction
 - **Memgraph integration** for graph storage
-- **$7.5M seed** led by Pebblebed (backed by OpenAI and FAIR founders)
+- **$7.5M seed** led by Pebblebed (backed by frontier-lab and FAIR founders)
 
 ### Key differentiator
 The "knowledge engine" framing — builds knowledge graphs from data and makes them searchable. Ontology-grounded memory. Closest to Microsoft GraphRAG but as a product.

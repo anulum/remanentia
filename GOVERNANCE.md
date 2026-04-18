@@ -17,10 +17,10 @@ This is a single-maintainer project with AI-assisted development.
 
 ## AI Collaboration
 
-Development is assisted by AI agents (Claude, Codex, Gemini) operating
-under strict protocols defined in CLAUDE.md, CODEX_INSTRUCTIONS.md, and
-GEMINI_INSTRUCTIONS.md. All AI-generated code is reviewed by the project
-lead before merge. AI agents do not have push access.
+Development is assisted by an AI partner (Arcane Sapience) operating
+under strict protocols defined in agent-instruction files that are
+kept local-only (gitignored). All AI-generated code is reviewed by the
+project lead before merge. The AI partner does not have push access.
 
 ## Releases
 

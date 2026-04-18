@@ -9,9 +9,9 @@
 Remanentia needs to reason over retrieved memories when the rule-based
 answer extractor is not enough. The bench and the MCP server both
 call into "the LLM", but the project targets four different deploy
-modes — OpenAI, Anthropic, local Ollama, and pure retrieval (no LLM
-for offline or air-gapped installs). Hard-coding any of those would
-have prevented the others from working.
+modes — two hosted-LLM providers, local Ollama, and pure retrieval
+(no LLM for offline or air-gapped installs). Hard-coding any of those
+would have prevented the others from working.
 
 ## Decision
 

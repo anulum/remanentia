@@ -278,9 +278,9 @@ in a short query.
 4. The SNN approach works BECAUSE it uses the full document, not because
    of anything special about spikes
 
-### Holographic v2 — Complex Hebbian (2026-03-19, post-Codex)
+### Holographic v2 — Complex Hebbian (2026-03-19, post-review)
 
-**Codex identified three bugs in v1:**
+**Internal review identified three bugs in v1:**
 1. `alpha += phi * phi^T` stores products, not phase differences. Fixed: use
    `J += xi * conj(xi)^T` where `xi = a * exp(i*phi)`, then `K=|J|, alpha=arg(J)`
 2. Inactive = phase 0 creates false coherent block. Fixed: random phase for inactive.

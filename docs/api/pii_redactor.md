@@ -13,8 +13,8 @@ plain text, indexed for retrieval. A later retrieval matches on those
 strings and leaks them back into the LLM prompt.
 
 The module runs a conservative regex sweep before every memory write.
-Eleven detectors run in a fixed order so specific prefixes (Anthropic
-`sk-ant-api…`) beat generic ones (OpenAI `sk-…`).
+Eleven detectors run in a fixed order so specific vendor prefixes (e.g.
+the ``sk-ant-api…`` shape) beat generic ones (plain ``sk-…``).
 
 ## Public surface
 
@@ -78,9 +78,10 @@ Order matters for correctness. The fixed sequence is:
 | 10 | `CREDIT_CARD` | 13-19 digit groups |
 | 11 | `PHONE` | 3-4 digit groups with separators |
 
-Anthropic beats OpenAI because both begin `sk-`. HEX_TOKEN is last among
-the API-key tags so it only catches home-rolled session tokens that
-none of the named detectors recognise.
+`ANTHROPIC_KEY` is matched before `OPENAI_KEY` because both shapes
+start with ``sk-``. `HEX_TOKEN` is last among the API-key tags so it
+only catches home-rolled session tokens that none of the named
+detectors recognise.
 
 ## Rust fast path
 

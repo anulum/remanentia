@@ -200,7 +200,7 @@ class TestBatch:
 
 class TestOrdering:
     def test_api_key_redacted_before_hex_catches_it(self):
-        """OpenAI key should be tagged OPENAI_KEY, not HEX_TOKEN."""
+        """``sk-`` prefixed keys should be tagged OPENAI_KEY, not HEX_TOKEN."""
         key = "sk-proj-" + "f" * 32
         r = redact(key)
         assert r.counts.get("OPENAI_KEY", 0) == 1

@@ -13,7 +13,7 @@ Seven production loaders — ``snn_backend._load_state``,
 ``build_memory_standalone.MemoryIndex.load`` — fell back to
 ``pickle.load`` for pre-0.4 saves. Each carried a ``# noqa: S301 —
 legacy format migration`` marker and had been deferred since the
-2026-04-05 Gemini audit. ``pickle.load`` on an attacker-controlled
+2026-04-05 internal audit. ``pickle.load`` on an attacker-controlled
 file is an arbitrary-code-execution primitive. Keeping the fallback
 alive "for compat" traded security for convenience indefinitely.
 

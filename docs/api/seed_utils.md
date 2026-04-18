@@ -79,10 +79,9 @@ logger.info(f"Seed: {seed}")
 
 - **`sentence-transformers` / `transformers` internal dropout** —
   honours `torch.manual_seed` already; no extra call needed.
-- **LLM provider RNG** (OpenAI, Anthropic) — controlled by
-  `temperature` and `seed` request parameters on each call, not library
-  state. The bench passes `seed=…` to the provider when it set one
-  itself.
+- **Hosted-LLM provider RNG** — controlled by `temperature` and `seed`
+  request parameters on each call, not library state. The bench passes
+  `seed=…` to the provider when it set one itself.
 - **Rust crate RNG** — deterministic by construction. No Rust Remanentia
   crate contains a non-deterministic code path today.
 

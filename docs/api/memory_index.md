@@ -115,9 +115,7 @@ The index scans 18 configured source directories:
 | semantic | `memory/semantic/` | Consolidated semantic memories |
 | disposition | `disposition/` | Agent disposition and identity |
 | sessions_as | `.coordination/sessions/arcane-sapience/` | Session states |
-| sessions_codex | `.coordination/sessions/CODEX/` | Codex sessions |
 | handovers_as | `.coordination/handovers/arcane-sapience/` | Handovers |
-| handovers_codex | `.coordination/handovers/codex/` | Codex handovers |
 | qc_research | `.coordination/handovers/scpn-quantum-control/` | Quantum research |
 | po_research | `.coordination/handovers/scpn-phase-orchestrator/` | Phase orchestrator |
 | nc_research | `sc-neurocore/docs/internal/` | SC-NeuroCore internals |

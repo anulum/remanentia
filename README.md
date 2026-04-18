@@ -28,7 +28,7 @@ Contact: www.anulum.li | protoscience@anulum.li
 
 **Persistent AI memory with SNN-orchestrated consolidation, entity graphs, and deep contextual recall.**
 
-> **Active Development** — Remanentia is under intensive development. The core memory engine, BM25+embedding hybrid retrieval, SNN-orchestrated consolidation, temporal reasoning, and the MCP server are fully functional, tested (2,005 passing tests, 100% coverage), and deployable. Rust rustification is complete across all compute/regex modules (13 crates, 54 functions wired). LongMemEval R11 (2026-04-11): 72.2% overall, **temporal-reasoning 65.4%** — target achieved, up from R8 45.9% (+19.5pp). All five recommendations from Gemini's R9 follow-up audit implemented (intraday HH:MM, fuzzy inclusive/exclusive durations, question_date anchoring, multi-event proximity tuning, narrow chain resolution). Overall benchmark variance is ~±10 questions per run; single-run changes ≤5 are not statistically significant. APIs may evolve as this work progresses.
+> **Active Development** — Remanentia is under intensive development. The core memory engine, BM25+embedding hybrid retrieval, SNN-orchestrated consolidation, temporal reasoning, and the MCP server are fully functional, tested (2,005 passing tests, 100% coverage), and deployable. Rust rustification is complete across all compute/regex modules (13 crates, 54 functions wired). LongMemEval R11 (2026-04-11): 72.2% overall, **temporal-reasoning 65.4%** — target achieved, up from R8 45.9% (+19.5pp). All five recommendations from the R9 follow-up audit implemented (intraday HH:MM, fuzzy inclusive/exclusive durations, question_date anchoring, multi-event proximity tuning, narrow chain resolution). Overall benchmark variance is ~±10 questions per run; single-run changes ≤5 are not statistically significant. APIs may evolve as this work progresses.
 
 BM25+embedding hybrid retrieval with RRF | 11 typed entity relation types | temporal reasoning with date arithmetic | async consolidation | thread-safe MCP server
 
@@ -134,7 +134,7 @@ Knowledge store (multi-hop graph search) ...... Zettelkasten + prospective queri
 | `knowledge_store.py` | Zettelkasten atomic notes, prospective triggers, graph search |
 | `temporal_graph.py` | Temporal event graph, relative date resolution, TReMu |
 | `entity_extractor.py` | GLiNER2 NER + regex fallback, 11 typed relation types |
-| `llm_backend.py` | Pluggable LLM backend: Auto, Local, Anthropic, Null |
+| `llm_backend.py` | Pluggable LLM backend: Auto, Local, hosted, Null |
 | `answer_extractor.py` | Query-proximity answer extraction, LLM fallback |
 | `answer_normalizer.py` | Hedging strip, yes/no polarity, semantic similarity |
 | `observer.py` | Filesystem watcher -> incremental index updates |
@@ -149,8 +149,8 @@ Knowledge store (multi-hop graph search) ...... Zettelkasten + prospective queri
 
 - Python 3.10+
 - numpy (required)
-- Optional: sentence-transformers (embedding rerank), torch (GPU), fastapi (REST API), anthropic (cloud LLM)
-- Optional: llama.cpp / Ollama for local LLM (any OpenAI-compatible endpoint)
+- Optional: sentence-transformers (embedding rerank), torch (GPU), fastapi (REST API), `anthropic` Python package (hosted LLM)
+- Optional: llama.cpp / Ollama for local LLM (any chat-completions-compatible endpoint)
 
 ## CLI
 
@@ -245,7 +245,7 @@ Source: [`training/HONEST_ASSESSMENT.md`](training/HONEST_ASSESSMENT.md).
 
 ## MCP Integration
 
-For Claude Code, Cursor, or any MCP-compatible tool:
+For Cursor or any MCP-compatible tool:
 
 ```json
 {

@@ -134,7 +134,7 @@ footer a:hover{color:#8878b0}
 <div class="version">v0.3.1</div>
 <div class="latin">remanentem &mdash; the state of remaining</div>
 <div class="divider"></div>
-<p>Persistent AI memory via filesystem knowledge retrieval. BM25 search with query intelligence, cross-encoder reranking, and pluggable LLM answer extraction. Rust-accelerated regex pipeline under 1ms. Continuous consolidation turns episodic traces into semantic memories. Integrates with Claude Code and MCP-compatible tools.</p>
+<p>Persistent AI memory via filesystem knowledge retrieval. BM25 search with query intelligence, cross-encoder reranking, and pluggable LLM answer extraction. Rust-accelerated regex pipeline under 1ms. Continuous consolidation turns episodic traces into semantic memories. Integrates with every MCP-compatible client.</p>
 
 <div class="stats">
 <div class="stat"><div class="stat-val">69.0%</div><div class="stat-label">LongMemEval (500q, committed)</div></div>
@@ -156,7 +156,7 @@ footer a:hover{color:#8878b0}
   <div class="pipe-arrow">&rarr;</div>
   <div class="pipe-step"><strong>Consolidate</strong><span>Episodic &rarr; semantic + entity graph</span></div>
 </div>
-<p style="text-align:center;font-size:0.9rem">Query classification routes to 8 intent types. 3-stage reranking: BM25, bi-encoder, cross-encoder. Answer extraction via Rust-accelerated regex with optional LLM fallback (local or Anthropic). Continuous consolidation on every memory write.</p>
+<p style="text-align:center;font-size:0.9rem">Query classification routes to 8 intent types. 3-stage reranking: BM25, bi-encoder, cross-encoder. Answer extraction via Rust-accelerated regex with optional LLM fallback (local or hosted). Continuous consolidation on every memory write.</p>
 </section>
 
 <!-- BENCHMARKS -->
@@ -235,7 +235,7 @@ footer a:hover{color:#8878b0}
 <div class="diff-grid" style="grid-template-columns:1fr 1fr;max-width:500px;margin:1.5rem auto">
   <div class="diff-item">
     <strong>AutoBackend</strong>
-    <span>Tries local &rarr; Anthropic &rarr; Null. Zero config.</span>
+    <span>Tries local &rarr; hosted &rarr; Null. Zero config.</span>
   </div>
   <div class="diff-item">
     <strong>LocalLLMBackend</strong>
@@ -270,7 +270,7 @@ footer a:hover{color:#8878b0}
   <div class="diff-item">
     <div class="icon">&#x1f517;</div>
     <strong>MCP Integration</strong>
-    <span>4 MCP tools: recall, remember, status, graph. Read and write path. Claude Code native.</span>
+    <span>4 MCP tools: recall, remember, status, graph. Read and write path. MCP-native.</span>
   </div>
 </div>
 </section>
@@ -296,7 +296,7 @@ footer a:hover{color:#8878b0}
   <span class="tech-badge">FastAPI</span>
   <span class="tech-badge">sentence-transformers</span>
   <span class="tech-badge">llama.cpp / Ollama</span>
-  <span class="tech-badge">Anthropic API</span>
+  <span class="tech-badge">Hosted LLM API</span>
   <span class="tech-badge">GLiNER2</span>
   <span class="tech-badge">NumPy</span>
   <span class="tech-badge">ROCm / CUDA</span>

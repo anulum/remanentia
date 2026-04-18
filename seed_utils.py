@@ -25,8 +25,8 @@ Libraries we do NOT pin (out of scope today):
 
 - ``sentence-transformers`` / ``transformers`` internal dropout:
   honour ``torch.manual_seed`` already.
-- LLM provider RNG (OpenAI, Anthropic): controlled by ``temperature``
-  and ``seed`` request parameters on each call, not library state.
+- Hosted-LLM provider RNG: controlled by ``temperature`` and ``seed``
+  request parameters on each call, not library state.
 - Rust crates: deterministic by construction — no seed needed.
 
 :func:`seed_everything` returns the seed it used so callers can print

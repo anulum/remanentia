@@ -88,8 +88,8 @@ _CREDIT_CARD = re.compile(
 # API-key-shaped strings. Conservative on length; very high entropy in
 # practice but we do not measure entropy here.
 _API_KEYS: tuple[tuple[str, re.Pattern[str]], ...] = (
-    # Anthropic first — its ``sk-ant-api*`` prefix would otherwise be
-    # shadowed by the generic OpenAI ``sk-`` pattern.
+    # ANTHROPIC_KEY first — its ``sk-ant-api*`` prefix would otherwise
+    # be shadowed by the more generic ``sk-`` pattern used by OPENAI_KEY.
     ("ANTHROPIC_KEY", re.compile(r"sk-ant-api\d\d-[A-Za-z0-9_-]{80,}")),
     ("OPENAI_KEY", re.compile(r"sk-(?:proj-|svcacct-|user-)?[A-Za-z0-9_-]{20,}")),
     ("HUGGINGFACE_KEY", re.compile(r"hf_[A-Za-z0-9]{30,}")),

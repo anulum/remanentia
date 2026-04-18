@@ -7,7 +7,7 @@
 # Remanentia — MCP server (Model Context Protocol)
 
 """MCP server for Remanentia — lets any MCP-compatible agent
-(Claude Code, Cursor, etc.) use Remanentia as a memory tool.
+(Cursor and others) use Remanentia as a memory tool.
 
 Provides four tools:
   - remanentia_recall: Search memory

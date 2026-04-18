@@ -25,8 +25,8 @@ Usage::
     .venv312/Scripts/python.exe gpu_daemon.py --neurons 5000
 
 The daemon owns the dashboard: starts it on launch, doesn't care which
-agent (Claude/Codex/Gemini) is connected. Agents are memory contributors,
-not dashboard runners.
+agent is connected. Agents are memory contributors, not dashboard
+runners.
 """
 
 from __future__ import annotations

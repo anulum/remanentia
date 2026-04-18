@@ -8,7 +8,8 @@
 
 """Full LongMemEval benchmark using GPT-4o-mini for both synthesis and judging.
 
-No Anthropic credits needed. Estimated cost: ~$0.54 for 500 questions.
+Runs without the hosted-SDK Python package. Estimated cost: ~$0.54
+for 500 questions against the public GPT-4o-mini endpoint.
 
 Usage:
     OPENAI_API_KEY=sk-... python training/bench_gpt.py [--temporal-only]
@@ -32,7 +33,7 @@ MODEL = "gpt-4o-mini"
 
 
 def _get_client():
-    """Create OpenAI client from environment."""
+    """Create the hosted-LLM client from environment."""
     from openai import OpenAI
 
     key = os.environ.get("OPENAI_API_KEY", "")

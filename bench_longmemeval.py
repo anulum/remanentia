@@ -53,17 +53,17 @@ for i, arg in enumerate(sys.argv):
     if arg == "--seed" and i + 1 < len(sys.argv):
         _SEED = int(sys.argv[i + 1])
 
-# Hard per-request timeout for every OpenAI call. Prevents the bench
-# from stalling forever on a hung HTTPS connection (2026-04-17T0711
-# INCIDENT: poll_schedule_timeout for 25+ min because no timeout was
+# Hard per-request timeout for every hosted-LLM call. Prevents the
+# bench from stalling forever on a hung HTTPS connection (2026-04-17
+# incident: poll_schedule_timeout for 25+ min because no timeout was
 # set on the client constructor).
 _OPENAI_TIMEOUT = float(os.environ.get("REMANENTIA_OPENAI_TIMEOUT", "30"))
 
 # Pin every randomness source Remanentia pulls in. REMANENTIA_SEED env
 # or --seed flag overrides the 42 default; result banners print the
 # effective seed so the noise envelope can be measured rather than
-# guessed. Does not affect OpenAI / Anthropic sampling (controlled
-# per-request via the ``seed`` and ``temperature`` parameters).
+# guessed. Does not affect hosted-LLM sampling (controlled per-request
+# via the ``seed`` and ``temperature`` parameters).
 from seed_utils import seed_everything, seed_from_env  # noqa: E402
 
 _EFFECTIVE_SEED = seed_everything(_SEED if _SEED is not None else seed_from_env())
@@ -74,11 +74,12 @@ def _hypothesis_complete(prompt: str, max_tokens: int = 400) -> str | None:
 
     When ``--local-llm`` is set (or ``OPENAI_API_KEY`` is missing),
     routes through :class:`llm_backend.LocalLLMBackend` (default Ollama
-    at localhost:11434 running ``gemma3:4b``). Otherwise uses OpenAI
-    ``gpt-4o-mini`` directly. Returns ``None`` on backend failure.
+    at localhost:11434 running ``gemma3:4b``). Otherwise uses the
+    hosted ``gpt-4o-mini`` endpoint directly. Returns ``None`` on
+    backend failure.
 
     The GPT-judge in :func:`run_evaluation` is NOT affected — it stays
-    on ``gpt-4o-mini`` via the OpenAI API so that scores remain
+    on ``gpt-4o-mini`` via the hosted API so that scores remain
     comparable with previous rounds.
     """
     if _USE_LOCAL_LLM or not os.environ.get("OPENAI_API_KEY"):
@@ -593,7 +594,7 @@ def run_benchmark():
     print(f"Arcane mode: {_USE_ARCANE}")
     print(f"Local LLM mode: {_USE_LOCAL_LLM} (Ollama gemma3:4b)")
     print(f"Progress every: {_PROGRESS_EVERY} questions")
-    print(f"OpenAI timeout: {_OPENAI_TIMEOUT:.0f} s per request")
+    print(f"Hosted-LLM timeout: {_OPENAI_TIMEOUT:.0f} s per request")
     print(f"Seed: {_EFFECTIVE_SEED}")
     print()
 
@@ -963,7 +964,7 @@ def _parse_cli() -> None:
         prog="bench_longmemeval.py",
         description="Run the LongMemEval benchmark or judge prior outputs.",
     )
-    p.add_argument("--llm", action="store_true", help="use OpenAI GPT-4o-mini for synthesis")
+    p.add_argument("--llm", action="store_true", help="use the hosted GPT-4o-mini endpoint for synthesis")
     p.add_argument(
         "--evaluate", action="store_true", help="after generation, run GPT-judge on outputs"
     )

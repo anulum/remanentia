@@ -16,8 +16,8 @@ query.
 5. **Optional:** repeat the pipeline on a randomly-picked item
    from `data/longmemeval_oracle.json` if it is present locally.
 
-The notebook runs **offline** — no OpenAI / Anthropic keys are
-needed for the rule-based path. The optional oracle cell is
+The notebook runs **offline** — no hosted-LLM API keys are needed
+for the rule-based path. The optional oracle cell is
 guarded; it prints a pointer when the oracle is not installed.
 
 ## Running it

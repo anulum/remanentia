@@ -1,6 +1,6 @@
 # Integration Guide
 
-## MCP Server (Claude Code, Cursor)
+## MCP Server (Cursor and other MCP-compatible clients)
 
 ### Configuration
 
@@ -34,8 +34,9 @@ Add to `.mcp.json` in your project root:
 }
 ```
 
-Set `llm: true` to enable Anthropic API answer synthesis (requires
-`ANTHROPIC_API_KEY` environment variable).
+Set `llm: true` to enable hosted-LLM answer synthesis (requires the
+hosted-provider API key in the environment — the default backend
+reads `ANTHROPIC_API_KEY`).
 
 #### remanentia_remember
 

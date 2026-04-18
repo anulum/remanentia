@@ -63,10 +63,11 @@ expected payload size. Investigate the client first — a 1 MiB
 
 ### Bench hangs with no progress print
 
-Cause: most likely an OpenAI request stalled (pre-2026-04-17 the
+Cause: most likely a hosted-LLM request stalled (pre-2026-04-17 the
 client had no timeout; fixed in commit `e2c1868`). Since the fix,
 the request times out after 30 s (configurable via
-`REMANENTIA_OPENAI_TIMEOUT`).
+`REMANENTIA_OPENAI_TIMEOUT`, kept under that name for backward
+compatibility).
 
 Diagnosis:
 
@@ -75,8 +76,8 @@ Diagnosis:
 # questions and a [slow Q] heartbeat for any question above timeout.
 tail -f bench.log
 
-# Also check the OpenAI status page — 5xx on their side is invisible
-# to our code except as timeouts.
+# Also check the hosted-LLM provider status page — 5xx on their
+# side is invisible to our code except as timeouts.
 ```
 
 Fix: raise `REMANENTIA_OPENAI_TIMEOUT`, or add `--progress-every 5`

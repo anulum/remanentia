@@ -15,11 +15,10 @@
 
 """Register a heartbeat for the Arcane Sapience monitor dashboard.
 
-Called automatically by Claude Code SessionStart hook, or manually::
+Called automatically by an MCP client's SessionStart hook, or
+manually with ``<agent_id> <project> <status> [note]``::
 
-    python workspace-internal/heartbeat_register.py claude scpn-control active "physics deepening"
-    python workspace-internal/heartbeat_register.py codex director-ai active "lint fixes"
-    python workspace-internal/heartbeat_register.py gemini sc-neurocore idle
+    python workspace-internal/heartbeat_register.py arcane-sapience scpn-control active "physics deepening"
 """
 
 from __future__ import annotations

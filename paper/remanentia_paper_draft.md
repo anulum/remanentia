@@ -14,7 +14,7 @@ Anulum | protoscience@anulum.li | www.anulum.li
 
 ## Abstract
 
-We present Remanentia, a persistent memory system for AI agents that operates as a filesystem knowledge retrieval engine. The system indexes documents across multiple sources — reasoning traces, session logs, code repositories, research documents, and entity graphs — into a unified BM25 index with query intelligence routing. On the LOCOMO multi-session conversational QA benchmark (1,986 questions), Remanentia achieves 74.7% accuracy without any LLM in the retrieval loop, compared to 91.4% for Hindsight (which uses GPT-4 for answer extraction). We document two negative results: (1) spiking neural network retrieval via STDP-modified weight matrices provides zero discriminative signal across 70+ experimental configurations and 4 learning rules, and (2) a Rust BM25 engine is slower than Python at the current 15K-paragraph scale due to FFI overhead. The system integrates with AI coding tools via the Model Context Protocol (MCP), serving as persistent cross-session memory for Claude Code and similar environments. We release Remanentia as open-source software (AGPL-3.0) with 225 tests.
+We present Remanentia, a persistent memory system for AI agents that operates as a filesystem knowledge retrieval engine. The system indexes documents across multiple sources — reasoning traces, session logs, code repositories, research documents, and entity graphs — into a unified BM25 index with query intelligence routing. On the LOCOMO multi-session conversational QA benchmark (1,986 questions), Remanentia achieves 74.7% accuracy without any LLM in the retrieval loop, compared to 91.4% for Hindsight (which uses GPT-4 for answer extraction). We document two negative results: (1) spiking neural network retrieval via STDP-modified weight matrices provides zero discriminative signal across 70+ experimental configurations and 4 learning rules, and (2) a Rust BM25 engine is slower than Python at the current 15K-paragraph scale due to FFI overhead. The system integrates with AI coding tools via the Model Context Protocol (MCP), serving as persistent cross-session memory for any MCP-compatible client. We release Remanentia as open-source software (AGPL-3.0) with 225 tests.
 
 **Keywords:** agent memory, BM25, retrieval, knowledge management, MCP, negative results, spiking neural networks
 
@@ -32,7 +32,7 @@ Remanentia indexes 18 source directories into a unified BM25 index with 15,938 p
 
 1. A filesystem-native memory system that indexes existing project artifacts rather than maintaining a separate memory store.
 2. Query intelligence with 8 intent types routing to specialized scoring (paragraph type boost, recency boost, temporal date extraction).
-3. Integration with AI coding environments via the Model Context Protocol (MCP), verified with Claude Code.
+3. Integration with AI coding environments via the Model Context Protocol (MCP), verified against MCP-compatible clients.
 4. Two documented negative results: SNN-based retrieval failure (Section 4) and Rust BM25 at small scale (Section 5.2).
 5. Open-source implementation with 225 tests, 8 test modules, and 77% average coverage on core modules.
 
@@ -112,7 +112,7 @@ Remanentia exposes 3 tools via the Model Context Protocol (JSON-RPC on stdio):
 - `remanentia_status`: system statistics
 - `remanentia_graph`: entity relationship query
 
-This allows Claude Code, Cursor, and other MCP-compatible tools to use Remanentia as persistent cross-session memory.
+This allows Cursor and other MCP-compatible tools to use Remanentia as persistent cross-session memory.
 
 ---
 

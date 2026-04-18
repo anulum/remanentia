@@ -108,7 +108,7 @@ assert b.is_available(), "Ollama not reachable on localhost:11434"
 print(b.complete("What is the capital of Slovakia?", max_tokens=20))
 # Expected: 'Bratislava' (or similar single word)
 
-# Auto: prefers local, falls back to Anthropic, then Null
+# Auto: prefers local, falls back to the hosted backend, then Null
 auto = AutoBackend()
 print(auto.complete("Hello"))
 ```
@@ -134,8 +134,8 @@ Or set the environment variable `REMANENTIA_LLM_CONFIG=/path/to/llm.toml`.
 
 ## 6a. Using the local LLM through the MCP server
 
-The MCP server is the usual way an agent (Claude Code, Cursor, …)
-talks to Remanentia. Two flags flip the backend selection:
+The MCP server is the usual way an MCP-compatible tool (Cursor and
+others) talks to Remanentia. Two flags flip the backend selection:
 
 ```bash
 # LLM-synthesised recall answers, local-Ollama backend pinned
@@ -160,7 +160,7 @@ Environment="REMANENTIA_LLM_BACKEND=local"
 ```
 
 With ``REMANENTIA_LLM_BACKEND=auto`` (the default), ``AutoBackend``
-tries local → Anthropic → Null in that order, so a running Ollama
+tries local → hosted → Null in that order, so a running Ollama
 at the configured URL wins automatically.
 
 ## 7. Re-running the benchmark
