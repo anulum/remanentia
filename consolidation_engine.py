@@ -29,6 +29,7 @@ import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import datetime
+from importlib import import_module
 from pathlib import Path
 
 import numpy as np
@@ -103,7 +104,7 @@ def _extract_entities(text: str) -> list[str]:
        numeric results, person names
     """
     try:
-        from remanentia_consolidation import extract_entities as _rust_ents
+        _rust_ents = import_module("remanentia_consolidation").extract_entities
 
         return _rust_ents(text)  # pragma: no cover
     except ImportError:
@@ -243,7 +244,7 @@ def _extract_key_lines(text: str) -> list[str]:
     grab the next 2 non-empty lines as context.
     """
     try:
-        from remanentia_consolidation import extract_key_lines as _rust_kl
+        _rust_kl = import_module("remanentia_consolidation").extract_key_lines
 
         return _rust_kl(text)  # pragma: no cover
     except ImportError:
@@ -306,7 +307,7 @@ def _extract_key_lines(text: str) -> list[str]:
 
 
 def _trace_hash(filename: str) -> str:
-    return hashlib.md5(filename.encode()).hexdigest()[:12]
+    return hashlib.sha256(filename.encode()).hexdigest()[:12]
 
 
 # ── Clustering ───────────────────────────────────────────────────
@@ -319,7 +320,7 @@ def _cluster_traces(traces: dict[str, dict]) -> list[list[str]]:
     A gap > 2 days starts a new cluster.
     """
     try:
-        from remanentia_consolidation import cluster_traces as _rust_ct  # pragma: no cover
+        _rust_ct = import_module("remanentia_consolidation").cluster_traces
 
         tuples = [  # pragma: no cover
             (name, meta["project"], meta.get("date", "")[:10]) for name, meta in traces.items()
@@ -524,7 +525,7 @@ def _update_graph(trace_name: str, entities: list[str], project: str, date: str,
     existing_pairs = {(r["source"], r["target"]) for r in relations}
     for i, e1 in enumerate(entities):
         for e2 in entities[i + 1 :]:
-            pair = tuple(sorted([e1, e2]))
+            pair = _entity_pair(e1, e2)
             rel_type = typed_pairs.get(pair, typed_pairs.get((pair[1], pair[0]), "co_occurs"))
             if pair in existing_pairs:
                 for r in relations:
@@ -572,7 +573,7 @@ _TYPED_RELATION_PATTERNS = [
 def _extract_typed_relations(text: str, entities: list[str]) -> dict[tuple[str, str], str]:
     """Extract typed relations between entity pairs from their connecting text."""
     try:
-        from remanentia_consolidation import extract_typed_relations as _rust_rels
+        _rust_rels = import_module("remanentia_consolidation").extract_typed_relations
 
         rust_result = _rust_rels(text, entities)  # pragma: no cover
         return {(s, t): r for s, t, r in rust_result}  # pragma: no cover
@@ -589,7 +590,7 @@ def _extract_typed_relations(text: str, entities: list[str]) -> dict[tuple[str, 
             start = min(pos1, pos2)
             end = max(pos1 + len(e1), pos2 + len(e2))
             between = text[start:end]
-            pair = tuple(sorted([e1, e2]))
+            pair = _entity_pair(e1, e2)
             matched = False
             for pattern, rel_type in _TYPED_RELATION_PATTERNS:
                 if pattern.search(between):
@@ -599,6 +600,11 @@ def _extract_typed_relations(text: str, entities: list[str]) -> dict[tuple[str, 
             if not matched:
                 typed[pair] = "co_occurs"
     return typed
+
+
+def _entity_pair(first: str, second: str) -> tuple[str, str]:
+    """Return a stable two-entity key."""
+    return (first, second) if first <= second else (second, first)
 
 
 # ── Novelty detection ────────────────────────────────────────────
@@ -882,7 +888,7 @@ def build_summary_dag(trace_data: dict[str, dict]) -> list[dict]:
         return []
 
     try:
-        from remanentia_consolidation import build_summary_dag as _rust_dag  # pragma: no cover
+        _rust_dag = import_module("remanentia_consolidation").build_summary_dag
 
         tuples = [  # pragma: no cover
             (
@@ -1112,7 +1118,7 @@ def age_memories(reference_date: str | None = None) -> dict:
 def _parse_frontmatter(text: str) -> dict | None:
     """Parse YAML-ish frontmatter from a semantic memory file."""
     try:
-        from remanentia_consolidation import parse_frontmatter as _rust_fm
+        _rust_fm = import_module("remanentia_consolidation").parse_frontmatter
 
         result = _rust_fm(text)  # pragma: no cover
         return result if result else None  # pragma: no cover

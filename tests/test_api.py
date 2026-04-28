@@ -15,6 +15,7 @@ from unittest.mock import patch
 import pytest
 
 from api import app
+from vector_index import VectorSearchResult
 
 try:
     from fastapi.testclient import TestClient
@@ -44,6 +45,7 @@ class TestHealth:
         data = resp.json()
         assert data["status"] == "ok"
         assert data["daemon"] == "stale"
+        assert data["vector_worker"] == "missing"
         assert data["version"] == "0.2.0"
 
     def test_health_daemon_alive(self, client, tmp_path):
@@ -55,6 +57,25 @@ class TestHealth:
         with patch("api.STATE_DIR", state_dir):
             resp = client.get("/health")
         assert resp.json()["daemon"] == "alive"
+
+    def test_health_vector_worker_alive(self, client, tmp_path):
+        state_dir = tmp_path / "snn_state"
+        state_dir.mkdir()
+        worker_state = {
+            "cycle": 3,
+            "pid": 1234,
+            "result": {"action": "skipped"},
+            "status": "ok",
+            "timestamp_unix": time.time(),
+        }
+        (state_dir / "vector_refresh_worker.json").write_text(
+            json.dumps(worker_state), encoding="utf-8"
+        )
+
+        with patch("api.STATE_DIR", state_dir):
+            resp = client.get("/health")
+
+        assert resp.json()["vector_worker"] == "alive"
 
 
 # ── Status ───────────────────────────────────────────────────────
@@ -243,6 +264,69 @@ class TestRecall:
         assert "context" in data
         assert data["context"] == "LLM context here"
 
+
+class TestPublicVectorSearch:
+    def test_public_vector_search_requires_query(self, client):
+        resp = client.post("/vector/search/public", json={"query": ""})
+
+        assert resp.status_code == 400
+
+    def test_public_vector_search_no_allowlist_returns_no_results(self, client):
+        raw_result = VectorSearchResult(
+            chunk_id="one",
+            text="beta public paragraph",
+            source="paper",
+            score=0.8,
+            metadata={"path": "paper/remanentia.md"},
+        )
+
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            patch("vector_index.HttpEmbeddingClient.from_env", return_value=object()),
+            patch("vector_pipeline.search_memory_vector_index", return_value=[raw_result]),
+        ):
+            resp = client.post("/vector/search/public", json={"query": "beta", "top_k": 1})
+
+        assert resp.status_code == 200
+        assert resp.json()["results"] == []
+
+    def test_public_vector_search_uses_server_policy_and_redaction(self, client, tmp_path):
+        redaction_file = tmp_path / "terms.txt"
+        redaction_file.write_text("private-token\n", encoding="utf-8")
+        raw_result = VectorSearchResult(
+            chunk_id="one",
+            text="beta private-token public paragraph",
+            source="paper",
+            score=0.8,
+            metadata={
+                "document": "private-token-paper.md",
+                "document_type": "paper",
+                "paragraph_idx": 0,
+                "path": "paper/private-token-paper.md",
+            },
+        )
+
+        with (
+            patch.dict(
+                "os.environ",
+                {
+                    "REMANENTIA_PUBLIC_VECTOR_SOURCES": "paper",
+                    "REMANENTIA_PUBLIC_VECTOR_PATH_PREFIXES": "paper",
+                    "REMANENTIA_PUBLIC_VECTOR_REDACTION_FILE": str(redaction_file),
+                },
+                clear=True,
+            ),
+            patch("vector_index.HttpEmbeddingClient.from_env", return_value=object()),
+            patch("vector_pipeline.search_memory_vector_index", return_value=[raw_result]),
+        ):
+            resp = client.post("/vector/search/public", json={"query": "beta", "top_k": 1})
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["results"][0]["text"] == "beta [redacted] public paragraph"
+        assert payload["results"][0]["metadata"]["document"] == "[redacted]-paper.md"
+        assert payload["results"][0]["redactions"] == 3
+
     def test_consolidate_endpoint(self, client):
         mock_result = {"status": "ok", "traces_processed": 5}
         with patch("consolidation_engine.consolidate", return_value=mock_result):
@@ -276,6 +360,35 @@ class TestRecall:
         data = resp.json()
         assert "daemon" in data
         assert data["daemon"]["cycle"] == 5
+
+    def test_status_with_vector_worker_state(self, client, tmp_path):
+        state_dir = tmp_path / "snn_state"
+        state_dir.mkdir()
+        worker_state = {
+            "cycle": 7,
+            "pid": 1234,
+            "result": {"action": "skipped"},
+            "status": "ok",
+            "timestamp_unix": time.time(),
+        }
+        (state_dir / "vector_refresh_worker.json").write_text(
+            json.dumps(worker_state), encoding="utf-8"
+        )
+        graph_dir = tmp_path / "memory" / "graph"
+        graph_dir.mkdir(parents=True)
+        (tmp_path / "reasoning_traces").mkdir()
+        (tmp_path / "memory" / "semantic").mkdir(parents=True)
+
+        with (
+            patch("api.BASE", tmp_path),
+            patch("api.STATE_DIR", state_dir),
+            patch("api.GRAPH_DIR", graph_dir),
+        ):
+            resp = client.get("/status")
+
+        data = resp.json()
+        assert data["vector_worker"]["state"] == "alive"
+        assert data["vector_worker"]["last_action"] == "skipped"
 
 
 # ── Missing patterns: pipeline, roundtrip ─────────────────────

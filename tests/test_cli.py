@@ -18,6 +18,7 @@ from cli import (
     cmd_graph,
     cmd_init,
     cmd_recall,
+    cmd_serve,
     cmd_status,
     main,
 )
@@ -189,6 +190,22 @@ class TestMain:
 
         out = capsys.readouterr().out
         assert "Daemon" in out or "NOT RUNNING" in out
+
+    def test_serve_command_wires_fastapi_runner(self):
+        with patch("sys.argv", ["remanentia", "serve", "--host", "127.0.0.1", "--port", "8765"]):
+            with patch("uvicorn.run") as run:
+                main()
+
+        run.assert_called_once_with("api:app", host="127.0.0.1", port=8765)
+
+
+class TestCmdServe:
+    def test_cmd_serve_uses_requested_bind(self):
+        args = type("Args", (), {"host": "127.0.0.1", "port": 8765})()
+        with patch("uvicorn.run") as run:
+            cmd_serve(args)
+
+        run.assert_called_once_with("api:app", host="127.0.0.1", port=8765)
 
 
 # ── cmd_recall ──────────────────────────────────────────────────

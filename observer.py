@@ -23,12 +23,16 @@ added heartbeat capabilities:
 from __future__ import annotations
 
 import json
+import logging
 import time
+from importlib import import_module
 from pathlib import Path
+from typing import Any, cast
 
 BASE = Path(__file__).parent
 project-workspace_ROOT = BASE.parent
 STATE_PATH = BASE / "memory" / "observer_state.json"
+_LOGGER = logging.getLogger(__name__)
 
 WATCHED_DIRS = {
     "traces": BASE / "reasoning_traces",
@@ -157,20 +161,8 @@ def observe_once(state: ObserverState, watched_dirs: dict[str, Path] | None = No
     files_new = 0
     notes_created = 0
 
-    try:
-        from knowledge_store import KnowledgeStore
-
-        store = KnowledgeStore()
-        store.load()
-    except Exception:  # pragma: no cover
-        return {
-            "files_scanned": 0,
-            "files_new": 0,
-            "notes_created": 0,
-            "error": "store load failed",
-        }
-
     new_files: list[tuple[Path, str]] = []
+    pending_notes: list[dict[str, str]] = []
     for source_name, source_dir in dirs.items():
         if not source_dir.exists():
             continue
@@ -181,24 +173,39 @@ def observe_once(state: ObserverState, watched_dirs: dict[str, Path] | None = No
             files_new += 1
             note_dicts = extract_notes_from_file(f)
             for nd in note_dicts:
-                store.add_note(nd["content"], source=nd["source"])
-                notes_created += 1
+                pending_notes.append(nd)
             new_files.append((f, source_name))
             state.mark_processed(f)
 
-    if notes_created > 0:
+    if pending_notes:
+        try:
+            knowledge_module = import_module("knowledge_store")
+            knowledge_store_cls = cast(Any, knowledge_module).KnowledgeStore
+            store = knowledge_store_cls()
+            store.load()
+        except Exception:  # pragma: no cover
+            return {
+                "files_scanned": files_scanned,
+                "files_new": files_new,
+                "notes_created": 0,
+                "error": "store load failed",
+            }
+
+        for nd in pending_notes:
+            store.add_note(nd["content"], source=nd["source"])
+        notes_created = len(pending_notes)
         store.save()
 
     # Incrementally update the unified index for new files
     if new_files:
         try:
-            from mcp_server import _UNIFIED_INDEX
-
-            if _UNIFIED_INDEX is not None and _UNIFIED_INDEX._built:
+            mcp_module = import_module("mcp_server")
+            unified_index = getattr(mcp_module, "_UNIFIED_INDEX", None)
+            if unified_index is not None and getattr(unified_index, "_built", False):
                 for f, source_name in new_files:
-                    _UNIFIED_INDEX.add_file(f, source=source_name)
+                    unified_index.add_file(f, source=source_name)
         except Exception:  # pragma: no cover
-            pass
+            _LOGGER.debug("Unified index incremental update failed", exc_info=True)
 
     return {
         "files_scanned": files_scanned,
@@ -217,6 +224,11 @@ def heartbeat(state: ObserverState, watched_dirs: dict[str, Path] | None = None)
 
     # 1. Observe filesystem changes
     result["observe"] = observe_once(state, watched_dirs)
+    if watched_dirs is not None and result["observe"].get("files_scanned", 0) == 0:
+        result["consolidate"] = {"status": "nothing_to_consolidate", "pending": 0}
+        result["aging"] = {"status": "skipped", "reason": "no_files_scanned"}
+        result["capacity"] = {"status": "skipped", "reason": "no_files_scanned"}
+        return result
 
     # 2. Consolidate any pending traces
     try:

@@ -37,7 +37,6 @@ gpu = ["torch>=2.0"]
 temporal = ["sentence-transformers>=3.0", "torch>=2.0", "transformers>=4.45"]
 sparse = ["scipy>=1.11"]
 api = ["fastapi>=0.100", "uvicorn>=0.20"]
-llm = ["anthropic>=0.40"]
 local = ["tomli>=2.0; python_version < '3.11'"]
 guarded = [
     "tomli>=2.0; python_version < '3.11'",
@@ -49,7 +48,6 @@ all = [
     "scipy>=1.11",
     "fastapi>=0.100",
     "uvicorn>=0.20",
-    "anthropic>=0.40",
     "tomli>=2.0; python_version < '3.11'",
 ]
 dev = [
@@ -93,6 +91,8 @@ py-modules = [
     "fact_validity_model",
     "llm_backend",
     "llm_setup",
+    "vector_index",
+    "vector_pipeline",
 ]
 
 [tool.setuptools.package-data]

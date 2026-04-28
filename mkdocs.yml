@@ -80,6 +80,7 @@ nav:
     - date_normalizer: api/date_normalizer.md
     - temporal_relation: api/temporal_relation.md
     - fact_validity_model: api/fact_validity_model.md
+    - api: api/api.md
     - api_server: api/api_server.md
     - api_security: api/api_security.md
     - skill_extractor: api/skill_extractor.md
@@ -90,6 +91,8 @@ nav:
     - memory_guarded: api/memory_guarded.md
     - pii_redactor: api/pii_redactor.md
     - seed_utils: api/seed_utils.md
+    - vector_index: api/vector_index.md
+    - vector_pipeline: api/vector_pipeline.md
     - CLI: api/cli.md
   - Architecture:
     - Overview: architecture/architecture.md

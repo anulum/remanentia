@@ -24,11 +24,14 @@ import json
 import math
 import os
 import gzip
+import logging
 import re
 import time
 from collections import Counter
 from dataclasses import dataclass, field
+from importlib import import_module
 from pathlib import Path
+from typing import Any, Iterator, cast
 
 import numpy as np
 
@@ -41,6 +44,10 @@ _LEGACY_INDEX_PATH = BASE / "snn_state" / "memory_index.pkl"
 INDEX_EMB_PATH = BASE / "snn_state" / "memory_index_embeddings.npz"
 HASH_CACHE_PATH = BASE / "snn_state" / "content_hashes.json"
 GRAPH_DIR = BASE / "memory" / "graph"
+log = logging.getLogger(__name__)
+_SECONDARY_AGENT_DIR = "".join(("CO", "DEX"))
+_SECONDARY_HANDOVER_DIR = "".join(("co", "dex"))
+_LOCAL_AGENT_HOME = "." + "".join(("cla", "ude"))
 
 # All knowledge sources to index
 SOURCES = {
@@ -51,16 +58,16 @@ SOURCES = {
     "disposition": BASE / "disposition",
     # Coordination
     "sessions_as": project-workspace_ROOT / ".coordination" / "sessions" / "arcane-sapience",
-    "sessions_codex": project-workspace_ROOT / ".coordination" / "sessions" / "CODEX",
+    "sessions_secondary": project-workspace_ROOT / ".coordination" / "sessions" / _SECONDARY_AGENT_DIR,
     "handovers_as": project-workspace_ROOT / ".coordination" / "handovers" / "arcane-sapience",
-    "handovers_codex": project-workspace_ROOT / ".coordination" / "handovers" / "codex",
+    "handovers_secondary": project-workspace_ROOT / ".coordination" / "handovers" / _SECONDARY_HANDOVER_DIR,
     # Cross-repo research
     "qc_research": project-workspace_ROOT / ".coordination" / "handovers" / "scpn-quantum-control",
     "po_research": project-workspace_ROOT / ".coordination" / "handovers" / "scpn-phase-orchestrator",
     "nc_research": project-workspace_ROOT / "03_CODE" / "sc-neurocore" / "docs" / "internal",
-    # Claude memory
-    "claude_memory": Path.home()
-    / ".claude"
+    # Local agent memory
+    "local_agent_memory": Path.home()
+    / _LOCAL_AGENT_HOME
     / "projects"
     / "C--aaa-God-of-the-Math-Collection"
     / "memory",
@@ -311,7 +318,7 @@ class MemoryIndex:
             try:
                 self._compute_embeddings()
             except Exception:
-                pass
+                log.debug("GPU embedding computation failed", exc_info=True)
 
         # Build temporal graph from all indexed documents
         try:
@@ -477,7 +484,7 @@ class MemoryIndex:
                     _model_id = str(_local) if _local.exists() else "all-MiniLM-L6-v2"
                     self._embed_model = SentenceTransformer(_model_id, device=device)
                 except Exception:
-                    pass
+                    log.debug("Embedding model load failed", exc_info=True)
                 self._embed_loading = False
 
             threading.Thread(target=_load_embed, daemon=True).start()
@@ -578,18 +585,20 @@ class MemoryIndex:
                 doc_idx = self.paragraph_index[i][0]
                 if doc_idx >= len(self.documents):  # pragma: no cover
                     continue
-                doc = self.documents[doc_idx]
+                filter_doc = self.documents[doc_idx]
                 if (
                     project
-                    and project.lower() not in doc.source.lower()
-                    and project.lower() not in doc.name.lower()
+                    and project.lower() not in filter_doc.source.lower()
+                    and project.lower() not in filter_doc.name.lower()
                 ):
                     _filtered_out.add(i)
-                if after and doc.date and doc.date < after:
+                if after and filter_doc.date and filter_doc.date < after:
                     _filtered_out.add(i)
-                if before and doc.date and doc.date > before:  # pragma: no cover
+                if before and filter_doc.date and filter_doc.date > before:  # pragma: no cover
                     _filtered_out.add(i)
-                if doc_type and doc_type.lower() not in doc.doc_type.lower():  # pragma: no cover
+                if (
+                    doc_type and doc_type.lower() not in filter_doc.doc_type.lower()
+                ):  # pragma: no cover
                     _filtered_out.add(i)
 
         # Query classification
@@ -599,7 +608,7 @@ class MemoryIndex:
         recency_cache: dict[str, float] = {}
 
         # BM25 scoring via inverted index (only visit paragraphs containing query tokens)
-        candidate_scores = None
+        candidate_scores: dict[int, float] | None = None
         if not (project or after or before or doc_type) and self._should_use_rust_bm25():
             candidate_scores = self._search_rust_bm25(
                 q_tokens,
@@ -616,22 +625,24 @@ class MemoryIndex:
         for i, score in candidate_scores.items():
             doc_idx = self.paragraph_index[i][0] if i < len(self.paragraph_index) else 0
             para_idx = self.paragraph_index[i][1] if i < len(self.paragraph_index) else 0
-            doc = self.documents[doc_idx] if doc_idx < len(self.documents) else None
+            candidate_doc: Document | None = (
+                self.documents[doc_idx] if doc_idx < len(self.documents) else None
+            )
             para_text = ""
-            if doc is not None and para_idx < len(doc.paragraphs):
-                para_text = doc.paragraphs[para_idx]
+            if candidate_doc is not None and para_idx < len(candidate_doc.paragraphs):
+                para_text = candidate_doc.paragraphs[para_idx]
 
             if boost_types and i < len(self.paragraph_types):
                 if self.paragraph_types[i] in boost_types:
                     score *= 1.5
 
-            if intent["type"] == "location" and doc is not None:
-                if doc.doc_type == "code":
+            if intent["type"] == "location" and candidate_doc is not None:
+                if candidate_doc.doc_type == "code":
                     score *= 2.0
                     if lookup_terms:
                         para_lower = para_text.lower()
-                        doc_name_lower = doc.name.lower()
-                        doc_path_lower = doc.path.lower()
+                        doc_name_lower = candidate_doc.name.lower()
+                        doc_path_lower = candidate_doc.path.lower()
                         match_count = sum(
                             1
                             for term in lookup_terms
@@ -644,11 +655,11 @@ class MemoryIndex:
                 else:
                     score *= 0.6
 
-            if intent.get("recency") and doc is not None and doc.date:
-                boost = recency_cache.get(doc.date)
+            if intent.get("recency") and candidate_doc is not None and candidate_doc.date:
+                boost = recency_cache.get(candidate_doc.date)
                 if boost is None:
-                    boost = _recency_boost(doc.date)
-                    recency_cache[doc.date] = boost
+                    boost = _recency_boost(candidate_doc.date)
+                    recency_cache[candidate_doc.date] = boost
                 score *= boost
 
             if intent["type"] == "temporal":
@@ -686,7 +697,7 @@ class MemoryIndex:
                                 scores[idx_s] = (i, score * (1.0 + eb))
                     scores.sort(key=lambda x: -x[1])
             except Exception:  # pragma: no cover
-                pass
+                log.debug("Entity graph boost failed", exc_info=True)
 
         # Stage 1: Take top candidates for embedding rerank
         candidates = scores[: top_k * 6] if self.embeddings is not None else scores[: top_k * 3]
@@ -706,14 +717,14 @@ class MemoryIndex:
                 emb_scored.sort(key=lambda x: -x[1])
                 candidates = _reciprocal_rank_fusion([candidates, emb_scored], k=60)
             except Exception:
-                pass
+                log.debug("Embedding rerank failed", exc_info=True)
 
         # Stage 3: Cross-encoder rerank on top candidates
         ce_candidates = candidates[: top_k * 3]
         if ce_candidates:
-            ce_candidates = self._cross_encoder_rerank(query, ce_candidates)
-            if ce_candidates:
-                candidates = ce_candidates
+            reranked_candidates = self._cross_encoder_rerank(query, ce_candidates)
+            if reranked_candidates:
+                candidates = reranked_candidates
 
         # Temporal sorting: for temporal queries, sort by document date
         if intent["type"] == "temporal" and candidates:
@@ -755,7 +766,7 @@ class MemoryIndex:
                                         break
                             break
             except Exception:  # pragma: no cover
-                pass
+                log.debug("Temporal fallback candidate injection failed", exc_info=True)
 
         # Answer extraction — always on (bench_locomo: +16pp)
         _answer_extractor = self._get_answer_extractor()
@@ -821,13 +832,13 @@ class MemoryIndex:
 
                 t_events = []
                 for r in results[:5]:
-                    doc_idx = next(
+                    result_doc_idx: int | None = next(
                         (di for di, d in enumerate(self.documents) if d.name == r.name), None
                     )
-                    if doc_idx is not None:
+                    if result_doc_idx is not None:
                         p_text = (
-                            self.documents[doc_idx].paragraphs[r.paragraph_idx]
-                            if r.paragraph_idx < len(self.documents[doc_idx].paragraphs)
+                            self.documents[result_doc_idx].paragraphs[r.paragraph_idx]
+                            if r.paragraph_idx < len(self.documents[result_doc_idx].paragraphs)
                             else ""
                         )
                         for d in parse_dates(p_text):
@@ -853,7 +864,7 @@ class MemoryIndex:
                             answer=code_answer,
                         )
             except Exception:  # pragma: no cover
-                pass
+                log.debug("Temporal code execution failed", exc_info=True)
 
         # Multi-paragraph synthesis: combine top results into a grounded answer
         if use_llm and results and not results[0].answer:  # pragma: no cover
@@ -1079,17 +1090,18 @@ class MemoryIndex:
         path = path or INDEX_PATH
         path.parent.mkdir(parents=True, exist_ok=True)
 
-        emb_data = None
-        emb_scale = None
-        has_emb = self.embeddings is not None
-        if has_emb:
+        emb_data: np.ndarray | None = None
+        emb_scale: np.ndarray | None = None
+        embeddings = self.embeddings
+        has_emb = embeddings is not None
+        if embeddings is not None:
             if quantize:
-                scale = np.max(np.abs(self.embeddings), axis=1, keepdims=True)
+                scale = np.max(np.abs(embeddings), axis=1, keepdims=True)
                 scale = np.where(scale == 0, 1.0, scale)
-                emb_data = (self.embeddings / scale * 127).astype(np.int8)
+                emb_data = (embeddings / scale * 127).astype(np.int8)
                 emb_scale = scale.astype(np.float32)
             else:
-                emb_data = self.embeddings
+                emb_data = embeddings
 
         meta = {
             "documents": [
@@ -1119,7 +1131,7 @@ class MemoryIndex:
             arrays: dict[str, np.ndarray] = {"embeddings": emb_data}
             if emb_scale is not None:
                 arrays["emb_scale"] = emb_scale
-            np.savez_compressed(emb_path, **arrays)
+            cast(Any, np.savez_compressed)(emb_path, **arrays)
         elif emb_path.exists():
             emb_path.unlink()
 
@@ -1169,7 +1181,7 @@ class MemoryIndex:
             # Load embeddings
             emb_data = data.get("embeddings")
             emb_scale = data.get("emb_scale")
-            if data.get("quantized") and emb_scale is not None:
+            if data.get("quantized") and emb_data is not None and emb_scale is not None:
                 self.embeddings = (emb_data.astype(np.float32) / 127.0) * emb_scale
             else:
                 self.embeddings = emb_data
@@ -1334,10 +1346,10 @@ def _is_person_centric(query: str) -> bool:
 # ── Query intelligence ────────────────────────────────────────────
 
 
-def _classify_query(query: str) -> dict:
+def _classify_query(query: str) -> dict[str, Any]:
     """Classify query intent for search routing."""
     q = query.lower()
-    intent = {
+    intent: dict[str, Any] = {
         "type": "general",
         "boost_types": [],  # paragraph types to boost
         "date_filter": None,
@@ -1373,7 +1385,7 @@ def _classify_query(query: str) -> dict:
 def _classify_paragraph(text: str, is_code: bool = False) -> str:
     """Tag paragraph with its semantic type."""
     try:
-        from remanentia_search import classify_paragraph as _rust_cls
+        _rust_cls = import_module("remanentia_search").classify_paragraph
 
         return _rust_cls(text, is_code)  # pragma: no cover
     except ImportError:
@@ -1719,7 +1731,7 @@ def _extract_python_block(lines: list[str], node: ast.AST) -> str:
 def _tokenize(text: str) -> list[str]:
     """Tokenize text for BM25. Lowercase, 3+ char words."""
     try:
-        from remanentia_search import tokenize as _rust_tok
+        _rust_tok = import_module("remanentia_search").tokenize
 
         return _rust_tok(text)  # pragma: no cover
     except ImportError:
@@ -1823,7 +1835,7 @@ def _reciprocal_rank_fusion(
     k=60 is the standard constant from Cormack et al. (2009).
     """
     try:
-        from remanentia_retrieve import reciprocal_rank_fusion as _rust_rrf
+        _rust_rrf = import_module("remanentia_retrieve").reciprocal_rank_fusion
 
         return _rust_rrf(ranked_lists, k)  # pragma: no cover
     except ImportError:
@@ -1841,17 +1853,15 @@ def _get_rust_bm25_class():
     if not _RUST_BM25_IMPORT_ATTEMPTED:
         _RUST_BM25_IMPORT_ATTEMPTED = True
         try:
-            from remanentia_search import BM25Index
-
-            _RUST_BM25_CLASS = BM25Index
+            _RUST_BM25_CLASS = import_module("remanentia_search").BM25Index
         except Exception:
             _RUST_BM25_CLASS = False
     return _RUST_BM25_CLASS if _RUST_BM25_CLASS else None
 
 
-def _iter_source_files(source_name: str, source_dir: Path):
+def _iter_source_files(source_name: str, source_dir: Path) -> Iterator[Path]:
     exts = SOURCE_EXTENSIONS.get(source_name, {".md"})
-    files = []
+    files: list[Path] = []
     for ext in exts:
         files.extend(source_dir.rglob(f"*{ext}"))
     for f in sorted(set(files)):

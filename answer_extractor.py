@@ -23,6 +23,8 @@ from __future__ import annotations
 
 import re
 from difflib import SequenceMatcher
+from importlib import import_module
+from typing import Any
 
 
 def extract_answer(query: str, paragraph: str) -> str | None:
@@ -42,7 +44,7 @@ def extract_answer(query: str, paragraph: str) -> str | None:
             return dur
 
     try:
-        from remanentia_answer_extractor import extract_answer as _rust_extract
+        _rust_extract = import_module("remanentia_answer_extractor").extract_answer
 
         return _rust_extract(query, paragraph)  # pragma: no cover
     except ImportError:
@@ -78,9 +80,9 @@ def extract_answer(query: str, paragraph: str) -> str | None:
     return None
 
 
-def extract_all_candidates(query: str, paragraph: str) -> list[dict]:
+def extract_all_candidates(query: str, paragraph: str) -> list[dict[str, Any]]:
     """Extract all answer candidates with types and scores."""
-    candidates = []
+    candidates: list[dict[str, Any]] = []
     p = paragraph
 
     for m in re.finditer(r"\d{4}-\d{2}-\d{2}", p):
@@ -103,13 +105,14 @@ def extract_all_candidates(query: str, paragraph: str) -> list[dict]:
     # Score boost for candidates near query terms
     q_tokens = set(re.findall(r"\w{3,}", query.lower()))
     for c in candidates:
-        pos = p.find(c["answer"])
+        answer = str(c["answer"])
+        pos = p.find(answer)
         if pos >= 0:
-            window = p[max(0, pos - 80) : pos + len(c["answer"]) + 80].lower()
+            window = p[max(0, pos - 80) : pos + len(answer) + 80].lower()
             overlap = sum(1 for t in q_tokens if t in window)
             c["score"] += overlap * 0.1
 
-    candidates.sort(key=lambda x: -x["score"])
+    candidates.sort(key=lambda x: -float(x["score"]))
     return candidates
 
 
@@ -380,7 +383,7 @@ def _best_by_proximity(
 def fuzzy_match(candidate: str, gold: str, threshold: float = 0.7) -> bool:
     """Check if candidate fuzzy-matches gold answer. Rust-accelerated."""
     try:
-        from remanentia_answer_extractor import fuzzy_match as _rust_fuzzy
+        _rust_fuzzy = import_module("remanentia_answer_extractor").fuzzy_match
 
         return _rust_fuzzy(candidate, gold, threshold)  # pragma: no cover
     except ImportError:
@@ -433,7 +436,7 @@ _WORD_TO_NUM = {
 def normalize_number(text: str) -> str | None:
     """Normalize number words and formats to digits. Rust-accelerated."""
     try:
-        from remanentia_answer_extractor import normalize_number as _rust_num
+        _rust_num = import_module("remanentia_answer_extractor").normalize_number
 
         return _rust_num(text)  # pragma: no cover
     except ImportError:
@@ -476,7 +479,7 @@ def normalize_number(text: str) -> str | None:
 def extract_best_sentence(query: str, paragraph: str) -> str | None:
     """Return the sentence most relevant to the query. Rust-accelerated."""
     try:
-        from remanentia_answer_extractor import extract_best_sentence as _rust_best
+        _rust_best = import_module("remanentia_answer_extractor").extract_best_sentence
 
         return _rust_best(query, paragraph)  # pragma: no cover
     except ImportError:
@@ -518,9 +521,7 @@ def get_llm_backend():
 # ── LLM-powered extraction ─────────────────────────────────────
 
 
-def llm_extract_answer(
-    query: str, paragraph: str, model: str = "claude-haiku-4-5-20251001"
-) -> str | None:
+def llm_extract_answer(query: str, paragraph: str, model: str = "remote-default") -> str | None:
     """Extract answer via LLM backend. Fallback when regex returns None.
 
     Returns 1-2 sentence answer or None.
@@ -546,7 +547,7 @@ def llm_extract_answer(
 
 
 def llm_generate_prospective_queries(
-    paragraph: str, doc_name: str, model: str = "claude-haiku-4-5-20251001"
+    paragraph: str, doc_name: str, model: str = "remote-default"
 ) -> list[str]:
     """Generate hypothetical future queries for a paragraph via LLM.
 
@@ -574,7 +575,7 @@ def llm_generate_prospective_queries(
 
 
 def llm_synthesize_answer(
-    query: str, paragraphs: list[str], model: str = "claude-haiku-4-5-20251001"
+    query: str, paragraphs: list[str], model: str = "remote-default"
 ) -> str | None:
     """Synthesize an answer from multiple retrieved paragraphs.
 

@@ -27,13 +27,14 @@ Endpoints:
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -53,6 +54,7 @@ app.add_middleware(
 BASE = Path(__file__).parent
 STATE_DIR = BASE / "snn_state"
 GRAPH_DIR = BASE / "memory" / "graph"
+VECTOR_WORKER_MAX_AGE_S = 1800
 
 
 class RecallRequest(BaseModel):
@@ -60,6 +62,12 @@ class RecallRequest(BaseModel):
     top_k: int = 3
     format: str = "summary"
     include_content: bool = False
+
+
+class PublicVectorSearchRequest(BaseModel):
+    query: str
+    top_k: int = 5
+    source: str = ""
 
 
 class ConsolidateRequest(BaseModel):
@@ -73,9 +81,11 @@ def health():
     if state_path.exists():
         s = json.loads(state_path.read_text(encoding="utf-8"))
         daemon_alive = (time.time() - s.get("timestamp", 0)) < 120
+    vector_worker = _vector_worker_state()
     return {
         "status": "ok",
         "daemon": "alive" if daemon_alive else "stale",
+        "vector_worker": vector_worker["state"],
         "version": "0.2.0",
     }
 
@@ -106,6 +116,47 @@ def recall_endpoint(req: RecallRequest):
         "novelty": ctx.novelty_score,
         "elapsed_ms": ctx.elapsed_ms,
     }
+
+
+@app.post("/vector/search/public")
+def public_vector_search_endpoint(req: PublicVectorSearchRequest):
+    """Public-safe vector search.
+
+    The result policy is server-controlled. Callers can narrow by source,
+    but cannot widen the public corpus allowlist.
+    """
+    if not req.query.strip():
+        raise HTTPException(status_code=400, detail="query required")
+    if req.top_k <= 0:
+        return {"query": req.query, "results": []}
+
+    from vector_index import HttpEmbeddingClient, VectorIndexError
+    from vector_pipeline import (
+        DEFAULT_VECTOR_INDEX_DIR,
+        PublicVectorResultPolicy,
+        public_vector_results,
+        search_memory_vector_index,
+    )
+
+    policy = PublicVectorResultPolicy(
+        allowed_sources=tuple(_split_env("REMANENTIA_PUBLIC_VECTOR_SOURCES")),
+        allowed_path_prefixes=tuple(_split_env("REMANENTIA_PUBLIC_VECTOR_PATH_PREFIXES")),
+        redacted_terms=tuple(_read_terms_from_env("REMANENTIA_PUBLIC_VECTOR_REDACTION_FILE")),
+        max_text_chars=int(os.environ.get("REMANENTIA_PUBLIC_VECTOR_MAX_TEXT_CHARS", "800")),
+    )
+    try:
+        provider = HttpEmbeddingClient.from_env("REMANENTIA_EMBEDDING")
+        raw_results = search_memory_vector_index(
+            Path(os.environ.get("REMANENTIA_VECTOR_INDEX_DIR", str(DEFAULT_VECTOR_INDEX_DIR))),
+            req.query,
+            provider,
+            top_k=req.top_k,
+            source=req.source,
+        )
+    except (OSError, ValueError, VectorIndexError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    return {"query": req.query, "results": public_vector_results(raw_results, policy)}
 
 
 @app.post("/consolidate")
@@ -150,6 +201,7 @@ def status():
         "entities": n_entities,
         "relations": n_relations,
         "daemon": daemon_state,
+        "vector_worker": _vector_worker_state(),
     }
 
 
@@ -204,6 +256,46 @@ def entity_detail(entity_id: str):
 
     connections.sort(key=lambda x: -x["weight"])
     return {"entity": entity, "connections": connections}
+
+
+def _split_env(name: str) -> list[str]:
+    return [item.strip() for item in os.environ.get(name, "").split(",") if item.strip()]
+
+
+def _vector_worker_state() -> dict[str, object]:
+    state_path = STATE_DIR / "vector_refresh_worker.json"
+    if not state_path.exists():
+        return {"state": "missing"}
+    try:
+        payload = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"state": "unreadable"}
+    age_s = round(time.time() - float(payload.get("timestamp_unix", 0)))
+    state = "alive" if age_s < VECTOR_WORKER_MAX_AGE_S else "stale"
+    return {
+        "age_s": age_s,
+        "cycle": payload.get("cycle"),
+        "last_action": (payload.get("result") or {}).get("action")
+        if isinstance(payload.get("result"), dict)
+        else None,
+        "pid": payload.get("pid"),
+        "state": state,
+        "status": payload.get("status"),
+    }
+
+
+def _read_terms_from_env(name: str) -> list[str]:
+    path_value = os.environ.get(name, "").strip()
+    if not path_value:
+        return []
+    path = Path(path_value)
+    if not path.exists():
+        raise ValueError(f"{name} points to a missing file")
+    return [
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
 
 
 if __name__ == "__main__":

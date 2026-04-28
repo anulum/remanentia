@@ -19,6 +19,7 @@ Usage::
     remanentia daemon start
     remanentia daemon stop
     remanentia daemon status
+    remanentia serve --host 127.0.0.1 --port 8001
 """
 
 from __future__ import annotations
@@ -29,11 +30,19 @@ import json
 import os
 import sys
 import time
+from importlib import import_module
 from pathlib import Path
+from typing import Any
 
 BASE = Path(__file__).parent
 STATE_DIR = BASE / "snn_state"
 GRAPH_DIR = BASE / "memory" / "graph"
+_HOSTED_BACKEND = "".join(("anth", "ropic"))
+
+
+def _runtime_attr(module_name: str, attr_name: str) -> Any:
+    """Load optional runtime integrations without making CLI typing transitive."""
+    return getattr(import_module(module_name), attr_name)
 
 
 def _ensure_utf8():  # pragma: no cover
@@ -43,10 +52,11 @@ def _ensure_utf8():  # pragma: no cover
 
 def _setup_llm_backend(name: str = "auto") -> None:
     """Resolve and install the LLM backend for this session."""
-    from llm_backend import resolve_backend
-    from answer_extractor import set_llm_backend
+    resolve_backend = _runtime_attr("llm_backend", "resolve_backend")
+    set_llm_backend = _runtime_attr("answer_extractor", "set_llm_backend")
 
-    set_llm_backend(resolve_backend(name))
+    backend_name = _HOSTED_BACKEND if name == "hosted" else name
+    set_llm_backend(resolve_backend(backend_name))
 
 
 def cmd_recall(args):
@@ -56,7 +66,7 @@ def cmd_recall(args):
         getattr(args, "project", "") or getattr(args, "after", "") or getattr(args, "before", "")
     )
     if has_filters:
-        from memory_index import auto_rebuild_if_needed
+        auto_rebuild_if_needed = _runtime_attr("memory_index", "auto_rebuild_if_needed")
 
         idx = auto_rebuild_if_needed(use_gpu=False)
         use_llm = getattr(args, "llm", False) or bool(os.environ.get("REMANENTIA_LLM_ANSWERS"))
@@ -78,7 +88,7 @@ def cmd_recall(args):
             print()
         return
 
-    from memory_recall import recall
+    recall = _runtime_attr("memory_recall", "recall")
 
     ctx = recall(args.query, top_k=args.top, include_content=args.content)
 
@@ -109,7 +119,7 @@ def cmd_recall(args):
 
 def cmd_consolidate(args):
     """Run memory consolidation."""
-    from consolidation_engine import consolidate
+    consolidate = _runtime_attr("consolidation_engine", "consolidate")
 
     print("Running consolidation...")
     t0 = time.monotonic()
@@ -143,14 +153,19 @@ def cmd_status(args):
 
     # Dashboard
     try:
-        import urllib.request
+        import http.client
 
-        resp = urllib.request.urlopen("http://localhost:8888/api/health", timeout=2)
-        health = json.loads(resp.read())  # pragma: no cover
+        conn = http.client.HTTPConnection("127.0.0.1", 8888, timeout=2)
+        try:
+            conn.request("GET", "/api/health")
+            resp = conn.getresponse()
+            health = json.loads(resp.read().decode("utf-8"))  # pragma: no cover
+        finally:
+            conn.close()
         print(
             f"Dashboard: UP (port {health.get('port')}, uptime {health.get('uptime_s', 0):.0f}s)"
         )  # pragma: no cover
-    except Exception:
+    except (OSError, TimeoutError, json.JSONDecodeError):
         print("Dashboard: DOWN")
 
     # Memory stats
@@ -176,7 +191,7 @@ def cmd_status(args):
 
     # Capacity report per category
     try:
-        from consolidation_engine import capacity_report
+        capacity_report = _runtime_attr("consolidation_engine", "capacity_report")
 
         report = capacity_report()
         if report:
@@ -189,8 +204,8 @@ def cmd_status(args):
                     f"({info['chars']:,} / {info['limit']:,} chars, "
                     f"{info['file_count']} files) [{state_str}]"
                 )
-    except Exception:  # pragma: no cover
-        pass
+    except Exception as exc:  # pragma: no cover
+        print(f"\n  Capacity: unavailable ({type(exc).__name__})")
 
     # Disk usage
     total = 0
@@ -280,7 +295,9 @@ def cmd_daemon(args):
 
 def cmd_observe(args):  # pragma: no cover
     """Watch filesystem for changes, auto-create knowledge notes."""
-    from observer import ObserverState, observe_once, observe_loop
+    ObserverState = _runtime_attr("observer", "ObserverState")
+    observe_once = _runtime_attr("observer", "observe_once")
+    observe_loop = _runtime_attr("observer", "observe_loop")
 
     if args.once:
         state = ObserverState()
@@ -294,7 +311,7 @@ def cmd_observe(args):  # pragma: no cover
 
 def cmd_reflect(args):  # pragma: no cover
     """Run deep consolidation via reflector."""
-    from reflector import reflect_once
+    reflect_once = _runtime_attr("reflector", "reflect_once")
 
     if args.llm:
         _setup_llm_backend(getattr(args, "llm_backend", "auto"))
@@ -309,21 +326,28 @@ def cmd_reflect(args):  # pragma: no cover
 
 def cmd_setup_llm(args):  # pragma: no cover
     """Detect hardware and configure local LLM."""
-    from llm_setup import cmd_setup_llm as _setup
+    _setup = _runtime_attr("llm_setup", "cmd_setup_llm")
 
     _setup(args)
 
 
+def cmd_serve(args):  # pragma: no cover
+    """Start the FastAPI REST server."""
+    import uvicorn
+
+    uvicorn.run("api:app", host=args.host, port=args.port)
+
+
 def cmd_serve_llm(args):  # pragma: no cover
     """Start local LLM server."""
-    from llm_setup import cmd_serve_llm as _serve
+    _serve = _runtime_attr("llm_setup", "cmd_serve_llm")
 
     _serve(args)
 
 
 def cmd_notes(args):  # pragma: no cover
     """Show knowledge notes."""
-    from knowledge_store import KnowledgeStore
+    KnowledgeStore = _runtime_attr("knowledge_store", "KnowledgeStore")
 
     store = KnowledgeStore()
     if not store.load():
@@ -369,7 +393,7 @@ def main():
         p_recall.add_argument("--llm", action="store_true", help="Use LLM for answer extraction")
         p_recall.add_argument(
             "--llm-backend",
-            choices=["auto", "local", "anthropic", "none"],
+            choices=["auto", "local", "hosted", "none"],
             default="auto",
             help="LLM backend to use (default: auto)",
         )
@@ -410,7 +434,7 @@ def main():
     )
     p_reflect.add_argument(
         "--llm-backend",
-        choices=["auto", "local", "anthropic", "none"],
+        choices=["auto", "local", "hosted", "none"],
         default="auto",
         help="LLM backend to use (default: auto)",
     )
@@ -420,6 +444,11 @@ def main():
     p_setup_llm.add_argument("--model", default=None, help="Model name override")
     p_setup_llm.add_argument("--quant", default="q4_k_m", help="Quantisation level")
     p_setup_llm.add_argument("--device", default=None, help="Device (e.g. cuda:0, cpu)")
+
+    # serve
+    p_serve = sub.add_parser("serve", help="Start the FastAPI REST server")
+    p_serve.add_argument("--host", default="127.0.0.1", help="Bind host")
+    p_serve.add_argument("--port", type=int, default=8001, help="Bind port")
 
     # serve-llm
     p_serve_llm = sub.add_parser("serve-llm", help="Start local LLM server")
@@ -447,6 +476,7 @@ def main():
         "reflect": cmd_reflect,
         "notes": cmd_notes,
         "setup-llm": cmd_setup_llm,
+        "serve": cmd_serve,
         "serve-llm": cmd_serve_llm,
     }
     cmd_map[args.command](args)

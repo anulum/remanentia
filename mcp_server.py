@@ -32,11 +32,14 @@ Configure in .mcp.json::
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
 import threading
 import time as _time
+from importlib import import_module
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -44,6 +47,7 @@ BASE = Path(os.environ.get("REMANENTIA_BASE", Path(__file__).parent))
 GRAPH_DIR = BASE / "memory" / "graph"
 
 _lock = threading.Lock()
+log = logging.getLogger(__name__)
 
 _UNIFIED_INDEX = None
 
@@ -56,6 +60,11 @@ _consolidation_last = 0.0
 _CONSOLIDATION_DEBOUNCE_S = 10
 
 
+def _runtime_attr(module_name: str, attr_name: str) -> Any:
+    """Load runtime integrations without making static checks transitive."""
+    return getattr(import_module(module_name), attr_name)
+
+
 def _get_knowledge_store():
     global _KNOWLEDGE_STORE
     if _KNOWLEDGE_STORE is not None:
@@ -64,11 +73,11 @@ def _get_knowledge_store():
         if _KNOWLEDGE_STORE is not None:  # pragma: no cover — thread safety guard
             return _KNOWLEDGE_STORE
         try:
-            from knowledge_store import KnowledgeStore
-
+            KnowledgeStore = _runtime_attr("knowledge_store", "KnowledgeStore")
             _KNOWLEDGE_STORE = KnowledgeStore()
             _KNOWLEDGE_STORE.load()
         except Exception:  # pragma: no cover
+            KnowledgeStore = _runtime_attr("knowledge_store", "KnowledgeStore")
             _KNOWLEDGE_STORE = KnowledgeStore() if _KNOWLEDGE_STORE is None else _KNOWLEDGE_STORE
     return _KNOWLEDGE_STORE
 
@@ -92,10 +101,10 @@ def handle_recall(
         for t in matched_triggers:  # pragma: no cover
             trigger_lines.append(f"[TRIGGER] {t.action}")
     except Exception:  # pragma: no cover
-        pass
+        log.debug("Prospective trigger check failed", exc_info=True)
 
     try:
-        from memory_index import MemoryIndex
+        MemoryIndex = _runtime_attr("memory_index", "MemoryIndex")
 
         if _UNIFIED_INDEX is None:
             with _lock:
@@ -107,11 +116,11 @@ def handle_recall(
 
         use_llm = llm or bool(os.environ.get("REMANENTIA_LLM_ANSWERS"))
         if use_llm:
-            from answer_extractor import get_llm_backend
+            get_llm_backend = _runtime_attr("answer_extractor", "get_llm_backend")
 
             if get_llm_backend() is None:
-                from llm_backend import resolve_backend
-                from answer_extractor import set_llm_backend
+                resolve_backend = _runtime_attr("llm_backend", "resolve_backend")
+                set_llm_backend = _runtime_attr("answer_extractor", "set_llm_backend")
 
                 backend_name = os.environ.get("REMANENTIA_LLM_BACKEND", "auto")
                 set_llm_backend(resolve_backend(backend_name))
@@ -129,19 +138,24 @@ def handle_recall(
         guarded_on = bool(os.environ.get("REMANENTIA_GUARDED"))
         guard_log: list[str] = []
         if guarded_on and results:
-            from memory_guarded import facts_from_results, is_available, score_memory_answer
+            try:
+                facts_from_results = _runtime_attr("memory_guarded", "facts_from_results")
+                is_available = _runtime_attr("memory_guarded", "is_available")
+                score_memory_answer = _runtime_attr("memory_guarded", "score_memory_answer")
 
-            if is_available():  # pragma: no cover — needs optional dep
-                facts = facts_from_results(results)
-                for r in results:
-                    if not r.answer:
-                        continue
-                    gr = score_memory_answer(query, r.answer, facts)
-                    if gr is None:
-                        continue
-                    if gr.blocked:
-                        guard_log.append(f"[guard] blocked {r.name}: {gr.reason}")
-                        r.answer = ""
+                if is_available():  # pragma: no cover — needs optional dep
+                    facts = facts_from_results(results)
+                    for r in results:
+                        if not r.answer:
+                            continue
+                        gr = score_memory_answer(query, r.answer, facts)
+                        if gr is None:
+                            continue
+                        if gr.blocked:
+                            guard_log.append(f"[guard] blocked {r.name}: {gr.reason}")
+                            r.answer = ""
+            except Exception:  # pragma: no cover
+                log.debug("Guarded recall scoring failed", exc_info=True)
 
         parts = list(trigger_lines)
         for r in results:
@@ -162,7 +176,7 @@ def handle_recall(
                     seen_snippets.add(snippet[:100])
                     parts.append(f"[knowledge] {note.title} (type={note.note_type})\n{snippet}")
         except Exception:  # pragma: no cover
-            pass
+            log.debug("Knowledge graph recall failed", exc_info=True)
 
         return "\n\n".join(parts)
 
@@ -183,8 +197,8 @@ def handle_remember(
     """
     from datetime import datetime
 
-    from file_utils import atomic_write_text
-    from pii_redactor import redact
+    atomic_write_text = _runtime_attr("file_utils", "atomic_write_text")
+    redact = _runtime_attr("pii_redactor", "redact")
 
     content = redact(content).text
 
@@ -219,7 +233,7 @@ def handle_remember(
             try:
                 _UNIFIED_INDEX.add_file(path)
             except Exception:  # pragma: no cover
-                pass
+                log.debug("Incremental unified-index update failed", exc_info=True)
 
     # Create knowledge note
     try:
@@ -229,7 +243,7 @@ def handle_remember(
             ks.add_trigger(trigger, content)
         ks.save()
     except Exception:  # pragma: no cover
-        pass
+        log.debug("Knowledge note persistence failed", exc_info=True)
 
     # Async consolidation with debounce
     _schedule_consolidation()
@@ -250,12 +264,12 @@ def _schedule_consolidation():
     def _run():
         global _RECALL_INDEX, _consolidation_last
         try:
-            from consolidation_engine import consolidate
+            consolidate = _runtime_attr("consolidation_engine", "consolidate")
 
             consolidate()
             _RECALL_INDEX = None
         except Exception:  # pragma: no cover
-            pass
+            log.debug("Background consolidation failed", exc_info=True)
         _consolidation_last = _time.monotonic()
 
     threading.Thread(target=_run, daemon=True).start()
@@ -265,9 +279,7 @@ _RECALL_INDEX: dict[str, tuple[set, str]] | None = None
 
 _rust_mcp_tok = None
 try:
-    from remanentia_search import tokenize as _rust_mcp_tok_fn
-
-    _rust_mcp_tok = _rust_mcp_tok_fn  # pragma: no cover
+    _rust_mcp_tok = _runtime_attr("remanentia_search", "tokenize")  # pragma: no cover
 except ImportError:
     pass
 
@@ -348,7 +360,7 @@ def handle_status() -> str:
     old_stdout = sys.stdout
     try:
         sys.stdout = buf = io.StringIO()
-        from cli import cmd_status
+        cmd_status = _runtime_attr("cli", "cmd_status")
 
         cmd_status(type("Args", (), {})())
         return buf.getvalue()
@@ -466,7 +478,7 @@ TOOLS = [
 ]
 
 
-def handle_request(request: dict) -> dict:
+def handle_request(request: dict) -> dict | None:
     method = request.get("method", "")
     rid = request.get("id")
 

@@ -21,6 +21,7 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, date, timedelta
+from importlib import import_module
 from pathlib import Path
 
 BASE = Path(__file__).parent
@@ -68,13 +69,9 @@ _DATE_RELATIVE = re.compile(
 _rust_date_to_phase = None
 _rust_resonance_search = None
 try:
-    from remanentia_temporal import (
-        date_to_phase as _rust_dtp,
-        resonance_search as _rust_rs,
-    )
-
-    _rust_date_to_phase = _rust_dtp  # pragma: no cover
-    _rust_resonance_search = _rust_rs  # pragma: no cover
+    _rust_temporal = import_module("remanentia_temporal")
+    _rust_date_to_phase = _rust_temporal.date_to_phase  # pragma: no cover
+    _rust_resonance_search = _rust_temporal.resonance_search  # pragma: no cover
 except ImportError:
     pass
 
@@ -232,7 +229,7 @@ class TemporalGraph:
             new_dates.add(ev.date)
 
         try:
-            from remanentia_temporal import build_temporal_edges as _rust_bte
+            _rust_bte = import_module("remanentia_temporal").build_temporal_edges
 
             by_date_snap = {d: list(idxs) for d, idxs in self._by_date.items()}  # pragma: no cover
             # Remove new events from snapshot (Rust re-adds them)
@@ -321,7 +318,7 @@ class TemporalGraph:
         dates_in_query = parse_dates(query)
 
         try:
-            from remanentia_temporal import score_temporal_query as _rust_stq
+            _rust_stq = import_module("remanentia_temporal").score_temporal_query
 
             ev_tuples = [
                 (e.date, e.text, e.source, e.paragraph_idx) for e in self.events
@@ -699,7 +696,7 @@ def parse_dates(text: str, reference_date: date | None = None) -> list[str]:
 
     # Try Rust engine first
     try:
-        from remanentia_temporal import parse_dates as _rust_parse
+        _rust_parse = import_module("remanentia_temporal").parse_dates
 
         return _rust_parse(text, ref.isoformat())  # pragma: no cover
     except ImportError:

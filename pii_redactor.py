@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from importlib import import_module
 from typing import Iterable
 
 
@@ -150,7 +151,7 @@ def _try_rust_redact(
     per-line pragmas.
     """
     try:
-        from remanentia_pii_redactor import redact as _rust_redact
+        _rust_redact = import_module("remanentia_pii_redactor").redact
     except ImportError:
         return None
 
@@ -200,7 +201,7 @@ def redact(text: str, policy: RedactionPolicy | None = None) -> RedactionResult:
     if rust_result is not None:
         return rust_result  # pragma: no cover
 
-    counts = {}
+    counts: dict[str, int] = {}
 
     # Order matters: API keys before HEX_TOKEN (prefix-specific before
     # generic), API keys before emails (they can contain @-like bytes

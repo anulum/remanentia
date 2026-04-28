@@ -17,10 +17,14 @@ Usage::
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from importlib import import_module
 from pathlib import Path
+from typing import Any, cast
 
 
 BASE = Path(__file__).parent
@@ -28,6 +32,7 @@ TRACES_DIR = BASE / "reasoning_traces"
 SEMANTIC_DIR = BASE / "memory" / "semantic"
 GRAPH_DIR = BASE / "memory" / "graph"
 HISTORY_PATH = BASE / "snn_state" / "retrieval_history.jsonl"
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -171,24 +176,23 @@ def _search_semantic(query: str, top_k: int = 5) -> list[dict]:
         return []
 
     try:
-        from remanentia_recall import (
-            tokenize_words as _rust_tok,
-            token_overlap_score as _rust_score,
-        )
+        recall_native = import_module("remanentia_recall")
 
-        _tok = _rust_tok  # pragma: no cover
-        _score = _rust_score  # pragma: no cover
+        _tok = cast(Callable[[str], set[str]], recall_native.tokenize_words)  # pragma: no cover
+        _score = cast(
+            Callable[[set[str], set[str]], float], recall_native.token_overlap_score
+        )  # pragma: no cover
     except ImportError:
         _tok = lambda text: set(re.findall(r"\w+", text.lower()))  # noqa: E731
         _score = None
 
     q_tokens = _tok(query)
-    results = []
+    results: list[dict[str, Any]] = []
 
     for md_file in SEMANTIC_DIR.rglob("*.md"):
         text = md_file.read_text(encoding="utf-8")
         # Parse frontmatter
-        meta = {}
+        meta: dict[str, str] = {}
         content = text
         if text.startswith("---"):
             parts = text.split("---", 2)
@@ -229,7 +233,7 @@ def _search_semantic(query: str, top_k: int = 5) -> list[dict]:
             }
         )
 
-    results.sort(key=lambda x: -x["score"])
+    results.sort(key=lambda x: -float(x["score"]))
     return results[:top_k]
 
 
@@ -301,7 +305,8 @@ def _assess_novelty(query: str, entities: dict) -> float:
         known_tokens.update(re.findall(r"\w{4,}", edata.get("label", "").lower()))
 
     try:
-        from remanentia_recall import assess_novelty as _rust_nov
+        recall_native = import_module("remanentia_recall")
+        _rust_nov = cast(Callable[[str, set[str]], float], recall_native.assess_novelty)
 
         return _rust_nov(query, known_tokens)  # pragma: no cover
     except ImportError:
@@ -345,7 +350,7 @@ def recall(
             ctx.trace_snippet = results[0].snippet
         sources += 1
     except Exception:  # pragma: no cover
-        pass
+        log.debug("Primary memory index recall failed", exc_info=True)
 
     # 2. Search consolidated semantic memories
     semantic = _search_semantic(query, top_k=5)
@@ -370,7 +375,7 @@ def recall(
     ctx.entities = query_entities
 
     # Find related entities across all query entities
-    all_related = {}
+    all_related: dict[str, dict[str, Any]] = {}
     for eid in query_entities:
         for r in _find_related(eid, relations, top_k=10):
             key = r["entity"]

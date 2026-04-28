@@ -20,8 +20,9 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import date, timedelta
+from importlib import import_module
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 log = logging.getLogger(__name__)
 
@@ -29,8 +30,8 @@ _BASE = Path(__file__).resolve().parent
 _MODEL_DIR = _BASE / "models" / "date-normalizer-v1"
 
 # Lazy-loaded model state
-_model = None
-_tokenizer = None
+_model: Any | None = None
+_tokenizer: Any | None = None
 
 # ---------------------------------------------------------------------------
 # Rule-based normaliser (covers ~60% of vague expressions without ML)
@@ -122,7 +123,7 @@ def _rule_based_normalise(expr: str, ref: date) -> Optional[DateResult]:
     """
     # Try Rust engine first
     try:
-        from remanentia_temporal import normalise_vague_date
+        normalise_vague_date = import_module("remanentia_temporal").normalise_vague_date
 
         result = normalise_vague_date(expr, ref.isoformat())  # pragma: no cover
         if result is not None:  # pragma: no cover
@@ -305,13 +306,16 @@ def _model_normalise(expr: str, ref: date) -> Optional[DateResult]:
 
     import torch
 
+    tokenizer = _tokenizer
+    model = _model
+    if tokenizer is None or model is None:
+        return None
+
     text = f"reference: {ref.isoformat()} expression: {expr}"
-    enc = _tokenizer(
-        text, max_length=64, padding="max_length", truncation=True, return_tensors="pt"
-    )
+    enc = tokenizer(text, max_length=64, padding="max_length", truncation=True, return_tensors="pt")
 
     with torch.no_grad():
-        digit_logits, confidence = _model(enc["input_ids"], enc["attention_mask"])
+        digit_logits, confidence = model(enc["input_ids"], enc["attention_mask"])
         pred_digits = [dl.argmax(dim=-1).item() for dl in digit_logits]
         conf = confidence.item()
 
