@@ -28,6 +28,8 @@ import argparse
 import io
 import json
 import os
+import signal
+import subprocess
 import sys
 import time
 from importlib import import_module
@@ -38,6 +40,7 @@ BASE = Path(__file__).parent
 STATE_DIR = BASE / "snn_state"
 GRAPH_DIR = BASE / "memory" / "graph"
 _HOSTED_BACKEND = "".join(("anth", "ropic"))
+VECTOR_WORKER_SERVICE = "remanentia-vector-worker.service"
 
 
 def _runtime_attr(module_name: str, attr_name: str) -> Any:
@@ -131,13 +134,25 @@ def cmd_consolidate(args):
 
 def cmd_status(args):
     """Show system status."""
+    # Vector worker — the maintained background path.
+    worker = _read_vector_worker_state()
+    if worker["state"] == "alive":
+        print("Vector worker: ALIVE")
+        print(f"  Cycle: {worker.get('cycle', '?')}")
+        print(f"  Last action: {worker.get('last_action', '?')}")
+        print(f"  PID: {worker.get('pid', '?')}")
+    elif worker["state"] == "missing":
+        print("Vector worker: NOT RUNNING")
+    else:
+        print(f"Vector worker: {str(worker['state']).upper()}")
+
     # Daemon
     state_path = STATE_DIR / "current_state.json"
     if state_path.exists():
         s = json.loads(state_path.read_text(encoding="utf-8"))
         age = time.time() - s.get("timestamp", 0)
         status = "ALIVE" if age < 120 else f"STALE ({age:.0f}s ago)"
-        print(f"Daemon:  {status}")
+        print(f"Legacy daemon: {status}")
         print(f"  Cycle: {s.get('cycle', '?')}")
         print(f"  Neurons: {s.get('n_neurons', '?')}")
         print(f"  VRAM: {s.get('vram_mb', '?')} MB")
@@ -149,7 +164,7 @@ def cmd_status(args):
                 f"{console.get('entities_found', 0)} entities"
             )
     else:
-        print("Daemon:  NOT RUNNING")
+        print("Legacy daemon: NOT RUNNING")
 
     # Dashboard
     try:
@@ -267,30 +282,71 @@ def cmd_init(args):
 
 
 def cmd_daemon(args):
-    """Daemon management."""
+    """Background worker management."""
     if args.action == "start":
-        import subprocess
-
-        script = str(BASE / "gpu_daemon.py")
-        subprocess.Popen([sys.executable, script, "--detach"])
-        print("Daemon start requested")
+        if _systemd_user_unit_available(VECTOR_WORKER_SERVICE):
+            _systemctl_user("start", VECTOR_WORKER_SERVICE)
+            print(f"Vector worker service start requested: {VECTOR_WORKER_SERVICE}")
+            return
+        subprocess.Popen(
+            [sys.executable, "-m", "vector_pipeline", "watch", "--interval-s", "900"],
+            cwd=BASE,
+        )
+        print("Vector worker start requested")
     elif args.action == "stop":
-        lock = STATE_DIR / "daemon.lock"
-        if lock.exists():
-            pid = int(lock.read_text().strip())
-            import signal
-
+        if _systemd_user_unit_available(VECTOR_WORKER_SERVICE):
+            _systemctl_user("stop", VECTOR_WORKER_SERVICE)
+            print(f"Vector worker service stop requested: {VECTOR_WORKER_SERVICE}")
+            return
+        worker = _read_vector_worker_state()
+        pid = worker.get("pid")
+        if isinstance(pid, int):
             try:
-                import os
-
                 os.kill(pid, signal.SIGTERM)
-                print(f"Sent SIGTERM to PID {pid}")
+                print(f"Sent SIGTERM to vector worker PID {pid}")
             except OSError as e:
-                print(f"Failed to stop PID {pid}: {e}")
+                print(f"Failed to stop vector worker PID {pid}: {e}")
         else:
-            print("No daemon lock found")
+            print("No vector worker PID found")
     elif args.action == "status":
         cmd_status(args)
+
+
+def _read_vector_worker_state() -> dict[str, object]:
+    heartbeat = STATE_DIR / "vector_refresh_worker.json"
+    if not heartbeat.exists():
+        return {"state": "missing"}
+    try:
+        payload = json.loads(heartbeat.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"state": "unreadable"}
+    age = time.time() - float(payload.get("timestamp_unix", 0))
+    result = payload.get("result")
+    return {
+        "age_s": round(age),
+        "cycle": payload.get("cycle"),
+        "last_action": result.get("action") if isinstance(result, dict) else None,
+        "pid": payload.get("pid"),
+        "state": "alive" if age < 1800 else "stale",
+        "status": payload.get("status"),
+    }
+
+
+def _systemctl_user(action: str, unit: str) -> None:
+    subprocess.run(["systemctl", "--user", action, unit], check=True)
+
+
+def _systemd_user_unit_available(unit: str) -> bool:
+    try:
+        completed = subprocess.run(
+            ["systemctl", "--user", "cat", unit],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError:
+        return False
+    return completed.returncode == 0
 
 
 def cmd_observe(args):  # pragma: no cover

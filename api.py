@@ -76,15 +76,16 @@ class ConsolidateRequest(BaseModel):
 
 @app.get("/health")
 def health():
-    state_path = STATE_DIR / "current_state.json"
-    daemon_alive = False
-    if state_path.exists():
-        s = json.loads(state_path.read_text(encoding="utf-8"))
-        daemon_alive = (time.time() - s.get("timestamp", 0)) < 120
+    legacy_daemon = _legacy_daemon_state()
     vector_worker = _vector_worker_state()
+    daemon_state = (
+        "alive" if vector_worker["state"] == "alive" else str(legacy_daemon.get("state", "stale"))
+    )
     return {
         "status": "ok",
-        "daemon": "alive" if daemon_alive else "stale",
+        "daemon": daemon_state,
+        "daemon_kind": "vector_worker" if vector_worker["state"] == "alive" else "legacy",
+        "legacy_daemon": legacy_daemon["state"],
         "vector_worker": vector_worker["state"],
         "version": "0.2.0",
     }
@@ -260,6 +261,22 @@ def entity_detail(entity_id: str):
 
 def _split_env(name: str) -> list[str]:
     return [item.strip() for item in os.environ.get(name, "").split(",") if item.strip()]
+
+
+def _legacy_daemon_state() -> dict[str, object]:
+    state_path = STATE_DIR / "current_state.json"
+    if not state_path.exists():
+        return {"state": "stale"}
+    try:
+        payload = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"state": "unreadable"}
+    age_s = round(time.time() - float(payload.get("timestamp", 0)))
+    return {
+        "age_s": age_s,
+        "cycle": payload.get("cycle"),
+        "state": "alive" if age_s < 120 else "stale",
+    }
 
 
 def _vector_worker_state() -> dict[str, object]:

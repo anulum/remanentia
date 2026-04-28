@@ -9,15 +9,46 @@ log (`docs/adr/`) records the rationale.
 
 ```bash
 curl -sS http://127.0.0.1:8001/health
-# Expected: {"status": "ok", "timestamp": 1.71e9}
+# Expected: {"status": "ok", "daemon": "alive", "daemon_kind": "vector_worker", ...}
 
-curl -sS -H "Authorization: Bearer $REMANENTIA_API_TOKEN" \
-    http://127.0.0.1:8001/status
-# Expected: {"status": "ok", "entities": N, "memories": N, ...}
+curl -sS http://127.0.0.1:8001/status
+# Expected: {"vector_worker": {"state": "alive", "status": "ok", ...}, ...}
 ```
 
 If `/health` returns anything other than 200 + `status: ok`, the
 process is down. Check the unit / container logs first.
+
+## Supervised vector service
+
+The maintained background path is the scheduled vector refresh worker,
+not the legacy SNN daemon. Install host-local user services from the
+checkout:
+
+```bash
+python tools/install_user_services.py --start
+systemctl --user status remanentia-api.service remanentia-vector-worker.service
+```
+
+The installer renders host-specific units into
+`~/.config/systemd/user/` so public source control does not carry local
+machine paths. The API and worker share the same embedding endpoint
+configuration. Public vector output is allowlist-first; the default
+service exposure is only source `paper` with path prefix `paper`.
+
+Useful operator commands:
+
+```bash
+python -m vector_pipeline status
+python -m vector_pipeline refresh --batch-size 64
+python -m vector_pipeline watch --interval-s 900
+remanentia status
+remanentia daemon status
+```
+
+`remanentia daemon start` and `remanentia daemon stop` now manage
+`remanentia-vector-worker.service` when it is installed. The legacy
+daemon heartbeat is still reported as `legacy_daemon` for diagnosis, but
+fresh vector worker heartbeat is the health signal used by `/health`.
 
 ## Symptom map
 
@@ -182,4 +213,4 @@ curl -sS http://127.0.0.1:8001/health
 Rollbacks work by reinstalling the prior version; the on-disk
 memory format is backward-compatible since 0.4.0.
 
-Last change: 2026-04-17.
+Last change: 2026-04-28.

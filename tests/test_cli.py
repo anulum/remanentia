@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import time
 from unittest.mock import MagicMock, patch
 
 
@@ -54,7 +55,8 @@ class TestCmdStatus:
             cmd_status(args)
 
         out = capsys.readouterr().out
-        assert "NOT RUNNING" in out
+        assert "Vector worker: NOT RUNNING" in out
+        assert "Legacy daemon: NOT RUNNING" in out
 
     def test_with_daemon_state(self, tmp_path, capsys):
         state_dir = tmp_path / "snn_state"
@@ -89,6 +91,41 @@ class TestCmdStatus:
         out = capsys.readouterr().out
         assert "ALIVE" in out
         assert "42" in out
+
+    def test_with_vector_worker_state(self, tmp_path, capsys):
+        state_dir = tmp_path / "snn_state"
+        state_dir.mkdir()
+        import time
+
+        state = {
+            "timestamp_unix": time.time(),
+            "cycle": 7,
+            "pid": 1234,
+            "status": "ok",
+            "result": {"action": "skipped"},
+        }
+        (state_dir / "vector_refresh_worker.json").write_text(
+            json.dumps(state),
+            encoding="utf-8",
+        )
+        graph_dir = tmp_path / "memory" / "graph"
+        graph_dir.mkdir(parents=True)
+        traces_dir = tmp_path / "reasoning_traces"
+        traces_dir.mkdir()
+        semantic_dir = tmp_path / "memory" / "semantic"
+        semantic_dir.mkdir(parents=True)
+
+        with (
+            patch("cli.STATE_DIR", state_dir),
+            patch("cli.GRAPH_DIR", graph_dir),
+            patch("cli.BASE", tmp_path),
+        ):
+            cmd_status(type("Args", (), {})())
+
+        out = capsys.readouterr().out
+        assert "Vector worker: ALIVE" in out
+        assert "Cycle: 7" in out
+        assert "Last action: skipped" in out
 
     def test_memory_counts(self, tmp_path, capsys):
         state_dir = tmp_path / "snn_state"
@@ -189,7 +226,7 @@ class TestMain:
             main()
 
         out = capsys.readouterr().out
-        assert "Daemon" in out or "NOT RUNNING" in out
+        assert "Vector worker" in out or "NOT RUNNING" in out
 
     def test_serve_command_wires_fastapi_runner(self):
         with patch("sys.argv", ["remanentia", "serve", "--host", "127.0.0.1", "--port", "8765"]):
@@ -399,19 +436,26 @@ class TestCmdDaemon:
     def test_daemon_stop_no_lock(self, tmp_path, capsys):
         from cli import cmd_daemon
 
-        with patch("cli.STATE_DIR", tmp_path):
+        with (
+            patch("cli.STATE_DIR", tmp_path),
+            patch("cli._systemd_user_unit_available", return_value=False),
+        ):
             cmd_daemon(type("Args", (), {"action": "stop"})())
         out = capsys.readouterr().out
-        assert "No daemon lock" in out
+        assert "No vector worker PID found" in out
 
     def test_daemon_stop_with_lock(self, tmp_path, capsys):
         from cli import cmd_daemon
 
         state_dir = tmp_path / "snn_state"
         state_dir.mkdir()
-        (state_dir / "daemon.lock").write_text("99999", encoding="utf-8")
+        (state_dir / "vector_refresh_worker.json").write_text(
+            json.dumps({"timestamp_unix": time.time(), "pid": 99999}),
+            encoding="utf-8",
+        )
         with (
             patch("cli.STATE_DIR", state_dir),
+            patch("cli._systemd_user_unit_available", return_value=False),
             patch("os.kill", side_effect=OSError("No such process")),
         ):
             cmd_daemon(type("Args", (), {"action": "stop"})())
@@ -423,8 +467,15 @@ class TestCmdDaemon:
 
         state_dir = tmp_path / "snn_state"
         state_dir.mkdir()
-        (state_dir / "daemon.lock").write_text("12345", encoding="utf-8")
-        with patch("cli.STATE_DIR", state_dir), patch("os.kill"):
+        (state_dir / "vector_refresh_worker.json").write_text(
+            json.dumps({"timestamp_unix": time.time(), "pid": 12345}),
+            encoding="utf-8",
+        )
+        with (
+            patch("cli.STATE_DIR", state_dir),
+            patch("cli._systemd_user_unit_available", return_value=False),
+            patch("os.kill"),
+        ):
             cmd_daemon(type("Args", (), {"action": "stop"})())
         out = capsys.readouterr().out
         assert "SIGTERM" in out
@@ -432,7 +483,10 @@ class TestCmdDaemon:
     def test_daemon_start(self, capsys):
         from cli import cmd_daemon
 
-        with patch("subprocess.Popen"):
+        with (
+            patch("cli._systemd_user_unit_available", return_value=False),
+            patch("subprocess.Popen"),
+        ):
             cmd_daemon(type("Args", (), {"action": "start"})())
         out = capsys.readouterr().out
         assert "start requested" in out

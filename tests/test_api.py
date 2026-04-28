@@ -75,7 +75,11 @@ class TestHealth:
         with patch("api.STATE_DIR", state_dir):
             resp = client.get("/health")
 
-        assert resp.json()["vector_worker"] == "alive"
+        payload = resp.json()
+        assert payload["daemon"] == "alive"
+        assert payload["daemon_kind"] == "vector_worker"
+        assert payload["legacy_daemon"] == "stale"
+        assert payload["vector_worker"] == "alive"
 
 
 # ── Status ───────────────────────────────────────────────────────

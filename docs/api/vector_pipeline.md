@@ -50,6 +50,7 @@ python -m vector_pipeline watch --interval-s 900
 python -m vector_pipeline search "hybrid retrieval decision" --top 5
 python -m vector_pipeline search "hybrid retrieval decision" --public \
   --public-source paper --public-path-prefix paper --redaction-file local_terms.txt
+python tools/install_user_services.py --start
 ```
 
 `build`, `refresh`, `watch`, and `search` read endpoint configuration
@@ -84,6 +85,19 @@ a heartbeat JSON file to `snn_state/vector_refresh_worker.json`. The
 heartbeat records the worker PID, cycle number, status, timestamp, and
 last refresh decision so operators can distinguish a live worker from a
 stale legacy daemon.
+
+`tools/install_user_services.py` is the official supervised-service
+installer for local user deployments. It writes two units into
+`~/.config/systemd/user/`:
+
+- `remanentia-api.service`
+- `remanentia-vector-worker.service`
+
+The generated API unit includes the embedding endpoint variables required
+by `/vector/search/public`. It also sets narrow public-vector defaults:
+source `paper`, path prefix `paper`, and 800 returned text characters.
+Widen those allowlists only when the target corpus has been reviewed for
+public exposure.
 
 Public-facing result output is a separate opt-in view. `--public` returns
 only results that match explicit source and path-prefix allowlists, emits
