@@ -21,7 +21,6 @@ consolidation/pending.json
 consolidation/conflicts.json
 memory/graph/*.jsonl
 docs/internal/
-.codex_scratch/
 data/longmemeval_oracle.json
 data/longmemeval_s.json
 data/*.R8_baseline.jsonl
@@ -40,9 +39,6 @@ site/
 checkpoints/
 CLAUDE.md
 .claude/
-GEMINI.md
-.gemini/
-.codex/
 .coordination/
 
 # Local backups — never committed
@@ -57,3 +53,13 @@ memory/
 gpu_build.pid
 tests/e2e_10x_bench/
 reasoning_traces/*.json
+reasoning_traces/*.md
+web/backups/
+
+# Generated benchmark/publication review outputs. Keep these local until they
+# have provenance, hygiene, and release review.
+data/ablation_channels_results.jsonl
+data/*_committed.jsonl
+paper/experiment_results_v2.json
+docs/REMANENTIA_10X_REPORT.md
+docs/assets/orcid_qr.png

@@ -42,6 +42,7 @@ Architecture::
 from __future__ import annotations
 
 import math
+import os
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
@@ -96,6 +97,8 @@ class ArcaneRetriever:
         self.session_dates = session_dates or []
         self.recency_half_life_days = recency_half_life_days
         self._reference_date = reference_date
+        self._reference_date_parsed = self._parse_iso_date(reference_date)
+        self._recency_weight_cache: dict[str, float] = {}
         self.facts = decompose_sessions(sessions, session_dates=session_dates)
         self.fact_index = FactIndex(self.facts)
 
@@ -151,6 +154,16 @@ class ArcaneRetriever:
         top_k: int = 40,
     ) -> dict[str, list[RetrievalResult]]:
         """Run all active channels in parallel."""
+        if set(channels).issubset({"bm25", "entity"}):
+            hits = self.fact_index.query(query, top_k=top_k, filter_expired=False)
+            return {
+                ch: [
+                    RetrievalResult(fact=f, score=s, channel=ch, rank=i)
+                    for i, (f, s) in enumerate(hits)
+                ]
+                for ch in channels
+            }
+
         results: dict[str, list[RetrievalResult]] = {}
 
         with ThreadPoolExecutor(max_workers=len(channels)) as pool:
@@ -223,6 +236,15 @@ class ArcaneRetriever:
             for i, (f, s) in enumerate(hits)
         ]
 
+    @staticmethod
+    def _parse_iso_date(value: str | None) -> date | None:
+        if not value:
+            return None
+        try:
+            return date.fromisoformat(value[:10])
+        except (ValueError, TypeError):
+            return None
+
     def _recency_weight(self, fact: AtomicFact) -> float:
         """Compute recency decay weight for a fact.
 
@@ -232,14 +254,8 @@ class ArcaneRetriever:
         if self.recency_half_life_days <= 0:
             return 1.0
 
-        ref_str = self._reference_date
-        if not ref_str:
-            return 1.0
-
-        # Parse reference date
-        try:
-            ref = date.fromisoformat(ref_str)
-        except (ValueError, TypeError):
+        ref = self._reference_date_parsed
+        if ref is None:
             return 1.0
 
         # Use fact's valid_from, or try session date, or fallback to no decay
@@ -249,16 +265,22 @@ class ArcaneRetriever:
         if not fact_date_str:
             return 1.0
 
-        try:
-            fact_date = date.fromisoformat(fact_date_str[:10])
-        except (ValueError, TypeError):
+        fact_date_key = fact_date_str[:10]
+        cached = self._recency_weight_cache.get(fact_date_key)
+        if cached is not None:
+            return cached
+
+        fact_date = self._parse_iso_date(fact_date_key)
+        if fact_date is None:
             return 1.0
 
         age_days = (ref - fact_date).days
         if age_days <= 0:
             return 1.0  # future or same-day facts: full weight
 
-        return math.pow(2.0, -age_days / self.recency_half_life_days)
+        weight = math.pow(2.0, -age_days / self.recency_half_life_days)
+        self._recency_weight_cache[fact_date_key] = weight
+        return weight
 
     def _rrf_fusion(
         self,
@@ -420,7 +442,11 @@ class ArcaneRetriever:
         self, query: str, results: list[FusedResult], top_n: int = 10
     ) -> list[FusedResult]:
         """Rerank results using cross-encoder if available."""
-        self._load_ce()
+        if ArcaneRetriever._ce_model is None:
+            if os.getenv("REMANENTIA_ARCANE_CE_AUTOLOAD") == "1":
+                self._load_ce()
+            else:
+                return results
         if not ArcaneRetriever._ce_model or ArcaneRetriever._ce_loading:
             return results
 
