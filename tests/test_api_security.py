@@ -159,6 +159,11 @@ class TestTokenBucketLimiter:
             assert lim.allow("k", now=10000.0) is True
         assert lim.allow("k", now=10000.0) is False
 
+    def test_retry_after_uses_configured_rate(self):
+        assert TokenBucketLimiter(rate_per_minute=60).retry_after_seconds() == "1"
+        assert TokenBucketLimiter(rate_per_minute=30).retry_after_seconds() == "2"
+        assert TokenBucketLimiter(rate_per_minute=7).retry_after_seconds() == "9"
+
 
 # ── enforce_body_size ────────────────────────────────────────────────
 

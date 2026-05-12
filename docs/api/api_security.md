@@ -57,8 +57,11 @@ scope for this module).
 ```python
 limiter = TokenBucketLimiter(rate_per_minute=60, burst=10)
 if not limiter.allow(request.client.host):
-    return Response(429, headers={"Retry-After": "1"})
+    return Response(429, headers={"Retry-After": limiter.retry_after_seconds()})
 ```
+
+`retry_after_seconds()` returns a conservative whole-second wait for one
+token to refill and is used by both HTTP API surfaces for `429` responses.
 
 ### `enforce_body_size(declared_length: int, limit_bytes: int)`
 

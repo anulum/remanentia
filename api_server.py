@@ -101,7 +101,11 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
                 return False
 
         if not limiter.allow(self._client_ip()):
-            self._json_response({"error": "rate limit exceeded"}, 429)
+            self._json_response(
+                {"error": "rate limit exceeded"},
+                429,
+                headers={"Retry-After": limiter.retry_after_seconds()},
+            )
             return False
 
         if not auth.check_header(self.headers.get("Authorization")):
@@ -263,12 +267,16 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
         except json.JSONDecodeError:
             return {}
 
-    def _json_response(self, data: dict, status: int = 200):
+    def _json_response(
+        self, data: dict, status: int = 200, *, headers: dict[str, str] | None = None
+    ):
         body = json.dumps(data, ensure_ascii=False, default=_json_default).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin", "*")
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.end_headers()
         self.wfile.write(body)
 
@@ -293,11 +301,12 @@ def build_server(
     """
     server = HTTPServer((host, port), RemanentiaHandler)
     server.auth = auth if auth is not None else BearerAuth.from_env()  # type: ignore[attr-defined]
+    rate_per_minute = float(os.environ.get("REMANENTIA_API_RATE", DEFAULT_RATE_PER_MINUTE))
     server.limiter = (  # type: ignore[attr-defined]
         limiter
         if limiter is not None
         else TokenBucketLimiter(
-            rate_per_minute=float(os.environ.get("REMANENTIA_API_RATE", DEFAULT_RATE_PER_MINUTE)),
+            rate_per_minute=rate_per_minute,
             burst=int(os.environ.get("REMANENTIA_API_BURST", DEFAULT_BURST)),
         )
     )

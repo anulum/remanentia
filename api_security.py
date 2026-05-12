@@ -27,6 +27,7 @@ while making "I forgot to set the token" visible in operator logs.
 from __future__ import annotations
 
 import hmac
+import math
 import os
 import sys
 import threading
@@ -127,6 +128,7 @@ class TokenBucketLimiter:
             raise ValueError("rate_per_minute must be positive")
         if burst <= 0:
             raise ValueError("burst must be positive")
+        self._rate_per_minute = rate_per_minute
         self._rate = rate_per_minute / 60.0
         self._burst = float(burst)
         self._ttl = ttl_seconds
@@ -162,6 +164,10 @@ class TokenBucketLimiter:
                 del self._buckets[k]
             return len(stale)
 
+    def retry_after_seconds(self) -> str:
+        """Return a conservative whole-second wait before retrying."""
+        return retry_after_seconds(self._rate_per_minute)
+
 
 def enforce_body_size(declared_length: int, limit_bytes: int) -> None:
     """Raise :class:`ValueError` if *declared_length* exceeds *limit_bytes*.
@@ -178,6 +184,13 @@ def enforce_body_size(declared_length: int, limit_bytes: int) -> None:
         raise ValueError("declared_length must be non-negative")
     if declared_length > limit_bytes:
         raise ValueError(f"request body {declared_length} B exceeds limit {limit_bytes} B")
+
+
+def retry_after_seconds(rate_per_minute: float) -> str:
+    """Return a whole-second Retry-After value for one replenished token."""
+    if rate_per_minute <= 0:
+        raise ValueError("rate_per_minute must be positive")
+    return str(max(1, math.ceil(60.0 / rate_per_minute)))
 
 
 DEFAULT_BODY_LIMIT = 1 * 1024 * 1024  # 1 MiB

@@ -400,6 +400,7 @@ class TestSecurityGates:
         h2 = _make_handler("/status", server=server)  # same client_address
         h2.do_GET()
         h2.send_response.assert_called_with(429)
+        h2.send_header.assert_any_call("Retry-After", "1")
         assert "rate limit" in _get_response_body(h2)["error"].lower()
 
     def test_body_size_limit_rejects_413(self):

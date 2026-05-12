@@ -27,7 +27,6 @@ Endpoints:
 from __future__ import annotations
 
 import json
-import math
 import os
 import sys
 import time
@@ -87,11 +86,6 @@ _AUTH_EXEMPT_PATHS = frozenset({"/health", "/vector/search/public"})
 _RATE_EXEMPT_PATHS = frozenset({"/health"})
 
 
-def _retry_after_seconds(rate_per_minute: float) -> str:
-    """Return a whole-second Retry-After value for one replenished token."""
-    return str(max(1, math.ceil(60.0 / rate_per_minute)))
-
-
 @app.middleware("http")
 async def require_bearer_token(request: Request, call_next):
     """Apply FastAPI request security gates before endpoint handlers run."""
@@ -107,7 +101,7 @@ async def require_bearer_token(request: Request, call_next):
             return JSONResponse(
                 {"detail": "rate limit exceeded"},
                 status_code=429,
-                headers={"Retry-After": _retry_after_seconds(RATE_PER_MINUTE)},
+                headers={"Retry-After": LIMITER.retry_after_seconds()},
             )
 
     if request.url.path not in _AUTH_EXEMPT_PATHS and not AUTH.check_header(

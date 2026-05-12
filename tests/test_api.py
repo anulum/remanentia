@@ -190,9 +190,9 @@ class TestAPISecurityBoundary:
         ]
 
     def test_retry_after_ceilings_match_rate_limit(self):
-        assert api._retry_after_seconds(60) == "1"
-        assert api._retry_after_seconds(30) == "2"
-        assert api._retry_after_seconds(7) == "9"
+        assert TokenBucketLimiter(rate_per_minute=60).retry_after_seconds() == "1"
+        assert TokenBucketLimiter(rate_per_minute=30).retry_after_seconds() == "2"
+        assert TokenBucketLimiter(rate_per_minute=7).retry_after_seconds() == "9"
 
 
 # ── Status ───────────────────────────────────────────────────────
