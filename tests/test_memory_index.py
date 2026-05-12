@@ -1345,6 +1345,39 @@ class TestEntityGraphHelpers:
             memory_index.GRAPH_DIR = original
             memory_index._ENTITY_GRAPH = None
 
+    def test_load_entity_graph_reloads_when_files_change(self, tmp_path):
+        import memory_index
+
+        original = memory_index.GRAPH_DIR
+        graph_dir = tmp_path / "graph"
+        graph_dir.mkdir()
+        entities_path = graph_dir / "entities.jsonl"
+        relations_path = graph_dir / "relations.jsonl"
+        entities_path.write_text(
+            json.dumps({"id": "e1", "type": "concept", "label": "alpha"}) + "\n",
+            encoding="utf-8",
+        )
+        relations_path.write_text("", encoding="utf-8")
+        memory_index.GRAPH_DIR = graph_dir
+        memory_index._ENTITY_GRAPH = None
+        try:
+            first = _load_entity_graph()
+            assert set(first["entities"]) == {"e1"}
+
+            entities_path.write_text(
+                json.dumps({"id": "e1", "type": "concept", "label": "alpha"})
+                + "\n"
+                + json.dumps({"id": "e2", "type": "concept", "label": "beta"})
+                + "\n",
+                encoding="utf-8",
+            )
+            second = _load_entity_graph()
+
+            assert set(second["entities"]) == {"e1", "e2"}
+        finally:
+            memory_index.GRAPH_DIR = original
+            memory_index._ENTITY_GRAPH = None
+
     def test_search_with_entity_graph_boost(self, tmp_path):
         """Entity graph boost path in search (covers lines 671-685)."""
         import memory_index

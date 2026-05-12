@@ -169,6 +169,11 @@ query: compiled facts, filters, BM25/Rust scoring, graph boosts,
 embedding rerank, answer extraction, and confidence handling. Results
 are then deduplicated and reranked against the original prompt.
 
+Entity graph data is cached in-process, keyed by the graph file paths,
+sizes, and mtimes for `entities.jsonl` and `relations.jsonl`. If the
+consolidation pipeline updates either file, the next search reloads the
+graph before applying boosts.
+
 ## Incremental File Addition
 
 `add_file(path, source)` adds a single file to the running index without

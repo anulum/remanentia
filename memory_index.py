@@ -1456,12 +1456,25 @@ class MemoryIndex:
 # ── Entity graph for retrieval boosting ──────────────────────────
 
 _ENTITY_GRAPH: dict | None = None
+_ENTITY_GRAPH_SIGNATURE: tuple[tuple[str, int | None, int | None], ...] | None = None
+
+
+def _entity_graph_signature() -> tuple[tuple[str, int | None, int | None], ...]:
+    signature: list[tuple[str, int | None, int | None]] = []
+    for path in (GRAPH_DIR / "entities.jsonl", GRAPH_DIR / "relations.jsonl"):
+        try:
+            stat = path.stat()
+            signature.append((str(path), stat.st_mtime_ns, stat.st_size))
+        except OSError:
+            signature.append((str(path), None, None))
+    return tuple(signature)
 
 
 def _load_entity_graph() -> dict:
     """Load entities + relations from JSONL. Cached after first call."""
-    global _ENTITY_GRAPH
-    if _ENTITY_GRAPH is not None:
+    global _ENTITY_GRAPH, _ENTITY_GRAPH_SIGNATURE
+    signature = _entity_graph_signature()
+    if _ENTITY_GRAPH is not None and signature == _ENTITY_GRAPH_SIGNATURE:
         return _ENTITY_GRAPH
     entities_path = GRAPH_DIR / "entities.jsonl"
     relations_path = GRAPH_DIR / "relations.jsonl"
@@ -1477,6 +1490,7 @@ def _load_entity_graph() -> dict:
             if line.strip():
                 relations.append(json.loads(line))
     _ENTITY_GRAPH = {"entities": entities, "relations": relations}
+    _ENTITY_GRAPH_SIGNATURE = signature
     return _ENTITY_GRAPH
 
 
