@@ -33,6 +33,8 @@ from vector_index import (
 BASE = Path(__file__).parent
 DEFAULT_VECTOR_INDEX_DIR = BASE / "snn_state" / "vector_index"
 DEFAULT_VECTOR_REFRESH_HEARTBEAT = BASE / "snn_state" / "vector_refresh_worker.json"
+VECTOR_CHUNK_MAX_WORDS = 96
+VECTOR_CHUNK_MAX_CHARS = 600
 PRIVATE_PATH_MARKERS = (
     ".coordination",
     ".git",
@@ -93,13 +95,17 @@ def chunks_from_memory_index(
         memory_index.build(use_gpu_embeddings=False)
 
     chunks = []
+    seen_chunk_ids: set[str] = set()
     for ordinal, pair in enumerate(memory_index.paragraph_index):
         doc_idx, paragraph_idx = pair
         doc = memory_index.documents[doc_idx]
         if not include_private and _is_private_source_path(doc.path):
             continue
-        text = doc.paragraphs[paragraph_idx]
+        text = _vector_chunk_text(doc.paragraphs[paragraph_idx])
         chunk_id = _chunk_id(doc.source, doc.name, paragraph_idx, text)
+        if chunk_id in seen_chunk_ids:
+            continue
+        seen_chunk_ids.add(chunk_id)
         chunks.append(
             VectorChunk(
                 chunk_id=chunk_id,
@@ -413,6 +419,17 @@ def main(argv: list[str] | None = None) -> int:
 def _chunk_id(source: str, document: str, paragraph_idx: int, text: str) -> str:
     payload = "\0".join([source, document, str(paragraph_idx), text])
     return sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _vector_chunk_text(text: str) -> str:
+    words = text.split()
+    trimmed = " ".join(words[:VECTOR_CHUNK_MAX_WORDS])
+    if len(trimmed) <= VECTOR_CHUNK_MAX_CHARS:
+        return trimmed
+    return (
+        trimmed[:VECTOR_CHUNK_MAX_CHARS].rsplit(" ", 1)[0].strip()
+        or trimmed[:VECTOR_CHUNK_MAX_CHARS]
+    )
 
 
 def corpus_fingerprint(chunks: Sequence[VectorChunk]) -> str:

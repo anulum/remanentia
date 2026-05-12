@@ -23,6 +23,7 @@ import json
 import logging
 import os
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -63,6 +64,8 @@ class LLMConfig:
     backend: str = "auto"
     local_url: str = "http://localhost:11434/v1"
     local_model: str = "gemma3:4b"
+    local_api_key: str = ""
+    local_timeout: float = 60.0
     anthropic_model: str = "claude-haiku-4-5-20251001"
     max_tokens_extract: int = 100
     max_tokens_generate: int = 200
@@ -96,9 +99,11 @@ def load_config(path: Path | None = None) -> LLMConfig:
     tokens = llm_section.pop("tokens", {})
 
     cfg = LLMConfig()
-    for key in ("backend", "local_url", "local_model", "anthropic_model"):
+    for key in ("backend", "local_url", "local_model", "local_api_key", "anthropic_model"):
         if key in llm_section:
             setattr(cfg, key, llm_section[key])
+    if "local_timeout" in llm_section:
+        cfg.local_timeout = float(llm_section["local_timeout"])
     if "extract" in tokens:
         cfg.max_tokens_extract = int(tokens["extract"])
     if "generate" in tokens:
@@ -203,15 +208,30 @@ class LocalLLMBackend:
         base_url: str = "http://localhost:11434/v1",
         model: str = "gemma3:4b",
         timeout: float = 60.0,
+        api_key: str | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
+        parsed = urllib.parse.urlparse(self._base_url)
+        if parsed.scheme not in {"http", "https"}:
+            raise ValueError("Local LLM base_url must use http or https")
         self._model = model
         self._timeout = timeout
+        self._api_key = api_key or os.environ.get("REMANENTIA_LOCAL_LLM_API_KEY", "")
+
+    def _headers(self) -> dict[str, str]:
+        headers = {"Content-Type": "application/json"}
+        if self._api_key:
+            headers["Authorization"] = f"Bearer {self._api_key}"
+        return headers
 
     def is_available(self) -> bool:
         """Health-check: GET /v1/models succeeds."""
         try:
-            req = urllib.request.Request(f"{self._base_url}/models", method="GET")
+            req = urllib.request.Request(
+                f"{self._base_url}/models",
+                headers=self._headers(),
+                method="GET",
+            )
             with urllib.request.urlopen(req, timeout=5) as resp:
                 return resp.status == 200
         except Exception:
@@ -241,7 +261,7 @@ class LocalLLMBackend:
         req = urllib.request.Request(
             f"{self._base_url}/chat/completions",
             data=payload,
-            headers={"Content-Type": "application/json"},
+            headers=self._headers(),
             method="POST",
         )
         try:
@@ -268,6 +288,8 @@ class AutoBackend:
         local = LocalLLMBackend(
             base_url=self._config.local_url,
             model=self._config.local_model,
+            timeout=self._config.local_timeout,
+            api_key=self._config.local_api_key,
         )
         if local.is_available():
             log.info("AutoBackend: using local LLM at %s", self._config.local_url)
@@ -318,7 +340,12 @@ def resolve_backend(
     if name == "none":
         return NullBackend()
     if name == "local":
-        return LocalLLMBackend(base_url=cfg.local_url, model=cfg.local_model)
+        return LocalLLMBackend(
+            base_url=cfg.local_url,
+            model=cfg.local_model,
+            timeout=cfg.local_timeout,
+            api_key=cfg.local_api_key,
+        )
     if name == "anthropic":
         return AnthropicBackend(model=cfg.anthropic_model)
     if name == "auto":

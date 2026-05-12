@@ -38,7 +38,10 @@ import numpy as np
 import hashlib as _hashlib
 
 BASE = Path(__file__).parent
-project-workspace_ROOT = BASE.parent
+CODE_ROOT = BASE.parent
+project-workspace_ROOT = CODE_ROOT.parent
+SHARED_ROOT = project-workspace_ROOT.parent / "shared-coordination"
+ARCANE_ROOT = project-workspace_ROOT / "workspace-internal"
 INDEX_PATH = BASE / "snn_state" / "memory_index.json.gz"
 _LEGACY_INDEX_PATH = BASE / "snn_state" / "memory_index.pkl"
 INDEX_EMB_PATH = BASE / "snn_state" / "memory_index_embeddings.npz"
@@ -55,16 +58,23 @@ SOURCES = {
     "traces": BASE / "reasoning_traces",
     "paper": BASE / "paper",
     "semantic": BASE / "memory" / "semantic",
+    "compiled": BASE / "memory" / "compiled",
+    "manuscripts": project-workspace_ROOT / "01_MANUSCRIPTS",
     "disposition": BASE / "disposition",
-    # Coordination
-    "sessions_as": project-workspace_ROOT / ".coordination" / "sessions" / "arcane-sapience",
-    "sessions_secondary": project-workspace_ROOT / ".coordination" / "sessions" / _SECONDARY_AGENT_DIR,
-    "handovers_as": project-workspace_ROOT / ".coordination" / "handovers" / "arcane-sapience",
-    "handovers_secondary": project-workspace_ROOT / ".coordination" / "handovers" / _SECONDARY_HANDOVER_DIR,
+    # Coordination and operational continuity
+    "coordination_sessions": project-workspace_ROOT / ".coordination" / "sessions",
+    "coordination_handovers": project-workspace_ROOT / ".coordination" / "handovers",
+    "repo_coordination": CODE_ROOT,
+    "webmaster_coordination": project-workspace_ROOT / "06_WEBMASTER",
+    "local_sessions": BASE / ".coordination" / "sessions",
+    "local_handovers": BASE / ".coordination" / "handovers",
+    "arcane_session_states": ARCANE_ROOT / "session_states",
+    "arcane_stimuli": ARCANE_ROOT / "snn_stimuli",
+    "shared_session_logs": SHARED_ROOT / "session_logs",
     # Cross-repo research
     "qc_research": project-workspace_ROOT / ".coordination" / "handovers" / "scpn-quantum-control",
     "po_research": project-workspace_ROOT / ".coordination" / "handovers" / "scpn-phase-orchestrator",
-    "nc_research": project-workspace_ROOT / "03_CODE" / "sc-neurocore" / "docs" / "internal",
+    "nc_research": CODE_ROOT / "SC-NEUROCORE" / "docs" / "internal",
     # Local agent memory
     "local_agent_memory": Path.home()
     / _LOCAL_AGENT_HOME
@@ -76,10 +86,10 @@ SOURCES = {
     # Code: Remanentia
     "code_remanentia": BASE,
     # Code: key repos (top-level Python files only, not venvs/node_modules)
-    "code_orchestrator": project-workspace_ROOT / "03_CODE" / "scpn-phase-orchestrator" / "src",
-    "code_quantum": project-workspace_ROOT / "03_CODE" / "scpn-quantum-control" / "src",
-    "code_neurocore": project-workspace_ROOT / "03_CODE" / "sc-neurocore" / "src",
-    "code_director": project-workspace_ROOT / "03_CODE" / "DIRECTOR_AI" / "src",
+    "code_orchestrator": CODE_ROOT / "SCPN-PHASE-ORCHESTRATOR" / "src",
+    "code_quantum": CODE_ROOT / "SCPN-QUANTUM-CONTROL" / "src",
+    "code_neurocore": CODE_ROOT / "SC-NEUROCORE" / "src",
+    "code_director": CODE_ROOT / "DIRECTOR-AI" / "src",
 }
 
 # File extensions to index per source type
@@ -89,7 +99,27 @@ SOURCE_EXTENSIONS = {
     "code_quantum": {".py", ".rs"},
     "code_neurocore": {".py", ".rs"},
     "code_director": {".py"},
+    "compiled": {".md", ".jsonl"},
+    "manuscripts": {
+        ".bib",
+        ".csv",
+        ".htm",
+        ".html",
+        ".log",
+        ".md",
+        ".tex",
+        ".txt",
+    },
     "indexer": {".md", ".yaml"},
+    "coordination_sessions": {".md", ".jsonl"},
+    "coordination_handovers": {".md", ".jsonl"},
+    "repo_coordination": {".md", ".json", ".jsonl"},
+    "webmaster_coordination": {".md", ".json", ".jsonl"},
+    "local_sessions": {".md", ".jsonl"},
+    "local_handovers": {".md", ".jsonl"},
+    "arcane_session_states": {".md", ".json", ".jsonl"},
+    "arcane_stimuli": {".json", ".jsonl", ".md"},
+    "shared_session_logs": {".md", ".jsonl"},
 }
 
 SKIP_PATH_PARTS = (
@@ -102,6 +132,13 @@ SKIP_PATH_PARTS = (
     "dist",
     ".egg",
 )
+MANUSCRIPT_SKIP_PATH_PARTS = (
+    "/ARCHIVE/",
+    "/DOCX_ARCHIVE/",
+    "/ACADEMIA_INPUT/",
+    "/SWARM_INPUT/",
+    "/PDF EXPORTS/",
+)
 MIN_FILE_CHARS = 50
 MAX_FILE_CHARS = 1_000_000
 MAX_TEXT_PARAGRAPH_CHARS = 10_000
@@ -110,6 +147,9 @@ MAX_CODE_CHUNK_CHARS = 1000
 MAX_CODE_CHUNKS = 200
 GRAPH_BOOST_QUERY_TYPES = {"general", "decision", "debugging", "explanation"}
 RUST_BM25_MIN_PARAGRAPHS = 50_000
+TEMPORAL_GRAPH_MAX_DOCUMENTS = 20_000
+COMPILED_FACT_MIN_SCORE = 8.0
+COMPILED_FACT_EARLY_SCORE = 1008.0
 LOCATION_STOPWORDS = {
     "where",
     "what",
@@ -168,6 +208,57 @@ class SearchResult:
     confidence: float = 0.0  # 0.0-1.0, computed from score distribution
 
 
+def _compiled_fact_results(query: str, top_k: int) -> list[SearchResult]:
+    try:
+        from compiled_memory import load_compiled_facts, search_compiled_facts
+    except Exception:
+        return []
+    try:
+        matches = search_compiled_facts(query, load_compiled_facts(), top_k=top_k)
+    except Exception:
+        log.debug("Compiled memory search failed", exc_info=True)
+        return []
+    results: list[SearchResult] = []
+    for fact, score in matches:
+        if score < COMPILED_FACT_MIN_SCORE:
+            continue
+        snippet = fact.fact[:300]
+        results.append(
+            SearchResult(
+                name=f"{fact.fact_id}.fact",
+                source="compiled",
+                score=round(1000.0 + score, 4),
+                snippet=snippet,
+                paragraph_idx=0,
+                answer=fact.fact,
+                confidence=1.0,
+            )
+        )
+    return results
+
+
+def _merge_priority_results(
+    priority_results: list[SearchResult],
+    ranked_results: list[SearchResult],
+    top_k: int,
+) -> list[SearchResult]:
+    merged: list[SearchResult] = []
+    seen = set()
+    for result in priority_results + ranked_results:
+        key = (result.source, result.name, result.answer or result.snippet)
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(result)
+        if len(merged) >= top_k:
+            break
+    return merged
+
+
+def _has_operational_compiled_memory(index: MemoryIndex) -> bool:
+    return len(index.paragraph_index) > 1000 or any(d.source == "compiled" for d in index.documents)
+
+
 class MemoryIndex:
     def __init__(self):
         self.documents: list[Document] = []
@@ -215,6 +306,13 @@ class MemoryIndex:
         self.paragraph_tokens = []
         self.all_entities: list[dict] = []
         self.all_relations: list[dict] = []
+
+        try:
+            from compiled_memory import compile_facts
+
+            compile_facts(BASE)
+        except Exception:
+            log.debug("Compiled memory refresh failed", exc_info=True)
 
         # Load previous content hashes for incremental builds
         old_hashes: dict[str, str] = {}
@@ -320,14 +418,18 @@ class MemoryIndex:
             except Exception:
                 log.debug("GPU embedding computation failed", exc_info=True)
 
-        # Build temporal graph from all indexed documents
-        try:
-            from temporal_graph import TemporalGraph
+        # Build temporal graph from indexed documents when the corpus is small enough
+        # for the in-memory event graph to remain useful.
+        if len(self.documents) <= TEMPORAL_GRAPH_MAX_DOCUMENTS:
+            try:
+                from temporal_graph import TemporalGraph
 
-            self._temporal_graph = TemporalGraph()
-            doc_texts = [(d.name, "\n\n".join(d.paragraphs)) for d in self.documents]
-            self._temporal_graph.build_from_documents(doc_texts)
-        except Exception:  # pragma: no cover
+                self._temporal_graph = TemporalGraph()
+                doc_texts = [(d.name, "\n\n".join(d.paragraphs)) for d in self.documents]
+                self._temporal_graph.build_from_documents(doc_texts)
+            except Exception:  # pragma: no cover
+                self._temporal_graph = None
+        else:
             self._temporal_graph = None
 
         self._built = True
@@ -577,6 +679,14 @@ class MemoryIndex:
         q_tokens = set(_tokenize(query))
         if not q_tokens:
             return []
+        compiled_results = (
+            _compiled_fact_results(query, top_k)
+            if _has_operational_compiled_memory(self)
+            and not (project or after or before or doc_type)
+            else []
+        )
+        if compiled_results and compiled_results[0].score >= COMPILED_FACT_EARLY_SCORE:
+            return compiled_results[:top_k]
 
         # Pre-compute filter sets for paragraph indices
         _filtered_out = set()
@@ -820,6 +930,9 @@ class MemoryIndex:
                     answer=r.answer,
                     confidence=round(base_conf, 3),
                 )
+
+        if compiled_results:
+            results = _merge_priority_results(compiled_results, results, top_k)
 
         # Cross-reference answer verification: boost confidence when answers agree
         if len(results) >= 2:
@@ -1859,14 +1972,28 @@ def _get_rust_bm25_class():
     return _RUST_BM25_CLASS if _RUST_BM25_CLASS else None
 
 
+def _source_roots(source_name: str, source_dir: Path) -> list[Path]:
+    if source_name in {"repo_coordination", "webmaster_coordination"}:
+        roots: list[Path] = []
+        for root in source_dir.glob("*/.coordination"):
+            roots.extend([root / "sessions", root / "handovers"])
+        return [root for root in roots if root.exists()]
+    return [source_dir]
+
+
 def _iter_source_files(source_name: str, source_dir: Path) -> Iterator[Path]:
     exts = SOURCE_EXTENSIONS.get(source_name, {".md"})
     files: list[Path] = []
-    for ext in exts:
-        files.extend(source_dir.rglob(f"*{ext}"))
+    for root in _source_roots(source_name, source_dir):
+        for ext in exts:
+            files.extend(root.rglob(f"*{ext}"))
     for f in sorted(set(files)):
         if any(skip in str(f) for skip in SKIP_PATH_PARTS):
             continue
+        if source_name == "manuscripts":
+            normalised_path = f.as_posix()
+            if any(skip in normalised_path for skip in MANUSCRIPT_SKIP_PATH_PARTS):
+                continue
         yield f
 
 

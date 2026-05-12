@@ -110,6 +110,7 @@ def write_config(
     backend: str = "local",
     local_url: str = "http://localhost:8080/v1",
     local_model: str = "qwen2.5-7b-instruct",
+    local_timeout: float = 60.0,
     path: Path | None = None,
 ) -> Path:
     """Write LLM configuration to TOML file."""
@@ -122,6 +123,7 @@ def write_config(
         f'backend = "{backend}"\n'
         f'local_url = "{local_url}"\n'
         f'local_model = "{local_model}"\n'
+        f"local_timeout = {local_timeout:g}\n"
         "\n"
         "[llm.tokens]\n"
         "extract = 100\n"
@@ -173,6 +175,7 @@ def cmd_setup_llm(args) -> None:  # pragma: no cover
 def cmd_serve_llm(args) -> None:  # pragma: no cover
     """Start llama.cpp server with configured model."""
     port = getattr(args, "port", 8080)
+    host = getattr(args, "host", "127.0.0.1")
 
     # Find model file
     model_dir = _DEFAULT_MODEL_DIR
@@ -186,11 +189,12 @@ def cmd_serve_llm(args) -> None:  # pragma: no cover
     model_path = gguf_files[0]
     print(f"Starting llama.cpp server...")
     print(f"  Model: {model_path.name}")
+    print(f"  Host: {host}")
     print(f"  Port: {port}")
 
     try:
         subprocess.run(
-            ["llama-server", "-m", str(model_path), "--port", str(port), "--host", "0.0.0.0"],
+            ["llama-server", "-m", str(model_path), "--port", str(port), "--host", host],
             check=True,
         )
     except FileNotFoundError:

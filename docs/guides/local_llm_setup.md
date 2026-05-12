@@ -122,6 +122,7 @@ Create `~/.remanentia/llm.toml`:
 backend = "auto"                              # auto | local | anthropic | none
 local_url = "http://localhost:11434/v1"
 local_model = "gemma3:4b"
+local_timeout = 60
 anthropic_model = "claude-haiku-4-5-20251001"
 
 [llm.tokens]
@@ -132,7 +133,49 @@ synthesise = 200
 
 Or set the environment variable `REMANENTIA_LLM_CONFIG=/path/to/llm.toml`.
 
-## 6a. Using the local LLM through the MCP server
+`remanentia serve-llm` starts `llama-server` on `127.0.0.1` by default. Use
+`--host` only for deliberately isolated network deployments with an external
+firewall/authentication boundary.
+
+## 6a. ML350 32B coder route
+
+ML350 exposes a hot Qwen 2.5 Coder 32B Q4 route for higher-quality local
+coding and memory-synthesis work. It is intentionally kept behind SSH/UFW.
+
+Open a tunnel from the workstation or notebook:
+
+```bash
+ssh -N -L 11438:127.0.0.1:11438 anulum@192.168.1.30
+```
+
+Then point Remanentia at the tunneled llama.cpp endpoint:
+
+```toml
+[llm]
+backend = "local"
+local_url = "http://127.0.0.1:11438/v1"
+local_model = "qwen2.5-coder-32b-instruct-q4"
+local_timeout = 300
+
+[llm.tokens]
+extract = 160
+generate = 320
+synthesise = 320
+```
+
+Use the config explicitly:
+
+```bash
+export REMANENTIA_LLM_CONFIG="$HOME/.remanentia/ml350-code32b.toml"
+remanentia recall "query" --llm --llm-backend local
+```
+
+The same model is registered in ML350 LiteLLM as `local-code` and `local-best`.
+Use LiteLLM only when the caller can pass the configured bearer token; the
+direct SSH tunnel above needs no API key and is simpler for local Remanentia
+runs.
+
+## 6b. Using the local LLM through the MCP server
 
 The MCP server is the usual way an MCP-compatible tool (Cursor and
 others) talks to Remanentia. Two flags flip the backend selection:

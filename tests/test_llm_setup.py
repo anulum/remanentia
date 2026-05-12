@@ -15,7 +15,10 @@ round-trip, file system errors, idempotency, and content validation.
 from __future__ import annotations
 
 
-from llm_setup import ModelConfig, recommend_model, write_config
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from llm_setup import ModelConfig, cmd_serve_llm, recommend_model, write_config
 
 
 # ── ModelConfig dataclass ─────────────────────────────────────
@@ -163,6 +166,7 @@ class TestWriteConfig:
         assert 'backend = "local"' in text
         assert "gpu:9090" in text
         assert "qwen2.5-3b" in text
+        assert "local_timeout = 60" in text
         assert "[llm.tokens]" in text
 
     def test_token_defaults(self, tmp_path):
@@ -185,6 +189,11 @@ class TestWriteConfig:
         assert 'backend = "local"' in text
         assert "localhost:8080" in text
         assert "qwen2.5-7b" in text
+
+    def test_custom_timeout(self, tmp_path):
+        path = tmp_path / "llm.toml"
+        write_config(local_timeout=300, path=path)
+        assert "local_timeout = 300" in path.read_text()
 
     def test_default_path_uses_config_dir(self, tmp_path):
         import llm_setup
@@ -233,6 +242,7 @@ class TestWriteConfig:
         assert cfg.backend == "local"
         assert cfg.local_url == "http://myhost:1234/v1"
         assert cfg.local_model == "test-model"
+        assert cfg.local_timeout == 60.0
         assert cfg.max_tokens_extract == 100
         assert cfg.max_tokens_generate == 200
         assert cfg.max_tokens_synthesise == 200
@@ -248,6 +258,35 @@ class TestWriteConfig:
     def test_returns_path_object(self, tmp_path):
         result = write_config(path=tmp_path / "test.toml")
         assert isinstance(result, type(tmp_path / "x"))
+
+
+# ── cmd_serve_llm ────────────────────────────────────────────────
+
+
+class TestServeLLM:
+    def test_server_binds_loopback_by_default(self, tmp_path):
+        model_dir = tmp_path / "models"
+        model_dir.mkdir()
+        (model_dir / "model.gguf").write_bytes(b"gguf")
+
+        with patch("llm_setup._DEFAULT_MODEL_DIR", model_dir):
+            with patch("llm_setup.subprocess.run") as run:
+                cmd_serve_llm(SimpleNamespace(port=9090))
+
+        args = run.call_args.args[0]
+        assert args[args.index("--host") + 1] == "127.0.0.1"
+
+    def test_server_uses_explicit_bind_host(self, tmp_path):
+        model_dir = tmp_path / "models"
+        model_dir.mkdir()
+        (model_dir / "model.gguf").write_bytes(b"gguf")
+
+        with patch("llm_setup._DEFAULT_MODEL_DIR", model_dir):
+            with patch("llm_setup.subprocess.run") as run:
+                cmd_serve_llm(SimpleNamespace(host="192.0.2.10", port=9090))
+
+        args = run.call_args.args[0]
+        assert args[args.index("--host") + 1] == "192.0.2.10"
 
 
 # ── _DEFAULT_MODEL_DIR ────────────────────────────────────────

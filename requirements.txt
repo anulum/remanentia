@@ -1,3 +1,4 @@
 # Canonical source: pyproject.toml
 # This file provides pinned runtime deps for reproducible environments.
+defusedxml>=0.7.1
 numpy>=1.24

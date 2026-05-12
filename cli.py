@@ -508,6 +508,7 @@ def main():
 
     # serve-llm
     p_serve_llm = sub.add_parser("serve-llm", help="Start local LLM server")
+    p_serve_llm.add_argument("--host", default="127.0.0.1", help="Bind host")
     p_serve_llm.add_argument("--port", type=int, default=8080, help="Server port")
 
     # notes

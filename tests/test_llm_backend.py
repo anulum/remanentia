@@ -18,6 +18,8 @@ import types
 import urllib.error
 from unittest import mock
 
+import pytest
+
 from llm_backend import (
     AnthropicBackend,
     AutoBackend,
@@ -125,11 +127,12 @@ class TestLocalLLMBackend:
         assert result == "hello world"
 
     def test_complete_with_system(self):
-        b = LocalLLMBackend()
+        b = LocalLLMBackend(api_key="test-key")
         calls = []
 
         def capture_urlopen(req, **kwargs):
             calls.append(json.loads(req.data.decode("utf-8")))
+            assert req.headers["Authorization"] == "Bearer test-key"
             return _mock_openai_response("ok")
 
         with mock.patch("urllib.request.urlopen", side_effect=capture_urlopen):
@@ -197,6 +200,14 @@ class TestLocalLLMBackend:
         b = LocalLLMBackend(base_url="http://localhost:11434/v1/")
         assert b._base_url == "http://localhost:11434/v1"
 
+    def test_rejects_non_http_base_url(self):
+        with pytest.raises(ValueError, match="http or https"):
+            LocalLLMBackend(base_url="file:///tmp/local-llm.sock")
+
+    def test_accepts_https_base_url(self):
+        b = LocalLLMBackend(base_url="https://llm.example.test/v1/")
+        assert b._base_url == "https://llm.example.test/v1"
+
     def test_default_url_is_ollama(self):
         b = LocalLLMBackend()
         assert b._base_url == "http://localhost:11434/v1"
@@ -208,6 +219,15 @@ class TestLocalLLMBackend:
     def test_default_timeout_60s(self):
         b = LocalLLMBackend()
         assert b._timeout == 60.0
+
+    def test_api_key_from_env(self):
+        with mock.patch.dict(os.environ, {"REMANENTIA_LOCAL_LLM_API_KEY": "env-key"}):
+            b = LocalLLMBackend()
+        assert b._api_key == "env-key"
+
+    def test_no_authorization_header_without_key(self):
+        b = LocalLLMBackend()
+        assert "Authorization" not in b._headers()
 
 
 # ── AutoBackend ───────────────────────────────────────────────────
@@ -247,7 +267,12 @@ class TestAutoBackend:
                 assert ab._resolved is first
 
     def test_uses_config(self):
-        cfg = LLMConfig(local_url="http://myhost:1234/v1", local_model="llama-8b")
+        cfg = LLMConfig(
+            local_url="http://myhost:1234/v1",
+            local_model="llama-8b",
+            local_api_key="local-key",
+            local_timeout=180.0,
+        )
         ab = AutoBackend(config=cfg)
         with mock.patch.object(LocalLLMBackend, "is_available", return_value=True):
             ab._resolve()
@@ -255,6 +280,8 @@ class TestAutoBackend:
             assert isinstance(resolved, LocalLLMBackend)
             assert resolved._base_url == "http://myhost:1234/v1"
             assert resolved._model == "llama-8b"
+            assert resolved._api_key == "local-key"
+            assert resolved._timeout == 180.0
 
 
 # ── LLMConfig ─────────────────────────────────────────────────────
@@ -266,6 +293,8 @@ class TestLLMConfig:
         assert cfg.backend == "auto"
         assert cfg.local_url == "http://localhost:11434/v1"
         assert cfg.local_model == "gemma3:4b"
+        assert cfg.local_api_key == ""
+        assert cfg.local_timeout == 60.0
         assert cfg.anthropic_model == "claude-haiku-4-5-20251001"
         assert cfg.max_tokens_extract == 100
         assert cfg.max_tokens_generate == 200
@@ -284,7 +313,8 @@ class TestLoadConfig:
         toml_path = tmp_path / "llm.toml"
         toml_path.write_text(
             '[llm]\nbackend = "local"\nlocal_url = "http://gpu:9090/v1"\n'
-            'local_model = "llama-3b"\n\n'
+            'local_model = "llama-3b"\nlocal_api_key = "test-key"\n'
+            "local_timeout = 240\n\n"
             "[llm.tokens]\nextract = 50\ngenerate = 100\nsynthesise = 150\n",
             encoding="utf-8",
         )
@@ -292,6 +322,8 @@ class TestLoadConfig:
         assert cfg.backend == "local"
         assert cfg.local_url == "http://gpu:9090/v1"
         assert cfg.local_model == "llama-3b"
+        assert cfg.local_api_key == "test-key"
+        assert cfg.local_timeout == 240.0
         assert cfg.max_tokens_extract == 50
         assert cfg.max_tokens_generate == 100
         assert cfg.max_tokens_synthesise == 150
@@ -348,6 +380,18 @@ class TestResolveBackend:
         assert isinstance(b, LocalLLMBackend)
         assert b._base_url == "http://myhost:5000/v1"
         assert b._model == "test-model"
+
+    def test_local_passes_timeout_and_api_key(self):
+        cfg = LLMConfig(
+            local_url="http://myhost:5000/v1",
+            local_model="test-model",
+            local_api_key="test-key",
+            local_timeout=300.0,
+        )
+        b = resolve_backend("local", config=cfg)
+        assert isinstance(b, LocalLLMBackend)
+        assert b._api_key == "test-key"
+        assert b._timeout == 300.0
 
     def test_anthropic(self):
         cfg = LLMConfig(anthropic_model="claude-opus-4-6")

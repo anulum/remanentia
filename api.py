@@ -98,25 +98,27 @@ def recall_endpoint(req: RecallRequest):
     ctx = recall(req.query, top_k=req.top_k, include_content=req.include_content)
 
     if req.format == "context":
-        return {"context": ctx.to_llm_context(), "elapsed_ms": ctx.elapsed_ms}
+        return _json_safe({"context": ctx.to_llm_context(), "elapsed_ms": ctx.elapsed_ms})
 
-    return {
-        "query": ctx.query,
-        "trace": ctx.trace,
-        "score": ctx.trace_score,
-        "snippet": ctx.trace_snippet[:300] if ctx.trace_snippet else "",
-        "semantic_memories": [
-            {"path": s["path"], "key_point": s.get("key_point", "")[:200]}
-            for s in ctx.semantic_memories[:5]
-        ],
-        "entities": ctx.entities,
-        "related": ctx.related_entities[:8],
-        "before": ctx.before,
-        "after": ctx.after,
-        "cross_project": ctx.cross_project[:3],
-        "novelty": ctx.novelty_score,
-        "elapsed_ms": ctx.elapsed_ms,
-    }
+    return _json_safe(
+        {
+            "query": ctx.query,
+            "trace": ctx.trace,
+            "score": ctx.trace_score,
+            "snippet": ctx.trace_snippet[:300] if ctx.trace_snippet else "",
+            "semantic_memories": [
+                {"path": s["path"], "key_point": s.get("key_point", "")[:200]}
+                for s in ctx.semantic_memories[:5]
+            ],
+            "entities": ctx.entities,
+            "related": ctx.related_entities[:8],
+            "before": ctx.before,
+            "after": ctx.after,
+            "cross_project": ctx.cross_project[:3],
+            "novelty": ctx.novelty_score,
+            "elapsed_ms": ctx.elapsed_ms,
+        }
+    )
 
 
 @app.post("/vector/search/public")
@@ -261,6 +263,21 @@ def entity_detail(entity_id: str):
 
 def _split_env(name: str) -> list[str]:
     return [item.strip() for item in os.environ.get(name, "").split(",") if item.strip()]
+
+
+def _json_safe(value):
+    """Convert scalar values returned by numeric backends into JSON-safe types."""
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list | tuple):
+        return [_json_safe(item) for item in value]
+    item = getattr(value, "item", None)
+    if callable(item):
+        try:
+            return item()
+        except ValueError:
+            return value
+    return value
 
 
 def _legacy_daemon_state() -> dict[str, object]:

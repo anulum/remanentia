@@ -255,6 +255,28 @@ class TestMemoryVectorPipeline:
             "internal.md",
         ]
 
+    def test_chunks_deduplicate_duplicate_paragraph_references(self):
+        memory = _built_memory_index()
+        memory.paragraph_index.append((0, 1))
+
+        chunks = chunks_from_memory_index(memory)
+
+        assert len(chunks) == 2
+        assert [chunk.text for chunk in chunks] == [
+            "alpha memory retrieval paragraph",
+            "beta factual verifier paragraph",
+        ]
+
+    def test_chunks_cap_long_paragraphs_for_embedding_context(self):
+        memory = _built_memory_index()
+        memory.documents[0].paragraphs[0] = " ".join(f"token{i}" for i in range(600))
+
+        chunks = chunks_from_memory_index(memory)
+
+        assert len(chunks[0].text.split()) < 600
+        assert len(chunks[0].text.split()) <= 96
+        assert len(chunks[0].text) <= 600
+
     def test_build_and_search_memory_vector_index(self, tmp_path: Path):
         memory = _built_memory_index()
         provider = KeywordEmbeddingProvider()
@@ -269,6 +291,17 @@ class TestMemoryVectorPipeline:
 
         assert stats.count == 2
         assert results[0].text == "beta factual verifier paragraph"
+
+    def test_build_memory_vector_index_tolerates_duplicate_paragraph_references(
+        self, tmp_path: Path
+    ):
+        memory = _built_memory_index()
+        memory.paragraph_index.append((0, 1))
+        provider = KeywordEmbeddingProvider()
+
+        stats = build_memory_vector_index(memory, tmp_path / "memory_vec", provider)
+
+        assert stats.count == 2
 
     def test_refresh_rebuilds_once_then_skips_unchanged_corpus(self, tmp_path: Path):
         memory = _built_memory_index()

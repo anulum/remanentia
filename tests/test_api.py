@@ -12,6 +12,7 @@ import json
 import time
 from unittest.mock import patch
 
+import numpy as np
 import pytest
 
 from api import app
@@ -267,6 +268,31 @@ class TestRecall:
         data = resp.json()
         assert "context" in data
         assert data["context"] == "LLM context here"
+
+    def test_recall_serializes_numpy_scalars(self, client):
+        from unittest.mock import MagicMock
+
+        mock_ctx = MagicMock()
+        mock_ctx.query = "test"
+        mock_ctx.trace = "trace.md"
+        mock_ctx.trace_score = np.float32(0.8)
+        mock_ctx.trace_snippet = "Some snippet"
+        mock_ctx.semantic_memories = []
+        mock_ctx.entities = ["stdp"]
+        mock_ctx.related_entities = [{"entity": "graph", "weight": np.float32(0.5)}]
+        mock_ctx.before = []
+        mock_ctx.after = []
+        mock_ctx.cross_project = []
+        mock_ctx.novelty_score = np.float32(0.3)
+        mock_ctx.elapsed_ms = np.float32(15.0)
+        with patch("memory_recall.recall", return_value=mock_ctx):
+            resp = client.post("/recall", json={"query": "test", "format": "summary"})
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["score"] == pytest.approx(0.8)
+        assert data["related"][0]["weight"] == pytest.approx(0.5)
+        assert data["novelty"] == pytest.approx(0.3)
 
 
 class TestPublicVectorSearch:

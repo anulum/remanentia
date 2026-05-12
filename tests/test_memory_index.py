@@ -2182,3 +2182,43 @@ class TestContentHashIndexing:
         finally:
             memory_index.SOURCES = original_sources
             memory_index.HASH_CACHE_PATH = original_hash_path
+
+    def test_project_coordination_source_expands_sessions_and_handovers(self, tmp_path):
+        """Project coordination roots should ingest nested session and handover files."""
+        import memory_index
+
+        project = tmp_path / "PROJECT"
+        sessions = project / ".coordination" / "sessions"
+        handovers = project / ".coordination" / "handovers"
+        sessions.mkdir(parents=True)
+        handovers.mkdir(parents=True)
+        (sessions / "session.md").write_text(
+            "Session note with enough detail about vector worker retrieval performance.",
+            encoding="utf-8",
+        )
+        (handovers / "handover.json").write_text(
+            '{"text":"Handover note with enough detail about local memory ingestion."}',
+            encoding="utf-8",
+        )
+        (project / "README.md").write_text(
+            "This regular project markdown file is not a coordination record.",
+            encoding="utf-8",
+        )
+
+        files = list(memory_index._iter_source_files("repo_coordination", tmp_path))
+        names = {path.name for path in files}
+
+        assert names == {"handover.json", "session.md"}
+
+    def test_arcane_stimuli_source_indexes_json(self, tmp_path):
+        """Stimulus JSON files are first-class memory source documents."""
+        import memory_index
+
+        (tmp_path / "stimulus.json").write_text(
+            '{"text":"Stimulus note with enough operational detail for retrieval."}',
+            encoding="utf-8",
+        )
+
+        files = list(memory_index._iter_source_files("arcane_stimuli", tmp_path))
+
+        assert [path.name for path in files] == ["stimulus.json"]
