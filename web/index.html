@@ -3,433 +3,117 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Remanentia — Persistent AI Memory</title>
-<meta name="description" content="Remanentia: Persistent AI memory with Rust acceleration, pluggable LLM backend, and sub-millisecond pipeline. 1,343 tests, 100% coverage. Open source.">
+<title>Remanentia | Persistent Memory and Factual Control</title>
+<meta name="description" content="Remanentia combines REMANENTIA persistent memory with DIRECTOR-CLASS-AI factual control for local AI systems, agents, and private operational knowledge.">
 <link rel="icon" href="https://remanentia.com/docs/assets/anulum_logo.png" type="image/png">
 <link rel="canonical" href="https://www.remanentia.com/">
-
-<!-- Open Graph -->
-<meta property="og:title" content="Remanentia — Persistent AI Memory">
-<meta property="og:description" content="Persistent AI memory with Rust acceleration, pluggable LLM backend, and sub-millisecond pipeline. 1,343 tests, 100% coverage.">
+<meta property="og:title" content="Remanentia | Persistent Memory and Factual Control">
+<meta property="og:description" content="Persistent memory, factual verification, retrieval, and policy control for local AI systems.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://www.remanentia.com/">
 <meta property="og:image" content="https://remanentia.com/docs/assets/remanentia_repo_header.png">
-<meta property="og:site_name" content="Remanentia">
-
-<!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Remanentia — Persistent AI Memory">
-<meta name="twitter:description" content="Persistent AI memory with Rust acceleration and sub-millisecond pipeline. 1,343 tests, 100% coverage.">
+<meta name="twitter:title" content="Remanentia | Persistent Memory and Factual Control">
+<meta name="twitter:description" content="Persistent memory, factual verification, retrieval, and policy control for local AI systems.">
 <meta name="twitter:image" content="https://remanentia.com/docs/assets/remanentia_repo_header.png">
-<meta name="twitter:site" content="@anulum">
-
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#0a0a0f;color:#e0e0e8}
-.bg{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none}
-.bg canvas{width:100%;height:100%}
-
-section{position:relative;z-index:1;max-width:720px;margin:0 auto;padding:0 1.5rem}
-.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
-h1{font-size:3.2rem;font-weight:300;letter-spacing:0.12em;color:#c8b8e8;margin-bottom:0.3rem;text-transform:uppercase;transition:color 0.3s,text-shadow 0.3s}
-.version{font-size:0.75rem;color:#5858a0;letter-spacing:0.06em;margin-bottom:0.2rem}
-.latin{font-size:1rem;font-style:italic;color:#8878a8;letter-spacing:0.08em;margin-bottom:2.4rem}
-.divider{width:80px;height:1px;background:linear-gradient(90deg,transparent,#6858a0,transparent);margin:0 auto 2rem}
-p{font-size:1.05rem;line-height:1.7;color:#a0a0b0;margin-bottom:1.2rem}
-
-/* Stats row */
-.stats{display:flex;flex-wrap:wrap;justify-content:center;margin:1.8rem 0}
-.stat{text-align:center;padding:0 1.2rem}
-.stat+.stat{border-left:1px solid #2a2840}
-.stat-val{font-size:1.4rem;font-weight:600;color:#c8b8e8}
-.stat-label{font-size:0.72rem;color:#6868a0;letter-spacing:0.04em;margin-top:0.1rem}
-
-/* Sections */
-.content-section{padding-top:4rem;padding-bottom:4rem}
-h2{font-size:1.3rem;font-weight:400;letter-spacing:0.06em;color:#b0a0d0;margin-bottom:1.5rem;text-align:center}
-
-/* How it works */
-.pipeline{display:flex;align-items:center;justify-content:center;gap:0.4rem;margin:1.5rem 0;flex-wrap:wrap}
-.pipe-step{background:#12121f;border:1px solid #2a2840;border-radius:4px;padding:0.6rem 1rem;text-align:center;min-width:120px}
-.pipe-step strong{display:block;font-size:0.95rem;color:#c8b8e8;font-weight:500}
-.pipe-step span{font-size:0.72rem;color:#7070a0}
-.pipe-arrow{color:#4040608f;font-size:1.2rem}
-
-/* Differentiators */
-.diff-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin:1.5rem 0}
-.diff-item{background:#0e0e1a;border:1px solid #1e1e30;border-radius:4px;padding:1rem;text-align:center}
-.diff-item .icon{font-size:1.5rem;margin-bottom:0.4rem}
-.diff-item strong{display:block;font-size:0.88rem;color:#c0b0e0;margin-bottom:0.3rem}
-.diff-item span{font-size:0.75rem;color:#7878a0;line-height:1.4}
-
-/* Benchmark table */
-.bench{margin:1.5rem auto;max-width:480px}
-.bench table{width:100%;border-collapse:collapse;font-size:0.85rem}
-.bench th{text-align:left;padding:0.4rem 0.6rem;color:#8878a8;border-bottom:1px solid #2a2840;font-weight:400}
-.bench td{padding:0.4rem 0.6rem;color:#a0a0b0;border-bottom:1px solid #18182a}
-.bench td:last-child{text-align:right;font-weight:600;color:#c8b8e8}
-.bench-duo{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.5rem auto;max-width:600px}
-
-/* Performance table */
-.perf{margin:1.5rem auto;max-width:520px}
-.perf table{width:100%;border-collapse:collapse;font-size:0.82rem}
-.perf th{text-align:left;padding:0.35rem 0.6rem;color:#8878a8;border-bottom:1px solid #2a2840;font-weight:400}
-.perf td{padding:0.35rem 0.6rem;color:#a0a0b0;border-bottom:1px solid #18182a;font-family:'Courier New',monospace;font-size:0.8rem}
-.perf td:nth-child(2),.perf td:nth-child(3){text-align:right}
-.perf td:last-child{text-align:right;font-weight:600;color:#c8b8e8}
-.perf-note{text-align:center;font-size:0.78rem;color:#6868a0;margin-top:0.6rem}
-
-/* Research honesty */
-.honesty{background:#0c0c18;border:1px solid #1e1e30;border-radius:4px;padding:1.2rem 1.5rem;margin:1.5rem 0;text-align:center}
-.honesty p{font-size:0.9rem;color:#9090b0;margin-bottom:0.5rem}
-.honesty strong{color:#c8b8e8}
-
-/* Tech stack */
-.tech-row{display:flex;flex-wrap:wrap;justify-content:center;gap:0.5rem;margin:1.2rem 0}
-.tech-badge{background:#14142a;border:1px solid #2a2840;border-radius:3px;padding:0.25rem 0.7rem;font-size:0.75rem;color:#8888b0;letter-spacing:0.03em}
-.tech-badge.rust{border-color:#c8784040;color:#c89878}
-
-/* Links row */
-.links-row{display:flex;flex-wrap:wrap;justify-content:center;gap:0.8rem;margin:1.2rem 0}
-.link-pill{display:inline-flex;align-items:center;gap:0.3rem;padding:0.35rem 0.9rem;border:1px solid #2a2840;border-radius:3px;font-size:0.8rem;color:#8888b0;text-decoration:none;transition:border-color 0.2s,color 0.2s}
-.link-pill:hover{border-color:#6858a0;color:#c8b8e8}
-
-/* Invest */
-.invest{margin-top:2.5rem;text-align:center}
-.invest-line{font-size:0.9rem;color:#8878a8;margin-bottom:0.6rem}
-.invest-cta{display:inline-block;padding:0.45rem 1.4rem;border:1px solid #6858a0;border-radius:3px;color:#c8b8e8;font-size:0.85rem;letter-spacing:0.04em;text-decoration:none;transition:background 0.2s,color 0.2s}
-.invest-cta:hover{background:#6858a0;color:#0a0a0f}
-
-/* Ecosystem */
-.eco{text-align:center;font-size:0.85rem;color:#6868a0;margin-top:1rem}
-.eco a{color:#8878b0;text-decoration:none}
-.eco a:hover{color:#c8b8e8}
-
-/* Status */
-.status{display:inline-block;margin-top:1.5rem;padding:0.5rem 1.6rem;border:1px solid #2a2840;border-radius:2px;font-size:0.85rem;color:#7868a0;letter-spacing:0.06em}
-.dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#6858a0;margin-right:8px;animation:pulse 2s ease-in-out infinite}
-@keyframes pulse{0%,100%{opacity:0.4}50%{opacity:1}}
-
-/* Footer */
-footer{position:relative;z-index:1;text-align:center;padding:3rem 1rem 1.5rem;font-size:0.78rem;color:#484858;letter-spacing:0.04em;line-height:1.6}
-footer a{color:#6858a0;text-decoration:none}
-footer a:hover{color:#8878b0}
-
-/* Responsive */
-@media(max-width:520px){
-  h1{font-size:2.2rem}
-  .stat{padding:0 0.6rem}.stat-val{font-size:1.1rem}
-  .diff-grid{grid-template-columns:1fr}
-  .bench-duo{grid-template-columns:1fr}
-  .pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg)}
-}
-</style>
+<link rel="stylesheet" href="/assets/css/site.css">
 </head>
 <body>
-<div class="bg"><canvas id="c"></canvas></div>
-
-<!-- HERO -->
-<section class="hero">
-<h1>Remanentia</h1>
-<div class="version">v0.3.1</div>
-<div class="latin">remanentem &mdash; the state of remaining</div>
-<div class="divider"></div>
-<p>Persistent AI memory via filesystem knowledge retrieval. BM25 search with query intelligence, cross-encoder reranking, and pluggable LLM answer extraction. Rust-accelerated regex pipeline under 1ms. Continuous consolidation turns episodic traces into semantic memories. Integrates with every MCP-compatible client.</p>
-
-<div class="stats">
-<div class="stat"><div class="stat-val">69.0%</div><div class="stat-label">LongMemEval (500q, committed)</div></div>
-<div class="stat"><div class="stat-val">0.6ms</div><div class="stat-label">regex pipeline (47K chars)</div></div>
-<div class="stat"><div class="stat-val">1,343</div><div class="stat-label">tests, 100% coverage</div></div>
-<div class="stat"><div class="stat-val">7</div><div class="stat-label">Rust acceleration crates</div></div>
-</div>
-</section>
-
-<!-- HOW IT WORKS -->
-<section class="content-section">
-<h2>How It Works</h2>
-<div class="pipeline">
-  <div class="pipe-step"><strong>Index</strong><span>BM25 + embeddings, filesystem-native</span></div>
-  <div class="pipe-arrow">&rarr;</div>
-  <div class="pipe-step"><strong>Search</strong><span>BM25 + cross-encoder rerank + RRF</span></div>
-  <div class="pipe-arrow">&rarr;</div>
-  <div class="pipe-step"><strong>Extract</strong><span>Rust regex + optional LLM</span></div>
-  <div class="pipe-arrow">&rarr;</div>
-  <div class="pipe-step"><strong>Consolidate</strong><span>Episodic &rarr; semantic + entity graph</span></div>
-</div>
-<p style="text-align:center;font-size:0.9rem">Query classification routes to 8 intent types. 3-stage reranking: BM25, bi-encoder, cross-encoder. Answer extraction via Rust-accelerated regex with optional LLM fallback (local or hosted). Continuous consolidation on every memory write.</p>
-</section>
-
-<!-- BENCHMARKS -->
-<section class="content-section">
-<h2>Benchmarks</h2>
-<div class="bench-duo">
-  <div class="bench">
-    <table>
-    <tr><th colspan="2">LongMemEval (500q, committed)</th></tr>
-    <tr><td>single-session-preference</td><td>90.0%</td></tr>
-    <tr><td>knowledge-update</td><td>87.2%</td></tr>
-    <tr><td>single-session-assistant</td><td>87.5%</td></tr>
-    <tr><td>single-session-user</td><td>82.9%</td></tr>
-    <tr><td>multi-session</td><td>61.7%</td></tr>
-    <tr><td>temporal-reasoning</td><td>45.9%</td></tr>
-    <tr><td><strong>Overall</strong></td><td><strong>69.0%</strong></td></tr>
-    </table>
-  </div>
-  <div class="bench">
-    <table>
-    <tr><th colspan="2">LOCOMO (1,986q, experimental)</th></tr>
-    <tr><td>Multi-hop</td><td>82.6%</td></tr>
-    <tr><td>Adversarial</td><td>79.5%</td></tr>
-    <tr><td>Open-domain</td><td>78.7%</td></tr>
-    <tr><td>Single-hop</td><td>55.7%</td></tr>
-    <tr><td>Temporal</td><td>42.7%</td></tr>
-    <tr><td><strong>Overall</strong></td><td><strong>74.7%</strong></td></tr>
-    </table>
-  </div>
-</div>
-<p style="text-align:center;font-size:0.82rem;color:#7878a0">LongMemEval: GPT-4o-mini generation + judge, results committed. LOCOMO: BM25 + answer extraction, no LLM in retrieval path. Temporal reasoning is the primary target for v0.4.</p>
-</section>
-
-<!-- RUST ACCELERATION -->
-<section class="content-section">
-<h2>Rust Acceleration</h2>
-<p style="text-align:center;font-size:0.9rem;margin-bottom:1.2rem">7 PyO3 crates built with maturin. Python fallback preserved in every module.</p>
-<div class="perf">
-<table>
-<tr><th>Crate</th><th>Speedup</th><th>Wired into</th></tr>
-<tr><td>remanentia_temporal</td><td style="color:#c8b8e8">14.2&times;</td><td>temporal_graph, date_normalizer</td></tr>
-<tr><td>remanentia_answer_extractor</td><td style="color:#c8b8e8">11.4&times;</td><td>answer_extractor</td></tr>
-<tr><td>remanentia_fact_decomposer</td><td style="color:#c8b8e8">~7&times;</td><td>fact_decomposer</td></tr>
-<tr><td>remanentia_answer_normalizer</td><td style="color:#c8b8e8">~6&times;</td><td>answer_normalizer</td></tr>
-<tr><td>remanentia_search</td><td style="color:#c8b8e8">~3-5&times;</td><td>memory_index (BM25)</td></tr>
-<tr><td>arcane_stdp</td><td style="color:#c8b8e8">~2-3&times;</td><td>snn_backend</td></tr>
-<tr><td>remanentia_entity_extractor</td><td style="color:#c8b8e8">~2&times;</td><td>entity_extractor</td></tr>
-</table>
-<p class="perf-note">Full regex pipeline: 0.60ms (Rust) vs 9.07ms (Python) on 470K chars = 14.1&times; on large workloads</p>
-</div>
-</section>
-
-<!-- PIPELINE PERFORMANCE -->
-<section class="content-section">
-<h2>Pipeline Performance</h2>
-<div class="perf">
-<table>
-<tr><th>Component</th><th>Avg (ms)</th></tr>
-<tr><td>parse_dates (47K chars)</td><td>0.323</td></tr>
-<tr><td>regex_entities (47K)</td><td>0.391</td></tr>
-<tr><td>extract_answer (47K)</td><td>0.075</td></tr>
-<tr><td>normalize_answer</td><td>0.001</td></tr>
-<tr><td>answers_match</td><td>0.002</td></tr>
-<tr><td>fuzzy_match</td><td>0.001</td></tr>
-<tr><td>KnowledgeStore.add_note</td><td>0.027</td></tr>
-<tr><td><strong>Total (regex pipeline)</strong></td><td><strong>0.60</strong></td></tr>
-</table>
-<p class="perf-note">Measured with time.perf_counter, 27 budget-asserted performance tests</p>
-</div>
-</section>
-
-<!-- LOCAL LLM -->
-<section class="content-section">
-<h2>Pluggable LLM Backend</h2>
-<p style="text-align:center;font-size:0.9rem">Four backends, zero cloud dependency required. Fully offline capable.</p>
-<div class="diff-grid" style="grid-template-columns:1fr 1fr;max-width:500px;margin:1.5rem auto">
-  <div class="diff-item">
-    <strong>AutoBackend</strong>
-    <span>Tries local &rarr; hosted &rarr; Null. Zero config.</span>
-  </div>
-  <div class="diff-item">
-    <strong>LocalLLMBackend</strong>
-    <span>OpenAI-compatible HTTP. llama.cpp, Ollama, vLLM.</span>
-  </div>
-  <div class="diff-item">
-    <strong>AnthropicBackend</strong>
-    <span>Claude Haiku/Sonnet via API.</span>
-  </div>
-  <div class="diff-item">
-    <strong>NullBackend</strong>
-    <span>Explicit no-LLM. Regex-only extraction.</span>
-  </div>
-</div>
-<p style="text-align:center;font-size:0.82rem;color:#7878a0">Benchmarked: Qwen 2.5 3B (44% LongMemEval, 8.5s/query) on AMD RX 6600 XT via ROCm. 8 GGUF models tested.</p>
-</section>
-
-<!-- WHAT MAKES THIS DIFFERENT -->
-<section class="content-section">
-<h2>What Makes This Different</h2>
-<div class="diff-grid">
-  <div class="diff-item">
-    <div class="icon">&#x1f50d;</div>
-    <strong>Filesystem-Native</strong>
-    <span>Indexes existing project artifacts &mdash; session logs, code, research docs. Your files are the memory.</span>
-  </div>
-  <div class="diff-item">
-    <div class="icon">&#x26a1;</div>
-    <strong>Zero Infrastructure</strong>
-    <span>No vector database, no cloud service. One Python process. Optional local or cloud LLM.</span>
-  </div>
-  <div class="diff-item">
-    <div class="icon">&#x1f517;</div>
-    <strong>MCP Integration</strong>
-    <span>4 MCP tools: recall, remember, status, graph. Read and write path. MCP-native.</span>
-  </div>
-</div>
-</section>
-
-<!-- RESEARCH HONESTY -->
-<section class="content-section">
-<div class="honesty">
-  <p><strong>Built on 70+ experiments. We publish what fails.</strong></p>
-  <p>SNN retrieval via STDP-modified weight matrices provides zero discriminative signal across 4 learning rules, 8 architectures, GPU sweeps. Root cause: input current dominates recurrent dynamics 100&ndash;2,300&times; &mdash; the SNN operates in a perturbative regime where learned connectivity cannot matter. The system uses BM25 + cross-encoder reranking + optional LLM because that is what 70+ experiments showed works. 1,343 tests at 100% coverage enforce this honestly.</p>
-</div>
-</section>
-
-<!-- TECH STACK -->
-<section class="content-section">
-<h2>Stack</h2>
-<div class="tech-row">
-  <span class="tech-badge rust">Rust (PyO3)</span>
-  <span class="tech-badge rust">maturin</span>
-  <span class="tech-badge">Python 3.10+</span>
-  <span class="tech-badge">BM25</span>
-  <span class="tech-badge">Cross-Encoder</span>
-  <span class="tech-badge">MCP (stdio)</span>
-  <span class="tech-badge">FastAPI</span>
-  <span class="tech-badge">sentence-transformers</span>
-  <span class="tech-badge">llama.cpp / Ollama</span>
-  <span class="tech-badge">Hosted LLM API</span>
-  <span class="tech-badge">GLiNER2</span>
-  <span class="tech-badge">NumPy</span>
-  <span class="tech-badge">ROCm / CUDA</span>
-  <span class="tech-badge">AGPL-3.0</span>
-</div>
-
-<div class="links-row">
-  <a href="https://github.com/anulum/remanentia" class="link-pill">GitHub</a>
-  <a href="https://pypi.org/project/remanentia/" class="link-pill">PyPI</a>
-  <a href="https://remanentia.com/docs" class="link-pill">Docs</a>
-</div>
-
-<div class="eco">Part of the <a href="https://www.anulum.li">SCPN framework</a> by Anulum</div>
-</section>
-
-<!-- CTA -->
-<section class="content-section" style="text-align:center">
-<div class="status"><span class="dot"></span>Beta &mdash; v0.3.1 &middot; 1,343 tests &middot; 100% coverage &middot; 7 Rust crates &middot; PyPI live</div>
-<div class="invest">
-  <p class="invest-line">Open to strategic partners, research collaborators, and investors.</p>
-  <a href="mailto:protoscience@anulum.li" class="invest-cta">protoscience@anulum.li</a>
-</div>
-</section>
-
-<footer>
-<div><a href="https://github.com/anulum">GitHub</a> &middot; <a href="https://www.linkedin.com/in/anulum/">LinkedIn</a> &middot; <a href="https://x.com/anulum">X</a> &middot; <a href="https://independent.academia.edu/fortisstudio">Academia</a> &middot; <a href="https://orcid.org/my-orcid?orcid=0009-0009-3560-0851">ORCID</a></div>
-<div>&copy; Concepts 1996&ndash;2026 Miroslav &Scaron;otek. All rights reserved.</div>
-<div>&copy; Code 2020&ndash;2026 Miroslav &Scaron;otek. All rights reserved.</div>
+<canvas class="bg-canvas" id="memory-canvas" aria-hidden="true"></canvas>
+<header class="site-header">
+  <a class="brand" href="/" aria-label="Remanentia home"><span class="brand-mark"></span><span>Remanentia</span></a>
+  <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav"><span></span><span></span><span></span></button>
+  <nav class="site-nav" id="site-nav">
+    <a href="/">Home</a><a href="/platform.html">Platform</a><a href="/benchmarks.html">Benchmarks</a><a href="/pricing.html">Pricing</a><a href="/contact.html">Contact</a><a href="/docs">Docs</a>
+  </nav>
+</header>
+<main>
+  <section class="hero">
+    <p class="eyebrow">Persistent memory + factual control</p>
+    <h1>Memory-backed AI systems that verify before they answer.</h1>
+    <p class="hero-copy">Remanentia brings REMANENTIA retrieval together with DIRECTOR-CLASS-AI control: operational memory, vector evidence, factuality checks, routing, and public-output boundaries in one coherent stack.</p>
+    <div class="hero-actions">
+      <a class="button primary" href="/platform.html">Explore platform</a>
+      <a class="button secondary" href="/contact.html">Discuss integration</a>
+    </div>
+    <div class="signal-row" aria-label="Current measured system signals">
+      <div><strong>60,890</strong><span>768-dim vector chunks</span></div>
+      <div><strong>100%</strong><span>current operational recall</span></div>
+      <div><strong>75.8%</strong><span>factuality benchmark BA</span></div>
+      <div><strong>5.8%</strong><span>QA guard false positives</span></div>
+    </div>
+  </section>
+  <section class="section compact">
+    <div class="section-heading">
+      <p class="eyebrow">System split</p>
+      <h2>Two responsibilities, one control loop.</h2>
+    </div>
+    <div class="role-grid">
+      <article class="panel">
+        <span class="panel-kicker">REMANENTIA</span>
+        <h3>Remembers</h3>
+        <p>Indexes project files, session logs, handovers, public documents, compiled facts, and refreshable vector corpora.</p>
+        <ul class="check-list">
+          <li>Scheduled vector refresh worker</li>
+          <li>BM25, embeddings, reranking, compiled recall</li>
+          <li>Allowlisted public vector search</li>
+        </ul>
+      </article>
+      <article class="panel accent">
+        <span class="panel-kicker">DIRECTOR-CLASS-AI</span>
+        <h3>Verifies</h3>
+        <p>Routes tasks, checks evidence, guards answers, and enforces the private/public boundary before output leaves the system.</p>
+        <ul class="check-list">
+          <li>Factuality guard and response verifier</li>
+          <li>Memory-backed decision context</li>
+          <li>Policy-controlled public output</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+  <section class="section">
+    <div class="section-heading">
+      <p class="eyebrow">Control loop</p>
+      <h2>From request to evidence-gated answer.</h2>
+    </div>
+    <div class="flow">
+      <div><strong>1. Request</strong><span>Agent, application, or API call</span></div>
+      <div><strong>2. Route</strong><span>DIRECTOR-CLASS-AI selects policy and path</span></div>
+      <div><strong>3. Retrieve</strong><span>REMANENTIA returns memory and vector evidence</span></div>
+      <div><strong>4. Verify</strong><span>Factuality and public-safety checks run</span></div>
+      <div><strong>5. Answer</strong><span>Bounded, cited, and policy-compliant output</span></div>
+    </div>
+  </section>
+  <section class="section split">
+    <div>
+      <p class="eyebrow">Public safety</p>
+      <h2>Private memory does not mean public exposure.</h2>
+      <p>Internal logs and handovers can improve operational recall, but public APIs must expose only allowlisted corpora, redacted snippets, and evidence that passed the public-output policy. Raw vector results are evidence for the control layer, not automatic public text.</p>
+    </div>
+    <div class="data-panel">
+      <div><span>Private operational records</span><strong>Internal by default</strong></div>
+      <div><span>Public vector results</span><strong>Allowlisted + redacted</strong></div>
+      <div><span>Legacy wording</span><strong>Blocked or rewritten</strong></div>
+      <div><span>Final answers</span><strong>Evidence-gated</strong></div>
+    </div>
+  </section>
+  <section class="section compact">
+    <div class="section-heading">
+      <p class="eyebrow">Measured state</p>
+      <h2>Current local operator benchmarks.</h2>
+    </div>
+    <div class="metric-grid">
+      <article><span>Memory retrieval</span><strong>100%</strong><p>Recall@1 / @5 / @10 / @20 on the current operational suite.</p></article>
+      <article><span>Vector index</span><strong>236 MB</strong><p>60,890 chunks, 768 dimensions, full rebuild measured at 391.06s.</p></article>
+      <article><span>Public vector search</span><strong>95.3ms</strong><p>p50 measured through the local API path.</p></article>
+    </div>
+    <div class="center-actions"><a class="button secondary" href="/benchmarks.html">View benchmark detail</a></div>
+  </section>
+</main>
+<footer class="site-footer">
+  <div><strong>Remanentia</strong><span>Persistent memory and factual control for local AI systems.</span></div>
+  <nav><a href="https://github.com/anulum/remanentia">GitHub</a><a href="https://pypi.org/project/remanentia/">PyPI</a><a href="https://www.anulum.li">Anulum</a><a href="mailto:protoscience@anulum.li">Contact</a></nav>
 </footer>
-
-<script>
-const c=document.getElementById('c'),x=c.getContext('2d');
-let w,h,pts=[];
-let frame=0;
-
-function resize(){
-  w=c.width=innerWidth;h=c.height=innerHeight;pts=[];
-  for(let i=0;i<120;i++) pts.push({
-    x:Math.random()*w, y:Math.random()*h,
-    vx:(Math.random()-0.5)*0.4, vy:(Math.random()-0.5)*0.4,
-    r:Math.random()*2.2+0.8,
-    heat:0, heatDecay:0, mode:0,
-  });
-}
-
-function ignite(){
-  const seed=Math.floor(Math.random()*pts.length);
-  const isWrite=Math.random()>0.5;
-  pts[seed].heat=1.0;
-  pts[seed].heatDecay=isWrite?0.008:0.012;
-  pts[seed].mode=isWrite?1:2;
-}
-
-function draw(){
-  frame++;
-  x.clearRect(0,0,w,h);
-  if(frame%180===0) ignite();
-  if(frame%540===0){ignite();ignite();}
-
-  for(let i=0;i<pts.length;i++){
-    let p=pts[i];
-    if(p.heat>0.3){
-      for(let j=0;j<pts.length;j++){
-        if(i===j) continue;
-        let q=pts[j];
-        let dx=p.x-q.x, dy=p.y-q.y, d=Math.sqrt(dx*dx+dy*dy);
-        if(d<180){
-          let spread=p.mode===1 ? 0.015 : 0.01;
-          let transfer=spread*(1-d/180)*p.heat;
-          if(q.heat<p.heat-0.1){
-            q.heat=Math.min(q.heat+transfer, p.heat*0.85);
-            q.heatDecay=q.heatDecay||0.01;
-            q.mode=q.mode||p.mode;
-          }
-        }
-      }
-    }
-  }
-
-  for(let i=0;i<pts.length;i++){
-    let p=pts[i];
-    p.x+=p.vx; p.y+=p.vy;
-    if(p.x<0||p.x>w) p.vx*=-1;
-    if(p.y<0||p.y>h) p.vy*=-1;
-    if(p.heat>0){
-      p.heat=Math.max(0, p.heat-p.heatDecay);
-      if(p.heat<0.01){p.heat=0;p.mode=0;p.heatDecay=0;}
-    }
-    let t=p.heat;
-    let cr=Math.round(130+125*t), cg=Math.round(110-70*t), cb=Math.round(190-130*t);
-    let alpha=0.7+0.3*t;
-    let drawR=p.r+p.r*t*1.5;
-    if(t>0.3){
-      let glow=x.createRadialGradient(p.x,p.y,0,p.x,p.y,drawR*4);
-      glow.addColorStop(0,`rgba(${cr},${cg-20},${cb-30},${t*0.25})`);
-      glow.addColorStop(1,'rgba(0,0,0,0)');
-      x.beginPath();x.arc(p.x,p.y,drawR*4,0,Math.PI*2);
-      x.fillStyle=glow;x.fill();
-    }
-    x.beginPath();x.arc(p.x,p.y,drawR,0,Math.PI*2);
-    x.fillStyle=`rgba(${cr},${cg},${cb},${alpha})`;
-    x.fill();
-    for(let j=i+1;j<pts.length;j++){
-      let q=pts[j];
-      let dx=p.x-q.x, dy=p.y-q.y, d=Math.sqrt(dx*dx+dy*dy);
-      if(d<180){
-        let lt=Math.max(p.heat, q.heat);
-        let lr=Math.round(130+125*lt), lg=Math.round(110-70*lt), lb=Math.round(190-130*lt);
-        let la=0.32*(1-d/180)+0.4*lt*(1-d/180);
-        x.beginPath();x.moveTo(p.x,p.y);x.lineTo(q.x,q.y);
-        x.strokeStyle=`rgba(${lr},${lg},${lb},${la})`;
-        x.lineWidth=0.8+lt*1.2;
-        x.stroke();
-      }
-    }
-  }
-  let maxHeat=0;
-  for(let i=0;i<pts.length;i++) if(pts[i].heat>maxHeat) maxHeat=pts[i].heat;
-  const h1=document.querySelector('h1');
-  if(h1){
-    let t=maxHeat;
-    let tr=Math.round(200+55*t), tg=Math.round(184-144*t), tb=Math.round(232-172*t);
-    h1.style.color=`rgb(${tr},${tg},${tb})`;
-    if(t>0.2){
-      let gl=Math.round(t*18);
-      h1.style.textShadow=`0 0 ${gl}px rgba(${tr},${tg-20},${tb-30},${t*0.6}), 0 0 ${gl*2}px rgba(${tr},${tg-20},${tb-30},${t*0.3})`;
-    } else {
-      h1.style.textShadow='none';
-    }
-  }
-  requestAnimationFrame(draw);
-}
-resize();draw();addEventListener('resize',resize);
-</script>
+<script src="/assets/js/site.js"></script>
 </body>
 </html>
