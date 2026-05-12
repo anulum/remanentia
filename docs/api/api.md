@@ -25,6 +25,21 @@ The intentionally public endpoints are:
 Unset tokens keep local development open, but the server emits the
 standard `api_security` warning so operators can see that auth is disabled.
 
+## Request Limits
+
+The FastAPI surface applies the shared `api_security` request gates before
+endpoint handlers run:
+
+| Variable | Default | Purpose |
+|---|---:|---|
+| `REMANENTIA_API_BODY_LIMIT_BYTES` | 1048576 | Maximum declared request body size |
+| `REMANENTIA_API_RATE_PER_MINUTE` | 60 | Per-client steady-state request rate |
+| `REMANENTIA_API_RATE_BURST` | 10 | Per-client token-bucket burst |
+
+`GET /health` is excluded from rate limiting so health checks cannot consume
+application request quota. Public vector search is unauthenticated, but still
+uses the body-size and rate-limit gates.
+
 ## Public Vector Search
 
 `POST /vector/search/public` exposes the public-safe vector result view.

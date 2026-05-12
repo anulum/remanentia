@@ -41,21 +41,21 @@ if not auth.check(request.headers.get("Authorization")):
     return Response(401)
 ```
 
-### `TokenBucketLimiter(capacity: int, refill_per_sec: float)`
+### `TokenBucketLimiter(rate_per_minute: float = 60.0, burst: int = 10)`
 
 Per-key token bucket. The key is caller-supplied (typically
-`request.client.host`), so `limiter.acquire(key)` returns `True` when
+`request.client.host`), so `limiter.allow(key)` returns `True` when
 a token is available and `False` when the caller exceeded the cap.
 
-The bucket refills continuously at `refill_per_sec`, so burst traffic
-is absorbed up to `capacity` before throttling kicks in. The state is
-per-process; behind a load balancer, each replica maintains its own
-bucket (intentional — distributed rate limiting needs a shared backend
-and is out of scope for this module).
+The bucket refills continuously from `rate_per_minute`, so burst traffic
+is absorbed up to `burst` before throttling kicks in. The state is
+per-process; behind a load balancer, each replica maintains its own bucket
+(intentional — distributed rate limiting needs a shared backend and is out of
+scope for this module).
 
 ```python
-limiter = TokenBucketLimiter(capacity=60, refill_per_sec=1.0)
-if not limiter.acquire(request.client.host):
+limiter = TokenBucketLimiter(rate_per_minute=60, burst=10)
+if not limiter.allow(request.client.host):
     return Response(429, headers={"Retry-After": "1"})
 ```
 

@@ -39,7 +39,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from api_security import BearerAuth
+from api_security import (
+    DEFAULT_BODY_LIMIT,
+    DEFAULT_BURST,
+    DEFAULT_RATE_PER_MINUTE,
+    BearerAuth,
+    TokenBucketLimiter,
+    enforce_body_size,
+)
 
 app = FastAPI(
     title="Remanentia",
@@ -59,12 +66,31 @@ STATE_DIR = BASE / "snn_state"
 GRAPH_DIR = BASE / "memory" / "graph"
 VECTOR_WORKER_MAX_AGE_S = 1800
 AUTH = BearerAuth.from_env()
+BODY_LIMIT = int(os.environ.get("REMANENTIA_API_BODY_LIMIT_BYTES", str(DEFAULT_BODY_LIMIT)))
+LIMITER = TokenBucketLimiter(
+    rate_per_minute=float(
+        os.environ.get("REMANENTIA_API_RATE_PER_MINUTE", str(DEFAULT_RATE_PER_MINUTE))
+    ),
+    burst=int(os.environ.get("REMANENTIA_API_RATE_BURST", str(DEFAULT_BURST))),
+)
 _AUTH_EXEMPT_PATHS = frozenset({"/health", "/vector/search/public"})
+_RATE_EXEMPT_PATHS = frozenset({"/health"})
 
 
 @app.middleware("http")
 async def require_bearer_token(request: Request, call_next):
-    """Require bearer auth for private FastAPI endpoints when configured."""
+    """Apply FastAPI request security gates before endpoint handlers run."""
+    if request.method in {"POST", "PUT", "PATCH"}:
+        try:
+            enforce_body_size(int(request.headers.get("content-length", "0")), BODY_LIMIT)
+        except ValueError as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=413)
+
+    if request.url.path not in _RATE_EXEMPT_PATHS:
+        client = request.client.host if request.client else "unknown"
+        if not LIMITER.allow(client):
+            return JSONResponse({"detail": "rate limit exceeded"}, status_code=429)
+
     if request.url.path not in _AUTH_EXEMPT_PATHS and not AUTH.check_header(
         request.headers.get("Authorization")
     ):

@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 import api
-from api_security import BearerAuth
+from api_security import BearerAuth, TokenBucketLimiter
 from api import app
 from vector_index import VectorSearchResult
 
@@ -31,7 +31,13 @@ pytestmark = pytest.mark.skipif(not HAS_TEST_CLIENT, reason="fastapi/httpx not i
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
+    monkeypatch.setattr(
+        api,
+        "LIMITER",
+        TokenBucketLimiter(rate_per_minute=60000, burst=1000),
+        raising=False,
+    )
     return TestClient(app)
 
 
@@ -132,6 +138,39 @@ class TestAPISecurityBoundary:
 
         assert resp.status_code == 200
         assert resp.json()["episodic_traces"] == 0
+
+    def test_post_body_limit_rejects_before_handler(self, client, monkeypatch):
+        monkeypatch.setattr(api, "BODY_LIMIT", 8, raising=False)
+        resp = client.post("/recall", json={"query": "body is too large"})
+
+        assert resp.status_code == 413
+        assert "exceeds limit" in resp.json()["detail"]
+
+    def test_private_endpoint_rate_limit_is_enforced(self, client, monkeypatch, tmp_path):
+        monkeypatch.setattr(
+            api,
+            "LIMITER",
+            TokenBucketLimiter(rate_per_minute=60, burst=1),
+            raising=False,
+        )
+        state_dir = tmp_path / "snn_state"
+        state_dir.mkdir()
+        graph_dir = tmp_path / "memory" / "graph"
+        graph_dir.mkdir(parents=True)
+        (tmp_path / "reasoning_traces").mkdir()
+        (tmp_path / "memory" / "semantic").mkdir(parents=True)
+
+        with (
+            patch("api.BASE", tmp_path),
+            patch("api.STATE_DIR", state_dir),
+            patch("api.GRAPH_DIR", graph_dir),
+        ):
+            first = client.get("/status")
+            second = client.get("/status")
+
+        assert first.status_code == 200
+        assert second.status_code == 429
+        assert second.json()["detail"] == "rate limit exceeded"
 
 
 # ── Status ───────────────────────────────────────────────────────
