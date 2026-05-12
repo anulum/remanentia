@@ -306,5 +306,7 @@ export REMANENTIA_USE_RUST_BM25=1
 
 ## Test Coverage
 
-1,430+ tests, 100% coverage, 43+ dedicated performance tests with budget
-assertions. All benchmarks run in CI and fail if budgets are exceeded.
+Current local full-suite baseline: 2,143 passed, 3 skipped on 2026-05-12.
+The CI coverage job enforces the repository's 100% coverage gate. Performance
+budget tests and benchmark checks should be rerun before publishing new latency
+or throughput numbers.

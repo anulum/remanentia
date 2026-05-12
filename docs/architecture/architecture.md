@@ -23,7 +23,7 @@ pipeline, and MCP server. No LLM required for core operations.
 | `observer.py` | 86 | Filesystem watcher → incremental index updates |
 | `entity_extractor.py` | 73 | GLiNER2 NER + regex fallback, 11 typed relations |
 | `answer_normalizer.py` | 72 | Hedging strip, polarity match, semantic similarity |
-| **Total** | **3,423** | **844 tests, 100% coverage** |
+| **Validation** | **current** | **2,143 passed, 3 skipped in the 2026-05-12 local full-suite run; CI coverage gate set to 100%** |
 
 ## Retrieval Pipeline
 

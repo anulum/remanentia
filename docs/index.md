@@ -61,7 +61,7 @@ Knowledge store (multi-hop graph search) ...... Zettelkasten + prospective queri
 | LongMemEval | 69.0% | 500 | Yes |
 | LOCOMO (no LLM) | 74.7% | 1,986 | No |
 
-1,343 tests, 100% coverage (19 modules, zero lines missing). 7 Rust acceleration crates (up to 14× speedup). Pluggable LLM backend (local/cloud/null).
+Current local full-suite baseline: 2,143 passed, 3 skipped on 2026-05-12. The CI coverage job enforces the repository's 100% coverage gate. 7 Rust acceleration crates (up to 14× speedup). Pluggable LLM backend (local/cloud/null).
 
 ## MCP Server
 

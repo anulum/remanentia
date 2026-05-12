@@ -3,7 +3,7 @@
 ## Committed Result — BM25 + CE rerank + answer extraction + LLM synthesis
 
 **83.1% overall** on 1,986 questions from the LOCOMO multi-session QA dataset.
-Source: [`paper/locomo_results.json`](../../paper/locomo_results.json)
+Source: [`paper/locomo_results.json`](https://github.com/anulum/remanentia/blob/main/paper/locomo_results.json)
 (committed 2026-04-17; 927 s wall-clock end-to-end).
 
 | Category    | Correct / Total | Accuracy |
@@ -62,7 +62,7 @@ Numbers below are from published papers or official documentation. "—" means n
 
 | System | LOCOMO | LongMemEval | LLM-dependent |
 |--------|:------:|:-----------:|:-------------:|
-| Remanentia | 74.7% (no LLM) | 69.0% (committed) | No (optional) |
+| Remanentia | 83.1% (committed, LLM synthesis); 74.7% historic no-LLM | 69.0% (committed) | Optional |
 | Zep/Graphiti | 94.8% (DMR, per their paper) | — | Yes |
 | Hindsight | — | 91.4% (per their paper) | Yes |
 | Mem0 | +26% vs baseline (per their docs) | — | Yes |

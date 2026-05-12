@@ -12,8 +12,8 @@ Contact: www.anulum.li | protoscience@anulum.li
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/anulum/remanentia/badge)](https://securityscorecards.dev/viewer/?uri=github.com/anulum/remanentia)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12340/badge)](https://www.bestpractices.dev/projects/12340)
 [![Version](https://img.shields.io/badge/version-0.3.1-blue)](https://github.com/anulum/remanentia)
-[![Tests](https://img.shields.io/badge/tests-2005_passed-brightgreen)](VALIDATION.md)
-[![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](VALIDATION.md)
+[![Tests](https://img.shields.io/badge/tests-2143_passed-brightgreen)](VALIDATION.md)
+[![Coverage Gate](https://img.shields.io/badge/coverage_gate-100%25-brightgreen)](pyproject.toml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![Rust](https://img.shields.io/badge/engine-Rust-orange)](docs/guides/PERFORMANCE_TUNING.md)
@@ -28,7 +28,7 @@ Contact: www.anulum.li | protoscience@anulum.li
 
 **Persistent AI memory with SNN-orchestrated consolidation, entity graphs, and deep contextual recall.**
 
-> **Active Development** — Remanentia is under intensive development. The core memory engine, BM25+embedding hybrid retrieval, SNN-orchestrated consolidation, temporal reasoning, and the MCP server are fully functional, tested (2,005 passing tests, 100% coverage), and deployable. Rust rustification is complete across all compute/regex modules (13 crates, 54 functions wired). LongMemEval R11 (2026-04-11): 72.2% overall, **temporal-reasoning 65.4%** — target achieved, up from R8 45.9% (+19.5pp). All five recommendations from the R9 follow-up audit implemented (intraday HH:MM, fuzzy inclusive/exclusive durations, question_date anchoring, multi-event proximity tuning, narrow chain resolution). Overall benchmark variance is ~±10 questions per run; single-run changes ≤5 are not statistically significant. APIs may evolve as this work progresses.
+> **Active Development** — Remanentia is under intensive development. The core memory engine, BM25+embedding hybrid retrieval, SNN-orchestrated consolidation, temporal reasoning, and the MCP server are functional, tested (2,143 passing tests in the 2026-05-12 local full-suite run), and deployable. The repository keeps a 100% coverage gate in CI via `pyproject.toml`; regenerate a coverage report before publishing module-level coverage numbers. Rust rustification is complete across all compute/regex modules (13 crates, 54 functions wired). LongMemEval R11 (2026-04-11): 72.2% overall, **temporal-reasoning 65.4%** — target achieved, up from R8 45.9% (+19.5pp). All five recommendations from the R9 follow-up audit implemented (intraday HH:MM, fuzzy inclusive/exclusive durations, question_date anchoring, multi-event proximity tuning, narrow chain resolution). Overall benchmark variance is ~±10 questions per run; single-run changes ≤5 are not statistically significant. APIs may evolve as this work progresses.
 
 BM25+embedding hybrid retrieval with RRF | 11 typed entity relation types | temporal reasoning with date arithmetic | async consolidation | thread-safe MCP server
 
@@ -347,7 +347,9 @@ pip install -e ".[dev]"
 pytest tests/ -q
 ```
 
-2,005 tests, 100% coverage (19 modules, zero lines missing).
+Current local full-suite baseline: 2,143 passed, 3 skipped on 2026-05-12.
+The CI coverage job is configured with `--cov-fail-under=100`; refresh the
+coverage report before publishing exact module-level coverage counts.
 
 ## License
 
