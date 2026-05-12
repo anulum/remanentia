@@ -48,6 +48,14 @@ from api_security import (
     enforce_body_size,
 )
 
+
+def _cors_origins_from_env() -> list[str]:
+    configured = os.environ.get("REMANENTIA_CORS_ORIGINS", "").strip()
+    if not configured:
+        return ["*"]
+    return [origin.strip() for origin in configured.split(",") if origin.strip()]
+
+
 app = FastAPI(
     title="Remanentia",
     description="Persistent AI memory with SNN-orchestrated consolidation",
@@ -56,7 +64,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins_from_env(),
     allow_methods=["*"],
     allow_headers=["*"],
 )

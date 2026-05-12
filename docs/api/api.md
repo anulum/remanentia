@@ -35,10 +35,15 @@ endpoint handlers run:
 | `REMANENTIA_API_BODY_LIMIT_BYTES` | 1048576 | Maximum declared request body size |
 | `REMANENTIA_API_RATE_PER_MINUTE` | 60 | Per-client steady-state request rate |
 | `REMANENTIA_API_RATE_BURST` | 10 | Per-client token-bucket burst |
+| `REMANENTIA_CORS_ORIGINS` | `*` | Comma-separated allowed browser origins |
 
 `GET /health` is excluded from rate limiting so health checks cannot consume
 application request quota. Public vector search is unauthenticated, but still
 uses the body-size and rate-limit gates.
+
+Set `REMANENTIA_CORS_ORIGINS` for browser-exposed deployments, for example
+`https://remanentia.com,https://www.remanentia.com`. Leaving it unset preserves
+the local-development wildcard.
 
 ## Public Vector Search
 

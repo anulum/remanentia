@@ -172,6 +172,22 @@ class TestAPISecurityBoundary:
         assert second.status_code == 429
         assert second.json()["detail"] == "rate limit exceeded"
 
+    def test_default_cors_origin_allows_local_development(self, monkeypatch):
+        monkeypatch.delenv("REMANENTIA_CORS_ORIGINS", raising=False)
+
+        assert api._cors_origins_from_env() == ["*"]
+
+    def test_cors_origins_can_be_scoped_by_environment(self, monkeypatch):
+        monkeypatch.setenv(
+            "REMANENTIA_CORS_ORIGINS",
+            "https://remanentia.com, https://www.remanentia.com",
+        )
+
+        assert api._cors_origins_from_env() == [
+            "https://remanentia.com",
+            "https://www.remanentia.com",
+        ]
+
 
 # ── Status ───────────────────────────────────────────────────────
 
