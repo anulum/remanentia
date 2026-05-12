@@ -23,9 +23,10 @@ from api_security import BearerAuth, TokenBucketLimiter, enforce_body_size
 
 ### `BearerAuth(token: str | None = None)`
 
-Constant-time bearer-token check. On construction, reads
-`REMANENTIA_API_TOKEN` from the environment when no explicit token is
-passed. **Configuration posture is intentionally loud-on-default-missing**:
+Constant-time bearer-token check. Pass an explicit token, or use
+`BearerAuth.from_env()` to read `REMANENTIA_API_TOKEN`, or
+`BearerAuth.from_file(path)` to load a local token file.
+**Configuration posture is intentionally loud-on-default-missing**:
 
 - Token set → every request must carry `Authorization: Bearer <token>`;
   mismatches return `401` and do not leak whether the token was too
@@ -36,8 +37,8 @@ passed. **Configuration posture is intentionally loud-on-default-missing**:
   in operator logs.
 
 ```python
-auth = BearerAuth()                       # reads REMANENTIA_API_TOKEN
-if not auth.check(request.headers.get("Authorization")):
+auth = BearerAuth.from_env()              # reads REMANENTIA_API_TOKEN
+if not auth.check_header(request.headers.get("Authorization")):
     return Response(401)
 ```
 
@@ -80,7 +81,7 @@ enforce_body_size(int(request.headers["content-length"]), 1_048_576)
 - **No third-party deps**: stdlib-only. Adding `api_security` to a
   listener does not change the install footprint.
 - **Never log tokens**: the warning on missing tokens is fixed text;
-  the `check` method returns bool only.
+  the `check_header` method returns bool only.
 
 ## When to use what
 
