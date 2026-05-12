@@ -1300,6 +1300,19 @@ class TestEntityGraphHelpers:
         score = _entity_boost_score("STDP removal was necessary", {"e1", "e2"}, graph)
         assert score > 0.0
 
+    def test_entity_boost_score_uses_typed_relation_labels(self):
+        graph = {
+            "entities": {
+                "e1": {"label": "stdp"},
+                "e2": {"label": "bm25"},
+            },
+            "relations": [{"source": "e1", "target": "e2", "type": "fixed_by"}],
+        }
+
+        score = _entity_boost_score("BM25 retrieval improved after the fix.", {"e1"}, graph)
+
+        assert score >= 0.15
+
     def test_entity_boost_score_no_match(self):
         graph = {
             "entities": {

@@ -172,7 +172,10 @@ are then deduplicated and reranked against the original prompt.
 Entity graph data is cached in-process, keyed by the graph file paths,
 sizes, and mtimes for `entities.jsonl` and `relations.jsonl`. If the
 consolidation pipeline updates either file, the next search reloads the
-graph before applying boosts.
+graph before applying boosts. Typed relation boosts use a precomputed
+entity-neighbor adjacency map, so scoring only visits relations adjacent
+to query entities instead of scanning the full relation list for every
+candidate paragraph.
 
 ## Incremental File Addition
 

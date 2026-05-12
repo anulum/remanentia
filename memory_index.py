@@ -1489,9 +1489,30 @@ def _load_entity_graph() -> dict:
         for line in relations_path.read_text(encoding="utf-8").strip().split("\n"):
             if line.strip():
                 relations.append(json.loads(line))
-    _ENTITY_GRAPH = {"entities": entities, "relations": relations}
+    _ENTITY_GRAPH = {
+        "entities": entities,
+        "relations": relations,
+        "relation_neighbors": _build_relation_neighbors(entities, relations),
+    }
     _ENTITY_GRAPH_SIGNATURE = signature
     return _ENTITY_GRAPH
+
+
+def _build_relation_neighbors(
+    entities: dict[str, dict], relations: list[dict]
+) -> dict[str, list[tuple[str, str, str]]]:
+    neighbors: dict[str, list[tuple[str, str, str]]] = {}
+    for rel in relations:
+        rel_type = str(rel.get("type", "co_occurs"))
+        src = str(rel.get("source", ""))
+        tgt = str(rel.get("target", ""))
+        if not src or not tgt:
+            continue
+        src_label = str(entities.get(src, {}).get("label", src)).lower()
+        tgt_label = str(entities.get(tgt, {}).get("label", tgt)).lower()
+        neighbors.setdefault(src, []).append((tgt, tgt_label, rel_type))
+        neighbors.setdefault(tgt, []).append((src, src_label, rel_type))
+    return neighbors
 
 
 def _query_entity_ids(query: str, graph: dict) -> set[str]:
@@ -1520,13 +1541,17 @@ def _entity_boost_score(para_text: str, query_entities: set[str], graph: dict) -
         label = graph["entities"].get(eid, {}).get("label", eid).lower()
         if label in p_lower:
             boost += 0.1
-    # Extra boost for typed relations between query entities and paragraph entities
-    for rel in graph.get("relations", []):
-        src, tgt = rel.get("source", ""), rel.get("target", "")
-        if rel.get("type", "co_occurs") != "co_occurs":
-            if (src in query_entities and tgt.lower() in p_lower) or (
-                tgt in query_entities and src.lower() in p_lower
-            ):
+    # Extra boost for typed relations between query entities and paragraph entities.
+    relation_neighbors = graph.get("relation_neighbors")
+    if relation_neighbors is None:
+        relation_neighbors = _build_relation_neighbors(
+            graph.get("entities", {}),
+            graph.get("relations", []),
+        )
+        graph["relation_neighbors"] = relation_neighbors
+    for eid in query_entities:
+        for _, neighbor_label, rel_type in relation_neighbors.get(eid, []):
+            if rel_type != "co_occurs" and neighbor_label and neighbor_label in p_lower:
                 boost += 0.15
     return boost
 
