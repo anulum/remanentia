@@ -49,7 +49,10 @@ Private endpoint responses are written as JSONL request metadata to
 `REMANENTIA_API_AUDIT_LOG` to a path to relocate the log, or to `off` to
 disable it. Audit records include method, path, client address, status,
 outcome, and auth-enabled state; request bodies and authorisation headers are
-never recorded.
+never recorded. Set `REMANENTIA_API_AUDIT_MAX_BYTES` to rotate before an
+append would exceed the configured byte cap, and
+`REMANENTIA_API_AUDIT_BACKUPS` to keep numbered backups such as
+`api_audit.jsonl.1`.
 
 Set `REMANENTIA_CORS_ORIGINS` for browser-exposed deployments, for example
 `https://remanentia.com,https://www.remanentia.com`. Leaving it unset preserves

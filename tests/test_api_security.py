@@ -246,6 +246,40 @@ class TestRequestAuditLogger:
 
         assert logger.path is None
 
+    def test_rotates_when_size_cap_would_be_exceeded(self, tmp_path):
+        path = tmp_path / "audit.jsonl"
+        logger = RequestAuditLogger(path, max_bytes=220, backups=2)
+
+        for idx in range(6):
+            logger.record(
+                server="fastapi",
+                method="GET",
+                path=f"/status/{idx}",
+                client="127.0.0.1",
+                status=200,
+                outcome="ok",
+                auth_enabled=True,
+            )
+
+        assert path.exists()
+        assert path.with_name("audit.jsonl.1").exists()
+        assert path.with_name("audit.jsonl.2").exists()
+        assert not path.with_name("audit.jsonl.3").exists()
+        assert path.stat().st_size <= 220
+        assert path.with_name("audit.jsonl.1").stat().st_size <= 220
+
+    def test_from_env_reads_rotation_controls(self, monkeypatch, tmp_path):
+        path = tmp_path / "api_audit.jsonl"
+        monkeypatch.setenv("REMANENTIA_API_AUDIT_LOG", str(path))
+        monkeypatch.setenv("REMANENTIA_API_AUDIT_MAX_BYTES", "4096")
+        monkeypatch.setenv("REMANENTIA_API_AUDIT_BACKUPS", "4")
+
+        logger = RequestAuditLogger.from_env(tmp_path / "fallback.jsonl")
+
+        assert logger.path == path
+        assert logger.max_bytes == 4096
+        assert logger.backups == 4
+
 
 # ── ToolAuditLogger ──────────────────────────────────────────────────
 
@@ -298,6 +332,38 @@ class TestToolAuditLogger:
         logger = ToolAuditLogger.from_env(tmp_path / "mcp_audit.jsonl")
 
         assert logger.path is None
+
+    def test_rotates_when_size_cap_would_be_exceeded(self, tmp_path):
+        path = tmp_path / "mcp_audit.jsonl"
+        logger = ToolAuditLogger(path, max_bytes=240, backups=1)
+
+        for idx in range(5):
+            logger.record(
+                server="mcp",
+                method="tools/call",
+                tool="remanentia_recall",
+                request_id=str(idx),
+                argument_keys=["query", "top_k"],
+                outcome="ok",
+                duration_ms=1.0,
+            )
+
+        assert path.exists()
+        assert path.with_name("mcp_audit.jsonl.1").exists()
+        assert not path.with_name("mcp_audit.jsonl.2").exists()
+        assert path.stat().st_size <= 240
+
+    def test_from_env_reads_rotation_controls(self, monkeypatch, tmp_path):
+        path = tmp_path / "mcp_audit.jsonl"
+        monkeypatch.setenv("REMANENTIA_MCP_AUDIT_LOG", str(path))
+        monkeypatch.setenv("REMANENTIA_MCP_AUDIT_MAX_BYTES", "8192")
+        monkeypatch.setenv("REMANENTIA_MCP_AUDIT_BACKUPS", "3")
+
+        logger = ToolAuditLogger.from_env(tmp_path / "fallback.jsonl")
+
+        assert logger.path == path
+        assert logger.max_bytes == 8192
+        assert logger.backups == 3
 
 
 # ── Defaults sanity ──────────────────────────────────────────────────

@@ -82,7 +82,7 @@ enforce_body_size(int(request.headers["content-length"]), 1_048_576)
 # raises ValueError if too large — wrap in the framework's 413 handler
 ```
 
-### `RequestAuditLogger(path: str | os.PathLike | None)`
+### `RequestAuditLogger(path: str | os.PathLike | None, *, max_bytes=0, backups=0)`
 
 Append-only JSONL audit logger for request metadata. It records routing and
 response fields only: timestamp, server, method, path, client, status,
@@ -103,9 +103,11 @@ audit.record(
 ```
 
 Set `REMANENTIA_API_AUDIT_LOG=off` to disable audit logging, or set it to a
-path to relocate the JSONL file.
+path to relocate the JSONL file. `REMANENTIA_API_AUDIT_MAX_BYTES` enables
+size-capped rotation, and `REMANENTIA_API_AUDIT_BACKUPS` controls how many
+numbered backups are retained. A zero byte cap disables rotation.
 
-### `ToolAuditLogger(path: str | os.PathLike | None)`
+### `ToolAuditLogger(path: str | os.PathLike | None, *, max_bytes=0, backups=0)`
 
 Append-only JSONL audit logger for MCP tool-call metadata. It records the
 server, method, tool name, request id, sorted argument names, outcome,
@@ -127,7 +129,9 @@ audit.record(
 ```
 
 Set `REMANENTIA_MCP_AUDIT_LOG=off` to disable MCP audit logging, or set it to
-a path to relocate the JSONL file.
+a path to relocate the JSONL file. `REMANENTIA_MCP_AUDIT_MAX_BYTES` enables
+size-capped rotation, and `REMANENTIA_MCP_AUDIT_BACKUPS` controls how many
+numbered backups are retained. A zero byte cap disables rotation.
 
 ## Invariants
 
@@ -142,6 +146,9 @@ a path to relocate the JSONL file.
   the `check_header` method returns bool only.
 - **Never log tool arguments**: MCP audit records include argument names
   only, not argument values.
+- **Bounded audit growth when configured**: audit writers rotate before
+  appending a record that would exceed `*_AUDIT_MAX_BYTES`; numbered backups
+  are capped by `*_AUDIT_BACKUPS`.
 
 ## When to use what
 

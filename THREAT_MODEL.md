@@ -58,7 +58,8 @@ peer reaching the HTTP API.
 | T3 concurrent writers tearing files | POSIX `fcntl.flock` + atomic `os.replace` on every memory-store writer | `c0ee8b5` · `file_utils` |
 | T4 legacy pickle loaded | All runtime `pickle.load` sites replaced by a `ValueError` pointing at the one-shot migrator | `9e31575` · see ADR-0002 |
 | T5 tampered release artefact | CycloneDX SBOM + sigstore keyless signatures + SLSA build provenance attached to every GitHub Release | `bacccd6` · `SECURITY.md` § "Verifying a Released Artefact" |
-| MCP tool-call abuse or unexpected write volume | Metadata-only JSONL audit of every `tools/call`, including tool name, request id, sorted argument names, outcome, duration, and exception type without argument values | `api_security.ToolAuditLogger` · `mcp_server` |
+| Audit-log disk growth | Optional byte-capped rotation with bounded numbered backups via `*_AUDIT_MAX_BYTES` and `*_AUDIT_BACKUPS` | `api_security.RequestAuditLogger` · `api_security.ToolAuditLogger` |
+| MCP tool-call abuse or unexpected write volume | Metadata-only JSONL audit of every `tools/call`, including tool name, request id, sorted argument names, outcome, duration, and exception type without argument values; same rotation controls as HTTP audit logs | `api_security.ToolAuditLogger` · `mcp_server` |
 
 ## Residual risk
 

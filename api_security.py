@@ -196,6 +196,69 @@ def retry_after_seconds(rate_per_minute: float) -> str:
     return str(max(1, math.ceil(60.0 / rate_per_minute)))
 
 
+def _disabled_env_value(value: str | None) -> bool:
+    return value is not None and value.strip().lower() in {"", "0", "false", "off", "no"}
+
+
+def _read_int_env(var: str, default: int) -> int:
+    value = os.environ.get(var)
+    if value is None or value.strip() == "":
+        return default
+    parsed = int(value)
+    if parsed < 0:
+        raise ValueError(f"{var} must be non-negative")
+    return parsed
+
+
+class _RotatingJsonlWriter:
+    """Thread-safe append-only JSONL writer with size-capped backups."""
+
+    def __init__(
+        self,
+        path: str | os.PathLike | None,
+        *,
+        max_bytes: int = 0,
+        backups: int = 0,
+    ) -> None:
+        if max_bytes < 0:
+            raise ValueError("max_bytes must be non-negative")
+        if backups < 0:
+            raise ValueError("backups must be non-negative")
+        self.path = Path(path) if path else None
+        self.max_bytes = int(max_bytes)
+        self.backups = int(backups)
+        self._lock = threading.Lock()
+
+    def write_payload(self, payload: dict[str, object]) -> None:
+        if self.path is None:
+            return
+        line = json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
+        encoded_size = len(line.encode("utf-8"))
+        with self._lock:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self._rotate_if_needed(encoded_size)
+            with self.path.open("a", encoding="utf-8") as handle:
+                handle.write(line)
+
+    def _rotate_if_needed(self, incoming_bytes: int) -> None:
+        if self.path is None or self.max_bytes <= 0 or not self.path.exists():
+            return
+        current_size = self.path.stat().st_size
+        if current_size + incoming_bytes <= self.max_bytes:
+            return
+        if self.backups <= 0:
+            self.path.unlink()
+            return
+        oldest = self.path.with_name(f"{self.path.name}.{self.backups}")
+        if oldest.exists():
+            oldest.unlink()
+        for idx in range(self.backups - 1, 0, -1):
+            src = self.path.with_name(f"{self.path.name}.{idx}")
+            if src.exists():
+                src.replace(self.path.with_name(f"{self.path.name}.{idx + 1}"))
+        self.path.replace(self.path.with_name(f"{self.path.name}.1"))
+
+
 class RequestAuditLogger:
     """Append-only JSONL audit logger for API request metadata.
 
@@ -203,9 +266,14 @@ class RequestAuditLogger:
     has no fields for request bodies or authorisation headers.
     """
 
-    def __init__(self, path: str | os.PathLike | None):
-        self.path = Path(path) if path else None
-        self._lock = threading.Lock()
+    def __init__(
+        self,
+        path: str | os.PathLike | None,
+        *,
+        max_bytes: int = 0,
+        backups: int = 0,
+    ):
+        self._writer = _RotatingJsonlWriter(path, max_bytes=max_bytes, backups=backups)
 
     @classmethod
     def from_env(
@@ -213,11 +281,29 @@ class RequestAuditLogger:
         default_path: str | os.PathLike,
         *,
         var: str = "REMANENTIA_API_AUDIT_LOG",
+        max_bytes_var: str = "REMANENTIA_API_AUDIT_MAX_BYTES",
+        backups_var: str = "REMANENTIA_API_AUDIT_BACKUPS",
     ) -> RequestAuditLogger:
         configured = os.environ.get(var)
-        if configured is not None and configured.strip().lower() in {"", "0", "false", "off", "no"}:
+        if _disabled_env_value(configured):
             return cls(None)
-        return cls(configured.strip() if configured else default_path)
+        return cls(
+            configured.strip() if configured else default_path,
+            max_bytes=_read_int_env(max_bytes_var, 0),
+            backups=_read_int_env(backups_var, 0),
+        )
+
+    @property
+    def path(self) -> Path | None:
+        return self._writer.path
+
+    @property
+    def max_bytes(self) -> int:
+        return self._writer.max_bytes
+
+    @property
+    def backups(self) -> int:
+        return self._writer.backups
 
     def record(
         self,
@@ -230,8 +316,6 @@ class RequestAuditLogger:
         outcome: str,
         auth_enabled: bool,
     ) -> None:
-        if self.path is None:
-            return
         payload = {
             "timestamp_unix": time.time(),
             "server": server,
@@ -242,11 +326,7 @@ class RequestAuditLogger:
             "outcome": outcome,
             "auth_enabled": bool(auth_enabled),
         }
-        line = json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
-        with self._lock:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            with self.path.open("a", encoding="utf-8") as handle:
-                handle.write(line)
+        self._writer.write_payload(payload)
 
 
 class ToolAuditLogger:
@@ -257,9 +337,14 @@ class ToolAuditLogger:
     prompts, and credentials cannot land in the audit stream.
     """
 
-    def __init__(self, path: str | os.PathLike | None):
-        self.path = Path(path) if path else None
-        self._lock = threading.Lock()
+    def __init__(
+        self,
+        path: str | os.PathLike | None,
+        *,
+        max_bytes: int = 0,
+        backups: int = 0,
+    ):
+        self._writer = _RotatingJsonlWriter(path, max_bytes=max_bytes, backups=backups)
 
     @classmethod
     def from_env(
@@ -267,11 +352,29 @@ class ToolAuditLogger:
         default_path: str | os.PathLike,
         *,
         var: str = "REMANENTIA_MCP_AUDIT_LOG",
+        max_bytes_var: str = "REMANENTIA_MCP_AUDIT_MAX_BYTES",
+        backups_var: str = "REMANENTIA_MCP_AUDIT_BACKUPS",
     ) -> ToolAuditLogger:
         configured = os.environ.get(var)
-        if configured is not None and configured.strip().lower() in {"", "0", "false", "off", "no"}:
+        if _disabled_env_value(configured):
             return cls(None)
-        return cls(configured.strip() if configured else default_path)
+        return cls(
+            configured.strip() if configured else default_path,
+            max_bytes=_read_int_env(max_bytes_var, 0),
+            backups=_read_int_env(backups_var, 0),
+        )
+
+    @property
+    def path(self) -> Path | None:
+        return self._writer.path
+
+    @property
+    def max_bytes(self) -> int:
+        return self._writer.max_bytes
+
+    @property
+    def backups(self) -> int:
+        return self._writer.backups
 
     def record(
         self,
@@ -285,8 +388,6 @@ class ToolAuditLogger:
         duration_ms: float,
         error_type: str = "",
     ) -> None:
-        if self.path is None:
-            return
         payload = {
             "timestamp_unix": time.time(),
             "server": server,
@@ -299,11 +400,7 @@ class ToolAuditLogger:
         }
         if error_type:
             payload["error_type"] = error_type
-        line = json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
-        with self._lock:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            with self.path.open("a", encoding="utf-8") as handle:
-                handle.write(line)
+        self._writer.write_payload(payload)
 
 
 DEFAULT_BODY_LIMIT = 1 * 1024 * 1024  # 1 MiB

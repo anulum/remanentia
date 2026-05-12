@@ -15,6 +15,10 @@ and exception type when a handler fails. They do not include tool argument
 values, memory content, recall queries, authorisation headers, or request
 bodies.
 
+Set `REMANENTIA_MCP_AUDIT_MAX_BYTES` to rotate before an append would exceed
+the configured byte cap, and `REMANENTIA_MCP_AUDIT_BACKUPS` to keep numbered
+backups such as `mcp_tool_audit.jsonl.1`.
+
 Handler exceptions return a generic JSON-RPC error (`-32000`) and are
 recorded with `outcome="error"` plus the exception class name. Unknown
 tools remain successful JSON-RPC responses for compatibility, but are
