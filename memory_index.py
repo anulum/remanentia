@@ -1415,14 +1415,49 @@ class MemoryIndex:
             # Load embeddings
             emb_data = data.get("embeddings")
             emb_scale = data.get("emb_scale")
-            if data.get("quantized") and emb_data is not None and emb_scale is not None:
-                self.embeddings = (emb_data.astype(np.float32) / 127.0) * emb_scale
-            else:
-                self.embeddings = emb_data
+            self.embeddings = self._validated_loaded_embeddings(
+                emb_data,
+                emb_scale,
+                quantized=bool(data.get("quantized")),
+            )
             self._built = True
             return True
         except Exception:
             return False
+
+    def _validated_loaded_embeddings(
+        self,
+        emb_data: Any,
+        emb_scale: Any,
+        *,
+        quantized: bool,
+    ) -> np.ndarray | None:
+        if emb_data is None:
+            return None
+        try:
+            embeddings = np.asarray(emb_data)
+            if quantized:
+                if emb_scale is None:
+                    return None
+                scale = np.asarray(emb_scale, dtype=np.float32)
+                embeddings = (embeddings.astype(np.float32) / 127.0) * scale
+            else:
+                embeddings = embeddings.astype(np.float32, copy=False)
+        except Exception:
+            log.debug("Loaded embedding sidecar has invalid array data", exc_info=True)
+            return None
+
+        if embeddings.ndim != 2 or embeddings.shape[0] != len(self.paragraph_index):
+            log.debug(
+                "Ignoring embedding sidecar with shape %s for %d paragraphs",
+                embeddings.shape,
+                len(self.paragraph_index),
+            )
+            return None
+        if not np.isfinite(embeddings).all():
+            log.debug("Ignoring embedding sidecar containing non-finite values")
+            return None
+        return embeddings
 
     def _load_index_data(self, path: Path) -> dict | None:
         """Load index data from JSON+gzip (new) or pickle (legacy).
@@ -1450,9 +1485,12 @@ class MemoryIndex:
                 stem = path.stem.replace(".json", "")
                 emb_path = path.with_name(stem + "_embeddings.npz")
                 if emb_path.exists():
-                    emb = np.load(emb_path, allow_pickle=False)
-                    meta["embeddings"] = emb.get("embeddings")
-                    meta["emb_scale"] = emb.get("emb_scale")
+                    try:
+                        with np.load(emb_path, allow_pickle=False) as emb:
+                            meta["embeddings"] = emb.get("embeddings")
+                            meta["emb_scale"] = emb.get("emb_scale")
+                    except Exception:
+                        log.debug("Embedding sidecar load failed: %s", emb_path, exc_info=True)
                 return meta
             except Exception:
                 return None

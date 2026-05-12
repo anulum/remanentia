@@ -831,7 +831,10 @@ class TestSaveLoadEmbeddings:
     def _build_idx(self, tmp_path):
         docs_dir = tmp_path / "docs"
         docs_dir.mkdir()
-        (docs_dir / "a.md").write_text("# Test\n\nContent about BM25 scoring.", encoding="utf-8")
+        (docs_dir / "a.md").write_text(
+            "# Test\n\nContent about BM25 scoring and retrieval quality across persistent memory indexes.",
+            encoding="utf-8",
+        )
         idx = MemoryIndex()
         with patch("memory_index.SOURCES", {"test": docs_dir}):
             with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}):
@@ -890,6 +893,34 @@ class TestSaveLoadEmbeddings:
         assert emb_path.exists()
         idx.save(path)
         assert not emb_path.exists()
+
+    def test_load_drops_stale_embedding_sidecar(self, tmp_path):
+        """A stale companion npz must not attach misaligned vectors."""
+        idx = self._build_idx(tmp_path)
+        path = tmp_path / "idx.gz"
+        idx.save(path, quantize=False)
+        emb_path = path.with_name("idx_embeddings.npz")
+        np.savez_compressed(emb_path, embeddings=np.ones((len(idx.paragraph_index) + 2, 4)))
+
+        idx2 = MemoryIndex()
+
+        assert idx2.load(path) is True
+        assert idx2.embeddings is None
+        assert idx2.search("BM25 scoring", top_k=3)
+
+    def test_load_ignores_corrupt_embedding_sidecar(self, tmp_path):
+        """A corrupt companion npz must not make the sparse index unloadable."""
+        idx = self._build_idx(tmp_path)
+        path = tmp_path / "idx.gz"
+        idx.save(path, quantize=False)
+        emb_path = path.with_name("idx_embeddings.npz")
+        emb_path.write_bytes(b"not a valid npz")
+
+        idx2 = MemoryIndex()
+
+        assert idx2.load(path) is True
+        assert idx2.embeddings is None
+        assert idx2.search("BM25 scoring", top_k=3)
 
     def test_load_nonexistent_path(self, tmp_path):
         """Loading from a path that doesn't exist returns False."""

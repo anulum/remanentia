@@ -180,8 +180,13 @@ rebuilding. Used by the observer for live updates:
 
 ### Index file
 
-`snn_state/memory_index.pkl` — serialised MemoryIndex with quantised
-embeddings (int8, ~4× smaller than float32).
+`snn_state/memory_index.json.gz` — serialized MemoryIndex metadata.
+
+`snn_state/memory_index_embeddings.npz` — optional embedding sidecar,
+quantized to int8 by default (~4× smaller than float32). Loading validates
+that the sidecar is two-dimensional, finite, and row-aligned with the
+paragraph index. If the sidecar is stale or corrupt, the sparse BM25 index
+still loads and embedding rerank is disabled for that process.
 
 ### Hash cache
 
