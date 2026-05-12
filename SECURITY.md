@@ -76,3 +76,8 @@ source distribution and wheel:
          --repo anulum/remanentia
 
 A release that fails any of these checks should not be installed.
+
+Maintainers can run `python tools/check_release_integrity.py` before tagging
+to verify that the tracked release workflow still builds the SBOM, signs and
+locally verifies release artefacts, emits SLSA provenance, and uploads the
+`.sigstore` bundles advertised above.

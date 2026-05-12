@@ -20,6 +20,11 @@ the operator's way to prove we actually did that**.
 
 - [ ] `.github/workflows/release.yml` permissions block contains
       `contents: write`, `id-token: write`, `attestations: write`.
+- [ ] `python tools/check_release_integrity.py` passes. This verifies
+      pinned workflow actions, CycloneDX SBOM generation from the installed
+      release artefact, SHA-256 digest generation, sigstore signing and
+      verification, SLSA provenance, and GitHub Release upload of `.sigstore`
+      bundles.
 - [ ] Action SHAs are pinned (not `@v3`, not `@main`). When bumping,
       fetch the SHA live:
 

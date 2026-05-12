@@ -65,6 +65,9 @@ jobs:
             dist/*.whl
             sbom.cyclonedx.json
             sha256sums.txt
+          verify: true
+          verify-cert-identity: https://github.com/anulum/remanentia/.github/workflows/release.yml@refs/tags/${{ github.ref_name }}
+          verify-oidc-issuer: https://token.actions.githubusercontent.com
           release-signing-artifacts: false
           upload-signing-artifacts: true
 
@@ -86,3 +89,4 @@ jobs:
             dist/*.whl
             sbom.cyclonedx.json
             sha256sums.txt
+            *.sigstore

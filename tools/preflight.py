@@ -74,6 +74,10 @@ def main() -> int:
             [sys.executable, "-m", "pytest", "tests/", "-x", "-q"],
             "pytest (tests)",
         ),
+        (
+            [sys.executable, "tools/check_release_integrity.py"],
+            "release integrity workflow",
+        ),
     ]
 
     # Credential scan: ensure no secrets in tracked files
