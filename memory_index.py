@@ -497,6 +497,50 @@ class MemoryIndex:
             normalize_embeddings=True,
         )
 
+    def _rebuild_sparse_index_from_documents(self):
+        """Rebuild BM25 structures after document-level replacement."""
+        self.paragraph_index = []
+        self.paragraph_tokens = []
+        self.paragraph_token_counts = []
+        self.paragraph_types = []
+
+        df: Counter = Counter()
+        inv: dict[str, list[int]] = {}
+        for doc_idx, doc in enumerate(self.documents):
+            is_code = doc.doc_type == "code" or Path(doc.path).suffix in (
+                ".py",
+                ".rs",
+                ".v",
+                ".ts",
+                ".js",
+            )
+            doc_tokens: set[str] = set()
+            for para_idx, para in enumerate(doc.paragraphs):
+                p_idx = len(self.paragraph_tokens)
+                self.paragraph_index.append((doc_idx, para_idx))
+                p_type = _classify_paragraph(para, is_code=is_code)
+                pq = _generate_prospective_queries(para, doc.name, p_type)
+                token_list = _tokenize(para + " " + " ".join(pq))
+                tokens = set(token_list)
+                doc_tokens.update(tokens)
+                self.paragraph_tokens.append(tokens)
+                self.paragraph_token_counts.append(_token_counts(token_list))
+                self.paragraph_types.append(p_type)
+                for token in tokens:
+                    df[token] += 1
+                    inv.setdefault(token, []).append(p_idx)
+            doc.tokens = doc_tokens
+
+        n_docs = len(self.paragraph_tokens)
+        self._df = dict(df)
+        self._inverted_index = inv
+        self.idf = {token: math.log(1 + n_docs / (1 + count)) for token, count in df.items()}
+        self._para_lengths = np.array([len(t) for t in self.paragraph_tokens], dtype=np.float32)
+        self._avg_dl = float(np.mean(self._para_lengths)) if len(self._para_lengths) > 0 else 1.0
+        self._bm25_weight_index = {}
+        self._bm25_weight_dirty = True
+        self._rust_bm25_dirty = True
+
     def add_file(self, path: Path, source: str = "traces") -> int:
         """Incrementally add a single file to the index. Returns number of paragraphs added."""
         if not self._built:
@@ -513,12 +557,21 @@ class MemoryIndex:
         if not paragraphs:  # pragma: no cover
             return 0
 
+        file_key = str(path)
+        replacing_existing = any(doc.path == file_key for doc in self.documents)
+        if replacing_existing:
+            self.documents = [doc for doc in self.documents if doc.path != file_key]
+            if self.embeddings is not None:
+                self.embeddings = None
+            self._rebuild_sparse_index_from_documents()
+
         doc_date = _parse_date(text, path.name)
         doc = Document(
             name=path.name,
             source=source,
             path=str(path),
             paragraphs=paragraphs,
+            tokens=set(),
             date=doc_date,
             doc_type="code" if is_code else source,
         )
@@ -535,6 +588,7 @@ class MemoryIndex:
             token_list = _tokenize(combined)
             tokens = set(token_list)
             token_counts = _token_counts(token_list)
+            doc.tokens.update(tokens)
             self.paragraph_tokens.append(tokens)
             self.paragraph_token_counts.append(token_counts)
             self.paragraph_types.append(p_type)
@@ -562,8 +616,13 @@ class MemoryIndex:
         self._bm25_weight_index = {}
         self._bm25_weight_dirty = True
 
-        # Compute embeddings for new paragraphs if model is loaded
-        if self._embed_model is not None:  # pragma: no cover
+        self._content_hashes[str(path)] = _hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+        # Compute embeddings if the model is loaded. Replacement invalidates
+        # paragraph positions, so rebuild all embeddings instead of appending.
+        if replacing_existing and self._embed_model is not None:  # pragma: no cover
+            self._compute_embeddings()
+        elif self._embed_model is not None:  # pragma: no cover
             new_texts = [paragraphs[i][:512] for i in range(len(paragraphs))]
             new_embs = self._embed_model.encode(
                 new_texts,

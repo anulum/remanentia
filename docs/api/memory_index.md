@@ -169,10 +169,12 @@ the Python implementation is used (no FFI overhead).
 rebuilding. Used by the observer for live updates:
 
 1. Read and split into paragraphs
-2. Tokenise and compute term frequencies
-3. Update inverted index and IDF
-4. Update paragraph length statistics
-5. Compute embeddings for new paragraphs (if model loaded)
+2. Replace any existing document with the same filesystem path
+3. Tokenise and compute term frequencies
+4. Update inverted index, IDF, and paragraph length statistics
+5. Invalidate cached BM25/Rust state
+6. Compute embeddings for new paragraphs if the model is loaded; if an
+   existing path was replaced, rebuild embeddings or drop the stale matrix
 
 ## Persistence
 

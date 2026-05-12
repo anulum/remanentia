@@ -577,6 +577,52 @@ class TestAddFile:
         results = idx.search("incremental indexing", top_k=3)
         assert any("added.md" in r.name for r in results)
 
+    def test_add_file_replaces_existing_path(self, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        target = docs_dir / "live.md"
+        target.write_text(
+            "# Live Memory\n\nOld retrieval fact about alpha resonance and stale context.",
+            encoding="utf-8",
+        )
+        idx = MemoryIndex()
+        with patch("memory_index.SOURCES", {"test": docs_dir}):
+            with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}):
+                idx.build(use_gpu_embeddings=False, use_gliner=False)
+
+        target.write_text(
+            "# Live Memory\n\nNew retrieval fact about beta resonance and current context.",
+            encoding="utf-8",
+        )
+        added = idx.add_file(target, source="test")
+
+        assert added == 1
+        assert [doc.path for doc in idx.documents].count(str(target)) == 1
+        assert idx.search("beta resonance current", top_k=3)[0].name == "live.md"
+        assert idx.search("alpha stale", top_k=3) == []
+
+    def test_add_file_replacement_drops_stale_embeddings(self, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        target = docs_dir / "live.md"
+        target.write_text(
+            "# Live Memory\n\nOld retrieval fact about alpha resonance and stale context.",
+            encoding="utf-8",
+        )
+        idx = MemoryIndex()
+        with patch("memory_index.SOURCES", {"test": docs_dir}):
+            with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}):
+                idx.build(use_gpu_embeddings=False, use_gliner=False)
+        idx.embeddings = np.ones((len(idx.paragraph_index), 4), dtype=np.float32)
+
+        target.write_text(
+            "# Live Memory\n\nNew retrieval fact about beta resonance and current context.",
+            encoding="utf-8",
+        )
+        idx.add_file(target, source="test")
+
+        assert idx.embeddings is None
+
     def test_add_file_not_built(self, tmp_path):
         idx = MemoryIndex()
         assert idx.add_file(tmp_path / "nope.md") == 0
