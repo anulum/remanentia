@@ -171,6 +171,7 @@ class TestAPISecurityBoundary:
         assert first.status_code == 200
         assert second.status_code == 429
         assert second.json()["detail"] == "rate limit exceeded"
+        assert second.headers["retry-after"] == "1"
 
     def test_default_cors_origin_allows_local_development(self, monkeypatch):
         monkeypatch.delenv("REMANENTIA_CORS_ORIGINS", raising=False)
@@ -187,6 +188,11 @@ class TestAPISecurityBoundary:
             "https://remanentia.com",
             "https://www.remanentia.com",
         ]
+
+    def test_retry_after_ceilings_match_rate_limit(self):
+        assert api._retry_after_seconds(60) == "1"
+        assert api._retry_after_seconds(30) == "2"
+        assert api._retry_after_seconds(7) == "9"
 
 
 # ── Status ───────────────────────────────────────────────────────

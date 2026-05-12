@@ -27,6 +27,7 @@ Endpoints:
 from __future__ import annotations
 
 import json
+import math
 import os
 import sys
 import time
@@ -75,14 +76,20 @@ GRAPH_DIR = BASE / "memory" / "graph"
 VECTOR_WORKER_MAX_AGE_S = 1800
 AUTH = BearerAuth.from_env()
 BODY_LIMIT = int(os.environ.get("REMANENTIA_API_BODY_LIMIT_BYTES", str(DEFAULT_BODY_LIMIT)))
+RATE_PER_MINUTE = float(
+    os.environ.get("REMANENTIA_API_RATE_PER_MINUTE", str(DEFAULT_RATE_PER_MINUTE))
+)
 LIMITER = TokenBucketLimiter(
-    rate_per_minute=float(
-        os.environ.get("REMANENTIA_API_RATE_PER_MINUTE", str(DEFAULT_RATE_PER_MINUTE))
-    ),
+    rate_per_minute=RATE_PER_MINUTE,
     burst=int(os.environ.get("REMANENTIA_API_RATE_BURST", str(DEFAULT_BURST))),
 )
 _AUTH_EXEMPT_PATHS = frozenset({"/health", "/vector/search/public"})
 _RATE_EXEMPT_PATHS = frozenset({"/health"})
+
+
+def _retry_after_seconds(rate_per_minute: float) -> str:
+    """Return a whole-second Retry-After value for one replenished token."""
+    return str(max(1, math.ceil(60.0 / rate_per_minute)))
 
 
 @app.middleware("http")
@@ -97,7 +104,11 @@ async def require_bearer_token(request: Request, call_next):
     if request.url.path not in _RATE_EXEMPT_PATHS:
         client = request.client.host if request.client else "unknown"
         if not LIMITER.allow(client):
-            return JSONResponse({"detail": "rate limit exceeded"}, status_code=429)
+            return JSONResponse(
+                {"detail": "rate limit exceeded"},
+                status_code=429,
+                headers={"Retry-After": _retry_after_seconds(RATE_PER_MINUTE)},
+            )
 
     if request.url.path not in _AUTH_EXEMPT_PATHS and not AUTH.check_header(
         request.headers.get("Authorization")

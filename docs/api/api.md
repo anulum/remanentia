@@ -41,6 +41,9 @@ endpoint handlers run:
 application request quota. Public vector search is unauthenticated, but still
 uses the body-size and rate-limit gates.
 
+Rate-limited responses return `429` with a `Retry-After` header in seconds,
+computed from `REMANENTIA_API_RATE_PER_MINUTE`.
+
 Set `REMANENTIA_CORS_ORIGINS` for browser-exposed deployments, for example
 `https://remanentia.com,https://www.remanentia.com`. Leaving it unset preserves
 the local-development wildcard.
