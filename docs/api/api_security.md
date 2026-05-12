@@ -93,6 +93,8 @@ enforce_body_size(int(request.headers["content-length"]), 1_048_576)
 
 ## See also
 
+- [`api`](api.md) — FastAPI surface that applies bearer auth to private
+  endpoints while keeping health and public vector search open.
 - [`api_server`](api_server.md) — HTTP surface that wires these in.
 - [`mcp_server`](mcp_server.md) — stdio bridge; uses `BearerAuth` when
   transported over a socket.

@@ -15,6 +15,8 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
+import api
+from api_security import BearerAuth
 from api import app
 from vector_index import VectorSearchResult
 
@@ -81,6 +83,55 @@ class TestHealth:
         assert payload["daemon_kind"] == "vector_worker"
         assert payload["legacy_daemon"] == "stale"
         assert payload["vector_worker"] == "alive"
+
+
+# ── Security boundary ──────────────────────────────────────────
+
+
+class TestAPISecurityBoundary:
+    def test_private_endpoint_requires_bearer_token_when_configured(
+        self, client, monkeypatch, tmp_path
+    ):
+        monkeypatch.setattr(
+            api, "AUTH", BearerAuth("secret", warn_on_disabled=False), raising=False
+        )
+        state_dir = tmp_path / "snn_state"
+        state_dir.mkdir()
+        graph_dir = tmp_path / "memory" / "graph"
+        graph_dir.mkdir(parents=True)
+        (tmp_path / "reasoning_traces").mkdir()
+        (tmp_path / "memory" / "semantic").mkdir(parents=True)
+
+        with (
+            patch("api.BASE", tmp_path),
+            patch("api.STATE_DIR", state_dir),
+            patch("api.GRAPH_DIR", graph_dir),
+        ):
+            resp = client.get("/status")
+
+        assert resp.status_code == 401
+        assert resp.json()["detail"] == "authentication required"
+
+    def test_private_endpoint_accepts_matching_bearer_token(self, client, monkeypatch, tmp_path):
+        monkeypatch.setattr(
+            api, "AUTH", BearerAuth("secret", warn_on_disabled=False), raising=False
+        )
+        state_dir = tmp_path / "snn_state"
+        state_dir.mkdir()
+        graph_dir = tmp_path / "memory" / "graph"
+        graph_dir.mkdir(parents=True)
+        (tmp_path / "reasoning_traces").mkdir()
+        (tmp_path / "memory" / "semantic").mkdir(parents=True)
+
+        with (
+            patch("api.BASE", tmp_path),
+            patch("api.STATE_DIR", state_dir),
+            patch("api.GRAPH_DIR", graph_dir),
+        ):
+            resp = client.get("/status", headers={"Authorization": "Bearer secret"})
+
+        assert resp.status_code == 200
+        assert resp.json()["episodic_traces"] == 0
 
 
 # ── Status ───────────────────────────────────────────────────────

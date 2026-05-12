@@ -34,9 +34,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+
+from api_security import BearerAuth
 
 app = FastAPI(
     title="Remanentia",
@@ -55,6 +58,18 @@ BASE = Path(__file__).parent
 STATE_DIR = BASE / "snn_state"
 GRAPH_DIR = BASE / "memory" / "graph"
 VECTOR_WORKER_MAX_AGE_S = 1800
+AUTH = BearerAuth.from_env()
+_AUTH_EXEMPT_PATHS = frozenset({"/health", "/vector/search/public"})
+
+
+@app.middleware("http")
+async def require_bearer_token(request: Request, call_next):
+    """Require bearer auth for private FastAPI endpoints when configured."""
+    if request.url.path not in _AUTH_EXEMPT_PATHS and not AUTH.check_header(
+        request.headers.get("Authorization")
+    ):
+        return JSONResponse({"detail": "authentication required"}, status_code=401)
+    return await call_next(request)
 
 
 class RecallRequest(BaseModel):

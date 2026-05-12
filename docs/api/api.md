@@ -11,6 +11,20 @@ Contact: www.anulum.li | protoscience@anulum.li
 
 FastAPI surface for Remanentia.
 
+## Authentication
+
+Set `REMANENTIA_API_TOKEN` in production. When the token is set, every
+private endpoint must send `Authorization: Bearer <token>` or the server
+returns `401`.
+
+The intentionally public endpoints are:
+
+- `GET /health`
+- `POST /vector/search/public`
+
+Unset tokens keep local development open, but the server emits the
+standard `api_security` warning so operators can see that auth is disabled.
+
 ## Public Vector Search
 
 `POST /vector/search/public` exposes the public-safe vector result view.
