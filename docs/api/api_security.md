@@ -1,7 +1,8 @@
 # api_security
 
-Authentication, rate limiting, and request-size guards for every
-Remanentia network surface (HTTP API, MCP server, future WebSocket).
+Authentication, rate limiting, request-size guards, and metadata-only
+audit logging for every Remanentia network surface (HTTP API, MCP
+server, future WebSocket).
 
 ## Purpose
 
@@ -11,9 +12,10 @@ the port, leaks private memories through search, and lets a single
 abusive client exhaust memory via unbounded request bodies.
 
 `api_security` is the shared defence layer behind every listener.
-Four orthogonal primitives — bearer auth, token-bucket rate limiting,
-body-size enforcement, and append-only request audit logging — so a caller
-composes exactly the guarantees it needs without pulling in a framework.
+Five orthogonal primitives — bearer auth, token-bucket rate limiting,
+body-size enforcement, append-only request audit logging, and append-only
+MCP tool-call audit logging — so a caller composes exactly the guarantees it
+needs without pulling in a framework.
 
 ## Public surface
 
@@ -21,6 +23,7 @@ composes exactly the guarantees it needs without pulling in a framework.
 from api_security import (
     BearerAuth,
     RequestAuditLogger,
+    ToolAuditLogger,
     TokenBucketLimiter,
     enforce_body_size,
 )
@@ -102,6 +105,30 @@ audit.record(
 Set `REMANENTIA_API_AUDIT_LOG=off` to disable audit logging, or set it to a
 path to relocate the JSONL file.
 
+### `ToolAuditLogger(path: str | os.PathLike | None)`
+
+Append-only JSONL audit logger for MCP tool-call metadata. It records the
+server, method, tool name, request id, sorted argument names, outcome,
+duration, and exception type when present. It deliberately stores argument
+names only, never argument values, so `remanentia_remember` content and
+`remanentia_recall` queries do not leak into audit files.
+
+```python
+audit = ToolAuditLogger.from_env(".coordination/runtime/mcp_tool_audit.jsonl")
+audit.record(
+    server="mcp",
+    method="tools/call",
+    tool="remanentia_recall",
+    request_id="42",
+    argument_keys=["query", "top_k"],
+    outcome="ok",
+    duration_ms=3.4,
+)
+```
+
+Set `REMANENTIA_MCP_AUDIT_LOG=off` to disable MCP audit logging, or set it to
+a path to relocate the JSONL file.
+
 ## Invariants
 
 - **Constant-time token compare**: `hmac.compare_digest` throughout,
@@ -113,6 +140,8 @@ path to relocate the JSONL file.
   listener does not change the install footprint.
 - **Never log tokens**: the warning on missing tokens is fixed text;
   the `check_header` method returns bool only.
+- **Never log tool arguments**: MCP audit records include argument names
+  only, not argument values.
 
 ## When to use what
 
@@ -122,6 +151,7 @@ path to relocate the JSONL file.
 | Single client hammering `/search` | `TokenBucketLimiter` |
 | Attacker streaming a 10 GB body to OOM the host | `enforce_body_size` |
 | Operational traceability for private API endpoints | `RequestAuditLogger` |
+| Operational traceability for MCP tool use | `ToolAuditLogger` |
 | Layered defence for a public endpoint | body-size and rate-limit gates, plus audit where appropriate |
 
 ## See also

@@ -65,6 +65,14 @@ def _runtime_attr(module_name: str, attr_name: str) -> Any:
     return getattr(import_module(module_name), attr_name)
 
 
+def _default_mcp_audit_logger():
+    ToolAuditLogger = _runtime_attr("api_security", "ToolAuditLogger")
+    return ToolAuditLogger.from_env(BASE / ".coordination" / "runtime" / "mcp_tool_audit.jsonl")
+
+
+MCP_AUDIT_LOGGER = _default_mcp_audit_logger()
+
+
 def _get_knowledge_store():
     global _KNOWLEDGE_STORE
     if _KNOWLEDGE_STORE is not None:
@@ -497,38 +505,65 @@ def handle_request(request: dict) -> dict | None:
         return {"jsonrpc": "2.0", "id": rid, "result": {"tools": TOOLS}}
 
     if method == "tools/call":
+        started = _time.monotonic()
         params = request.get("params", {})
         tool_name = params.get("name", "")
         args = params.get("arguments", {})
+        if not isinstance(args, dict):
+            args = {}
+        outcome = "ok"
+        error_type = ""
 
-        if tool_name == "remanentia_recall":
-            text = handle_recall(
-                args.get("query", ""),
-                args.get("top_k", 3),
-                project=args.get("project", ""),
-                after=args.get("after", ""),
-                before=args.get("before", ""),
-                llm=args.get("llm", False),
-            )
-        elif tool_name == "remanentia_remember":
-            text = handle_remember(
-                args.get("content", ""),
-                args.get("type", "context"),
-                args.get("project", ""),
-                args.get("trigger", ""),
-            )
-        elif tool_name == "remanentia_status":
-            text = handle_status()
-        elif tool_name == "remanentia_graph":
-            text = handle_graph(args.get("entity", ""), args.get("top", 10))
-        else:
-            text = f"Unknown tool: {tool_name}"
+        try:
+            if tool_name == "remanentia_recall":
+                text = handle_recall(
+                    args.get("query", ""),
+                    args.get("top_k", 3),
+                    project=args.get("project", ""),
+                    after=args.get("after", ""),
+                    before=args.get("before", ""),
+                    llm=args.get("llm", False),
+                )
+            elif tool_name == "remanentia_remember":
+                text = handle_remember(
+                    args.get("content", ""),
+                    args.get("type", "context"),
+                    args.get("project", ""),
+                    args.get("trigger", ""),
+                )
+            elif tool_name == "remanentia_status":
+                text = handle_status()
+            elif tool_name == "remanentia_graph":
+                text = handle_graph(args.get("entity", ""), args.get("top", 10))
+            else:
+                outcome = "unknown_tool"
+                text = f"Unknown tool: {tool_name}"
 
-        return {
-            "jsonrpc": "2.0",
-            "id": rid,
-            "result": {"content": [{"type": "text", "text": text}]},
-        }
+            return {
+                "jsonrpc": "2.0",
+                "id": rid,
+                "result": {"content": [{"type": "text", "text": text}]},
+            }
+        except Exception as exc:
+            outcome = "error"
+            error_type = type(exc).__name__
+            log.exception("MCP tool call failed: %s", tool_name)
+            return {
+                "jsonrpc": "2.0",
+                "id": rid,
+                "error": {"code": -32000, "message": "Tool call failed"},
+            }
+        finally:
+            MCP_AUDIT_LOGGER.record(
+                server="mcp",
+                method="tools/call",
+                tool=tool_name,
+                request_id=str(rid),
+                argument_keys=list(args),
+                outcome=outcome,
+                duration_ms=(_time.monotonic() - started) * 1000.0,
+                error_type=error_type,
+            )
 
     if method == "notifications/initialized":
         return None

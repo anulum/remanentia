@@ -20,6 +20,7 @@ from api_security import (
     DEFAULT_RATE_PER_MINUTE,
     BearerAuth,
     RequestAuditLogger,
+    ToolAuditLogger,
     TokenBucketLimiter,
     enforce_body_size,
 )
@@ -242,6 +243,59 @@ class TestRequestAuditLogger:
         monkeypatch.setenv("REMANENTIA_API_AUDIT_LOG", "off")
 
         logger = RequestAuditLogger.from_env(tmp_path / "audit.jsonl")
+
+        assert logger.path is None
+
+
+# ── ToolAuditLogger ──────────────────────────────────────────────────
+
+
+class TestToolAuditLogger:
+    def test_disabled_logger_writes_nothing(self, tmp_path):
+        path = tmp_path / "mcp_audit.jsonl"
+        logger = ToolAuditLogger(None)
+        logger.record(
+            server="mcp",
+            method="tools/call",
+            tool="remanentia_recall",
+            request_id="1",
+            argument_keys=["query"],
+            outcome="ok",
+            duration_ms=1.0,
+        )
+
+        assert not path.exists()
+
+    def test_record_writes_argument_names_without_values(self, tmp_path):
+        path = tmp_path / "nested" / "mcp_audit.jsonl"
+        logger = ToolAuditLogger(path)
+        logger.record(
+            server="mcp",
+            method="tools/call",
+            tool="remanentia_remember",
+            request_id="abc",
+            argument_keys=["content", "project"],
+            outcome="ok",
+            duration_ms=2.5,
+        )
+
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        assert payload["server"] == "mcp"
+        assert payload["method"] == "tools/call"
+        assert payload["tool"] == "remanentia_remember"
+        assert payload["request_id"] == "abc"
+        assert payload["argument_keys"] == ["content", "project"]
+        assert payload["outcome"] == "ok"
+        assert payload["duration_ms"] == 2.5
+        assert "timestamp_unix" in payload
+        assert "arguments" not in payload
+        assert "authorization" not in payload
+        assert "body" not in payload
+
+    def test_from_env_can_disable_logging(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("REMANENTIA_MCP_AUDIT_LOG", "off")
+
+        logger = ToolAuditLogger.from_env(tmp_path / "mcp_audit.jsonl")
 
         assert logger.path is None
 

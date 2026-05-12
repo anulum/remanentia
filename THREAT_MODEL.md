@@ -58,6 +58,7 @@ peer reaching the HTTP API.
 | T3 concurrent writers tearing files | POSIX `fcntl.flock` + atomic `os.replace` on every memory-store writer | `c0ee8b5` · `file_utils` |
 | T4 legacy pickle loaded | All runtime `pickle.load` sites replaced by a `ValueError` pointing at the one-shot migrator | `9e31575` · see ADR-0002 |
 | T5 tampered release artefact | CycloneDX SBOM + sigstore keyless signatures + SLSA build provenance attached to every GitHub Release | `bacccd6` · `SECURITY.md` § "Verifying a Released Artefact" |
+| MCP tool-call abuse or unexpected write volume | Metadata-only JSONL audit of every `tools/call`, including tool name, request id, sorted argument names, outcome, duration, and exception type without argument values | `api_security.ToolAuditLogger` · `mcp_server` |
 
 ## Residual risk
 
@@ -69,10 +70,6 @@ peer reaching the HTTP API.
   stored memory can influence subsequent LLM output. No defence
   beyond the PII redactor today; a grounding / guardrail layer is
   on the roadmap (P2-13 Director-AI Guarded tier).
-- **No audit log of MCP tool calls.** An operator cannot tell after
-  the fact whether `remanentia_remember` was called once or a
-  million times. Tracked as a follow-up item in the comprehensive
-  gap audit.
 
 ## Out of scope
 
@@ -82,4 +79,4 @@ peer reaching the HTTP API.
   choose their own token; no key derivation is performed.
 
 This document is updated whenever a new control ships. Last change:
-2026-04-17.
+2026-05-12.

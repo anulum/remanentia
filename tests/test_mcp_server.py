@@ -8,7 +8,10 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import patch
+
+import pytest
 
 
 from mcp_server import (
@@ -19,6 +22,14 @@ from mcp_server import (
     handle_request,
     handle_status,
 )
+
+
+@pytest.fixture(autouse=True)
+def _disable_default_mcp_audit(monkeypatch):
+    import mcp_server
+    from api_security import ToolAuditLogger
+
+    monkeypatch.setattr(mcp_server, "MCP_AUDIT_LOGGER", ToolAuditLogger(None))
 
 
 # ── Tool definitions ─────────────────────────────────────────────
@@ -226,6 +237,7 @@ class TestHandleRememberConsolidation:
             patch("mcp_server._RECALL_INDEX", None),
             patch("mcp_server._UNIFIED_INDEX", None),
             patch("mcp_server._consolidation_last", 0.0),
+            patch("mcp_server._CONSOLIDATION_DEBOUNCE_S", 0.0),
             patch("consolidation_engine.consolidate", mock_consolidate),
         ):
             handle_remember("Test consolidation trigger", "finding", "test")
@@ -494,6 +506,88 @@ class TestMCPProtocolRemember:
         mock.assert_called_once()
         call_kwargs = mock.call_args
         assert call_kwargs[1].get("llm") is True
+
+
+# ── MCP tool-call audit ────────────────────────────────────────
+
+
+class TestMCPToolAudit:
+    def test_tool_call_writes_metadata_only_record(self, tmp_path):
+        from api_security import ToolAuditLogger
+
+        audit_path = tmp_path / "mcp_audit.jsonl"
+        req = {
+            "jsonrpc": "2.0",
+            "id": "audit-1",
+            "method": "tools/call",
+            "params": {
+                "name": "remanentia_recall",
+                "arguments": {
+                    "query": "private memory text",
+                    "top_k": 1,
+                    "llm": False,
+                },
+            },
+        }
+        with (
+            patch("mcp_server.MCP_AUDIT_LOGGER", ToolAuditLogger(audit_path)),
+            patch("mcp_server.handle_recall", return_value="result"),
+        ):
+            resp = handle_request(req)
+        assert resp["result"]["content"][0]["text"] == "result"
+
+        record = json.loads(audit_path.read_text(encoding="utf-8"))
+        assert record["server"] == "mcp"
+        assert record["method"] == "tools/call"
+        assert record["tool"] == "remanentia_recall"
+        assert record["request_id"] == "audit-1"
+        assert record["outcome"] == "ok"
+        assert record["argument_keys"] == ["llm", "query", "top_k"]
+        assert "private memory text" not in audit_path.read_text(encoding="utf-8")
+        assert "arguments" not in record
+        assert "authorization" not in record
+
+    def test_unknown_tool_writes_audit_record(self, tmp_path):
+        from api_security import ToolAuditLogger
+
+        audit_path = tmp_path / "mcp_audit.jsonl"
+        req = {
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": "tools/call",
+            "params": {"name": "nonexistent_tool", "arguments": {"content": "do not log"}},
+        }
+        with patch("mcp_server.MCP_AUDIT_LOGGER", ToolAuditLogger(audit_path)):
+            handle_request(req)
+
+        record = json.loads(audit_path.read_text(encoding="utf-8"))
+        assert record["tool"] == "nonexistent_tool"
+        assert record["outcome"] == "unknown_tool"
+        assert record["argument_keys"] == ["content"]
+        assert "do not log" not in audit_path.read_text(encoding="utf-8")
+
+    def test_tool_exception_returns_error_and_writes_audit_record(self, tmp_path):
+        from api_security import ToolAuditLogger
+
+        audit_path = tmp_path / "mcp_audit.jsonl"
+        req = {
+            "jsonrpc": "2.0",
+            "id": "status-fail",
+            "method": "tools/call",
+            "params": {"name": "remanentia_status", "arguments": {}},
+        }
+        with (
+            patch("mcp_server.MCP_AUDIT_LOGGER", ToolAuditLogger(audit_path)),
+            patch("mcp_server.handle_status", side_effect=RuntimeError("sensitive detail")),
+        ):
+            resp = handle_request(req)
+
+        assert resp["error"]["code"] == -32000
+        assert "sensitive detail" not in resp["error"]["message"]
+        record = json.loads(audit_path.read_text(encoding="utf-8"))
+        assert record["tool"] == "remanentia_status"
+        assert record["outcome"] == "error"
+        assert record["error_type"] == "RuntimeError"
 
 
 # ── Pipeline integration ─────────────────────────────────────

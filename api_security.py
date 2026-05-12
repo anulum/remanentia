@@ -85,7 +85,8 @@ class BearerAuth:
         header must be exactly ``Bearer <token>`` and the comparison is
         constant-time to avoid timing oracles.
         """
-        if not self.enabled:
+        token = self._token
+        if token is None:
             return True
         if not authorization_header:
             return False
@@ -95,7 +96,7 @@ class BearerAuth:
         candidate = authorization_header[len(prefix) :]
         if not candidate:
             return False
-        return hmac.compare_digest(candidate, self._token)
+        return hmac.compare_digest(candidate, token)
 
 
 class TokenBucketLimiter:
@@ -241,6 +242,63 @@ class RequestAuditLogger:
             "outcome": outcome,
             "auth_enabled": bool(auth_enabled),
         }
+        line = json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
+        with self._lock:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            with self.path.open("a", encoding="utf-8") as handle:
+                handle.write(line)
+
+
+class ToolAuditLogger:
+    """Append-only JSONL audit logger for MCP tool-call metadata.
+
+    The logger records invocation metadata only. It deliberately stores
+    argument names instead of argument values so user memory content,
+    prompts, and credentials cannot land in the audit stream.
+    """
+
+    def __init__(self, path: str | os.PathLike | None):
+        self.path = Path(path) if path else None
+        self._lock = threading.Lock()
+
+    @classmethod
+    def from_env(
+        cls,
+        default_path: str | os.PathLike,
+        *,
+        var: str = "REMANENTIA_MCP_AUDIT_LOG",
+    ) -> ToolAuditLogger:
+        configured = os.environ.get(var)
+        if configured is not None and configured.strip().lower() in {"", "0", "false", "off", "no"}:
+            return cls(None)
+        return cls(configured.strip() if configured else default_path)
+
+    def record(
+        self,
+        *,
+        server: str,
+        method: str,
+        tool: str,
+        request_id: str,
+        argument_keys: list[str],
+        outcome: str,
+        duration_ms: float,
+        error_type: str = "",
+    ) -> None:
+        if self.path is None:
+            return
+        payload = {
+            "timestamp_unix": time.time(),
+            "server": server,
+            "method": method,
+            "tool": tool,
+            "request_id": request_id,
+            "argument_keys": sorted(argument_keys),
+            "outcome": outcome,
+            "duration_ms": round(float(duration_ms), 3),
+        }
+        if error_type:
+            payload["error_type"] = error_type
         line = json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
         with self._lock:
             self.path.parent.mkdir(parents=True, exist_ok=True)
