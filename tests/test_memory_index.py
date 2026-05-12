@@ -689,6 +689,57 @@ class TestRustBm25Gate:
         assert idx._should_use_rust_bm25() is False
 
 
+class TestPythonBm25Weights:
+    def test_precomputed_weights_match_python_bm25_scores(self):
+        idx = MemoryIndex()
+        idx._built = True
+        idx.paragraph_index = [(0, 0), (0, 1)]
+        idx.paragraph_tokens = [
+            {"alpha", "beta"},
+            {"alpha", "gamma"},
+        ]
+        idx.paragraph_token_counts = [
+            {"alpha": 2, "beta": 1},
+            {"alpha": 1, "gamma": 1},
+        ]
+        idx._inverted_index = {
+            "alpha": [0, 1],
+            "beta": [0],
+            "gamma": [1],
+        }
+        idx.idf = {
+            "alpha": 1.25,
+            "beta": 1.75,
+            "gamma": 1.75,
+        }
+        idx._para_lengths = np.array([2, 2], dtype=np.float32)
+        idx._avg_dl = 2.0
+
+        weights = idx._build_bm25_weight_index()
+        scores = idx._search_python_bm25({"alpha", "beta"}, set())
+
+        alpha_weights = dict(weights["alpha"])
+        beta_weights = dict(weights["beta"])
+        assert scores[0] == alpha_weights[0] + beta_weights[0]
+        assert scores[1] == alpha_weights[1]
+
+    def test_python_bm25_weight_cache_respects_filters(self):
+        idx = MemoryIndex()
+        idx._built = True
+        idx.paragraph_index = [(0, 0), (0, 1)]
+        idx.paragraph_tokens = [{"alpha"}, {"alpha"}]
+        idx.paragraph_token_counts = [{"alpha": 1}, {"alpha": 1}]
+        idx._inverted_index = {"alpha": [0, 1]}
+        idx.idf = {"alpha": 1.0}
+        idx._para_lengths = np.array([1, 1], dtype=np.float32)
+        idx._avg_dl = 1.0
+
+        scores = idx._search_python_bm25({"alpha"}, {0})
+
+        assert 0 not in scores
+        assert scores[1] > 0
+
+
 # ── Dataclass sanity ─────────────────────────────────────────────
 
 
@@ -2088,8 +2139,8 @@ class TestContentHashIndexing:
             memory_index.SOURCES = original_sources
             memory_index.HASH_CACHE_PATH = original_hash_path
 
-    def test_second_build_skips_unchanged(self, tmp_path):
-        """Second build with same files should have hash_hits > 0."""
+    def test_second_build_preserves_unchanged_documents(self, tmp_path):
+        """Unchanged files must remain searchable after a fresh incremental build."""
         import memory_index
 
         original_sources = memory_index.SOURCES
@@ -2110,12 +2161,14 @@ class TestContentHashIndexing:
             stats1 = idx.build(use_gpu_embeddings=False, use_gliner=False, incremental=True)
             assert stats1["hash_misses"] >= 1
 
-            # Second build — file unchanged, should be skipped
+            # Second build records the unchanged file as a hash hit, but the
+            # fresh in-memory index must still contain searchable documents.
             idx2 = memory_index.MemoryIndex()
             stats2 = idx2.build(use_gpu_embeddings=False, use_gliner=False, incremental=True)
             assert stats2["hash_hits"] >= 1
-            # No files indexed on second build (all hits)
-            assert stats2["documents"] == 0
+            assert stats2["documents"] >= 1
+            results = idx2.search("retrieval accuracy", top_k=3)
+            assert any(result.name == "test.md" for result in results)
         finally:
             memory_index.SOURCES = original_sources
             memory_index.HASH_CACHE_PATH = original_hash_path

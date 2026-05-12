@@ -241,17 +241,17 @@ Total: 6.6 ms (50 conversation turns → ranked context + stored notes)
 | Mode | Time | When to use |
 |------|------|-------------|
 | Full build (no embeddings) | 5-8s | First build or structure change |
-| Incremental build (no changes) | 0.3-0.5s | Subsequent builds (hash skip) |
-| Incremental build (10 changed) | 1-2s | After editing a few files |
+| Incremental build (no changes) | 5-8s | Complete rebuild with hash-hit statistics |
+| `add_file()` update | <5ms | Already-loaded index plus one changed file |
 | Full build (with embeddings) | 10-30s | When using embedding rerank |
 
 ### Content-hash incremental builds
 
 ```python
 idx = MemoryIndex()
-stats = idx.build(incremental=True)  # skips unchanged files
-# stats["hash_hits"]   → files skipped
-# stats["hash_misses"] → files (re-)indexed
+stats = idx.build(incremental=True)
+# stats["hash_hits"]   → files unchanged since the previous snapshot
+# stats["hash_misses"] → files new or changed since the previous snapshot
 ```
 
 ## Query Latency

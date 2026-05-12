@@ -11,10 +11,11 @@ research documents, handovers), builds a BM25 inverted index with TF-IDF
 scoring, and optionally adds GPU-accelerated embedding reranking via
 sentence-transformers and cross-encoder models.
 
-In v0.4, the index gained **content-hash incremental builds** inspired
-by memsearch (Zilliz): files whose SHA-256 hash has not changed since
-the last build are skipped entirely, reducing rebuild time by 50-90% on
-large corpora.
+The index tracks SHA-256 content hashes for rebuild observability and
+watcher-driven update decisions. `build(incremental=True)` reports
+unchanged files as hash hits while still materializing a complete
+searchable in-memory index; use `add_file()` on an already-loaded index
+for true single-file incremental updates.
 
 ## Architecture
 
@@ -27,7 +28,7 @@ SOURCES (18 directories)
     ├── For each source file:
     │     ├── Read text
     │     ├── SHA-256 hash
-    │     ├── Skip if hash unchanged (hash_hit)
+    │     ├── Record unchanged file as hash_hit
     │     ├── Split into paragraphs (_split_paragraphs)
     │     ├── Classify paragraph type (_classify_paragraph)
     │     ├── Generate prospective queries
@@ -59,12 +60,14 @@ compared against the stored hash from the previous build:
 ```
 File read → SHA-256(content) → compare with stored hash
     │
-    ├── Match → skip file (hash_hit)
-    └── Mismatch / new → index file (hash_miss)
+    ├── Match → record hash_hit
+    └── Mismatch / new → record hash_miss
 ```
 
 After the build completes, all hashes are saved to
-`snn_state/content_hashes.json` for the next build.
+`snn_state/content_hashes.json` for the next build. The file is always
+indexed during a fresh `build()` so a hash hit cannot erase memory from
+the current process.
 
 ### Hash cache format
 
@@ -81,19 +84,16 @@ The build return value includes hash statistics:
 
 ```python
 stats = idx.build(incremental=True)
-# stats["hash_hits"]   → files skipped (unchanged)
-# stats["hash_misses"] → files indexed (new or changed)
+# stats["hash_hits"]   → files unchanged since the previous hash snapshot
+# stats["hash_misses"] → files new or changed since the previous snapshot
 ```
 
 ### Performance impact
 
-| Corpus size | Full build | Incremental (no changes) | Speedup |
-|-------------|-----------|-------------------------|---------|
-| 100 files | 0.5s | 0.05s | 10× |
-| 1,000 files | 5.0s | 0.3s | 17× |
-| 15,000 paragraphs | 8.0s | 0.5s | 16× |
-
 The hash check itself costs ~0.01ms per file (SHA-256 of in-memory string).
+Search latency is reduced by a lazy Python BM25 term-weight cache, which
+precomputes each posting's normalized BM25 contribution once per index
+version and reuses it across repeated queries.
 
 ### Disabling incremental builds
 
@@ -193,7 +193,7 @@ Measured on the project-workspace corpus (15,938 paragraphs, 1,217 documents):
 | Operation | Time | Budget |
 |-----------|------|--------|
 | Full build (no embeddings) | 5-8s | 30s |
-| Incremental build (no changes) | 0.3-0.5s | 5s |
+| Incremental build (no changes) | 5-8s | 30s |
 | BM25 search (warm) | <10ms | 50ms |
 | BM25 + cross-encoder rerank | 50-200ms | 500ms |
 | `add_file()` single file | <5ms | 50ms |
@@ -244,11 +244,11 @@ from memory_index import MemoryIndex
 
 idx = MemoryIndex()
 
-# Incremental build (skips unchanged files)
+# Incremental build with hash-hit statistics
 stats = idx.build(use_gpu_embeddings=False, incremental=True)
 print(f"Indexed {stats['documents']} docs, "
-      f"skipped {stats['hash_hits']} unchanged, "
-      f"processed {stats['hash_misses']} new/changed")
+      f"unchanged {stats['hash_hits']}, "
+      f"new/changed {stats['hash_misses']}")
 
 # Search
 results = idx.search("what did we decide about authentication", top_k=5)
@@ -271,8 +271,8 @@ idx2.load()
 Tests in `tests/test_memory_index.py` (relevant to new features):
 
 - **Hash cache**: save/load roundtrip, nonexistent path, corrupt JSON
-- **Incremental build**: first build (all misses), second build (all hits),
-  changed file detected, non-incremental ignores cache
+- **Incremental build**: first build (all misses), second build preserves
+  searchable unchanged documents, changed file detected, non-incremental ignores cache
 - **Build stats**: hash_hits and hash_misses in return value
 
 Plus all existing tests for BM25, search, reranking, incremental add,

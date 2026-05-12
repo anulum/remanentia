@@ -269,6 +269,8 @@ class MemoryIndex:
         self.idf: dict[str, float] = {}
         self._df: dict[str, int] = {}  # document frequency counts for incremental IDF
         self._inverted_index: dict[str, list[int]] = {}  # token → paragraph indices
+        self._bm25_weight_index: dict[str, list[tuple[int, float]]] = {}
+        self._bm25_weight_dirty = True
         self.embeddings: np.ndarray | None = None
         self._built = False
         self._embed_model = None
@@ -297,13 +299,21 @@ class MemoryIndex:
 
         When *incremental* is True and a hash cache exists, files whose
         SHA-256 content hash has not changed since the last build are
-        skipped entirely.  This can reduce rebuild time by 50-90% on
-        large corpora where most files are unchanged.
+        reported as hash hits. The build still materializes a complete
+        in-memory index; callers that need a true partial update should use
+        :meth:`add_file` against an already-loaded index.
         """
         t0 = time.monotonic()
         self.documents = []
         self.paragraph_index = []
         self.paragraph_tokens = []
+        self.paragraph_token_counts = []
+        self.paragraph_types = []
+        self.idf = {}
+        self._df = {}
+        self._inverted_index = {}
+        self._bm25_weight_index = {}
+        self._bm25_weight_dirty = True
         self.all_entities: list[dict] = []
         self.all_relations: list[dict] = []
 
@@ -340,8 +350,8 @@ class MemoryIndex:
                 new_hashes[file_key] = content_hash
                 if incremental and file_key in old_hashes and old_hashes[file_key] == content_hash:
                     self._hash_hits += 1
-                    continue
-                self._hash_misses += 1
+                else:
+                    self._hash_misses += 1
 
                 is_code = f.suffix in (".py", ".rs", ".v", ".ts", ".js")
                 paragraphs = _split_paragraphs(text, is_code=is_code)
@@ -409,6 +419,8 @@ class MemoryIndex:
         self.idf = {t: math.log(1 + n_docs / (1 + count)) for t, count in df.items()}
         self._para_lengths = np.array([len(t) for t in self.paragraph_tokens], dtype=np.float32)
         self._avg_dl = float(np.mean(self._para_lengths)) if len(self._para_lengths) > 0 else 1.0
+        self._bm25_weight_index = {}
+        self._bm25_weight_dirty = True
         self._rust_bm25_dirty = True
 
         # GPU embeddings if available
@@ -529,10 +541,12 @@ class MemoryIndex:
             n_total = len(self.paragraph_tokens)
             for t in tokens:
                 self._df[t] = self._df.get(t, 0) + 1
-                self.idf[t] = math.log(1 + n_total / (1 + self._df[t]))
                 if t not in self._inverted_index:
                     self._inverted_index[t] = []
                 self._inverted_index[t].append(p_idx)
+
+        n_total = len(self.paragraph_tokens)
+        self.idf = {t: math.log(1 + n_total / (1 + count)) for t, count in self._df.items()}
 
         # Update para_lengths array
         new_lengths = np.array(
@@ -545,6 +559,8 @@ class MemoryIndex:
             else new_lengths
         )
         self._avg_dl = float(np.mean(self._para_lengths)) if len(self._para_lengths) > 0 else 1.0
+        self._bm25_weight_index = {}
+        self._bm25_weight_dirty = True
 
         # Compute embeddings for new paragraphs if model is loaded
         if self._embed_model is not None:  # pragma: no cover
@@ -1091,6 +1107,50 @@ class MemoryIndex:
         return results
 
     def _search_python_bm25(self, q_tokens: set[str], filtered_out: set[int]) -> dict[int, float]:
+        if self._bm25_weight_dirty:
+            self._build_bm25_weight_index()
+
+        weight_index = self._bm25_weight_index
+        if weight_index:
+            candidate_scores: dict[int, float] = {}
+            for qt in q_tokens:
+                for para_idx, weight in weight_index.get(qt, ()):
+                    if para_idx in filtered_out:
+                        continue
+                    candidate_scores[para_idx] = candidate_scores.get(para_idx, 0.0) + weight
+            return candidate_scores
+
+        return self._score_python_bm25_uncached(q_tokens, filtered_out)
+
+    def _build_bm25_weight_index(self) -> dict[str, list[tuple[int, float]]]:
+        k1, b = 1.5, 0.75
+        avg_dl = self._avg_dl if self._avg_dl > 0 else 1.0
+        para_lengths = self._para_lengths
+        token_counts = self.paragraph_token_counts
+        weight_index: dict[str, list[tuple[int, float]]] = {}
+
+        for token, posting in self._inverted_index.items():
+            idf_val = self.idf.get(token, 0.0)
+            if idf_val == 0:
+                continue
+            weighted_posting: list[tuple[int, float]] = []
+            for para_idx in posting:
+                if para_idx >= len(para_lengths):
+                    continue
+                tf = token_counts[para_idx].get(token, 1) if para_idx < len(token_counts) else 1
+                dl_ratio = float(para_lengths[para_idx]) / avg_dl
+                weight = idf_val * tf * (k1 + 1) / (tf + k1 * (1 - b + b * dl_ratio))
+                weighted_posting.append((para_idx, weight))
+            if weighted_posting:
+                weight_index[token] = weighted_posting
+
+        self._bm25_weight_index = weight_index
+        self._bm25_weight_dirty = False
+        return weight_index
+
+    def _score_python_bm25_uncached(
+        self, q_tokens: set[str], filtered_out: set[int]
+    ) -> dict[int, float]:
         k1, b = 1.5, 0.75
         avg_dl = self._avg_dl if self._avg_dl > 0 else 1.0
         candidate_scores: dict[int, float] = {}
@@ -1289,6 +1349,8 @@ class MemoryIndex:
             self._avg_dl = (
                 float(np.mean(self._para_lengths)) if len(self._para_lengths) > 0 else 1.0
             )
+            self._bm25_weight_index = {}
+            self._bm25_weight_dirty = True
             self._rust_bm25_dirty = True
             self._rust_bm25 = None
             # Load embeddings

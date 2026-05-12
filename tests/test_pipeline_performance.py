@@ -1030,8 +1030,8 @@ class TestEndToEndNewFeatures:
             for k, v in orig.items():
                 setattr(ce, k, v)
 
-    def test_e2e_incremental_index_skips_unchanged(self, tmp_path):
-        """Second build with same files should show hash_hits > 0."""
+    def test_e2e_incremental_index_preserves_unchanged(self, tmp_path):
+        """Second build should report hash hits and keep unchanged files searchable."""
         import memory_index
 
         orig_sources = memory_index.SOURCES
@@ -1055,7 +1055,9 @@ class TestEndToEndNewFeatures:
             idx2 = memory_index.MemoryIndex()
             s2 = idx2.build(use_gpu_embeddings=False, use_gliner=False, incremental=True)
             assert s2["hash_hits"] >= 1
-            assert s2["documents"] == 0  # all skipped
+            assert s2["documents"] >= 1
+            results = idx2.search("BM25 retrieval accuracy", top_k=3)
+            assert any(result.name == "doc.md" for result in results)
         finally:
             memory_index.SOURCES = orig_sources
             memory_index.HASH_CACHE_PATH = orig_hash
