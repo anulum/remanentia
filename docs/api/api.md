@@ -44,6 +44,13 @@ uses the body-size and rate-limit gates.
 Rate-limited responses return `429` with a `Retry-After` header in seconds,
 computed from `REMANENTIA_API_RATE_PER_MINUTE`.
 
+Private endpoint responses are written as JSONL request metadata to
+`.coordination/runtime/api_audit.jsonl` by default. Set
+`REMANENTIA_API_AUDIT_LOG` to a path to relocate the log, or to `off` to
+disable it. Audit records include method, path, client address, status,
+outcome, and auth-enabled state; request bodies and authorisation headers are
+never recorded.
+
 Set `REMANENTIA_CORS_ORIGINS` for browser-exposed deployments, for example
 `https://remanentia.com,https://www.remanentia.com`. Leaving it unset preserves
 the local-development wildcard.

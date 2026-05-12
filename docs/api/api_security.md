@@ -11,14 +11,19 @@ the port, leaks private memories through search, and lets a single
 abusive client exhaust memory via unbounded request bodies.
 
 `api_security` is the shared defence layer behind every listener.
-Three orthogonal primitives — bearer auth, token-bucket rate limiting,
-body-size enforcement — so a caller composes exactly the guarantees
-it needs without pulling in a framework.
+Four orthogonal primitives — bearer auth, token-bucket rate limiting,
+body-size enforcement, and append-only request audit logging — so a caller
+composes exactly the guarantees it needs without pulling in a framework.
 
 ## Public surface
 
 ```python
-from api_security import BearerAuth, TokenBucketLimiter, enforce_body_size
+from api_security import (
+    BearerAuth,
+    RequestAuditLogger,
+    TokenBucketLimiter,
+    enforce_body_size,
+)
 ```
 
 ### `BearerAuth(token: str | None = None)`
@@ -74,6 +79,29 @@ enforce_body_size(int(request.headers["content-length"]), 1_048_576)
 # raises ValueError if too large — wrap in the framework's 413 handler
 ```
 
+### `RequestAuditLogger(path: str | os.PathLike | None)`
+
+Append-only JSONL audit logger for request metadata. It records routing and
+response fields only: timestamp, server, method, path, client, status,
+outcome, and whether auth was enabled. It does not accept request bodies or
+authorisation headers as inputs.
+
+```python
+audit = RequestAuditLogger.from_env(".coordination/runtime/api_audit.jsonl")
+audit.record(
+    server="fastapi",
+    method="GET",
+    path="/status",
+    client=request.client.host,
+    status=200,
+    outcome="ok",
+    auth_enabled=auth.enabled,
+)
+```
+
+Set `REMANENTIA_API_AUDIT_LOG=off` to disable audit logging, or set it to a
+path to relocate the JSONL file.
+
 ## Invariants
 
 - **Constant-time token compare**: `hmac.compare_digest` throughout,
@@ -93,7 +121,8 @@ enforce_body_size(int(request.headers["content-length"]), 1_048_576)
 | Unauthorised writes from the internet | `BearerAuth` |
 | Single client hammering `/search` | `TokenBucketLimiter` |
 | Attacker streaming a 10 GB body to OOM the host | `enforce_body_size` |
-| Layered defence for a public endpoint | all three, in that order |
+| Operational traceability for private API endpoints | `RequestAuditLogger` |
+| Layered defence for a public endpoint | body-size and rate-limit gates, plus audit where appropriate |
 
 ## See also
 

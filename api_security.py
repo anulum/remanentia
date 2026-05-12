@@ -27,11 +27,13 @@ while making "I forgot to set the token" visible in operator logs.
 from __future__ import annotations
 
 import hmac
+import json
 import math
 import os
 import sys
 import threading
 import time
+from pathlib import Path
 
 
 class BearerAuth:
@@ -191,6 +193,59 @@ def retry_after_seconds(rate_per_minute: float) -> str:
     if rate_per_minute <= 0:
         raise ValueError("rate_per_minute must be positive")
     return str(max(1, math.ceil(60.0 / rate_per_minute)))
+
+
+class RequestAuditLogger:
+    """Append-only JSONL audit logger for API request metadata.
+
+    The logger records routing and response metadata only. It deliberately
+    has no fields for request bodies or authorisation headers.
+    """
+
+    def __init__(self, path: str | os.PathLike | None):
+        self.path = Path(path) if path else None
+        self._lock = threading.Lock()
+
+    @classmethod
+    def from_env(
+        cls,
+        default_path: str | os.PathLike,
+        *,
+        var: str = "REMANENTIA_API_AUDIT_LOG",
+    ) -> RequestAuditLogger:
+        configured = os.environ.get(var)
+        if configured is not None and configured.strip().lower() in {"", "0", "false", "off", "no"}:
+            return cls(None)
+        return cls(configured.strip() if configured else default_path)
+
+    def record(
+        self,
+        *,
+        server: str,
+        method: str,
+        path: str,
+        client: str,
+        status: int,
+        outcome: str,
+        auth_enabled: bool,
+    ) -> None:
+        if self.path is None:
+            return
+        payload = {
+            "timestamp_unix": time.time(),
+            "server": server,
+            "method": method,
+            "path": path,
+            "client": client,
+            "status": int(status),
+            "outcome": outcome,
+            "auth_enabled": bool(auth_enabled),
+        }
+        line = json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
+        with self._lock:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            with self.path.open("a", encoding="utf-8") as handle:
+                handle.write(line)
 
 
 DEFAULT_BODY_LIMIT = 1 * 1024 * 1024  # 1 MiB

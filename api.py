@@ -44,6 +44,7 @@ from api_security import (
     DEFAULT_BURST,
     DEFAULT_RATE_PER_MINUTE,
     BearerAuth,
+    RequestAuditLogger,
     TokenBucketLimiter,
     enforce_body_size,
 )
@@ -82,8 +83,27 @@ LIMITER = TokenBucketLimiter(
     rate_per_minute=RATE_PER_MINUTE,
     burst=int(os.environ.get("REMANENTIA_API_RATE_BURST", str(DEFAULT_BURST))),
 )
+AUDIT_LOGGER = RequestAuditLogger.from_env(BASE / ".coordination" / "runtime" / "api_audit.jsonl")
 _AUTH_EXEMPT_PATHS = frozenset({"/health", "/vector/search/public"})
 _RATE_EXEMPT_PATHS = frozenset({"/health"})
+
+
+def _is_private_path(path: str) -> bool:
+    return path not in _AUTH_EXEMPT_PATHS
+
+
+def _audit_request(request: Request, status: int, outcome: str) -> None:
+    if not _is_private_path(request.url.path):
+        return
+    AUDIT_LOGGER.record(
+        server="fastapi",
+        method=request.method,
+        path=request.url.path,
+        client=request.client.host if request.client else "unknown",
+        status=status,
+        outcome=outcome,
+        auth_enabled=AUTH.enabled,
+    )
 
 
 @app.middleware("http")
@@ -93,11 +113,13 @@ async def require_bearer_token(request: Request, call_next):
         try:
             enforce_body_size(int(request.headers.get("content-length", "0")), BODY_LIMIT)
         except ValueError as exc:
+            _audit_request(request, 413, "body_too_large")
             return JSONResponse({"detail": str(exc)}, status_code=413)
 
     if request.url.path not in _RATE_EXEMPT_PATHS:
         client = request.client.host if request.client else "unknown"
         if not LIMITER.allow(client):
+            _audit_request(request, 429, "rate_limited")
             return JSONResponse(
                 {"detail": "rate limit exceeded"},
                 status_code=429,
@@ -107,8 +129,15 @@ async def require_bearer_token(request: Request, call_next):
     if request.url.path not in _AUTH_EXEMPT_PATHS and not AUTH.check_header(
         request.headers.get("Authorization")
     ):
+        _audit_request(request, 401, "authentication_required")
         return JSONResponse({"detail": "authentication required"}, status_code=401)
-    return await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception:
+        _audit_request(request, 500, "exception")
+        raise
+    _audit_request(request, response.status_code, "ok" if response.status_code < 400 else "error")
+    return response
 
 
 class RecallRequest(BaseModel):

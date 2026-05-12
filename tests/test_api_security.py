@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 
@@ -18,6 +19,7 @@ from api_security import (
     DEFAULT_BURST,
     DEFAULT_RATE_PER_MINUTE,
     BearerAuth,
+    RequestAuditLogger,
     TokenBucketLimiter,
     enforce_body_size,
 )
@@ -189,6 +191,59 @@ class TestEnforceBodySize:
 
     def test_zero_body_ok(self):
         enforce_body_size(0, 1024)
+
+
+# ── RequestAuditLogger ────────────────────────────────────────────────
+
+
+class TestRequestAuditLogger:
+    def test_disabled_logger_writes_nothing(self, tmp_path):
+        path = tmp_path / "audit.jsonl"
+        logger = RequestAuditLogger(None)
+        logger.record(
+            server="fastapi",
+            method="GET",
+            path="/status",
+            client="127.0.0.1",
+            status=200,
+            outcome="ok",
+            auth_enabled=True,
+        )
+
+        assert not path.exists()
+
+    def test_record_writes_jsonl_without_sensitive_fields(self, tmp_path):
+        path = tmp_path / "nested" / "audit.jsonl"
+        logger = RequestAuditLogger(path)
+
+        logger.record(
+            server="fastapi",
+            method="GET",
+            path="/status",
+            client="127.0.0.1",
+            status=401,
+            outcome="authentication_required",
+            auth_enabled=True,
+        )
+
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        assert payload["server"] == "fastapi"
+        assert payload["method"] == "GET"
+        assert payload["path"] == "/status"
+        assert payload["client"] == "127.0.0.1"
+        assert payload["status"] == 401
+        assert payload["outcome"] == "authentication_required"
+        assert payload["auth_enabled"] is True
+        assert "timestamp_unix" in payload
+        assert "authorization" not in payload
+        assert "body" not in payload
+
+    def test_from_env_can_disable_logging(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("REMANENTIA_API_AUDIT_LOG", "off")
+
+        logger = RequestAuditLogger.from_env(tmp_path / "audit.jsonl")
+
+        assert logger.path is None
 
 
 # ── Defaults sanity ──────────────────────────────────────────────────

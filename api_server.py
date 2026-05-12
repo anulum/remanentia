@@ -42,6 +42,7 @@ from api_security import (  # noqa: E402 — path inserted above
     DEFAULT_BURST,
     DEFAULT_RATE_PER_MINUTE,
     BearerAuth,
+    RequestAuditLogger,
     TokenBucketLimiter,
     enforce_body_size,
 )
@@ -271,6 +272,7 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
         self, data: dict, status: int = 200, *, headers: dict[str, str] | None = None
     ):
         body = json.dumps(data, ensure_ascii=False, default=_json_default).encode("utf-8")
+        self._audit_response(status)
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
@@ -279,6 +281,21 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
             self.send_header(name, value)
         self.end_headers()
         self.wfile.write(body)
+
+    def _audit_response(self, status: int) -> None:
+        if self.path in _PUBLIC_PATHS:
+            return
+        logger: RequestAuditLogger = self.server.audit_logger  # type: ignore[attr-defined]
+        auth: BearerAuth = self.server.auth  # type: ignore[attr-defined]
+        logger.record(
+            server="stdlib",
+            method=self.command,
+            path=self.path,
+            client=self._client_ip(),
+            status=status,
+            outcome="ok" if status < 400 else "error",
+            auth_enabled=auth.enabled,
+        )
 
     def log_message(self, fmt, *args):
         # Quiet logging — only errors
@@ -311,6 +328,9 @@ def build_server(
         )
     )
     server.body_limit = body_limit  # type: ignore[attr-defined]
+    server.audit_logger = RequestAuditLogger.from_env(  # type: ignore[attr-defined]
+        BASE / ".coordination" / "runtime" / "api_server_audit.jsonl"
+    )
     return server
 
 

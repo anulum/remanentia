@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 import api
-from api_security import BearerAuth, TokenBucketLimiter
+from api_security import BearerAuth, RequestAuditLogger, TokenBucketLimiter
 from api import app
 from vector_index import VectorSearchResult
 
@@ -38,6 +38,7 @@ def client(monkeypatch):
         TokenBucketLimiter(rate_per_minute=60000, burst=1000),
         raising=False,
     )
+    monkeypatch.setattr(api, "AUDIT_LOGGER", RequestAuditLogger(None), raising=False)
     return TestClient(app)
 
 
@@ -193,6 +194,42 @@ class TestAPISecurityBoundary:
         assert TokenBucketLimiter(rate_per_minute=60).retry_after_seconds() == "1"
         assert TokenBucketLimiter(rate_per_minute=30).retry_after_seconds() == "2"
         assert TokenBucketLimiter(rate_per_minute=7).retry_after_seconds() == "9"
+
+    def test_private_endpoint_writes_audit_record(self, client, monkeypatch, tmp_path):
+        audit_path = tmp_path / "audit.jsonl"
+        monkeypatch.setattr(api, "AUDIT_LOGGER", RequestAuditLogger(audit_path), raising=False)
+        state_dir = tmp_path / "snn_state"
+        state_dir.mkdir()
+        graph_dir = tmp_path / "memory" / "graph"
+        graph_dir.mkdir(parents=True)
+        (tmp_path / "reasoning_traces").mkdir()
+        (tmp_path / "memory" / "semantic").mkdir(parents=True)
+
+        with (
+            patch("api.BASE", tmp_path),
+            patch("api.STATE_DIR", state_dir),
+            patch("api.GRAPH_DIR", graph_dir),
+        ):
+            resp = client.get("/status")
+
+        payload = json.loads(audit_path.read_text(encoding="utf-8"))
+        assert resp.status_code == 200
+        assert payload["server"] == "fastapi"
+        assert payload["method"] == "GET"
+        assert payload["path"] == "/status"
+        assert payload["status"] == 200
+        assert payload["outcome"] == "ok"
+        assert "authorization" not in payload
+        assert "body" not in payload
+
+    def test_public_health_does_not_write_audit_record(self, client, monkeypatch, tmp_path):
+        audit_path = tmp_path / "audit.jsonl"
+        monkeypatch.setattr(api, "AUDIT_LOGGER", RequestAuditLogger(audit_path), raising=False)
+
+        resp = client.get("/health")
+
+        assert resp.status_code == 200
+        assert not audit_path.exists()
 
 
 # ── Status ───────────────────────────────────────────────────────
