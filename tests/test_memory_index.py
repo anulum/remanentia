@@ -1563,6 +1563,45 @@ class TestMultiHopSearch:
         finally:
             memory_index.SOURCES = original_sources
 
+    def test_multihop_subqueries_use_full_search_stack(self):
+        idx = MemoryIndex()
+        idx._built = True
+        idx.documents = [
+            Document(
+                name="compiled_facts.md",
+                source="compiled",
+                path="/tmp/compiled_facts.md",
+                paragraphs=["Compiled fact memory is operational."],
+            )
+        ]
+        idx.paragraph_index = [(0, 0)]
+        idx.paragraph_tokens = [{"compiled", "fact", "memory"}]
+        idx.paragraph_token_counts = [{"compiled": 1, "fact": 1, "memory": 1}]
+        idx.paragraph_types = ["finding"]
+        idx.idf = {"compiled": 1.0, "fact": 1.0, "memory": 1.0}
+        idx._df = {"compiled": 1, "fact": 1, "memory": 1}
+        idx._inverted_index = {"compiled": [0], "fact": [0], "memory": [0]}
+        idx._para_lengths = np.array([3], dtype=np.float32)
+        idx._avg_dl = 3.0
+
+        compiled_hit = SearchResult(
+            name="compiled.fact",
+            source="compiled",
+            score=1009.0,
+            snippet="Melanie works as a software engineer and likes chess.",
+            answer="Melanie likes chess.",
+            confidence=1.0,
+        )
+
+        with patch("memory_index._compiled_fact_results", return_value=[compiled_hit]):
+            results = idx.search(
+                "What hobbies does the person who works as a software engineer have?",
+                top_k=3,
+            )
+
+        assert results
+        assert results[0].name == "compiled.fact"
+
 
 # ── Rust BM25 paths ──────────────────────────────────────────────
 

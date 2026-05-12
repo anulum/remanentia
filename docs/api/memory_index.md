@@ -163,6 +163,12 @@ the Python implementation is used (no FFI overhead).
 | counting | BM25 + temporal range |
 | identity | BM25 + entity exact match |
 
+Multi-hop prompts are decomposed into bounded sub-queries, and each
+sub-query runs through the same non-decomposing search stack as a normal
+query: compiled facts, filters, BM25/Rust scoring, graph boosts,
+embedding rerank, answer extraction, and confidence handling. Results
+are then deduplicated and reranked against the original prompt.
+
 ## Incremental File Addition
 
 `add_file(path, source)` adds a single file to the running index without

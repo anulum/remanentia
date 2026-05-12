@@ -725,6 +725,7 @@ class MemoryIndex:
         before: str = "",
         doc_type: str = "",
         use_llm: bool = False,
+        _decompose: bool = True,
     ) -> list[SearchResult]:
         """Search with query intelligence, optional structured filters.
 
@@ -738,7 +739,7 @@ class MemoryIndex:
             self.build()
 
         # Query decomposition: break multi-hop queries into sub-queries
-        sub_queries = _decompose_query(query)
+        sub_queries = _decompose_query(query) if _decompose else None
         if sub_queries:
             return self._multi_hop_search(
                 query,
@@ -1081,11 +1082,7 @@ class MemoryIndex:
         """Run sub-queries, combine results, re-rank by original query."""
         all_results: dict[str, SearchResult] = {}
         for sq in sub_queries:
-            results = (
-                self.search.__wrapped__(self, sq, top_k=top_k, **kwargs)
-                if hasattr(self.search, "__wrapped__")
-                else self._single_query_search(sq, top_k=top_k, **kwargs)
-            )
+            results = self.search(sq, top_k=top_k, _decompose=False, **kwargs)
             for r in results:
                 if r.name not in all_results or r.score > all_results[r.name].score:
                     all_results[r.name] = r
@@ -1111,59 +1108,16 @@ class MemoryIndex:
         use_llm: bool = False,
     ) -> list[SearchResult]:
         """Single query search (no decomposition). Used by _multi_hop_search."""
-        q_tokens = set(_tokenize(query))
-        if not q_tokens:
-            return []
-
-        _filtered_out = set()
-        if project or after or before or doc_type:
-            for i in range(len(self.paragraph_index)):
-                doc_idx = self.paragraph_index[i][0]
-                if doc_idx >= len(self.documents):  # pragma: no cover — corrupt index guard
-                    continue
-                doc = self.documents[doc_idx]
-                if (
-                    project
-                    and project.lower() not in doc.source.lower()
-                    and project.lower() not in doc.name.lower()
-                ):
-                    _filtered_out.add(i)
-                if after and doc.date and doc.date < after:
-                    _filtered_out.add(i)
-                if before and doc.date and doc.date > before:
-                    _filtered_out.add(i)
-                if doc_type and doc_type.lower() not in doc.doc_type.lower():
-                    _filtered_out.add(i)
-
-        candidate_scores = self._search_python_bm25(q_tokens, _filtered_out)
-        scores = sorted(candidate_scores.items(), key=lambda x: -x[1])[: top_k * 3]
-
-        _answer_extractor = self._get_answer_extractor()
-        seen_docs = set()
-        results = []
-        for para_idx, score in scores:
-            doc_idx, p_idx = self.paragraph_index[para_idx]
-            if doc_idx in seen_docs:
-                continue
-            seen_docs.add(doc_idx)
-            doc = self.documents[doc_idx]
-            snippet = doc.paragraphs[p_idx][:300]
-            answer = ""
-            if _answer_extractor:
-                answer = _answer_extractor(query, doc.paragraphs[p_idx]) or ""
-            results.append(
-                SearchResult(
-                    name=doc.name,
-                    source=doc.source,
-                    score=round(score, 4),
-                    snippet=snippet,
-                    paragraph_idx=p_idx,
-                    answer=answer,
-                )
-            )
-            if len(results) >= top_k:
-                break
-        return results
+        return self.search(
+            query,
+            top_k=top_k,
+            project=project,
+            after=after,
+            before=before,
+            doc_type=doc_type,
+            use_llm=use_llm,
+            _decompose=False,
+        )
 
     def _search_python_bm25(self, q_tokens: set[str], filtered_out: set[int]) -> dict[int, float]:
         if self._bm25_weight_dirty:
