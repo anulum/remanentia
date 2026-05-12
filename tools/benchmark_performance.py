@@ -281,12 +281,14 @@ def hardware_snapshot() -> dict[str, Any]:
 
 def render_markdown(report: dict[str, Any]) -> str:
     """Render a compact internal Markdown benchmark report."""
+    reproducibility = report.get("reproducibility") or {}
     lines = [
         "# Remanentia Performance Benchmark",
         "",
         f"- Timestamp: `{report['timestamp_utc']}`",
         f"- Base URL: `{report['base_url']}`",
         f"- Query: `{report['query']}`",
+        f"- Seed: `{reproducibility.get('seed', '')}`",
         "",
         "## Hardware Context",
         "",
@@ -369,18 +371,36 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--api-iterations", type=int, default=20)
     parser.add_argument("--refresh-iterations", type=int, default=5)
     parser.add_argument("--direct-recall-iterations", type=int, default=10)
+    parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--skip-direct-recall", action="store_true")
     parser.add_argument("--include-pytest", action="store_true")
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+def build_report(args: argparse.Namespace) -> dict[str, Any]:
+    """Build a complete benchmark report from parsed CLI arguments."""
+    sys.path.insert(0, str(REPO_ROOT))
+    from seed_utils import build_reproducibility_manifest, seed_everything, seed_from_env
+
+    seed = seed_everything(args.seed if args.seed is not None else seed_from_env())
     report: dict[str, Any] = {
         "timestamp_utc": datetime.now(UTC).isoformat(),
         "base_url": args.base_url,
         "query": args.query,
+        "reproducibility": build_reproducibility_manifest(
+            seed=seed,
+            workload="performance_benchmark",
+            parameters={
+                "api_iterations": args.api_iterations,
+                "refresh_iterations": args.refresh_iterations,
+                "direct_recall_iterations": args.direct_recall_iterations,
+                "skip_direct_recall": bool(args.skip_direct_recall),
+                "include_pytest": bool(args.include_pytest),
+                "embedding_model": args.embedding_model,
+                "embedding_base_url": args.embedding_base_url,
+            },
+        ),
         "hardware": hardware_snapshot(),
         "api": api_benchmarks(args.base_url, args.query, args.api_iterations),
         "vector": vector_benchmarks(
@@ -391,6 +411,12 @@ def main(argv: list[str] | None = None) -> int:
         report["direct_recall"] = direct_recall_benchmark(args.query, args.direct_recall_iterations)
     if args.include_pytest:
         report["pytest_performance"] = pytest_performance_benchmark()
+    return report
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    report = build_report(args)
 
     paths = write_reports(report, args.out_dir)
     print(json.dumps({"report_paths": paths, "summary": summarise_public_report(report)}, indent=2))

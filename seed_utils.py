@@ -35,8 +35,13 @@ it in the banner and write it to result files.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+import importlib.metadata
 import os
+import platform
 import random
+import sys
+from typing import Any
 
 
 def seed_everything(seed: int | None = None, *, torch_cuda_deterministic: bool = False) -> int:
@@ -105,3 +110,35 @@ def seed_from_env(var: str = "REMANENTIA_SEED", default: int = 42) -> int:
         return int(raw)
     except ValueError:
         return default
+
+
+def build_reproducibility_manifest(
+    *,
+    seed: int,
+    workload: str,
+    parameters: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Return JSON-serialisable runtime metadata for scientific reports.
+
+    The manifest records the deterministic seed, workload label,
+    operator-selected parameters, Python/platform context, and versions of
+    core numerical packages when installed. It intentionally excludes host
+    names, usernames, paths, environment variables, and credentials.
+    """
+
+    packages: dict[str, str] = {}
+    for name in ("numpy", "scipy", "torch", "scikit-learn", "sentence-transformers"):
+        try:
+            packages[name] = importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            packages[name] = ""
+
+    return {
+        "timestamp_utc": datetime.now(UTC).isoformat(),
+        "seed": int(seed),
+        "workload": workload,
+        "parameters": parameters or {},
+        "python_version": sys.version.split()[0],
+        "platform": platform.platform(),
+        "packages": packages,
+    }

@@ -14,7 +14,7 @@ import random
 import numpy as np
 import pytest
 
-from seed_utils import seed_everything, seed_from_env
+from seed_utils import build_reproducibility_manifest, seed_everything, seed_from_env
 
 
 class TestSeedEverything:
@@ -82,6 +82,37 @@ class TestSeedFromEnv:
         monkeypatch.setenv("MY_SEED", "11")
         monkeypatch.delenv("REMANENTIA_SEED", raising=False)
         assert seed_from_env("MY_SEED") == 11
+
+
+class TestReproducibilityManifest:
+    def test_manifest_records_seed_workload_and_parameters(self):
+        manifest = build_reproducibility_manifest(
+            seed=123,
+            workload="performance_benchmark",
+            parameters={"iterations": 5, "query": "memory"},
+        )
+
+        assert manifest["seed"] == 123
+        assert manifest["workload"] == "performance_benchmark"
+        assert manifest["parameters"] == {"iterations": 5, "query": "memory"}
+        assert manifest["python_version"]
+        assert manifest["platform"]
+        assert "packages" in manifest
+        assert manifest["packages"]["numpy"] == np.__version__
+        assert "timestamp_utc" in manifest
+
+    def test_manifest_is_json_serialisable(self):
+        manifest = build_reproducibility_manifest(
+            seed=42,
+            workload="unit-test",
+            parameters={"alpha": 0.1},
+        )
+
+        import json
+
+        encoded = json.dumps(manifest, sort_keys=True)
+        assert '"seed": 42' in encoded
+        assert '"alpha": 0.1' in encoded
 
 
 class TestEndToEnd:

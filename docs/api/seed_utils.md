@@ -19,7 +19,7 @@ entry point now makes. The bench refuses to start without it
 ## Public surface
 
 ```python
-from seed_utils import seed_everything, seed_from_env
+from seed_utils import build_reproducibility_manifest, seed_everything, seed_from_env
 ```
 
 ### `seed_everything(seed: int | None = None, *, torch_cuda_deterministic: bool = False) -> int`
@@ -27,9 +27,8 @@ from seed_utils import seed_everything, seed_from_env
 Pin every randomness source atomically. Returns the seed actually
 applied so the caller can log it.
 
-- `seed=None` → a fresh seed is drawn from `secrets.randbits(32)` and
-  returned. Useful for "don't care about reproducibility, do care about
-  logging exactly what ran" callers.
+- `seed=None` → deterministic default `42`. This keeps two fresh
+  processes aligned when operators do not pass an explicit seed.
 - `torch_cuda_deterministic=True` → also sets
   `torch.backends.cudnn.deterministic = True` and
   `torch.backends.cudnn.benchmark = False`. Slower but byte-identical
@@ -49,10 +48,9 @@ What gets pinned, in order:
 
 ### `seed_from_env(var: str = "REMANENTIA_SEED", default: int = 42) -> int`
 
-Read an integer seed from the environment. Raises `ValueError` when
-the env var is set but not a base-10 integer; returns `default` when
-absent. Combine with `seed_everything` at the top of a bench entry
-point:
+Read an integer seed from the environment. Returns `default` when the env var
+is absent or not a base-10 integer. Combine with `seed_everything` at the top
+of a bench entry point:
 
 ```python
 from seed_utils import seed_everything, seed_from_env
@@ -61,15 +59,22 @@ seed = seed_everything(seed_from_env())
 logger.info(f"Seed: {seed}")
 ```
 
+### `build_reproducibility_manifest(seed: int, workload: str, parameters: dict | None = None) -> dict`
+
+Return JSON-serialisable metadata for benchmark and experiment reports. The
+manifest records the seed, workload label, operator-selected parameters,
+Python version, platform string, timestamp, and installed versions of core
+numerical packages (`numpy`, `scipy`, `torch`, `scikit-learn`,
+`sentence-transformers`). It deliberately excludes host names, usernames,
+absolute paths, environment variables, and credentials.
+
 ## Invariants
 
 - **Single call is enough.** No sub-module needs to re-seed; every
   library we care about reads its state from the globals set here.
-- **No silent no-ops.** When `torch` is importable but CUDA is absent,
-  the CUDA seed call is skipped without complaint. When `torch` is not
-  importable at all, the call emits a one-line stderr warning and
-  continues (`seed_everything` is best-effort; a missing torch is not
-  a fatal error for reproducibility of non-torch code paths).
+- **Best-effort optional backends.** When `torch` is importable but CUDA is
+  absent, the CUDA seed call is skipped. When `torch` is not importable,
+  non-torch code paths remain reproducible.
 - **PYTHONHASHSEED caveat documented.** The env var affects *child*
   processes only. If a bench spawns workers via `multiprocessing` with
   `spawn` context, they inherit the var; with `fork`, they inherit
@@ -88,7 +93,7 @@ logger.info(f"Seed: {seed}")
 ## Usage pattern
 
 ```python
-# bench_longmemeval.py head
+# benchmark or experiment head
 import argparse
 from seed_utils import seed_everything
 

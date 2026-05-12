@@ -102,3 +102,47 @@ def test_summarise_public_report_selects_landing_page_fields():
         "api_public_vector_search_p95_ms": 40.0,
         "direct_recall_p50_ms": 90.0,
     }
+
+
+def test_build_report_includes_reproducibility_manifest(monkeypatch):
+    benchmark = _load_benchmark_module()
+    monkeypatch.setattr(benchmark, "hardware_snapshot", lambda: {"cpu_model": "cpu"})
+    monkeypatch.setattr(benchmark, "api_benchmarks", lambda base_url, query, iterations: [])
+    monkeypatch.setattr(
+        benchmark,
+        "vector_benchmarks",
+        lambda iterations, embedding_model, embedding_base_url: {
+            "index": {"count": 0, "dimension": 0, "total_bytes": 0},
+            "refresh_skip": {"p50_ms": 0.0, "p95_ms": 0.0},
+        },
+    )
+    monkeypatch.setattr(
+        benchmark,
+        "direct_recall_benchmark",
+        lambda query, iterations: {"name": "direct_recall", "p50_ms": 0.0, "p95_ms": 0.0},
+    )
+
+    args = benchmark.build_parser().parse_args(
+        [
+            "--base-url",
+            "http://127.0.0.1:8001",
+            "--query",
+            "q",
+            "--seed",
+            "123",
+            "--api-iterations",
+            "2",
+            "--refresh-iterations",
+            "1",
+            "--direct-recall-iterations",
+            "3",
+        ]
+    )
+    report = benchmark.build_report(args)
+
+    manifest = report["reproducibility"]
+    assert manifest["seed"] == 123
+    assert manifest["workload"] == "performance_benchmark"
+    assert manifest["parameters"]["api_iterations"] == 2
+    assert manifest["parameters"]["refresh_iterations"] == 1
+    assert manifest["parameters"]["direct_recall_iterations"] == 3
