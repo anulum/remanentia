@@ -2,16 +2,16 @@
 
 ## Completed (v0.3.1)
 
-- [x] LongMemEval benchmark: 69.0% (345/500), results committed
-- [x] LOCOMO benchmark: 74.7% (1,986 questions, no LLM)
+- [x] LongMemEval benchmark: 72.2% (361/500) at R11, results committed
+- [x] LOCOMO benchmark: 83.1% (1,651/1,986) with LLM synthesis; 74.7% no-LLM baseline
 - [x] PyPI publish workflow (OIDC trusted publisher, `publish.yml`)
-- [x] 100% test coverage (1,677 tests, 38 files, zero lines missing)
+- [x] 100% coverage gate on product modules (2,166 test functions across 62 files)
 - [x] MCP server with 4 tools (recall, remember, status, graph)
 - [x] ArcaneRetriever 4-channel parallel retrieval with RRF fusion
 - [x] Atomic fact decomposer with temporal validity windows
 - [x] Enterprise hardening (CI, CodeQL, Scorecard, REUSE, CITATION.cff)
 - [x] Documentation site (MkDocs, 18 API refs, 5 guides, 2 benchmarks)
-- [x] 13 Rust acceleration crates, 54 functions (PyO3 + maturin, up to 76× speedup)
+- [x] 16 Rust acceleration crates (PyO3 + maturin, Python fallback, up to 76× speedup)
 - [x] Pluggable LLM backend (Auto, Local, hosted, Null)
 - [x] 8-model local LLM benchmark (Qwen 2.5 3B recommended, ROCm)
 - [x] Pipeline performance documented (0.6ms regex pipeline, 27 budget tests)
@@ -21,8 +21,8 @@
 
 The primary target: temporal-reasoning accuracy from 45.9% toward 70%+.
 
-- [x] Temporal training pipeline (C1–C5): temporal-reasoning 45.9% → 60.2% (+14.3pp)
-- [x] Tier 1–3 + recall Rust rustification complete (13 crates, 54 functions)
+- [x] Temporal pipeline (rule-based date normaliser + reference-date fix): temporal-reasoning 45.9% (R8) → 65.4% (R11, +19.5pp)
+- [x] Tier 1–3 + recall Rust rustification complete (PyO3 + maturin)
 - [ ] Date arithmetic in answer extraction (TReMu code execution for ordering/counting)
 - [ ] Multi-session entity tracking (supersession chains across sessions)
 - [ ] LongMemEval R9+ targeting 75%+ overall
