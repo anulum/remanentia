@@ -28,7 +28,7 @@ Contact: www.anulum.li | protoscience@anulum.li
 
 **Persistent AI memory with SNN-orchestrated consolidation, entity graphs, and deep contextual recall.**
 
-> **Active Development** — Remanentia is under intensive development. The core memory engine, BM25+embedding hybrid retrieval, SNN-orchestrated consolidation, temporal reasoning, and the MCP server are functional, tested (2,143 passing tests in the 2026-05-12 local full-suite run), and deployable. The repository keeps a 100% coverage gate in CI via `pyproject.toml`; regenerate a coverage report before publishing module-level coverage numbers. Rust rustification is complete across all compute/regex modules (13 crates, 54 functions wired). LongMemEval R11 (2026-04-11): 72.2% overall, **temporal-reasoning 65.4%** — target achieved, up from R8 45.9% (+19.5pp). All five recommendations from the R9 follow-up audit implemented (intraday HH:MM, fuzzy inclusive/exclusive durations, question_date anchoring, multi-event proximity tuning, narrow chain resolution). Overall benchmark variance is ~±10 questions per run; single-run changes ≤5 are not statistically significant. APIs may evolve as this work progresses.
+> **Active Development** — Remanentia is under intensive development. The core memory engine, BM25+embedding hybrid retrieval, SNN-orchestrated consolidation, temporal reasoning, and the MCP server are functional, tested (2,143 passing tests in the 2026-05-12 local full-suite run), and deployable. The repository keeps a 100% coverage gate in CI via `pyproject.toml`; regenerate a coverage report before publishing module-level coverage numbers. Rust acceleration spans 16 crates with a Python fallback on every path. LongMemEval (3-run mean on the current `gpt-4o-mini`, default config): **~71% overall, ~60% temporal-reasoning**. The committed April-2026 R11 snapshot reads 72.2% / 65.4%; re-running the same code on the current model reproduces the lower figures — the temporal delta is `gpt-4o-mini` drift between model snapshots, not a pipeline regression (see Benchmarks). Variance is ~±10 questions per 500-run; figures are 3-run means, not single runs. APIs may evolve as this work progresses.
 
 BM25+embedding hybrid retrieval with RRF | 11 typed entity relation types | temporal reasoning with date arithmetic | async consolidation | thread-safe MCP server
 
@@ -180,7 +180,10 @@ Results with snippets + extracted answers
 
 ### LongMemEval (committed, reproducible)
 
-500 questions across 6 categories. GPT-4o-mini generation + judge. Results committed in `data/longmemeval_hypotheses.results.jsonl`.
+500 questions across 6 categories. GPT-4o-mini generation + judge. Per-run history
+is tracked in `benchmarks/longmemeval_history.jsonl`.
+
+**Committed snapshot — R11, April 2026** (single run, `data/longmemeval_hypotheses.results.jsonl`):
 
 | Category | Score |
 |----------|-------|
@@ -192,13 +195,20 @@ Results with snippets + extracted answers
 | multi-session | 54.1% (72/133) |
 | **Overall** | **72.2% (361/500)** |
 
+**Current model, default config (cross-encoder rerank on), 3-run mean on the 2026-06
+`gpt-4o-mini`:** ~71.2% overall, ~60.2% temporal-reasoning, ~89% knowledge-update,
+~53% multi-session. The ~1pp overall and ~5pp temporal gap vs the April snapshot is
+`gpt-4o-mini` drift between model snapshots — the same code reproduces ~60% temporal on
+the current model, so it is not a pipeline regression. Quote ≥3-run means; single-run
+swings of ±~10 questions are noise.
+
 Temporal-reasoning improved from 45.9% (R8) to **65.4% (R11, 2026-04-11)**, a +19.5pp / +26 question gain — the 65% target has been achieved. Four rounds shipped pipeline improvements:
 
 - R9 (+14 temporal): session-anchored date resolution, explicit duration arithmetic via TReMu pre-computation, chronological session ordering
 - R10 (+2 temporal): intraday HH:MM tiebreak + qtype-aware sort
 - R11 (+10 temporal): fuzzy inclusive/exclusive durations, question_date anchoring in LLM prompt + TReMu, multi-event bigram/proximity tuning, narrow multi-hop chain resolution
 
-Single-run LLM judge noise envelope is ±~10 questions per 500-run (observed across R9/R10/R11 category cross-tabs). R10→R11 multi-session movement (−12) is within this envelope, particularly since none of the R11 code changes touch non-temporal code paths. Multi-run averages are pending.
+Single-run LLM-judge noise is ±~10 questions per 500-run; per-round 3-run means are now recorded in `benchmarks/longmemeval_history.jsonl`. Cross-encoder reranking is **on by default** — set `REMANENTIA_ARCANE_CE_DISABLE=1` to skip it for latency-sensitive live/MCP use (it is worth ~8–9 questions on this benchmark).
 
 Hindsight (SOTA with GPT-4 extraction) reports 91.4% on this benchmark.
 
@@ -311,7 +321,7 @@ for r in results:
 
 ## Rust Acceleration
 
-13 PyO3 crates (54 functions) built with maturin. Python fallback preserved in every module.
+16 PyO3 crates built with maturin. Python fallback preserved in every module.
 Tiers 1–3 + recall pipeline complete — all compute-bound functions have a Rust path.
 
 | Crate | Peak speedup | Wired into |
