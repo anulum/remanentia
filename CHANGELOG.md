@@ -5,6 +5,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Full LongMemEval-S benchmark mode (`bench_longmemeval.py --full`): runs the realistic
+  ~50-session haystack instead of the oracle (gold-only) setting, with a new
+  retrieved-context reader that feeds the reader only the top retrieved sessions rather
+  than the whole history. Tunable via `REMANENTIA_FULL_MAX_SESSIONS`,
+  `REMANENTIA_FULL_CHAR_BUDGET`, `REMANENTIA_FULL_RETRIEVE_K`.
+- `retrieved_context.py` — budget-limited retrieved-session assembly and gold-session
+  recall scoring for large-haystack evaluation.
+- `tools/retrieval_recall.py` — full-S retrieval-recall diagnostic (recall@N per
+  category, no LLM calls).
+
 ### Fixed
 - Cross-encoder reranking is on by default again in `ArcaneRetriever`. It had been
   gated behind an opt-in environment flag, which silently cost ~8–9 LongMemEval
@@ -12,11 +23,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `REMANENTIA_ARCANE_CE_DISABLE=1` for latency-sensitive live/MCP use.
 
 ### Changed
-- Benchmark reporting reconciled: README now gives the current-model 3-run mean
-  (~71% overall / ~60% temporal-reasoning) alongside the committed April-2026 R11
-  snapshot (72.2% / 65.4%); the temporal gap is documented as `gpt-4o-mini` model
-  drift between snapshots, not a pipeline regression. Per-run accuracy history is
-  recorded in `benchmarks/longmemeval_history.jsonl`.
+- Benchmark reporting reconciled around the two LongMemEval settings. The headline is
+  now the full-S retrieval setting (3-run mean 56.6% overall on the current
+  `gpt-4o-mini`), which is what published leaderboards measure; the 72.2%/~71% figures
+  are labelled as the oracle setting (gold sessions only, retrieval not exercised) and
+  marked not comparable to leaderboards. Per-run accuracy history, including the three
+  full-S runs, is recorded in `benchmarks/longmemeval_history.jsonl`.
 - `arcane_retriever.py` is strict-mypy clean.
 
 ### Documentation

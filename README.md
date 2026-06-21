@@ -28,7 +28,7 @@ Contact: www.anulum.li | protoscience@anulum.li
 
 **Persistent AI memory with SNN-orchestrated consolidation, entity graphs, and deep contextual recall.**
 
-> **Active Development** — Remanentia is under intensive development. The core memory engine, BM25+embedding hybrid retrieval, SNN-orchestrated consolidation, temporal reasoning, and the MCP server are functional, tested (2,143 passing tests in the 2026-05-12 local full-suite run), and deployable. The repository keeps a 100% coverage gate in CI via `pyproject.toml`; regenerate a coverage report before publishing module-level coverage numbers. Rust acceleration spans 16 crates with a Python fallback on every path. LongMemEval (3-run mean on the current `gpt-4o-mini`, default config): **~71% overall, ~60% temporal-reasoning**. The committed April-2026 R11 snapshot reads 72.2% / 65.4%; re-running the same code on the current model reproduces the lower figures — the temporal delta is `gpt-4o-mini` drift between model snapshots, not a pipeline regression (see Benchmarks). Variance is ~±10 questions per 500-run; figures are 3-run means, not single runs. APIs may evolve as this work progresses.
+> **Active Development** — Remanentia is under intensive development. The core memory engine, BM25+embedding hybrid retrieval, SNN-orchestrated consolidation, temporal reasoning, and the MCP server are functional, tested (2,143 passing tests in the 2026-05-12 local full-suite run), and deployable. The repository keeps a 100% coverage gate in CI via `pyproject.toml`; regenerate a coverage report before publishing module-level coverage numbers. Rust acceleration spans 16 crates with a Python fallback on every path. LongMemEval, **full-S setting** (realistic ~50-session haystacks, retrieval actually exercised; this is what published leaderboards measure): **56.6% overall** (3-run mean on the current `gpt-4o-mini`, spread 2.2). The older 72.2%/~71% figures are the *oracle* setting (gold sessions only, retrieval bypassed) and are not comparable to leaderboards — see Benchmarks for both. Figures are 3-run means, not single runs. APIs may evolve as this work progresses.
 
 BM25+embedding hybrid retrieval with RRF | 11 typed entity relation types | temporal reasoning with date arithmetic | async consolidation | thread-safe MCP server
 
@@ -183,6 +183,38 @@ Results with snippets + extracted answers
 500 questions across 6 categories. GPT-4o-mini generation + judge. Per-run history
 is tracked in `benchmarks/longmemeval_history.jsonl`.
 
+LongMemEval has two settings, and the distinction matters: the **oracle** setting gives
+the reader only the gold sessions (~2 per question), so retrieval is not exercised; the
+**full-S** setting gives ~50 sessions per question (~2 of them gold), so the system must
+actually retrieve. Published leaderboard numbers (e.g. Hindsight 91.4 %) are full-S. The
+realistic, comparable number for Remanentia is the **full-S** figure below.
+
+#### Full-S (realistic retrieval setting) — headline
+
+~50 sessions/question, retrieved-context reader (top-10 retrieved sessions). 3-run mean
+on the 2026-06 `gpt-4o-mini`, cross-encoder rerank on (ledger round `full-S`):
+
+| Category | Full-S 3-run mean |
+|----------|-------------------|
+| knowledge-update | 79.5% |
+| single-session-user | 73.8% |
+| single-session-assistant | 71.4% |
+| single-session-preference | 58.9% |
+| multi-session | 42.1% |
+| temporal-reasoning | 41.8% |
+| **Overall** | **56.6%** (runs 57.6 / 55.4 / 56.8, spread 2.2) |
+
+This is the number to compare against full-S leaderboards. The hard categories
+(multi-session, temporal) carry most of the gap: retrieval recall@10 is high (~88 % /
+~79 %), so the remaining loss there is synthesis over the retrieved context, not a
+retrieval miss; single-session losses are retrieval misses on the legacy BM25 path.
+
+#### Oracle setting (gold sessions only — retrieval NOT exercised)
+
+The figures below are the oracle setting: the haystack is exactly the gold sessions, fed
+to the reader in full. They measure synthesis, not retrieval, and are **not** comparable
+to full-S leaderboards. Kept for historical continuity.
+
 **Committed snapshot — R11, April 2026** (single run, `data/longmemeval_hypotheses.results.jsonl`):
 
 | Category | Score |
@@ -210,7 +242,10 @@ Temporal-reasoning improved from 45.9% (R8) to **65.4% (R11, 2026-04-11)**, a +1
 
 Single-run LLM-judge noise is ±~10 questions per 500-run; per-round 3-run means are now recorded in `benchmarks/longmemeval_history.jsonl`. Cross-encoder reranking is **on by default** — set `REMANENTIA_ARCANE_CE_DISABLE=1` to skip it for latency-sensitive live/MCP use (it is worth ~8–9 questions on this benchmark).
 
-Hindsight (SOTA with GPT-4 extraction) reports 91.4% on this benchmark.
+Hindsight (SOTA with GPT-4 extraction) reports 91.4% on the **full-S** setting —
+compare it to Remanentia's full-S **56.6 %**, not the oracle number above. Closing that
+gap on full-S is the active work (retrieval recall on single-session, cross-session
+synthesis on multi-session/temporal).
 
 ### LOCOMO
 

@@ -154,6 +154,11 @@ omit = [
     "tools/migrate_pickle_to_npz.py",
     # Ad-hoc retrieval bench harness — not wired into product code.
     "ablation_channels.py",
+    # Full-S retrieval-recall diagnostic — needs the cross-encoder model and
+    # the 277 MB longmemeval_s.json haystack, neither present in CI. Its pure
+    # logic (recall_curve, aggregate_recall) is unit-tested in
+    # tests/test_retrieval_recall.py; the retriever loop is an I/O harness.
+    "tools/retrieval_recall.py",
     # Test files themselves
     "tests/test_*.py",
     "tests/conftest.py",

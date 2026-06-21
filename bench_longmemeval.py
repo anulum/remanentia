@@ -35,8 +35,26 @@ from pathlib import Path
 if __name__ == "__main__":  # pragma: no cover — avoid breaking pytest capture
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
-DATA_PATH = Path(__file__).parent / "data" / "longmemeval_oracle.json"
+# --full selects the realistic LongMemEval-S haystack (~50 sessions/question,
+# ~2 gold) instead of the oracle setting (gold sessions only). On full-S the
+# arcane reader cannot dump the whole history (~123K tokens) — it switches to a
+# retrieved-context reader (top-ranked sessions only), so retrieval is actually
+# exercised. Default stays oracle for backward-comparable numbers.
+_USE_FULL = "--full" in sys.argv
+_DATA_FILE = "longmemeval_s.json" if _USE_FULL else "longmemeval_oracle.json"
+DATA_PATH = Path(__file__).parent / "data" / _DATA_FILE
 OUTPUT_PATH = Path(__file__).parent / "data" / "longmemeval_hypotheses.jsonl"
+
+# Retrieved-context reader budget (full-S only). The reader sees the top
+# REMANENTIA_FULL_MAX_SESSIONS retrieved sessions, capped at
+# REMANENTIA_FULL_CHAR_BUDGET characters of transcript. full-S sessions run
+# ~10K chars, so the char budget must fit max_sessions of them (~120K chars
+# ≈ 30K tokens, well inside gpt-4o-mini's 128K window) or it silently drops
+# retrieved gold sessions before the reader sees them.
+_RETRIEVED_CONTEXT = _USE_FULL
+_FULL_MAX_SESSIONS = int(os.environ.get("REMANENTIA_FULL_MAX_SESSIONS", "10"))
+_FULL_CHAR_BUDGET = int(os.environ.get("REMANENTIA_FULL_CHAR_BUDGET", "120000"))
+_FULL_RETRIEVE_K = int(os.environ.get("REMANENTIA_FULL_RETRIEVE_K", "50"))
 
 _USE_LLM = "--llm" in sys.argv
 _EVALUATE = "--evaluate" in sys.argv
@@ -480,7 +498,11 @@ def _arcane_answer(
     from arcane_retriever import ArcaneRetriever
 
     ar = ArcaneRetriever(sessions, session_dates=haystack_dates)
-    results = ar.retrieve(question, qtype, top_k=15, max_iterations=2)
+    # On full-S the reader is fed only the top retrieved sessions, so retrieve
+    # enough facts for the session selector to have candidates beyond the few
+    # the oracle setting needs.
+    _top_k = _FULL_RETRIEVE_K if _RETRIEVED_CONTEXT else 15
+    results = ar.retrieve(question, qtype, top_k=_top_k, max_iterations=2)
 
     if not results:
         return "I don't have enough information to answer this question."
@@ -503,30 +525,44 @@ def _arcane_answer(
         "knowledge-update",
         "single-session-preference",
     ):
-        # Sort sessions chronologically so LLM sees oldest first
-        indexed_sessions = list(enumerate(sessions))
-        if haystack_dates and len(haystack_dates) == len(sessions):
-            indexed_sessions.sort(
-                key=lambda x: haystack_dates[x[0]] if x[0] < len(haystack_dates) else ""
-            )
+        if _RETRIEVED_CONTEXT:
+            # Full-S: feed only the top retrieved sessions (the whole haystack
+            # is ~123K tokens and cannot be dumped) — this is where retrieval
+            # actually matters. select_sessions renders them chronologically.
+            from retrieved_context import select_sessions
 
-        session_parts = []
-        for order, (orig_idx, session) in enumerate(indexed_sessions):
-            sess_date = (
-                haystack_dates[orig_idx]
-                if haystack_dates and orig_idx < len(haystack_dates)
-                else ""
-            )
-            header = f"=== Session {order + 1}"
-            if sess_date:
-                header += f" ({sess_date})"
-            header += " ==="
-            turns = []
-            for turn in session:
-                role = turn["role"].upper()
-                turns.append(f"[{role}]: {turn['content']}")
-            session_parts.append(header + "\n" + "\n".join(turns))
-        full_context = "\n\n".join(session_parts)
+            full_context = select_sessions(
+                results,
+                sessions,
+                session_dates=haystack_dates,
+                max_sessions=_FULL_MAX_SESSIONS,
+                char_budget=_FULL_CHAR_BUDGET,
+            ).session_text
+        else:
+            # Oracle: dump every haystack session (gold-only, tiny) oldest-first.
+            indexed_sessions = list(enumerate(sessions))
+            if haystack_dates and len(haystack_dates) == len(sessions):
+                indexed_sessions.sort(
+                    key=lambda x: haystack_dates[x[0]] if x[0] < len(haystack_dates) else ""
+                )
+
+            session_parts = []
+            for order, (orig_idx, session) in enumerate(indexed_sessions):
+                sess_date = (
+                    haystack_dates[orig_idx]
+                    if haystack_dates and orig_idx < len(haystack_dates)
+                    else ""
+                )
+                header = f"=== Session {order + 1}"
+                if sess_date:
+                    header += f" ({sess_date})"
+                header += " ==="
+                turns = []
+                for turn in session:
+                    role = turn["role"].upper()
+                    turns.append(f"[{role}]: {turn['content']}")
+                session_parts.append(header + "\n" + "\n".join(turns))
+            full_context = "\n\n".join(session_parts)
 
         if qtype == "temporal-reasoning":
             # Prepend date-rich facts from retrieval + timeline
@@ -590,6 +626,12 @@ def run_benchmark():
         data = data[:_LIMIT]
 
     print(f"Questions: {len(data)}")
+    print(f"Dataset: {_DATA_FILE} ({'full-S retrieval' if _USE_FULL else 'oracle'})")
+    if _RETRIEVED_CONTEXT:
+        print(
+            f"Reader: retrieved-context (top {_FULL_MAX_SESSIONS} sessions, "
+            f"{_FULL_CHAR_BUDGET} char budget, retrieve k={_FULL_RETRIEVE_K})"
+        )
     print(f"LLM mode: {_USE_LLM}")
     print(f"Arcane mode: {_USE_ARCANE}")
     print(f"Local LLM mode: {_USE_LOCAL_LLM} (Ollama gemma3:4b)")
