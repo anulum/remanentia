@@ -46,6 +46,7 @@ import os
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
+from typing import Any
 from datetime import date
 
 from fact_decomposer import AtomicFact, FactIndex, decompose_sessions
@@ -88,7 +89,7 @@ class ArcaneRetriever:
 
     def __init__(
         self,
-        sessions: list[list[dict]],
+        sessions: list[list[dict[str, str]]],
         session_dates: list[str] | None = None,
         recency_half_life_days: int = DEFAULT_DECAY_HALF_LIFE_DAYS,
         reference_date: str | None = None,
@@ -294,7 +295,7 @@ class ArcaneRetriever:
         Recency weight uses exponential decay with configurable half-life.
         """
         # Map fact text → aggregated data (dedup by text)
-        fact_map: dict[str, dict] = {}
+        fact_map: dict[str, dict[str, Any]] = {}
 
         for ch_name, results in channel_results.items():
             for r in results:
@@ -357,7 +358,9 @@ class ArcaneRetriever:
 
         # Check entity coverage: does the question mention entities found in results?
         try:
-            from remanentia_fact_decomposer import tokenize_words as _rust_tw
+            from remanentia_fact_decomposer import (  # type: ignore[import-untyped]  # Rust extension; no stubs
+                tokenize_words as _rust_tw,
+            )
         except ImportError:
             _rust_tw = None
 
@@ -515,7 +518,7 @@ def _sort_results_chronologically(results: list[FusedResult]) -> list[FusedResul
         dt = _parse_session_datetime(s)
         if dt is None:
             return s  # pragma: no cover — defensive fallback for unknown date format
-        return dt.isoformat()
+        return str(dt.isoformat())
 
     def _date_key(r: FusedResult) -> tuple[str, str, int, int]:
         primary = (
