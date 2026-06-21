@@ -414,13 +414,13 @@ class ArcaneRetriever:
     _ce_model = None
     _ce_loading = False
 
-    def _load_ce(self):
+    def _load_ce(self) -> None:
         """Lazy-load cross-encoder model in background thread."""
         if ArcaneRetriever._ce_model is not None or ArcaneRetriever._ce_loading:
             return
         ArcaneRetriever._ce_loading = True
 
-        def _load():  # pragma: no cover — runs in background thread
+        def _load() -> None:  # pragma: no cover — runs in background thread
             try:
                 from sentence_transformers import CrossEncoder
 
@@ -441,12 +441,18 @@ class ArcaneRetriever:
     def _cross_encoder_rerank(
         self, query: str, results: list[FusedResult], top_n: int = 10
     ) -> list[FusedResult]:
-        """Rerank results using cross-encoder if available."""
+        """Rerank results with the cross-encoder; on by default.
+
+        Set ``REMANENTIA_ARCANE_CE_DISABLE=1`` to skip reranking — for
+        latency-sensitive live/MCP use that wants to avoid loading the
+        cross-encoder model. The model loads lazily in a background thread on
+        first use, so the first call(s) return un-reranked results until it is
+        ready; subsequent calls (model loaded) are reranked.
+        """
+        if os.getenv("REMANENTIA_ARCANE_CE_DISABLE") == "1":
+            return results
         if ArcaneRetriever._ce_model is None:
-            if os.getenv("REMANENTIA_ARCANE_CE_AUTOLOAD") == "1":
-                self._load_ce()
-            else:
-                return results
+            self._load_ce()
         if not ArcaneRetriever._ce_model or ArcaneRetriever._ce_loading:
             return results
 

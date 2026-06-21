@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import os
 from unittest.mock import patch
 
 from arcane_retriever import ArcaneRetriever, FusedResult, RetrievalResult
@@ -63,6 +64,71 @@ class TestDataclasses:
         fr = FusedResult(fact=fact, rrf_score=0.5, channels=["bm25"], per_channel_ranks={"bm25": 0})
         assert fr.rrf_score == 0.5
         assert "bm25" in fr.channels
+
+
+# ── Cross-encoder rerank: on by default, opt-out env ─────────────
+
+
+class _FakeCrossEncoder:
+    """Stub cross-encoder returning preset scores from ``predict``."""
+
+    def __init__(self, scores: list[float]) -> None:
+        self._scores = scores
+
+    def predict(self, pairs: list, show_progress_bar: bool = False) -> list[float]:
+        return self._scores[: len(pairs)]
+
+
+class TestCrossEncoderRerankDefault:
+    @staticmethod
+    def _fact(text: str) -> AtomicFact:
+        return AtomicFact(text=text, session_idx=0, turn_idx=0, role="user", fact_type="event")
+
+    def _results(self) -> list[FusedResult]:
+        return [
+            FusedResult(fact=self._fact("alpha"), rrf_score=0.1),
+            FusedResult(fact=self._fact("beta"), rrf_score=0.2),
+        ]
+
+    def test_disable_env_skips_rerank_even_with_model(self):
+        ar = ArcaneRetriever(SESSIONS)
+        results = self._results()
+        with (
+            patch.object(ArcaneRetriever, "_ce_model", _FakeCrossEncoder([0.9, 0.1])),
+            patch.object(ArcaneRetriever, "_ce_loading", False),
+            patch.dict(os.environ, {"REMANENTIA_ARCANE_CE_DISABLE": "1"}),
+        ):
+            out = ar._cross_encoder_rerank("q", results, top_n=10)
+        assert out is results
+        assert [r.rrf_score for r in out] == [0.1, 0.2]  # untouched
+
+    def test_default_reranks_when_model_present(self):
+        ar = ArcaneRetriever(SESSIONS)
+        results = self._results()
+        beta = results[1].fact
+        with (
+            patch.object(ArcaneRetriever, "_ce_model", _FakeCrossEncoder([0.2, 0.95])),
+            patch.object(ArcaneRetriever, "_ce_loading", False),
+            patch.dict(os.environ, {}, clear=False),
+        ):
+            os.environ.pop("REMANENTIA_ARCANE_CE_DISABLE", None)
+            out = ar._cross_encoder_rerank("q", results, top_n=10)
+        assert out[0].fact is beta  # higher CE score reranked to the top
+        assert out[0].rrf_score == 0.95
+
+    def test_default_triggers_load_when_model_absent(self):
+        ar = ArcaneRetriever(SESSIONS)
+        results = self._results()
+        with (
+            patch.object(ArcaneRetriever, "_ce_model", None),
+            patch.object(ArcaneRetriever, "_ce_loading", False),
+            patch.object(ArcaneRetriever, "_load_ce") as mock_load,
+            patch.dict(os.environ, {}, clear=False),
+        ):
+            os.environ.pop("REMANENTIA_ARCANE_CE_DISABLE", None)
+            out = ar._cross_encoder_rerank("q", results, top_n=10)
+        mock_load.assert_called_once()
+        assert out is results  # model not ready this call → un-reranked
 
 
 # ── Gate (channel selection) ─────────────────────────────────────
