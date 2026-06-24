@@ -9,12 +9,13 @@
 """MCP server for Remanentia — lets any MCP-compatible agent
 (Cursor and others) use Remanentia as a memory tool.
 
-Provides five tools:
+Provides six tools:
   - remanentia_recall: Search memory
   - remanentia_remember: Persist a memory
   - remanentia_status: System status
   - remanentia_graph: Entity relationship query
-  - remanentia_recall_feedback: Rate whether a recall was used
+  - remanentia_recall_feedback: Rate whether a recall was used (usage label)
+  - remanentia_recall_correctness: Rate whether a recall was correct (gate label)
 
 Usage (stdio transport)::
     python workspace-internal/mcp_server.py
@@ -79,6 +80,8 @@ _RECALL_LEDGER = None
 _BUS_EMITTER = None
 _BUS_EMITTER_INIT = False
 
+_OUTCOME_TRACKER = None
+
 
 def _get_recall_ledger():
     """Return the process-wide recall query-stream ledger (lazy singleton)."""
@@ -124,13 +127,32 @@ def _emit_recall_bus(query: str, returned_ids: list[str]) -> None:
         log.debug("Recall bus emit failed", exc_info=True)
 
 
+def _get_outcome_tracker():
+    """Return the process-wide recall outcome tracker (lazy singleton).
+
+    Watches recall→remember loop closure to auto-derive the ``was_used``
+    label, so the calibration stream populates without anyone rating recalls.
+    Shares the ledger's disable switch — it is the same labelling stream.
+    """
+    global _OUTCOME_TRACKER
+    if _OUTCOME_TRACKER is None:
+        RecallOutcomeTracker = _runtime_attr("recall_outcome_tracker", "RecallOutcomeTracker")
+        _OUTCOME_TRACKER = RecallOutcomeTracker()
+    return _OUTCOME_TRACKER
+
+
+def _recall_identity() -> str:
+    """The querying-agent identity, shared by the ledger and the tracker."""
+    return _runtime_attr("recall_ledger", "_identity")()
+
+
 def _log_recall(
     query: str,
     returned_ids: list[str],
     top_k: int,
     project: str,
     score: float | None = None,
-) -> None:
+) -> str | None:
     """Record a recall in the query-stream ledger (MS.1); never raise.
 
     The query stream is the query-weighted calibration + salience source
@@ -139,16 +161,51 @@ def _log_recall(
     sinks: the durable local ledger and the fleet bus. The ledger is
     disabled via ``REMANENTIA_RECALL_LEDGER_DISABLE`` and the bus via
     ``REMANENTIA_RECALL_BUS_DISABLE`` — independently. Telemetry must never
-    break a recall, so every failure is swallowed.
+    break a recall, so every failure is swallowed. Returns the ledger
+    ``event_id`` (for loop-closure tracking) or ``None`` when the ledger is
+    disabled or the write failed.
     """
+    event_id: str | None = None
     if not os.environ.get("REMANENTIA_RECALL_LEDGER_DISABLE"):
         try:
-            _get_recall_ledger().record(
+            event_id = _get_recall_ledger().record(
                 query, returned_ids, top_k=top_k, project=project, score=score
             )
         except Exception:  # pragma: no cover — telemetry must never break recall
             log.debug("Recall ledger write failed", exc_info=True)
     _emit_recall_bus(query, returned_ids)
+    return event_id
+
+
+def _observe_recall(event_id: str | None, returned_texts: list[str]) -> None:
+    """Buffer a served recall so a later remember can close the used-loop.
+
+    No-op when the ledger is disabled or the recall was not logged; never
+    raises (telemetry must not break a recall).
+    """
+    if event_id is None or os.environ.get("REMANENTIA_RECALL_LEDGER_DISABLE"):
+        return
+    try:
+        _get_outcome_tracker().observe_recall(
+            event_id, _recall_identity(), returned_texts, ledger=_get_recall_ledger()
+        )
+    except Exception:  # pragma: no cover — telemetry must never break recall
+        log.debug("Recall outcome observe failed", exc_info=True)
+
+
+def _close_recall_loops(content: str) -> None:
+    """Mark recent recalls this agent's new memory echoes as ``was_used``.
+
+    Called when a memory is remembered: if its text substantially echoes a
+    recently recalled memory, that recall demonstrably informed the work.
+    No-op when the ledger is disabled; never raises.
+    """
+    if os.environ.get("REMANENTIA_RECALL_LEDGER_DISABLE"):
+        return
+    try:
+        _get_outcome_tracker().note_text(content, _recall_identity(), _get_recall_ledger())
+    except Exception:  # pragma: no cover — telemetry must never break remember
+        log.debug("Recall loop-closure failed", exc_info=True)
 
 
 def _get_knowledge_store():
@@ -267,7 +324,8 @@ def handle_recall(
         except Exception:  # pragma: no cover
             log.debug("Knowledge graph recall failed", exc_info=True)
 
-        _log_recall(query, returned_ids, top_k, project, top_score)
+        event_id = _log_recall(query, returned_ids, top_k, project, top_score)
+        _observe_recall(event_id, [r.snippet for r in results])
         return "\n\n".join(parts)
 
     except Exception:  # pragma: no cover
@@ -334,6 +392,9 @@ def handle_remember(
         ks.save()
     except Exception:  # pragma: no cover
         log.debug("Knowledge note persistence failed", exc_info=True)
+
+    # Close any recall→use loops this new memory echoes (auto-derive was_used)
+    _close_recall_loops(content)
 
     # Async consolidation with debounce
     _schedule_consolidation()
@@ -487,10 +548,12 @@ def handle_graph(entity: str = "", top: int = 10) -> str:
 def handle_recall_feedback(query: str, was_used: bool, by: str = "") -> str:
     """Record whether a prior recall for *query* was used downstream.
 
-    Attaches a ``was_used`` outcome to the most recent matching recall in
-    the query-stream ledger (MS.1) — the realised-outcome label the
-    conformal calibration gate trains on. A *usage* signal, not a
-    correctness label. Disabled via ``REMANENTIA_RECALL_LEDGER_DISABLE``.
+    Attaches a ``was_used`` outcome to the most recent matching recall in the
+    query-stream ledger (MS.1). A *usage* signal for cold-start calibration and
+    a retrieval-precision monitor — not the safety label (that is ``was_correct``,
+    set via :func:`handle_recall_correctness`). Usually populated automatically by
+    recall→remember loop closure; this tool is the explicit override. Disabled
+    via ``REMANENTIA_RECALL_LEDGER_DISABLE``.
     """
     if os.environ.get("REMANENTIA_RECALL_LEDGER_DISABLE"):
         return "Recall ledger disabled; feedback ignored."
@@ -504,6 +567,30 @@ def handle_recall_feedback(query: str, was_used: bool, by: str = "") -> str:
     except Exception as e:  # pragma: no cover — telemetry must never break recall
         log.debug("Recall feedback failed", exc_info=True)
         return f"Feedback error: {e}"
+
+
+def handle_recall_correctness(query: str, was_correct: bool, by: str = "") -> str:
+    """Record whether a prior recall's memories were *correct* — the gate label.
+
+    The seam a downstream verifier wires its verdict into: an answer that used a
+    recalled memory and passed verification ⇒ ``was_correct=True``; an answer
+    flagged, halted, or corrected by the verifier ⇒ ``was_correct=False``. This
+    is the label the conformal abstention gate calibrates on (a *correctness*
+    guarantee, distinct from the usage-only ``was_used``). Attaches to the most
+    recent matching recall. Disabled via ``REMANENTIA_RECALL_LEDGER_DISABLE``.
+    """
+    if os.environ.get("REMANENTIA_RECALL_LEDGER_DISABLE"):
+        return "Recall ledger disabled; correctness ignored."
+    try:
+        ledger = _get_recall_ledger()
+        event_id = ledger.latest_for(query, by=by or None)
+        if event_id is None:
+            return f"No prior recall found for: {query}"
+        ledger.record_outcome(event_id, was_correct=was_correct)
+        return f"Recorded was_correct={was_correct} for recall of: {query}"
+    except Exception as e:  # pragma: no cover — telemetry must never break recall
+        log.debug("Recall correctness failed", exc_info=True)
+        return f"Correctness error: {e}"
 
 
 # ── MCP Protocol (stdio JSON-RPC) ────────────────────────────────
@@ -605,6 +692,24 @@ TOOLS = [
             "required": ["query", "was_used"],
         },
     },
+    {
+        "name": "remanentia_recall_correctness",
+        "description": "Report whether a prior recall's memories were correct, from a downstream verifier's verdict. This is the safety/calibration label the abstention gate trains on (distinct from was_used). Call with the verifier verdict for the recalled memory's query.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The query of the recall being rated",
+                },
+                "was_correct": {
+                    "type": "boolean",
+                    "description": "Whether the recalled memories were correct (verifier clean pass)",
+                },
+            },
+            "required": ["query", "was_correct"],
+        },
+    },
 ]
 
 
@@ -661,6 +766,11 @@ def handle_request(request: dict) -> dict | None:
                 text = handle_recall_feedback(
                     args.get("query", ""),
                     bool(args.get("was_used", False)),
+                )
+            elif tool_name == "remanentia_recall_correctness":
+                text = handle_recall_correctness(
+                    args.get("query", ""),
+                    bool(args.get("was_correct", False)),
                 )
             else:
                 outcome = "unknown_tool"

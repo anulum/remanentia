@@ -34,6 +34,7 @@ def _isolate_recall_bus(monkeypatch):
     if mod is not None:
         mod._BUS_EMITTER = None
         mod._BUS_EMITTER_INIT = False
+        mod._OUTCOME_TRACKER = None
 
 
 @pytest.fixture

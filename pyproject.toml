@@ -75,6 +75,7 @@ Author = "https://www.anulum.li"
 py-modules = [
     "memory_index",
     "recall_ledger",
+    "recall_outcome_tracker",
     "bus_recall",
     "index_freshness",
     "compiled_memory",

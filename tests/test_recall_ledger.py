@@ -121,6 +121,46 @@ class TestOutcome:
         assert q.event_id == eid
         assert q.was_used is None
 
+    def test_correctness_label_merges_independently(self, ledger: RecallLedger):
+        eid = ledger.record("q", ["s:n"], top_k=1)
+        ledger.record_outcome(eid, was_correct=True)
+        (q,) = list(ledger.queries())
+        assert q.was_correct is True
+        assert q.was_used is None  # usage untouched by a correctness-only outcome
+
+    def test_usage_and_correctness_are_orthogonal(self, ledger: RecallLedger):
+        eid = ledger.record("q", ["s:n"], top_k=1)
+        ledger.record_outcome(eid, was_used=True)
+        ledger.record_outcome(eid, was_correct=False)  # used but wrong
+        (q,) = list(ledger.queries())
+        assert q.was_used is True
+        assert q.was_correct is False
+
+    def test_both_labels_in_one_call(self, ledger: RecallLedger):
+        eid = ledger.record("q", ["s:n"], top_k=1)
+        ledger.record_outcome(eid, was_used=True, was_correct=True)
+        (q,) = list(ledger.queries())
+        assert q.was_used is True
+        assert q.was_correct is True
+
+    def test_correctness_only_outcome_does_not_clobber_usage(self, ledger: RecallLedger):
+        eid = ledger.record("q", ["s:n"], top_k=1)
+        ledger.record_outcome(eid, was_used=True)
+        ledger.record_outcome(eid, was_correct=True)  # separate call, usage must survive
+        (q,) = list(ledger.queries())
+        assert q.was_used is True
+        assert q.was_correct is True
+
+    def test_record_outcome_needs_at_least_one_label(self, ledger: RecallLedger):
+        eid = ledger.record("q", ["s:n"], top_k=1)
+        with pytest.raises(ValueError, match="was_used and/or was_correct"):
+            ledger.record_outcome(eid)
+
+    def test_default_was_correct_is_none(self, ledger: RecallLedger):
+        ledger.record("q", ["s:n"], top_k=1)
+        (q,) = list(ledger.queries())
+        assert q.was_correct is None
+
 
 class TestReadTolerance:
     def test_missing_file_yields_nothing(self, tmp_path: Path):
@@ -260,6 +300,98 @@ class TestRecallFeedback:
         assert resp is not None and resp["id"] == 7
         (rq,) = list(led.queries())
         assert rq.was_used is True
+
+
+class TestRecallCorrectness:
+    """The correctness seam records the gate label a downstream verifier supplies."""
+
+    def test_records_correctness(self, tmp_path: Path, monkeypatch):
+        import mcp_server
+
+        led = RecallLedger(tmp_path / "c.jsonl")
+        monkeypatch.setattr(mcp_server, "_RECALL_LEDGER", led)
+        monkeypatch.delenv("REMANENTIA_RECALL_LEDGER_DISABLE", raising=False)
+        led.record("q", ["s:n"], top_k=1)
+        msg = mcp_server.handle_recall_correctness("q", False)
+        assert "was_correct=False" in msg
+        (rq,) = list(led.queries())
+        assert rq.was_correct is False
+        assert rq.was_used is None  # correctness must not touch usage
+
+    def test_no_prior_recall(self, tmp_path: Path, monkeypatch):
+        import mcp_server
+
+        led = RecallLedger(tmp_path / "c.jsonl")
+        monkeypatch.setattr(mcp_server, "_RECALL_LEDGER", led)
+        monkeypatch.delenv("REMANENTIA_RECALL_LEDGER_DISABLE", raising=False)
+        assert "No prior recall" in mcp_server.handle_recall_correctness("nope", True)
+
+    def test_disabled_is_noop(self, monkeypatch):
+        import mcp_server
+
+        monkeypatch.setenv("REMANENTIA_RECALL_LEDGER_DISABLE", "1")
+        assert "disabled" in mcp_server.handle_recall_correctness("q", True)
+
+    def test_dispatch_via_handle_request(self, tmp_path: Path, monkeypatch):
+        import mcp_server
+
+        led = RecallLedger(tmp_path / "c.jsonl")
+        monkeypatch.setattr(mcp_server, "_RECALL_LEDGER", led)
+        monkeypatch.delenv("REMANENTIA_RECALL_LEDGER_DISABLE", raising=False)
+        led.record("q", ["s:n"], top_k=1)
+        req = {
+            "jsonrpc": "2.0",
+            "id": 9,
+            "method": "tools/call",
+            "params": {
+                "name": "remanentia_recall_correctness",
+                "arguments": {"query": "q", "was_correct": True},
+            },
+        }
+        resp = mcp_server.handle_request(req)
+        assert resp is not None and resp["id"] == 9
+        (rq,) = list(led.queries())
+        assert rq.was_correct is True
+
+
+class TestRecallLoopClosure:
+    """Recall→remember loop closure auto-populates was_used through mcp_server."""
+
+    def test_remember_closes_recall_loop(self, tmp_path: Path, monkeypatch):
+        import mcp_server
+
+        led = RecallLedger(tmp_path / "lc.jsonl")
+        monkeypatch.setattr(mcp_server, "_RECALL_LEDGER", led)
+        monkeypatch.setattr(mcp_server, "_OUTCOME_TRACKER", None)
+        monkeypatch.delenv("REMANENTIA_RECALL_LEDGER_DISABLE", raising=False)
+
+        event_id = mcp_server._log_recall("how to reuse vectors", ["sem:t"], 3, "")
+        assert event_id is not None
+        mcp_server._observe_recall(event_id, ["incremental vector index reuse content hash dedup"])
+        # An unrelated memory must not close the loop.
+        mcp_server._close_recall_loops("notes about coffee brewing temperature")
+        assert list(led.queries())[0].was_used is None
+        # The echoing memory does.
+        mcp_server._close_recall_loops("we did incremental vector index reuse via content hash dedup")
+        assert list(led.queries())[0].was_used is True
+
+    def test_observe_noop_when_event_id_none(self, monkeypatch):
+        import mcp_server
+
+        monkeypatch.delenv("REMANENTIA_RECALL_LEDGER_DISABLE", raising=False)
+        # Ledger write was skipped/failed → no event id → nothing to track, no raise.
+        mcp_server._observe_recall(None, ["a returned memory text long enough to tokenize"])
+
+    def test_loop_closure_disabled_is_noop(self, tmp_path: Path, monkeypatch):
+        import mcp_server
+
+        led = RecallLedger(tmp_path / "lc.jsonl")
+        monkeypatch.setattr(mcp_server, "_RECALL_LEDGER", led)
+        monkeypatch.setattr(mcp_server, "_OUTCOME_TRACKER", None)
+        monkeypatch.setenv("REMANENTIA_RECALL_LEDGER_DISABLE", "1")
+        mcp_server._observe_recall("e1", ["incremental vector index reuse content hash dedup"])
+        mcp_server._close_recall_loops("incremental vector index reuse content hash dedup")
+        assert list(led.queries()) == []
 
 
 class TestMcpRecallHook:

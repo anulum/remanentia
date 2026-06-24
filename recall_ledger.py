@@ -92,6 +92,16 @@ class RecallQuery:
         Whether the recalled memories were used downstream, once an outcome
         has been recorded; ``None`` until then. A *usage* signal, not a
         correctness label — a recalled memory can be used and still wrong.
+        Auto-derived from recall→remember loop closure; suitable for
+        cold-start calibration and a retrieval-precision monitor, not for the
+        safety threshold.
+    was_correct
+        Whether the recalled memories were *right*, once a correctness outcome
+        has been recorded; ``None`` until then. The label the conformal
+        abstention gate must calibrate on, supplied by a downstream verifier's
+        verdict (a clean answer that used the memory ⇒ correct; a
+        flagged/halted/corrected answer ⇒ not). Orthogonal to ``was_used``: a
+        memory can be used and wrong, or correct but unused.
     """
 
     event_id: str
@@ -105,6 +115,7 @@ class RecallQuery:
     score: float | None = None
     abstained: bool | None = None
     was_used: bool | None = None
+    was_correct: bool | None = None
 
 
 @dataclass
@@ -178,22 +189,41 @@ class RecallLedger:
         self._append(row)
         return event_id
 
-    def record_outcome(self, event_id: str, *, was_used: bool) -> None:
-        """Append an ``outcome`` record linking a query to its usefulness.
+    def record_outcome(
+        self,
+        event_id: str,
+        *,
+        was_used: bool | None = None,
+        was_correct: bool | None = None,
+    ) -> None:
+        """Append an ``outcome`` record linking a query to a realised label.
+
+        The two labels are independent and may be recorded in separate calls
+        (usage is known at loop-closure time; correctness arrives later, from a
+        downstream verifier's verdict). At least one must be supplied; only the
+        supplied label(s) are written, so a usage outcome never clobbers a
+        correctness outcome or vice versa.
 
         Parameters
         ----------
         event_id
             The ``event_id`` returned by :meth:`record`.
         was_used
-            Whether the recalled memories were used downstream.
+            Whether the recalled memories were used downstream (usage proxy).
+        was_correct
+            Whether the recalled memories were right (calibration label).
         """
-        row = {
+        if was_used is None and was_correct is None:
+            raise ValueError("record_outcome requires was_used and/or was_correct")
+        row: dict[str, object] = {
             "kind": _OUTCOME,
             "event_id": event_id,
             "ts": _now(),
-            "was_used": bool(was_used),
         }
+        if was_used is not None:
+            row["was_used"] = bool(was_used)
+        if was_correct is not None:
+            row["was_correct"] = bool(was_correct)
         self._append(row)
 
     def queries(self) -> Iterator[RecallQuery]:
@@ -212,10 +242,16 @@ class RecallLedger:
         if not self.path.exists():
             return
         rows = self._read_rows()
-        outcomes: dict[str, bool] = {}
+        used: dict[str, bool] = {}
+        correct: dict[str, bool] = {}
         for row in rows:
-            if row.get("kind") == _OUTCOME and isinstance(row.get("event_id"), str):
-                outcomes[row["event_id"]] = bool(row.get("was_used"))
+            if row.get("kind") != _OUTCOME or not isinstance(row.get("event_id"), str):
+                continue
+            event_id = row["event_id"]
+            if "was_used" in row:
+                used[event_id] = bool(row["was_used"])
+            if "was_correct" in row:
+                correct[event_id] = bool(row["was_correct"])
         for row in rows:
             if row.get("kind") != _QUERY:
                 continue
@@ -233,7 +269,8 @@ class RecallLedger:
                 found=bool(row.get("found", False)),
                 score=row.get("score"),
                 abstained=row.get("abstained"),
-                was_used=outcomes.get(event_id),
+                was_used=used.get(event_id),
+                was_correct=correct.get(event_id),
             )
 
     def latest_for(self, query: str, by: str | None = None) -> str | None:
