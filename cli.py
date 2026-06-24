@@ -146,6 +146,19 @@ def cmd_status(args):
     else:
         print(f"Vector worker: {str(worker['state']).upper()}")
 
+    # Index freshness — the watchdog that catches a silently stalled index.
+    freshness = _read_freshness_report()
+    if freshness["state"] == "missing":
+        print("Index freshness: NO CHECK YET")
+    elif freshness["state"] == "unreadable":
+        print("Index freshness: UNREADABLE")
+    else:
+        verdict = "STALE" if freshness["stale"] else "fresh"
+        drift = freshness["drift_days"]
+        drift_str = "n/a" if drift is None else f"{drift:.1f}d"
+        print(f"Index freshness: {verdict.upper()} (drift {drift_str})")
+        print(f"  Checked: {freshness['checked_age']}")
+
     # Daemon
     state_path = STATE_DIR / "current_state.json"
     if state_path.exists():
@@ -329,6 +342,34 @@ def _read_vector_worker_state() -> dict[str, object]:
         "pid": payload.get("pid"),
         "state": "alive" if age < 1800 else "stale",
         "status": payload.get("status"),
+    }
+
+
+def _read_freshness_report() -> dict[str, object]:
+    """Read the index-freshness watchdog's last verdict for the status view.
+
+    The daily watchdog writes ``snn_state/index_freshness.json``; surfacing it
+    here is the whole point of the watchdog — a stalled index was invisible for
+    eight weeks because no status line ever reported the drift.
+    """
+    report = STATE_DIR / "index_freshness.json"
+    if not report.exists():
+        return {"state": "missing"}
+    try:
+        payload = json.loads(report.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"state": "unreadable"}
+    checked = payload.get("checked_at_unix")
+    if isinstance(checked, (int, float)):
+        age_s = round(time.time() - float(checked))
+        checked_age = f"{age_s}s ago" if age_s < 3600 else f"{age_s / 86400:.1f}d ago"
+    else:
+        checked_age = "unknown"
+    return {
+        "state": "present",
+        "stale": bool(payload.get("stale")),
+        "drift_days": payload.get("drift_days"),
+        "checked_age": checked_age,
     }
 
 

@@ -16,6 +16,7 @@ on wall-clock timing.
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -27,10 +28,12 @@ from index_freshness import (
     PipelineFreshness,
     StageFreshness,
     _iso,
+    _now,
     assess_default,
     assess_pipeline,
     default_stages,
     probe_stage,
+    write_report,
 )
 
 
@@ -210,6 +213,52 @@ class TestDefaultStages:
         report = assess_default(max_drift_days=DEFAULT_MAX_DRIFT_DAYS)
         assert report.stale is True
         assert report.drift_days == pytest.approx(56.0)
+
+
+class TestWriteReport:
+    """The watchdog persists its verdict for the status view and later inspection."""
+
+    def _report(self, *, index_day: float) -> PipelineFreshness:
+        return assess_pipeline(
+            [
+                StageFreshness("stimuli", 100 * SECONDS_PER_DAY, 1, "/s"),
+                StageFreshness("vector-index", index_day * SECONDS_PER_DAY, 1, "/v"),
+            ],
+            max_drift_days=DEFAULT_MAX_DRIFT_DAYS,
+        )
+
+    def test_writes_json_with_pinned_timestamp(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setattr("index_freshness._now", lambda: 1781637939.0)
+        report = self._report(index_day=44.0)  # 56-day drift → stale
+        out = tmp_path / "nested" / "index_freshness.json"
+
+        returned = write_report(report, out)
+
+        assert returned == out
+        payload = json.loads(out.read_text(encoding="utf-8"))
+        assert payload["stale"] is True
+        assert payload["drift_days"] == pytest.approx(56.0)
+        assert payload["checked_at_unix"] == 1781637939
+        # The parent directory did not exist before the call.
+        assert out.parent.is_dir()
+
+    def test_records_fresh_verdict(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setattr("index_freshness._now", lambda: 42.0)
+        report = self._report(index_day=98.0)  # 2-day drift, within tolerance
+        out = tmp_path / "index_freshness.json"
+
+        write_report(report, out)
+
+        payload = json.loads(out.read_text(encoding="utf-8"))
+        assert payload["stale"] is False
+        assert payload["drift_days"] == pytest.approx(2.0)
+
+    def test_now_returns_wall_clock(self):
+        import time
+
+        before = time.time()
+        value = _now()
+        assert before <= value <= time.time()
 
 
 def test_stage_freshness_is_frozen():

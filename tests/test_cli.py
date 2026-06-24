@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, patch
 
 
 from cli import (
+    _read_freshness_report,
     cmd_consolidate,
     cmd_entities,
     cmd_graph,
@@ -149,6 +150,88 @@ class TestCmdStatus:
 
         out = capsys.readouterr().out
         assert "2" in out  # 2 traces
+
+
+class TestFreshnessReport:
+    """The status view surfaces the watchdog's last verdict — the signal that was
+    missing while the index sat frozen for eight weeks."""
+
+    def _write(self, state_dir, payload) -> None:
+        state_dir.mkdir(parents=True, exist_ok=True)
+        (state_dir / "index_freshness.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    def test_missing_report(self, tmp_path):
+        with patch("cli.STATE_DIR", tmp_path / "snn_state"):
+            assert _read_freshness_report() == {"state": "missing"}
+
+    def test_unreadable_report(self, tmp_path):
+        state_dir = tmp_path / "snn_state"
+        state_dir.mkdir()
+        (state_dir / "index_freshness.json").write_text("{not json", encoding="utf-8")
+        with patch("cli.STATE_DIR", state_dir):
+            assert _read_freshness_report()["state"] == "unreadable"
+
+    def test_stale_report_age_in_seconds(self, tmp_path):
+        state_dir = tmp_path / "snn_state"
+        self._write(
+            state_dir,
+            {"stale": True, "drift_days": 54.7, "checked_at_unix": time.time() - 30},
+        )
+        with patch("cli.STATE_DIR", state_dir):
+            report = _read_freshness_report()
+        assert report["stale"] is True
+        assert report["drift_days"] == 54.7
+        assert report["checked_age"].endswith("s ago")
+
+    def test_fresh_report_age_in_days(self, tmp_path):
+        state_dir = tmp_path / "snn_state"
+        self._write(
+            state_dir,
+            {"stale": False, "drift_days": 1.0, "checked_at_unix": time.time() - 200000},
+        )
+        with patch("cli.STATE_DIR", state_dir):
+            report = _read_freshness_report()
+        assert report["stale"] is False
+        assert report["checked_age"].endswith("d ago")
+
+    def test_unknown_timestamp(self, tmp_path):
+        state_dir = tmp_path / "snn_state"
+        self._write(state_dir, {"stale": False, "drift_days": None, "checked_at_unix": "nope"})
+        with patch("cli.STATE_DIR", state_dir):
+            assert _read_freshness_report()["checked_age"] == "unknown"
+
+    def _run_status(self, tmp_path, state_dir):
+        graph_dir = tmp_path / "memory" / "graph"
+        graph_dir.mkdir(parents=True)
+        (tmp_path / "reasoning_traces").mkdir()
+        (tmp_path / "memory" / "semantic").mkdir(parents=True)
+        with (
+            patch("cli.STATE_DIR", state_dir),
+            patch("cli.GRAPH_DIR", graph_dir),
+            patch("cli.BASE", tmp_path),
+        ):
+            cmd_status(type("Args", (), {})())
+
+    def test_status_prints_stale_drift(self, tmp_path, capsys):
+        state_dir = tmp_path / "snn_state"
+        self._write(
+            state_dir,
+            {"stale": True, "drift_days": 54.7, "checked_at_unix": time.time()},
+        )
+        self._run_status(tmp_path, state_dir)
+        out = capsys.readouterr().out
+        assert "Index freshness: STALE (drift 54.7d)" in out
+
+    def test_status_prints_no_check_yet(self, tmp_path, capsys):
+        self._run_status(tmp_path, tmp_path / "snn_state")
+        assert "Index freshness: NO CHECK YET" in capsys.readouterr().out
+
+    def test_status_prints_unreadable(self, tmp_path, capsys):
+        state_dir = tmp_path / "snn_state"
+        state_dir.mkdir()
+        (state_dir / "index_freshness.json").write_text("{bad", encoding="utf-8")
+        self._run_status(tmp_path, state_dir)
+        assert "Index freshness: UNREADABLE" in capsys.readouterr().out
 
 
 # ── cmd_graph ────────────────────────────────────────────────────

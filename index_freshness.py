@@ -254,13 +254,48 @@ def assess_default(
     return assess_pipeline(default_stages(base), max_drift_days=max_drift_days)
 
 
+def write_report(report: PipelineFreshness, path: str | Path) -> Path:
+    """Persist the drift verdict as JSON so watchdogs and status surfaces read it.
+
+    The daily freshness timer leaves this artifact behind every run, giving the
+    CLI ``status`` view and any later inspection a durable record of the last
+    check — when it ran, the drift, and whether the pipeline was stale — without
+    re-walking the corpus. The parent directory is created if absent so a fresh
+    checkout's first run does not fail. Returns the path written.
+    """
+    import json
+
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    payload = report.as_dict()
+    payload["checked_at_unix"] = int(_now())
+    out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return out
+
+
+def _now() -> float:
+    """Wall-clock epoch seconds, isolated so tests can pin the check timestamp."""
+    import time
+
+    return time.time()
+
+
 def main() -> int:  # pragma: no cover — CLI/cron entry point
-    """Print the freshness report; exit non-zero when the pipeline is stale."""
+    """Print the freshness report; exit non-zero when the pipeline is stale.
+
+    With ``--report PATH`` the verdict is also persisted as JSON for the daily
+    watchdog timer, so ``remanentia status`` and any later inspection can read
+    the last check without re-walking the corpus. A non-zero exit on staleness
+    is what the systemd timer turns into a visible ``failed`` unit.
+    """
     import json
     import sys
 
-    as_json = "--json" in sys.argv[1:]
+    argv = sys.argv[1:]
+    as_json = "--json" in argv
     report = assess_default()
+    if "--report" in argv:
+        write_report(report, argv[argv.index("--report") + 1])
     if as_json:
         print(json.dumps(report.as_dict(), indent=2))
     else:
