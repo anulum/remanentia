@@ -78,6 +78,7 @@ py-modules = [
     "recall_outcome_tracker",
     "bus_recall",
     "finding_ingest",
+    "recall_gate",
     "index_freshness",
     "compiled_memory",
     "benchmark_suites",
