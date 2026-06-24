@@ -120,11 +120,12 @@ def present(
     admit = _norm(admission)
 
     # 1. Any unknown/undeclared member on a gating axis withholds validation.
+    #    This check is strictly first, faithful to the platform source: a
+    #    finding with an unknown sibling axis floors to boundary even if another
+    #    axis would read falsified/refuted. (In valid data a refuted finding
+    #    always carries a known evidence_kind, so this edge does not arise; the
+    #    parity-preserving literal order is kept rather than a local safety tweak.)
     if kind not in EVIDENCE_KINDS or status not in CLAIM_STATUSES or admit not in ADMISSIONS:
-        # A negative finding still surfaces as refuted even when another gating
-        # axis is unknown — a tested-false claim is never softened to a hedge.
-        if kind == FALSIFIED or status == REFUTED_STATUS:
-            return REFUTED
         return BOUNDARY
     # 2. A negative finding is refuted, even against a reference-validated boundary.
     if kind == FALSIFIED or status == REFUTED_STATUS:

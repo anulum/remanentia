@@ -93,12 +93,15 @@ class TestPresentUnknownAxes:
             BOUNDARY
         )
 
-    def test_falsified_with_unknown_status_still_refuted(self):
-        # A tested-false claim surfaces as refuted even if another gating axis is unknown.
-        assert present("falsified", None, "admitted", None) == REFUTED
+    def test_falsified_with_unknown_status_floors_to_boundary(self):
+        # Faithful to the platform: the unknown-gating-axis check is strictly
+        # first, so an unknown sibling axis floors even a falsified finding to
+        # boundary. (Does not arise in valid data — a refuted/falsified finding
+        # always carries a known claim_status.)
+        assert present("falsified", None, "admitted", None) == BOUNDARY
 
-    def test_refuted_status_with_unknown_kind_still_refuted(self):
-        assert present(None, "refuted", "admitted", None) == REFUTED
+    def test_refuted_status_with_unknown_kind_floors_to_boundary(self):
+        assert present(None, "refuted", "admitted", None) == BOUNDARY
 
 
 class TestStatusTable:
