@@ -55,6 +55,8 @@ gpu_build.pid
 tests/e2e_10x_bench/
 reasoning_traces/*.json
 reasoning_traces/*.md
+# Agentic working identity / relationship notes — internal, never published.
+disposition/
 web/backups/
 
 # Generated benchmark/publication review outputs. Keep these local until they
