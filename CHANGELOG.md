@@ -51,11 +51,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Cumulative R8 → R11: 45.9% → 65.4% = **+19.5pp / +26 questions**
   - Overall: 72.2% (361/500); R10→R11 movement (−0.6pp) within LLM single-run noise envelope
   - Category changes R10→R11: multi-session 63.2%→54.1% (−12, within typical ~±10 question noise — all R11 code changes are gated inside `if qtype == "temporal-reasoning"` branches and do not touch multi-session pipeline), knowledge-update 88.5%→84.6% (−3), preference 83.3%→90.0% (+2, recovered)
-  - Four pipeline changes implementing remaining Gemini R9 follow-up recommendations:
-    - **Fuzzy inclusive/exclusive durations** (commit 94f44c7, Gemini #2): `temporal_code_execute` and `extract_duration` emit dual-format output ("30 days or 31 days counting both endpoints") so the LLM/judge has both inclusive and exclusive forms.
-    - **Question_date anchoring** (commit 8b187a4, Gemini #3 — root-cause re-interpretation): plumb `question_date` from oracle through `run_benchmark → _arcane_answer → _build_context → _tremu_precompute → temporal_code_execute`. Prepends `TODAY (question was asked on): ...` to temporal-reasoning LLM prompt. Fixed "how many X ago" queries where the LLM was hallucinating "today" as an arbitrary date.
-    - **Multi-event proximity tuning** (commit d9d9713, Gemini #4): `_score_event_vs_query` combines unigram + 2× bigram + density term; `_proximity_score` uses distance-weighted scoring within a tighter 60-char window. Eliminates tied scoring that caused `_pick_duration_pair` / `extract_duration` to choose the wrong date pair.
-    - **Narrow multi-hop chain resolution** (commit 9dd754b, Gemini #5): `_expand_chained_dates` resolves `"N (days|weeks|months) (after|before) YYYY-MM-DD"` patterns within a single sentence, emitting the computed ISO date as a new `TemporalEvent`. Scope limited to ISO anchors; entity-linked chains out of scope.
+  - Four pipeline changes for temporal-reasoning:
+    - **Fuzzy inclusive/exclusive durations** (commit 94f44c7): `temporal_code_execute` and `extract_duration` emit dual-format output ("30 days or 31 days counting both endpoints") so the LLM/judge has both inclusive and exclusive forms.
+    - **Question_date anchoring** (commit 8b187a4): plumb `question_date` from oracle through `run_benchmark → _arcane_answer → _build_context → _tremu_precompute → temporal_code_execute`. Prepends `TODAY (question was asked on): ...` to temporal-reasoning LLM prompt. Fixed "how many X ago" queries where the LLM was hallucinating "today" as an arbitrary date.
+    - **Multi-event proximity tuning** (commit d9d9713): `_score_event_vs_query` combines unigram + 2× bigram + density term; `_proximity_score` uses distance-weighted scoring within a tighter 60-char window. Eliminates tied scoring that caused `_pick_duration_pair` / `extract_duration` to choose the wrong date pair.
+    - **Narrow multi-hop chain resolution** (commit 9dd754b): `_expand_chained_dates` resolves `"N (days|weeks|months) (after|before) YYYY-MM-DD"` patterns within a single sentence, emitting the computed ISO date as a new `TemporalEvent`. Scope limited to ISO anchors; entity-linked chains out of scope.
   - 31 new tests across temporal_graph (22: fuzzy dual-format, question_date anchor, scoring, proximity, chained), answer_extractor (9: dual-format + proximity), bringing total to 1,814
   - R10 results archived as `data/longmemeval_hypotheses.results.R10_baseline.jsonl` (gitignored)
 
@@ -73,7 +73,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     for knowledge-update, multi-session, and preference qtypes (first release of Task #32 caused
     -5 question regression in each; `fix: qtype-aware chronological sort` restored them)
   - 14 new tests across date_normalizer (10), arcane_retriever (5 sort + 2 flag), fact_decomposer (2)
-  - Gemini R9 follow-up audit recommendation #1 of 5
   - R9 results archived as `data/longmemeval_hypotheses.results.R9_baseline.jsonl` (gitignored)
 
 - **LongMemEval R9 — temporal breakthrough** (2026-04-11):

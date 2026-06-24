@@ -29,7 +29,7 @@ pytest tests/ --cov=. --cov-config=pyproject.toml -q
 
 - Python 3.10+ with type hints on public API boundaries
 - No `# noqa` comments — fix the code instead
-- SPDX 6-line header on every source file (see root CLAUDE.md)
+- SPDX 6-line header on every source file (match the header on any existing source file)
 - Anti-slop policy: no narration comments, no defensive boilerplate walls,
   no buzzword naming, no trivial wrappers
 
