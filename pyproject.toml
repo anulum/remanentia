@@ -76,6 +76,7 @@ py-modules = [
     "memory_index",
     "recall_ledger",
     "bus_recall",
+    "index_freshness",
     "compiled_memory",
     "benchmark_suites",
     "memory_recall",
