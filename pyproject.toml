@@ -72,6 +72,7 @@ Author = "https://www.anulum.li"
 [tool.setuptools]
 py-modules = [
     "memory_index",
+    "recall_ledger",
     "compiled_memory",
     "benchmark_suites",
     "memory_recall",

@@ -48,7 +48,7 @@ jobs:
 
       - name: Mypy type check (advisory)
         continue-on-error: true
-        run: mypy memory_index.py mcp_server.py consolidation_engine.py cli.py api.py api_server.py answer_extractor.py answer_normalizer.py knowledge_store.py temporal_graph.py entity_extractor.py observer.py reflector.py memory_recall.py arcane_retriever.py fact_decomposer.py --ignore-missing-imports --explicit-package-bases
+        run: mypy memory_index.py mcp_server.py recall_ledger.py consolidation_engine.py cli.py api.py api_server.py answer_extractor.py answer_normalizer.py knowledge_store.py temporal_graph.py entity_extractor.py observer.py reflector.py memory_recall.py arcane_retriever.py fact_decomposer.py --ignore-missing-imports --explicit-package-bases
 
       - name: Bandit SAST
         # B301 (pickle.load) + B403 (import pickle) re-enabled 2026-04-17

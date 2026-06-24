@@ -73,6 +73,34 @@ def _default_mcp_audit_logger():
 MCP_AUDIT_LOGGER = _default_mcp_audit_logger()
 
 
+_RECALL_LEDGER = None
+
+
+def _get_recall_ledger():
+    """Return the process-wide recall query-stream ledger (lazy singleton)."""
+    global _RECALL_LEDGER
+    if _RECALL_LEDGER is None:
+        default_ledger = _runtime_attr("recall_ledger", "default_ledger")
+        _RECALL_LEDGER = default_ledger()
+    return _RECALL_LEDGER
+
+
+def _log_recall(query: str, returned_ids: list[str], top_k: int, project: str) -> None:
+    """Record a recall in the query-stream ledger (MS.1); never raise.
+
+    The query stream is the query-weighted calibration + salience source
+    the fleet-memory design needs. Disabled via
+    ``REMANENTIA_RECALL_LEDGER_DISABLE``. Telemetry must never break a
+    recall, so every failure is swallowed.
+    """
+    if os.environ.get("REMANENTIA_RECALL_LEDGER_DISABLE"):
+        return
+    try:
+        _get_recall_ledger().record(query, returned_ids, top_k=top_k, project=project)
+    except Exception:  # pragma: no cover — telemetry must never break recall
+        log.debug("Recall ledger write failed", exc_info=True)
+
+
 def _get_knowledge_store():
     global _KNOWLEDGE_STORE
     if _KNOWLEDGE_STORE is not None:
@@ -135,7 +163,9 @@ def handle_recall(
         results = _UNIFIED_INDEX.search(
             query, top_k=top_k, project=project, after=after, before=before, use_llm=use_llm
         )
+        returned_ids = [f"{r.source}:{r.name}" for r in results]
         if not results and not trigger_lines:
+            _log_recall(query, returned_ids, top_k, project)
             return f"No memories found for: {query}"
 
         # Guarded tier: when enabled and director-ai is available, check
@@ -186,6 +216,7 @@ def handle_recall(
         except Exception:  # pragma: no cover
             log.debug("Knowledge graph recall failed", exc_info=True)
 
+        _log_recall(query, returned_ids, top_k, project)
         return "\n\n".join(parts)
 
     except Exception:  # pragma: no cover
