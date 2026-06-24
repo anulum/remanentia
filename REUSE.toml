@@ -43,6 +43,7 @@ SPDX-License-Identifier = "AGPL-3.0-or-later"
 [[annotations]]
 path = [
   "data/longmemeval_hypotheses*.jsonl",
+  "benchmarks/*.jsonl",
   "paper/locomo_results.json",
   "paper/autoresearch_retrieval_2026-04-06.log",
   "paper/longmemeval_final_results_2026-04-06.txt",
