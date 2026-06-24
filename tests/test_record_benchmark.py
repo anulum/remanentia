@@ -173,7 +173,11 @@ def test_build_record_shape_and_passthrough() -> None:
     assert record["round"] == "R12"
     assert record["benchmark"] == "longmemeval"
     assert record["git_sha"] == "abc1234"
-    assert record["config"] == {"synth_model": "gpt-4o-mini", "judge_model": "gpt-4o-mini", "seed": 42}
+    assert record["config"] == {
+        "synth_model": "gpt-4o-mini",
+        "judge_model": "gpt-4o-mini",
+        "seed": 42,
+    }
     assert record["overall_accuracy"] == 50.0
     assert record["note"] == "unit"
 
@@ -201,8 +205,7 @@ def test_record_run_end_to_end(tmp_path: Path) -> None:
     results = tmp_path / "results.jsonl"
     results.write_text(
         "\n".join(
-            json.dumps(r)
-            for r in _records(("temporal-reasoning", True), ("multi-session", False))
+            json.dumps(r) for r in _records(("temporal-reasoning", True), ("multi-session", False))
         ),
         encoding="utf-8",
     )

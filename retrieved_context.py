@@ -82,9 +82,7 @@ def rank_ordered_sessions(results: Sequence[_Result]) -> list[int]:
     return ordered
 
 
-def _render_session(
-    order: int, session: list[dict[str, str]], session_date: str
-) -> str:
+def _render_session(order: int, session: list[dict[str, str]], session_date: str) -> str:
     """Render one session as a dated, role-tagged transcript block."""
     header = f"=== Session {order}"
     if session_date:
@@ -155,9 +153,7 @@ def select_sessions(
     )
 
 
-def gold_session_recall(
-    selected_idxs: Sequence[int], gold_idxs: Sequence[int | None]
-) -> float:
+def gold_session_recall(selected_idxs: Sequence[int], gold_idxs: Sequence[int | None]) -> float:
     """Fraction of gold answer sessions present in the selected set.
 
     1.0 means every gold session was retrieved into the reader context (so any

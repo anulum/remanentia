@@ -86,7 +86,7 @@ def test_aggregate_full_rate_and_mean_candidates():
     ns = (5, 10)
     records = [
         _rec("multi-session", {5: 0.5, 10: 1.0}, 12),  # full@10
-        _rec("multi-session", {5: 0.0, 10: 0.5}, 8),   # not full@10
+        _rec("multi-session", {5: 0.0, 10: 0.5}, 8),  # not full@10
     ]
     agg = rr.aggregate_recall(records, ns=ns)
     assert agg["multi-session"]["full@10"] == pytest.approx(0.5)
@@ -94,9 +94,7 @@ def test_aggregate_full_rate_and_mean_candidates():
 
 
 def test_aggregate_full_rate_all_recalled():
-    agg = rr.aggregate_recall(
-        [_rec("x", {3: 1.0}, 5), _rec("x", {3: 1.0}, 5)], ns=(3,)
-    )
+    agg = rr.aggregate_recall([_rec("x", {3: 1.0}, 5), _rec("x", {3: 1.0}, 5)], ns=(3,))
     assert agg["x"]["full@3"] == 1.0
 
 
@@ -106,9 +104,7 @@ def test_aggregate_full_rate_all_recalled():
 
 
 def test_print_table_renders(capsys):
-    agg = rr.aggregate_recall(
-        [_rec("multi-session", {n: 0.5 for n in rr.RECALL_NS}, 15)]
-    )
+    agg = rr.aggregate_recall([_rec("multi-session", {n: 0.5 for n in rr.RECALL_NS}, 15)])
     rr._print_table(agg)
     out = capsys.readouterr().out
     assert "multi-session" in out

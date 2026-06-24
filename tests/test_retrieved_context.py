@@ -146,13 +146,13 @@ def test_returns_retrieved_context_type():
 @pytest.mark.parametrize(
     "selected,gold,expected",
     [
-        ([1, 2, 3], [2, 3], 1.0),          # all gold retrieved
-        ([1, 2], [2, 3], 0.5),             # half retrieved
-        ([4, 5], [2, 3], 0.0),             # pure retrieval miss
-        ([], [2, 3], 0.0),                 # nothing selected
-        ([1, 2, 3], [], 1.0),             # no gold → vacuously complete
-        ([1, 2, 3], [None, 2], 1.0),       # None gold ids filtered out
-        ([1], [None], 1.0),                # all-None gold → vacuous
+        ([1, 2, 3], [2, 3], 1.0),  # all gold retrieved
+        ([1, 2], [2, 3], 0.5),  # half retrieved
+        ([4, 5], [2, 3], 0.0),  # pure retrieval miss
+        ([], [2, 3], 0.0),  # nothing selected
+        ([1, 2, 3], [], 1.0),  # no gold → vacuously complete
+        ([1, 2, 3], [None, 2], 1.0),  # None gold ids filtered out
+        ([1], [None], 1.0),  # all-None gold → vacuous
     ],
 )
 def test_gold_session_recall(selected, gold, expected):
