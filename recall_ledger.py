@@ -236,6 +236,31 @@ class RecallLedger:
                 was_used=outcomes.get(event_id),
             )
 
+    def latest_for(self, query: str, by: str | None = None) -> str | None:
+        """Return the ``event_id`` of the most recent matching query.
+
+        Matches on exact ``query`` text and, when ``by`` is given, the
+        querying agent. Lets a consumer attach an outcome to the recall it
+        just made without tracking event ids itself.
+
+        Parameters
+        ----------
+        query
+            The recall query text to match.
+        by
+            When given, also require this querying agent.
+
+        Returns
+        -------
+        str or None
+            The latest matching ``event_id``, or ``None`` if none match.
+        """
+        event_id: str | None = None
+        for q in self.queries():
+            if q.query == query and (by is None or q.by == by):
+                event_id = q.event_id
+        return event_id
+
     @staticmethod
     def _event_id(query: str, ts: float, by: str) -> str:
         """Return a stable short id for a query record."""

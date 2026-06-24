@@ -195,6 +195,73 @@ class TestDefaultLedger:
         assert led.path.name == "recall_ledger.jsonl"
 
 
+class TestLatestFor:
+    def test_finds_latest_matching(self, ledger: RecallLedger):
+        ledger.record("alpha", ["s:1"], top_k=1)
+        e2 = ledger.record("alpha", ["s:2"], top_k=1)
+        assert ledger.latest_for("alpha") == e2
+
+    def test_none_when_no_match(self, ledger: RecallLedger):
+        ledger.record("alpha", [], top_k=1)
+        assert ledger.latest_for("beta") is None
+
+    def test_filters_by_agent(self, ledger: RecallLedger):
+        ledger.record("alpha", [], top_k=1, by="a1")
+        e = ledger.record("alpha", [], top_k=1, by="a2")
+        assert ledger.latest_for("alpha", by="a2") == e
+        assert ledger.latest_for("alpha", by="a3") is None
+
+
+class TestRecallFeedback:
+    def test_records_outcome(self, tmp_path: Path, monkeypatch):
+        import mcp_server
+
+        led = RecallLedger(tmp_path / "fb.jsonl")
+        monkeypatch.setattr(mcp_server, "_RECALL_LEDGER", led)
+        monkeypatch.delenv("REMANENTIA_RECALL_LEDGER_DISABLE", raising=False)
+        led.record("q", ["s:n"], top_k=1)
+        msg = mcp_server.handle_recall_feedback("q", True)
+        assert "was_used=True" in msg
+        (rq,) = list(led.queries())
+        assert rq.was_used is True
+
+    def test_no_prior_recall(self, tmp_path: Path, monkeypatch):
+        import mcp_server
+
+        led = RecallLedger(tmp_path / "fb.jsonl")
+        monkeypatch.setattr(mcp_server, "_RECALL_LEDGER", led)
+        monkeypatch.delenv("REMANENTIA_RECALL_LEDGER_DISABLE", raising=False)
+        msg = mcp_server.handle_recall_feedback("nope", True)
+        assert "No prior recall" in msg
+
+    def test_disabled_is_noop(self, monkeypatch):
+        import mcp_server
+
+        monkeypatch.setenv("REMANENTIA_RECALL_LEDGER_DISABLE", "1")
+        assert "disabled" in mcp_server.handle_recall_feedback("q", True)
+
+    def test_dispatch_via_handle_request(self, tmp_path: Path, monkeypatch):
+        import mcp_server
+
+        led = RecallLedger(tmp_path / "fb.jsonl")
+        monkeypatch.setattr(mcp_server, "_RECALL_LEDGER", led)
+        monkeypatch.delenv("REMANENTIA_RECALL_LEDGER_DISABLE", raising=False)
+        led.record("q", ["s:n"], top_k=1)
+        req = {
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": "tools/call",
+            "params": {
+                "name": "remanentia_recall_feedback",
+                "arguments": {"query": "q", "was_used": True},
+            },
+        }
+        resp = mcp_server.handle_request(req)
+        assert resp is not None and resp["id"] == 7
+        (rq,) = list(led.queries())
+        assert rq.was_used is True
+
+
 class TestMcpRecallHook:
     """The mcp_server recall hook records the query stream, opt-out aware."""
 

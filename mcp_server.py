@@ -9,11 +9,12 @@
 """MCP server for Remanentia — lets any MCP-compatible agent
 (Cursor and others) use Remanentia as a memory tool.
 
-Provides four tools:
+Provides five tools:
   - remanentia_recall: Search memory
   - remanentia_remember: Persist a memory
   - remanentia_status: System status
   - remanentia_graph: Entity relationship query
+  - remanentia_recall_feedback: Rate whether a recall was used
 
 Usage (stdio transport)::
     python workspace-internal/mcp_server.py
@@ -441,6 +442,28 @@ def handle_graph(entity: str = "", top: int = 10) -> str:
     return "\n".join(lines)
 
 
+def handle_recall_feedback(query: str, was_used: bool, by: str = "") -> str:
+    """Record whether a prior recall for *query* was used downstream.
+
+    Attaches a ``was_used`` outcome to the most recent matching recall in
+    the query-stream ledger (MS.1) — the realised-outcome label the
+    conformal calibration gate trains on. A *usage* signal, not a
+    correctness label. Disabled via ``REMANENTIA_RECALL_LEDGER_DISABLE``.
+    """
+    if os.environ.get("REMANENTIA_RECALL_LEDGER_DISABLE"):
+        return "Recall ledger disabled; feedback ignored."
+    try:
+        ledger = _get_recall_ledger()
+        event_id = ledger.latest_for(query, by=by or None)
+        if event_id is None:
+            return f"No prior recall found for: {query}"
+        ledger.record_outcome(event_id, was_used=was_used)
+        return f"Recorded was_used={was_used} for recall of: {query}"
+    except Exception as e:  # pragma: no cover — telemetry must never break recall
+        log.debug("Recall feedback failed", exc_info=True)
+        return f"Feedback error: {e}"
+
+
 # ── MCP Protocol (stdio JSON-RPC) ────────────────────────────────
 
 TOOLS = [
@@ -522,6 +545,24 @@ TOOLS = [
             },
         },
     },
+    {
+        "name": "remanentia_recall_feedback",
+        "description": "Report whether a prior recall was actually used, so memory can calibrate recall quality against real outcomes. Call after acting (or not) on a remanentia_recall result for the same query.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The query of the recall being rated",
+                },
+                "was_used": {
+                    "type": "boolean",
+                    "description": "Whether the recalled memories were used",
+                },
+            },
+            "required": ["query", "was_used"],
+        },
+    },
 ]
 
 
@@ -574,6 +615,11 @@ def handle_request(request: dict) -> dict | None:
                 text = handle_status()
             elif tool_name == "remanentia_graph":
                 text = handle_graph(args.get("entity", ""), args.get("top", 10))
+            elif tool_name == "remanentia_recall_feedback":
+                text = handle_recall_feedback(
+                    args.get("query", ""),
+                    bool(args.get("was_used", False)),
+                )
             else:
                 outcome = "unknown_tool"
                 text = f"Unknown tool: {tool_name}"

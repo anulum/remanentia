@@ -36,8 +36,8 @@ def _disable_default_mcp_audit(monkeypatch):
 
 
 class TestToolDefinitions:
-    def test_four_tools_defined(self):
-        assert len(TOOLS) == 4
+    def test_five_tools_defined(self):
+        assert len(TOOLS) == 5
 
     def test_tool_names(self):
         names = {t["name"] for t in TOOLS}
@@ -46,6 +46,7 @@ class TestToolDefinitions:
             "remanentia_remember",
             "remanentia_status",
             "remanentia_graph",
+            "remanentia_recall_feedback",
         }
 
     def test_recall_schema(self):
@@ -76,7 +77,7 @@ class TestMCPProtocol:
     def test_tools_list(self):
         req = {"jsonrpc": "2.0", "id": 2, "method": "tools/list"}
         resp = handle_request(req)
-        assert len(resp["result"]["tools"]) == 4
+        assert len(resp["result"]["tools"]) == 5
 
     def test_notifications_initialized(self):
         req = {"jsonrpc": "2.0", "method": "notifications/initialized"}
