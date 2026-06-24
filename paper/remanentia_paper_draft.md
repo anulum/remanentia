@@ -218,4 +218,4 @@ The path to improving accuracy is straightforward: add LLM-based answer extracti
 
 ---
 
-Co-Authored-By: Arcane Sapience <protoscience@anulum.li>
+Authored by Anulum Fortis & Arcane Sapience (protoscience@anulum.li)

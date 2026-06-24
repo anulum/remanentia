@@ -2098,7 +2098,7 @@ class TestReciprocalRankFusion:
         assert len(result) == 2
 
 
-# ── Remaining coverage gaps ──────────────────────────────────────
+# ── Additional memory-index behaviours ──────────────────────────────────────
 
 
 class TestRustBm25NoneReturn:

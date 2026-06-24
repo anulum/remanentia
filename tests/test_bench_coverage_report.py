@@ -8,51 +8,29 @@
 
 """Coverage diagnostic for `bench_longmemeval.compute_coverage_buckets`.
 
-Exercises the R3 post-hoc analyser via subprocess so the module-level
-``sys.argv`` probes in `bench_longmemeval` do not taint the test
-interpreter.
+The function is pure (no dependency on the module-level ``sys.argv`` /
+``os.environ`` probes), so it is imported and called in-process — the
+same direct-import pattern other bench tests use via ``conftest``'s
+``sys.path`` insertion. The argv-sensitive constants that genuinely need
+a clean interpreter are exercised separately in
+``test_bench_longmemeval_cli.py``.
 """
 
 from __future__ import annotations
 
-import json
-import subprocess
-import sys
-from pathlib import Path
-
 import pytest
 
-REPO = Path(__file__).resolve().parent.parent
-PY = sys.executable
+from bench_longmemeval import compute_coverage_buckets
 
 
-def _run(results: list[dict], oracle_list: list[dict]) -> dict[str, list[float]]:
-    """Invoke compute_coverage_buckets in a subprocess and return the result."""
-    oracle_map = {q["question_id"]: q for q in oracle_list}
-    code = (
-        "import sys, json\n"
-        f"sys.argv = ['bench_longmemeval.py']\n"
-        "import bench_longmemeval as b\n"
-        f"results = {results!r}\n"
-        f"oracle = {oracle_map!r}\n"
-        "buckets = b.compute_coverage_buckets(results, oracle)\n"
-        "print(json.dumps({k: v for k, v in buckets.items()}))\n"
-    )
-    r = subprocess.run(
-        [PY, "-c", code],
-        cwd=REPO,
-        capture_output=True,
-        text=True,
-        timeout=30,
-        env={"PATH": str(REPO / ".venv" / "bin") + ":/usr/bin:/bin"},
-    )
-    if r.returncode != 0:
-        raise RuntimeError(r.stderr)
-    return json.loads(r.stdout.strip())
+def _buckets(results: list[dict], oracle_list: list[dict]) -> dict[str, list[float]]:
+    """Call compute_coverage_buckets with an oracle keyed by question_id."""
+    oracle = {q["question_id"]: q for q in oracle_list}
+    return compute_coverage_buckets(results, oracle)
 
 
 @pytest.fixture
-def sample_oracle():
+def sample_oracle() -> list[dict]:
     return [
         {
             "question_id": "q1",
@@ -80,7 +58,7 @@ def sample_oracle():
 
 class TestComputeCoverageBuckets:
     def test_empty_returns_empty_dict(self, sample_oracle):
-        assert _run([], sample_oracle) == {}
+        assert _buckets([], sample_oracle) == {}
 
     def test_passing_question_excluded(self, sample_oracle):
         results = [
@@ -91,7 +69,7 @@ class TestComputeCoverageBuckets:
                 "judge_label": True,
             }
         ]
-        assert _run(results, sample_oracle) == {}
+        assert _buckets(results, sample_oracle) == {}
 
     def test_full_coverage_failure(self, sample_oracle):
         """Hypothesis mentions both answer sessions → coverage 1.0."""
@@ -103,8 +81,7 @@ class TestComputeCoverageBuckets:
                 "judge_label": False,
             }
         ]
-        buckets = _run(results, sample_oracle)
-        assert buckets == {"multi-session": [1.0]}
+        assert _buckets(results, sample_oracle) == {"multi-session": [1.0]}
 
     def test_half_coverage_failure(self, sample_oracle):
         """Hypothesis only mentions session 1 content → coverage 0.5."""
@@ -116,8 +93,7 @@ class TestComputeCoverageBuckets:
                 "judge_label": False,
             }
         ]
-        buckets = _run(results, sample_oracle)
-        assert buckets == {"multi-session": [0.5]}
+        assert _buckets(results, sample_oracle) == {"multi-session": [0.5]}
 
     def test_zero_coverage_failure(self, sample_oracle):
         """Hypothesis mentions nothing from any answer session."""
@@ -129,8 +105,7 @@ class TestComputeCoverageBuckets:
                 "judge_label": False,
             }
         ]
-        buckets = _run(results, sample_oracle)
-        assert buckets == {"multi-session": [0.0]}
+        assert _buckets(results, sample_oracle) == {"multi-session": [0.0]}
 
     def test_unknown_question_id_skipped(self, sample_oracle):
         results = [
@@ -141,7 +116,7 @@ class TestComputeCoverageBuckets:
                 "judge_label": False,
             }
         ]
-        assert _run(results, sample_oracle) == {}
+        assert _buckets(results, sample_oracle) == {}
 
     def test_empty_hypothesis_skipped(self, sample_oracle):
         results = [
@@ -152,7 +127,7 @@ class TestComputeCoverageBuckets:
                 "judge_label": False,
             }
         ]
-        assert _run(results, sample_oracle) == {}
+        assert _buckets(results, sample_oracle) == {}
 
     def test_qtype_grouping(self, sample_oracle):
         results = [
@@ -169,7 +144,52 @@ class TestComputeCoverageBuckets:
                 "judge_label": False,
             },
         ]
-        buckets = _run(results, sample_oracle)
+        buckets = _buckets(results, sample_oracle)
         assert set(buckets) == {"multi-session", "temporal-reasoning"}
         assert len(buckets["multi-session"]) == 1
         assert len(buckets["temporal-reasoning"]) == 1
+
+    def test_no_answer_sessions_skipped(self, sample_oracle):
+        """A gold entry with no answer_session_ids contributes nothing."""
+        oracle = sample_oracle + [
+            {
+                "question_id": "q3",
+                "question_type": "multi-session",
+                "answer_session_ids": [],
+                "haystack_session_ids": ["x1"],
+                "haystack_sessions": [[{"role": "user", "content": "anything at all here"}]],
+            }
+        ]
+        results = [
+            {
+                "question_id": "q3",
+                "question_type": "multi-session",
+                "hypothesis": "anything at all here matches",
+                "judge_label": False,
+            }
+        ]
+        assert _buckets(results, oracle) == {}
+
+    def test_answer_session_missing_from_haystack(self, sample_oracle):
+        """An answer session absent from the haystack counts as not covered."""
+        oracle = [
+            {
+                "question_id": "q4",
+                "question_type": "multi-session",
+                "answer_session_ids": ["present", "absent"],
+                "haystack_session_ids": ["present"],
+                "haystack_sessions": [
+                    [{"role": "user", "content": "Saturn rings telescope observation"}],
+                ],
+            }
+        ]
+        results = [
+            {
+                "question_id": "q4",
+                "question_type": "multi-session",
+                "hypothesis": "Saturn rings telescope observation noted",
+                "judge_label": False,
+            }
+        ]
+        # 'present' covered (>=2 overlapping tokens), 'absent' uncovered → 1/2.
+        assert _buckets(results, oracle) == {"multi-session": [0.5]}
