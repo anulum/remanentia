@@ -18,6 +18,24 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
+@pytest.fixture(autouse=True)
+def _isolate_recall_bus(monkeypatch):
+    """Keep the fleet recall bus off by default in every test.
+
+    The bus opens a real websocket to the SYNAPSE hub; no test may reach the
+    network implicitly. Tests that exercise the bus build a ``BusRecallEmitter``
+    with an injected fake factory, or opt back in by deleting the env var.
+    The lazy bus singleton in ``mcp_server`` is reset afterwards so an
+    injection in one test never leaks into the next.
+    """
+    monkeypatch.setenv("REMANENTIA_RECALL_BUS_DISABLE", "1")
+    yield
+    mod = sys.modules.get("mcp_server")
+    if mod is not None:
+        mod._BUS_EMITTER = None
+        mod._BUS_EMITTER_INIT = False
+
+
 @pytest.fixture
 def tmp_traces(tmp_path):
     """Create a temporary traces directory with sample traces."""

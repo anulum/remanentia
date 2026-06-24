@@ -298,6 +298,72 @@ class TestMcpRecallHook:
         assert first is second
 
 
+class _FakeEmitter:
+    """Records bus emits without touching the network."""
+
+    def __init__(self, *, fail: bool = False):
+        self.calls: list[tuple] = []
+        self._fail = fail
+
+    def emit(self, query_text, *, returned_claim_ids, was_used=False, abstained=False):
+        if self._fail:
+            raise RuntimeError("emit boom")
+        self.calls.append((query_text, list(returned_claim_ids), was_used, abstained))
+        return True
+
+
+class TestMcpRecallBus:
+    """The mcp_server recall hook mirrors the query stream onto the fleet bus."""
+
+    def test_log_recall_emits_to_bus(self, monkeypatch):
+        import mcp_server
+
+        fake = _FakeEmitter()
+        monkeypatch.setattr(mcp_server, "_BUS_EMITTER", fake)
+        monkeypatch.setattr(mcp_server, "_BUS_EMITTER_INIT", True)
+        monkeypatch.setenv("REMANENTIA_RECALL_LEDGER_DISABLE", "1")  # isolate the bus sink
+        mcp_server._log_recall("q", ["sem:trace"], 3, "scpn", 0.9)
+        assert fake.calls == [("q", ["sem:trace"], False, False)]
+
+    def test_bus_abstains_when_nothing_returned(self, monkeypatch):
+        import mcp_server
+
+        fake = _FakeEmitter()
+        monkeypatch.setattr(mcp_server, "_BUS_EMITTER", fake)
+        monkeypatch.setattr(mcp_server, "_BUS_EMITTER_INIT", True)
+        monkeypatch.setenv("REMANENTIA_RECALL_LEDGER_DISABLE", "1")
+        mcp_server._log_recall("unknown", [], 5, "")
+        assert fake.calls == [("unknown", [], False, True)]
+
+    def test_emit_recall_bus_none_is_noop(self, monkeypatch):
+        import mcp_server
+
+        monkeypatch.setattr(mcp_server, "_BUS_EMITTER", None)
+        monkeypatch.setattr(mcp_server, "_BUS_EMITTER_INIT", True)
+        # No emitter → silent return, no exception.
+        mcp_server._emit_recall_bus("q", ["a:1"])
+
+    def test_failing_emitter_never_breaks_recall(self, monkeypatch):
+        import mcp_server
+
+        monkeypatch.setattr(mcp_server, "_BUS_EMITTER", _FakeEmitter(fail=True))
+        monkeypatch.setattr(mcp_server, "_BUS_EMITTER_INIT", True)
+        # A raising emitter must be swallowed, not propagated.
+        mcp_server._emit_recall_bus("q", ["a:1"])
+
+    def test_get_bus_emitter_lazy_and_cached(self, monkeypatch):
+        import mcp_server
+
+        monkeypatch.setenv("REMANENTIA_RECALL_BUS_DISABLE", "1")  # default_emitter → None
+        monkeypatch.setattr(mcp_server, "_BUS_EMITTER", None)
+        monkeypatch.setattr(mcp_server, "_BUS_EMITTER_INIT", False)
+        first = mcp_server._get_bus_emitter()
+        assert first is None
+        assert mcp_server._BUS_EMITTER_INIT is True
+        # Second call returns the cached resolution without rebuilding.
+        assert mcp_server._get_bus_emitter() is None
+
+
 def test_recall_query_is_frozen():
     q = RecallQuery(
         event_id="x",

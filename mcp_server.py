@@ -76,6 +76,9 @@ MCP_AUDIT_LOGGER = _default_mcp_audit_logger()
 
 _RECALL_LEDGER = None
 
+_BUS_EMITTER = None
+_BUS_EMITTER_INIT = False
+
 
 def _get_recall_ledger():
     """Return the process-wide recall query-stream ledger (lazy singleton)."""
@@ -84,6 +87,41 @@ def _get_recall_ledger():
         default_ledger = _runtime_attr("recall_ledger", "default_ledger")
         _RECALL_LEDGER = default_ledger()
     return _RECALL_LEDGER
+
+
+def _get_bus_emitter():
+    """Return the process-wide recall bus emitter, or ``None`` if disabled.
+
+    Lazy singleton like the ledger, but ``None`` is a valid resolved value
+    (bus opt-out or ``synapse_channel`` absent), so a separate init flag
+    distinguishes "not yet built" from "built, no bus".
+    """
+    global _BUS_EMITTER, _BUS_EMITTER_INIT
+    if not _BUS_EMITTER_INIT:
+        default_emitter = _runtime_attr("bus_recall", "default_emitter")
+        _BUS_EMITTER = default_emitter()
+        _BUS_EMITTER_INIT = True
+    return _BUS_EMITTER
+
+
+def _emit_recall_bus(query: str, returned_ids: list[str]) -> None:
+    """Mirror a recall onto the fleet bus (MS.1 second sink); never raise.
+
+    Carries the recall-time facts the wire supports — the query, what came
+    back, and whether the system objectively abstained (nothing returned).
+    The realised ``was_used`` outcome stays in the local ledger until an
+    outcome-linking wire seam exists. Opt out via
+    ``REMANENTIA_RECALL_BUS_DISABLE`` (handled in ``bus_recall``).
+    """
+    try:
+        emitter = _get_bus_emitter()
+        if emitter is None:
+            return
+        emitter.emit(
+            query, returned_claim_ids=returned_ids, was_used=False, abstained=not returned_ids
+        )
+    except Exception:  # pragma: no cover — telemetry must never break recall
+        log.debug("Recall bus emit failed", exc_info=True)
 
 
 def _log_recall(
@@ -97,16 +135,20 @@ def _log_recall(
 
     The query stream is the query-weighted calibration + salience source
     the fleet-memory design needs; ``score`` is the top retrieval score,
-    the conformal gate's per-recall nonconformity signal. Disabled via
-    ``REMANENTIA_RECALL_LEDGER_DISABLE``. Telemetry must never break a
-    recall, so every failure is swallowed.
+    the conformal gate's per-recall nonconformity signal. One recall, two
+    sinks: the durable local ledger and the fleet bus. The ledger is
+    disabled via ``REMANENTIA_RECALL_LEDGER_DISABLE`` and the bus via
+    ``REMANENTIA_RECALL_BUS_DISABLE`` — independently. Telemetry must never
+    break a recall, so every failure is swallowed.
     """
-    if os.environ.get("REMANENTIA_RECALL_LEDGER_DISABLE"):
-        return
-    try:
-        _get_recall_ledger().record(query, returned_ids, top_k=top_k, project=project, score=score)
-    except Exception:  # pragma: no cover — telemetry must never break recall
-        log.debug("Recall ledger write failed", exc_info=True)
+    if not os.environ.get("REMANENTIA_RECALL_LEDGER_DISABLE"):
+        try:
+            _get_recall_ledger().record(
+                query, returned_ids, top_k=top_k, project=project, score=score
+            )
+        except Exception:  # pragma: no cover — telemetry must never break recall
+            log.debug("Recall ledger write failed", exc_info=True)
+    _emit_recall_bus(query, returned_ids)
 
 
 def _get_knowledge_store():
