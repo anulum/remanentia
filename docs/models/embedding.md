@@ -9,8 +9,7 @@
 ## What this model is for
 
 Encode memory fragments and queries into 384-d vectors for dense
-retrieval. Used by `memory_index.MemoryIndex._compute_embeddings`
-and `build_memory_standalone.MemoryIndex._compute_embeddings`.
+retrieval. Used by `memory_index.MemoryIndex._compute_embeddings`.
 
 ## Architecture
 

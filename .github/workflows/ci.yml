@@ -42,10 +42,10 @@ jobs:
         run: reuse lint
 
       - name: Ruff check
-        run: ruff check . --exclude=".venv*,build,dist,site,training,experimental,bench_*.py,experiments,build_memory_standalone.py,encoding.py" --output-format=github
+        run: ruff check . --exclude=".venv*,build,dist,site,training,experimental,bench_*.py,experiments,encoding.py" --output-format=github
 
       - name: Ruff format check
-        run: ruff format --check . --exclude=".venv*,build,dist,site,training,experimental,bench_*.py,experiments,build_memory_standalone.py,encoding.py"
+        run: ruff format --check . --exclude=".venv*,build,dist,site,training,experimental,bench_*.py,experiments,encoding.py"
 
       - name: Mypy type check (advisory)
         continue-on-error: true

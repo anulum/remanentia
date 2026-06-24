@@ -122,7 +122,6 @@ omit = [
     "monitor.py",
     "snn_daemon.py",
     "snn_backend.py",
-    "gpu_daemon.py",
     "retrieve.py",
     "encoding.py",
     "git_stimulus.py",
@@ -134,7 +133,6 @@ omit = [
     "skill_extractor.py",
     "__init__.py",
     "extractors/*",
-    "build_memory_standalone.py",
     # Benchmarks and experiment runners (not product code)
     "bench_locomo.py",
     "bench_experiments.py",

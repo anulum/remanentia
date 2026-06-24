@@ -47,7 +47,8 @@
 Legacy/experimental modules (not part of the product surface):
 
 - `snn_daemon.py`, `snn_backend.py` — SNN experimental, excluded from product gate
-- `monitor.py`, `gpu_daemon.py`, `retrieve.py`, `encoding.py` — dead/legacy code
+- `monitor.py`, `retrieve.py`, `encoding.py` — dead/legacy code
+  (`gpu_daemon.py` + `build_memory_standalone.py` archived to 00_SAFETY_BACKUPS 2026-06-24)
 - `git_stimulus.py`, `heartbeat_register.py`, `hooks.py` — infrastructure scripts
 - `pattern_separation.py`, `cognitive_snapshot.py`, `active_retrieval.py`, `skill_extractor.py` — experimental
 - `bench_locomo.py`, `bench_longmemeval.py`, `bench_experiments.py`, `run_exp*.py` — benchmark runners
