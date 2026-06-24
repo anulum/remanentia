@@ -79,10 +79,18 @@ class VectorIndexStats:
     vector_bytes: int
     metadata_bytes: int
     elapsed_s: float = 0.0
+    reused: int = 0
+    """Chunks whose stored vector was kept rather than re-embedded. ``count``
+    minus ``reused`` is the number of texts actually sent to the provider."""
 
     @property
     def total_bytes(self) -> int:
         return self.vector_bytes + self.metadata_bytes
+
+    @property
+    def embedded(self) -> int:
+        """Chunks sent to the embedding provider this build."""
+        return self.count - self.reused
 
 
 class HttpEmbeddingClient:
@@ -191,15 +199,43 @@ class PersistentVectorIndex:
         provider: EmbeddingProvider,
         *,
         batch_size: int = 64,
+        reuse: bool = True,
     ) -> VectorIndexStats:
-        """Rebuild the vector index from the supplied chunks."""
+        """Build the index, reusing prior embeddings for unchanged chunks.
+
+        Embedding is the expensive step and depends only on chunk text, so when
+        a prior index exists every chunk whose text is byte-identical to one
+        already embedded — matched by content hash — keeps its stored vector and
+        only genuinely new or edited chunks are sent to the provider. A corpus
+        that grew by a handful of records re-embeds a handful, not the whole
+        store, which is the difference between seconds and re-embedding hundreds
+        of thousands of vectors that did not change.
+
+        Pass ``reuse=False`` to force a full re-embed — for instance after an
+        embedding-model change that the content hash cannot see. A dimension
+        change between the stored vectors and the provider's output is detected
+        and triggers the same full re-embed automatically, since mixing vector
+        geometries would corrupt search.
+        """
         started = time.perf_counter()
         chunk_list = list(chunks)
         _validate_chunks(chunk_list)
         if batch_size <= 0:
             raise ValueError("batch_size must be positive")
 
-        vectors = self._embed_chunks(chunk_list, provider, batch_size)
+        prior = self._prior_vectors_by_hash() if reuse else {}
+        pending = [chunk for chunk in chunk_list if chunk.content_hash not in prior]
+        fresh = self._embed_chunks(pending, provider, batch_size) if pending else None
+
+        if fresh is not None and prior:
+            prior_dim = next(iter(prior.values())).shape[0]
+            if fresh.shape[1] != prior_dim:
+                prior = {}
+                fresh = self._embed_chunks(chunk_list, provider, batch_size)
+
+        vectors = self._assemble_vectors(chunk_list, prior, fresh)
+        reused = len(chunk_list) - (0 if fresh is None else fresh.shape[0])
+
         self.root.mkdir(parents=True, exist_ok=True)
         _atomic_save_vectors(self.vectors_path, vectors)
         metadata_bytes = _write_metadata(self.metadata_path, chunk_list)
@@ -211,9 +247,53 @@ class PersistentVectorIndex:
             vector_bytes=int(vectors.nbytes),
             metadata_bytes=metadata_bytes,
             elapsed_s=round(elapsed, 6),
+            reused=reused,
         )
         self._write_manifest(stats)
         return stats
+
+    def _prior_vectors_by_hash(self) -> dict[str, np.ndarray]:
+        """Map content hash → stored vector from the existing index, for reuse.
+
+        Returns an empty map when no index exists yet, so a first build embeds
+        every chunk. Both stores are read fully into memory before the build
+        overwrites them, so reusing the index it is rebuilding is safe.
+        """
+        if not self.exists():
+            return {}
+        vectors = self._load_vectors()
+        mapping: dict[str, np.ndarray] = {}
+        with sqlite3.connect(self.metadata_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("select ordinal, content_hash from chunks").fetchall()
+        for row in rows:
+            ordinal = int(row["ordinal"])
+            if 0 <= ordinal < vectors.shape[0]:
+                mapping[str(row["content_hash"])] = vectors[ordinal]
+        return mapping
+
+    def _assemble_vectors(
+        self,
+        chunk_list: list[VectorChunk],
+        prior: dict[str, np.ndarray],
+        fresh: np.ndarray | None,
+    ) -> np.ndarray:
+        """Interleave reused and freshly embedded vectors into chunk order."""
+        if not prior:
+            assert fresh is not None  # a non-empty chunk list always embeds when no reuse
+            return fresh
+        dimension = fresh.shape[1] if fresh is not None else next(iter(prior.values())).shape[0]
+        vectors = np.empty((len(chunk_list), dimension), dtype=np.float32)
+        fresh_cursor = 0
+        for ordinal, chunk in enumerate(chunk_list):
+            reused_vector = prior.get(chunk.content_hash)
+            if reused_vector is not None:
+                vectors[ordinal] = reused_vector
+            else:
+                assert fresh is not None
+                vectors[ordinal] = fresh[fresh_cursor]
+                fresh_cursor += 1
+        return vectors
 
     def search(
         self,
@@ -315,6 +395,8 @@ class PersistentVectorIndex:
             "metadata_bytes": stats.metadata_bytes,
             "total_bytes": stats.total_bytes,
             "elapsed_s": stats.elapsed_s,
+            "reused": stats.reused,
+            "embedded": stats.embedded,
             "created_at_unix": int(time.time()),
         }
         _atomic_write_text(self.manifest_path, json.dumps(payload, indent=2) + "\n")

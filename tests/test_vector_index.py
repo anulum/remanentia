@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import threading
+from hashlib import sha256
 from io import StringIO
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -569,3 +570,144 @@ def _built_memory_index() -> MemoryIndex:
     memory.paragraph_index = [(0, 0), (0, 1)]
     memory._built = True
     return memory
+
+
+class CountingEmbeddingProvider:
+    """Deterministic provider that records every text it is asked to embed.
+
+    The vector for a text depends only on that text, so a reused stored vector
+    is bit-identical to what re-embedding would produce — letting the tests
+    assert both that unchanged chunks are *not* re-sent and that the index they
+    land in is identical to a full rebuild.
+    """
+
+    def __init__(self, dimension: int = 4) -> None:
+        self.dimension = dimension
+        self.embedded: list[str] = []
+        self.calls = 0
+
+    def embed_texts(self, texts):
+        self.calls += 1
+        self.embedded.extend(texts)
+        rows = []
+        for text in texts:
+            seed = int(sha256(text.encode("utf-8")).hexdigest(), 16) % (2**32)
+            rows.append(np.random.default_rng(seed).standard_normal(self.dimension))
+        return np.asarray(rows, dtype=np.float32)
+
+
+def _ic(chunk_id: str, text: str) -> VectorChunk:
+    return VectorChunk(chunk_id=chunk_id, text=text, source="trace")
+
+
+class TestIncrementalBuild:
+    """Reuse stored embeddings for unchanged chunks; embed only the delta."""
+
+    def _seed(self, tmp_path: Path, provider) -> PersistentVectorIndex:
+        index = PersistentVectorIndex(tmp_path / "vi")
+        index.build([_ic("a", "alpha"), _ic("b", "beta"), _ic("c", "gamma")], provider)
+        return index
+
+    def test_only_new_chunks_are_embedded(self, tmp_path: Path):
+        provider = CountingEmbeddingProvider()
+        index = self._seed(tmp_path, provider)
+        before = index._load_vectors().copy()
+
+        provider.embedded.clear()
+        stats = index.build(
+            [_ic("a", "alpha"), _ic("b", "beta"), _ic("c", "gamma"), _ic("d", "delta")],
+            provider,
+        )
+
+        assert provider.embedded == ["delta"]  # only the new chunk's text
+        assert stats.reused == 3
+        assert stats.embedded == 1
+        assert stats.count == 4
+        # The three unchanged rows are byte-identical to the prior store.
+        after = index._load_vectors()
+        np.testing.assert_array_equal(after[:3], before)
+
+    def test_identical_corpus_calls_provider_never(self, tmp_path: Path):
+        provider = CountingEmbeddingProvider()
+        index = self._seed(tmp_path, provider)
+
+        provider.calls = 0
+        provider.embedded.clear()
+        stats = index.build([_ic("a", "alpha"), _ic("b", "beta"), _ic("c", "gamma")], provider)
+
+        assert provider.calls == 0
+        assert provider.embedded == []
+        assert stats.reused == 3
+        assert stats.embedded == 0
+
+    def test_edited_text_is_reembedded_others_reused(self, tmp_path: Path):
+        provider = CountingEmbeddingProvider()
+        index = self._seed(tmp_path, provider)
+
+        provider.embedded.clear()
+        stats = index.build(
+            [_ic("a", "alpha"), _ic("b", "beta EDITED"), _ic("c", "gamma")],
+            provider,
+        )
+
+        assert provider.embedded == ["beta EDITED"]
+        assert stats.reused == 2
+        assert stats.embedded == 1
+
+    def test_reuse_false_forces_full_reembed(self, tmp_path: Path):
+        provider = CountingEmbeddingProvider()
+        index = self._seed(tmp_path, provider)
+
+        provider.embedded.clear()
+        stats = index.build(
+            [_ic("a", "alpha"), _ic("b", "beta"), _ic("c", "gamma")],
+            provider,
+            reuse=False,
+        )
+
+        assert sorted(provider.embedded) == ["alpha", "beta", "gamma"]
+        assert stats.reused == 0
+
+    def test_dimension_change_triggers_full_reembed(self, tmp_path: Path):
+        index = self._seed(tmp_path, CountingEmbeddingProvider(dimension=4))
+        wider = CountingEmbeddingProvider(dimension=8)
+
+        stats = index.build(
+            [_ic("a", "alpha"), _ic("b", "beta"), _ic("c", "gamma"), _ic("d", "delta")],
+            wider,
+        )
+
+        # Mixing geometries would corrupt search, so every chunk is re-embedded
+        # at the new width (the new chunk is also touched by the dimension probe
+        # before the mismatch is detected — acceptable on a rare model change).
+        assert stats.reused == 0
+        assert stats.embedded == 4
+        assert stats.dimension == 8
+        assert set(wider.embedded) == {"alpha", "beta", "gamma", "delta"}
+
+    def test_fresh_index_embeds_all_with_zero_reuse(self, tmp_path: Path):
+        provider = CountingEmbeddingProvider()
+        index = PersistentVectorIndex(tmp_path / "vi")
+
+        stats = index.build([_ic("a", "alpha"), _ic("b", "beta")], provider)
+
+        assert stats.reused == 0
+        assert stats.embedded == 2
+        assert sorted(provider.embedded) == ["alpha", "beta"]
+
+    def test_rejects_non_positive_batch_size(self, tmp_path: Path):
+        index = PersistentVectorIndex(tmp_path / "vi")
+        with pytest.raises(ValueError, match="batch_size must be positive"):
+            index.build([_ic("a", "alpha")], CountingEmbeddingProvider(), batch_size=0)
+
+    def test_reused_index_still_searches_correctly(self, tmp_path: Path):
+        provider = KeywordEmbeddingProvider()
+        index = PersistentVectorIndex(tmp_path / "vi")
+        index.build([_ic("a", "alpha one"), _ic("b", "beta two")], provider)
+        index.build(
+            [_ic("a", "alpha one"), _ic("b", "beta two"), _ic("g", "gamma three")],
+            provider,
+        )
+
+        results = index.search("gamma", provider, top_k=1)
+        assert results[0].chunk_id == "g"

@@ -638,6 +638,8 @@ def _stats_to_dict(stats: VectorIndexStats) -> dict[str, int | float]:
         "metadata_bytes": stats.metadata_bytes,
         "total_bytes": stats.total_bytes,
         "elapsed_s": stats.elapsed_s,
+        "reused": stats.reused,
+        "embedded": stats.embedded,
     }
 
 
