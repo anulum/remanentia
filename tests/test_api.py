@@ -593,3 +593,40 @@ class TestAPIPipeline:
             resp = client.get("/status")
         assert resp.status_code == 200
         assert isinstance(resp.json(), dict)
+
+
+class TestRecallCorrectnessEndpoint:
+    """The HTTP write seam a verifier posts its correctness verdict to."""
+
+    def test_records_verdict(self, client, tmp_path, monkeypatch):
+        from recall_ledger import RecallLedger
+
+        led_path = tmp_path / "rl.jsonl"
+        monkeypatch.setenv("REMANENTIA_RECALL_LEDGER", str(led_path))
+        RecallLedger(led_path).record("how to reuse vectors", ["s:n"], top_k=1)
+
+        resp = client.post(
+            "/recall/correctness",
+            json={"query": "how to reuse vectors", "was_correct": False},
+        )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["was_correct"] is False
+        assert body["event_id"]
+        (rq,) = list(RecallLedger(led_path).queries())
+        assert rq.was_correct is False
+        assert rq.was_used is None  # correctness must not touch usage
+
+    def test_unknown_query_returns_404(self, client, tmp_path, monkeypatch):
+        monkeypatch.setenv("REMANENTIA_RECALL_LEDGER", str(tmp_path / "empty.jsonl"))
+        resp = client.post(
+            "/recall/correctness", json={"query": "never asked", "was_correct": True}
+        )
+        assert resp.status_code == 404
+        assert "no prior recall" in resp.json()["detail"]
+
+    def test_missing_was_correct_is_422(self, client, tmp_path, monkeypatch):
+        monkeypatch.setenv("REMANENTIA_RECALL_LEDGER", str(tmp_path / "rl.jsonl"))
+        resp = client.post("/recall/correctness", json={"query": "q"})
+        assert resp.status_code == 422  # pydantic validation: was_correct required

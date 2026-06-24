@@ -157,6 +157,12 @@ class ConsolidateRequest(BaseModel):
     force: bool = False
 
 
+class RecallCorrectnessRequest(BaseModel):
+    query: str
+    was_correct: bool
+    by: str = ""
+
+
 @app.get("/health")
 def health():
     legacy_daemon = _legacy_daemon_state()
@@ -250,6 +256,29 @@ def consolidate_endpoint(req: ConsolidateRequest):
     from consolidation_engine import consolidate
 
     return consolidate(force=req.force)
+
+
+@app.post("/recall/correctness")
+def recall_correctness_endpoint(req: RecallCorrectnessRequest):
+    """Record a downstream verifier's correctness verdict for a prior recall.
+
+    The HTTP write seam a calibration consumer posts its verdict to: an answer
+    that used a recalled memory and passed verification ⇒ ``was_correct=true``;
+    a flagged, halted, or corrected answer ⇒ ``false``. The verdict attaches to
+    the most recent matching recall in the query-stream ledger, and the conformal
+    abstention gate calibrates on this label (distinct from the usage-only
+    ``was_used``, which the server derives automatically). An auth-protected
+    write; unknown queries return 404 so a mis-targeted verdict is not silently
+    swallowed.
+    """
+    from recall_ledger import default_ledger
+
+    ledger = default_ledger()
+    event_id = ledger.latest_for(req.query, by=req.by or None)
+    if event_id is None:
+        raise HTTPException(status_code=404, detail=f"no prior recall for: {req.query}")
+    ledger.record_outcome(event_id, was_correct=req.was_correct)
+    return {"event_id": event_id, "was_correct": req.was_correct}
 
 
 @app.get("/status")
