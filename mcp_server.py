@@ -85,18 +85,25 @@ def _get_recall_ledger():
     return _RECALL_LEDGER
 
 
-def _log_recall(query: str, returned_ids: list[str], top_k: int, project: str) -> None:
+def _log_recall(
+    query: str,
+    returned_ids: list[str],
+    top_k: int,
+    project: str,
+    score: float | None = None,
+) -> None:
     """Record a recall in the query-stream ledger (MS.1); never raise.
 
     The query stream is the query-weighted calibration + salience source
-    the fleet-memory design needs. Disabled via
+    the fleet-memory design needs; ``score`` is the top retrieval score,
+    the conformal gate's per-recall nonconformity signal. Disabled via
     ``REMANENTIA_RECALL_LEDGER_DISABLE``. Telemetry must never break a
     recall, so every failure is swallowed.
     """
     if os.environ.get("REMANENTIA_RECALL_LEDGER_DISABLE"):
         return
     try:
-        _get_recall_ledger().record(query, returned_ids, top_k=top_k, project=project)
+        _get_recall_ledger().record(query, returned_ids, top_k=top_k, project=project, score=score)
     except Exception:  # pragma: no cover — telemetry must never break recall
         log.debug("Recall ledger write failed", exc_info=True)
 
@@ -164,8 +171,9 @@ def handle_recall(
             query, top_k=top_k, project=project, after=after, before=before, use_llm=use_llm
         )
         returned_ids = [f"{r.source}:{r.name}" for r in results]
+        top_score = max((r.score for r in results), default=None)
         if not results and not trigger_lines:
-            _log_recall(query, returned_ids, top_k, project)
+            _log_recall(query, returned_ids, top_k, project, top_score)
             return f"No memories found for: {query}"
 
         # Guarded tier: when enabled and director-ai is available, check
@@ -216,7 +224,7 @@ def handle_recall(
         except Exception:  # pragma: no cover
             log.debug("Knowledge graph recall failed", exc_info=True)
 
-        _log_recall(query, returned_ids, top_k, project)
+        _log_recall(query, returned_ids, top_k, project, top_score)
         return "\n\n".join(parts)
 
     except Exception:  # pragma: no cover

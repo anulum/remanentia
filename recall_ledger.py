@@ -81,12 +81,17 @@ class RecallQuery:
     found
         Whether any memory was returned (objective; the abstention proxy
         until the conformal gate lands).
+    score
+        The top retrieval score of the returned memories, or ``None`` when
+        nothing was returned. The per-recall nonconformity signal the
+        conformal retrieval gate calibrates on.
     abstained
         Whether the system abstained, when the caller knows; ``None`` when
         no abstention decision was made (read ``found`` instead).
     was_used
         Whether the recalled memories were used downstream, once an outcome
-        has been recorded; ``None`` until then.
+        has been recorded; ``None`` until then. A *usage* signal, not a
+        correctness label — a recalled memory can be used and still wrong.
     """
 
     event_id: str
@@ -97,6 +102,7 @@ class RecallQuery:
     project: str
     returned_ids: tuple[str, ...]
     found: bool
+    score: float | None = None
     abstained: bool | None = None
     was_used: bool | None = None
 
@@ -123,6 +129,7 @@ class RecallLedger:
         top_k: int,
         project: str = "",
         by: str | None = None,
+        score: float | None = None,
         abstained: bool | None = None,
     ) -> str:
         """Append a ``query`` record and return its ``event_id``.
@@ -140,6 +147,9 @@ class RecallLedger:
         by
             Querying agent identity; resolved from the environment when
             ``None``.
+        score
+            The top retrieval score, or ``None`` when nothing was returned;
+            the conformal gate's per-recall nonconformity signal.
         abstained
             The abstention decision when known, else ``None``.
 
@@ -162,6 +172,7 @@ class RecallLedger:
             "project": project,
             "returned_ids": list(ids),
             "found": bool(ids),
+            "score": score,
             "abstained": abstained,
         }
         self._append(row)
@@ -220,6 +231,7 @@ class RecallLedger:
                 project=str(row.get("project", "")),
                 returned_ids=tuple(row.get("returned_ids", []) or ()),
                 found=bool(row.get("found", False)),
+                score=row.get("score"),
                 abstained=row.get("abstained"),
                 was_used=outcomes.get(event_id),
             )

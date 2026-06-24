@@ -58,6 +58,16 @@ class TestRecord:
         (q,) = list(ledger.queries())
         assert q.abstained is abstained
 
+    def test_score_round_trips(self, ledger: RecallLedger):
+        ledger.record("q", ["s:n"], top_k=1, score=0.87)
+        (q,) = list(ledger.queries())
+        assert q.score == 0.87
+
+    def test_score_defaults_none(self, ledger: RecallLedger):
+        ledger.record("q", [], top_k=1)
+        (q,) = list(ledger.queries())
+        assert q.score is None
+
     def test_identity_from_env(self, ledger: RecallLedger, monkeypatch):
         monkeypatch.setenv("REMANENTIA_AGENT", "scpn-control")
         ledger.record("q", [], top_k=1)
@@ -194,12 +204,13 @@ class TestMcpRecallHook:
         led = RecallLedger(tmp_path / "hook.jsonl")
         monkeypatch.setattr(mcp_server, "_RECALL_LEDGER", led)
         monkeypatch.delenv("REMANENTIA_RECALL_LEDGER_DISABLE", raising=False)
-        mcp_server._log_recall("q", ["sem:trace"], 3, "scpn")
+        mcp_server._log_recall("q", ["sem:trace"], 3, "scpn", 0.91)
         (q,) = list(led.queries())
         assert q.query == "q"
         assert q.returned_ids == ("sem:trace",)
         assert q.top_k == 3
         assert q.project == "scpn"
+        assert q.score == 0.91
 
     def test_log_recall_disabled_is_noop(self, tmp_path: Path, monkeypatch):
         import mcp_server
