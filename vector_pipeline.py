@@ -273,13 +273,23 @@ def public_vector_results(
 
 
 def load_or_build_memory_index(*, use_gpu_embeddings: bool = False) -> Any:
-    """Load the persisted ``MemoryIndex`` or build it when no cache exists."""
-    from memory_index import MemoryIndex
+    """Return a MemoryIndex that reflects the current source tree.
+
+    The persisted cache is reused only when it is still current; if any source
+    file is newer than the cache (``needs_rebuild``) — or no cache exists — the
+    index is rebuilt and saved. The earlier version returned the cache whenever
+    it merely *existed*, so the refresh worker fed the vector index a frozen
+    corpus and the index stalled on an April-2026 worldview while new memories
+    accumulated unseen. Rebuilding is incremental, so an unchanged corpus stays
+    cheap; the staleness check is what makes new memory actually reach search.
+    """
+    from memory_index import MemoryIndex, needs_rebuild
 
     memory_index = MemoryIndex()
-    if not memory_index.load():
-        memory_index.build(use_gpu_embeddings=use_gpu_embeddings)
-        memory_index.save()
+    if memory_index.load() and not needs_rebuild():
+        return memory_index
+    memory_index.build(use_gpu_embeddings=use_gpu_embeddings)
+    memory_index.save()
     return memory_index
 
 
