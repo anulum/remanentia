@@ -18,7 +18,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib import request
@@ -354,7 +354,7 @@ def render_markdown(report: dict[str, Any]) -> str:
 def write_reports(report: dict[str, Any], out_dir: Path) -> dict[str, str]:
     """Write timestamped JSON and Markdown reports."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(UTC).strftime("%Y-%m-%d_%H%M%S")
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H%M%S")
     json_path = out_dir / f"remanentia_performance_{stamp}.json"
     md_path = out_dir / f"remanentia_performance_{stamp}.md"
     json_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -385,7 +385,7 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
 
     seed = seed_everything(args.seed if args.seed is not None else seed_from_env())
     report: dict[str, Any] = {
-        "timestamp_utc": datetime.now(UTC).isoformat(),
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "base_url": args.base_url,
         "query": args.query,
         "reproducibility": build_reproducibility_manifest(

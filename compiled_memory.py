@@ -16,7 +16,7 @@ import json
 import re
 import time
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -813,7 +813,7 @@ def _query_truth_mode(query: str) -> str:
 
 def _timestamp_to_iso(value: Any) -> str:
     if isinstance(value, int | float):
-        return datetime.fromtimestamp(float(value), UTC).isoformat()
+        return datetime.fromtimestamp(float(value), timezone.utc).isoformat()
     if isinstance(value, str) and value:
         return value
     return _now_iso()
@@ -833,7 +833,7 @@ def _path_date(path: Path) -> str:
 
 
 def _now_iso() -> str:
-    return datetime.fromtimestamp(time.time(), UTC).isoformat()
+    return datetime.fromtimestamp(time.time(), timezone.utc).isoformat()
 
 
 def main() -> None:

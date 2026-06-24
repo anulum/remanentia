@@ -134,9 +134,9 @@ def _index_stats(path: Path) -> dict[str, Any]:
     timestamp = data.get("timestamp")
     date = ""
     if isinstance(timestamp, int | float):
-        from datetime import UTC, datetime
+        from datetime import datetime, timezone
 
-        date = datetime.fromtimestamp(float(timestamp), UTC).date().isoformat()
+        date = datetime.fromtimestamp(float(timestamp), timezone.utc).date().isoformat()
     return {
         "documents": len(data.get("documents") or []),
         "paragraphs": len(data.get("paragraph_index") or []),

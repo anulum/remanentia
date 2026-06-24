@@ -35,7 +35,7 @@ it in the banner and write it to result files.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 import importlib.metadata
 import os
 import platform
@@ -134,7 +134,7 @@ def build_reproducibility_manifest(
             packages[name] = ""
 
     return {
-        "timestamp_utc": datetime.now(UTC).isoformat(),
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "seed": int(seed),
         "workload": workload,
         "parameters": parameters or {},
