@@ -936,3 +936,29 @@ class TestExtractEventsWithReferenceDate:
             reference_date="",
         )
         assert any(e.date == "2023-05-20" for e in events)
+
+
+class TestPythonRuleFallbackCoverage:
+    REF = date(2023, 4, 10)
+
+    def test_quantified_and_vague_rules_without_native_extension(self):
+        with patch("date_normalizer.import_module", side_effect=ImportError):
+            expectations = {
+                "2 days ago": "2023-04-08",
+                "2 weeks ago": "2023-03-27",
+                "2 months ago": "2023-02-10",
+                "2 years ago": "2021-04-10",
+                "a couple of days ago": "2023-04-08",
+                "a couple of weeks ago": "2023-03-27",
+                "a couple of months ago": "2023-02-10",
+                "a few days ago": "2023-04-07",
+                "a few weeks ago": "2023-03-20",
+                "a few months ago": "2023-01-10",
+                "several days ago": "2023-04-05",
+                "several weeks ago": "2023-03-06",
+                "several months ago": "2022-11-10",
+                "last Monday": "2023-04-03",
+                "yesterday": "2023-04-09",
+            }
+            for expr, expected in expectations.items():
+                assert _rule_based_normalise(expr, self.REF).iso_date == expected

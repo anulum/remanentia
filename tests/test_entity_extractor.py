@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import builtins
 from unittest.mock import patch
 
 
@@ -18,6 +19,17 @@ from entity_extractor import (
     extract_entities,
     extract_relations,
 )
+
+
+def _without_native_entity():
+    original_import = builtins.__import__
+
+    def import_without_native(name, *args, **kwargs):
+        if name == "remanentia_entity_extractor":
+            raise ImportError(name)
+        return original_import(name, *args, **kwargs)
+
+    return patch("builtins.__import__", side_effect=import_without_native)
 
 
 # ── Regex entity extraction (no GLiNER) ──────────────────────────
@@ -402,3 +414,37 @@ class TestEntityExtractorRoundtrip:
         # Should find at least one typed relation
         typed = [r for r in relations if r.relation_type != "co_occurs"]
         assert len(typed) >= 1
+
+
+class TestPythonEntityFallbackCoverage:
+    def test_regex_entities_without_native_extension(self):
+        text = "Director-ai used STDP on GPU with PyTorch v3.9.0 in src/main.py."
+        with _without_native_entity():
+            entities = _regex_entities(text)
+
+        labels = {e.text: e.label for e in entities}
+        assert labels["director-ai"] == "project"
+        assert labels["stdp"] == "algorithm"
+        assert labels["gpu"] == "hardware"
+        assert labels["pytorch"] == "software tool"
+        assert labels["v3.9.0"] == "version number"
+        assert labels["main.py"] == "file path"
+
+    def test_extract_relations_without_native_extension(self):
+        entities = [Entity("STDP", "algorithm", 0.9), Entity("Remanentia", "project", 0.9)]
+        with _without_native_entity():
+            relations = extract_relations("STDP is used in Remanentia.", entities)
+
+        assert relations[0].relation_type == "used_in"
+
+    def test_extract_relations_default_co_occurs_without_native_extension(self):
+        entities = [Entity("STDP", "algorithm", 0.9), Entity("BM25", "algorithm", 0.9)]
+        with _without_native_entity():
+            relations = extract_relations("STDP and BM25 are both retrieval signals.", entities)
+
+        assert relations[0].relation_type == "co_occurs"
+
+    def test_extract_relations_skips_entities_absent_from_text(self):
+        entities = [Entity("STDP", "algorithm", 0.9), Entity("Missing", "project", 0.9)]
+        with _without_native_entity():
+            assert extract_relations("STDP is present here.", entities) == []

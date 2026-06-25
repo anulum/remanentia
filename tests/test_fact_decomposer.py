@@ -8,7 +8,9 @@
 
 from __future__ import annotations
 
+import builtins
 from datetime import date
+from unittest.mock import patch
 
 from fact_decomposer import (
     AtomicFact,
@@ -17,11 +19,23 @@ from fact_decomposer import (
     _build_fact,
     _classify_fact,
     _extract_dates,
+    _extract_dates_with_normaliser,
     _extract_entities_simple,
     _parse_date_str,
     _split_sentences,
     _tokenize,
 )
+
+
+def _without_native_fact():
+    original_import = builtins.__import__
+
+    def import_without_native(name, *args, **kwargs):
+        if name == "remanentia_fact_decomposer":
+            raise ImportError(name)
+        return original_import(name, *args, **kwargs)
+
+    return patch("builtins.__import__", side_effect=import_without_native)
 
 
 # ── Tokenizer ────────────────────────────────────────────────────
@@ -840,3 +854,103 @@ class TestFactDecomposerRoundtrip:
         results = idx.query("running")
         # Should return list (may be empty depending on tokenisation)
         assert isinstance(results, list)
+
+
+class TestFactPythonFallbackCoverage:
+    def test_python_split_without_native_extension(self):
+        with _without_native_fact():
+            assert _split_sentences("First sentence here. Second sentence there.") == [
+                "First sentence here.",
+                "Second sentence there.",
+            ]
+            assert _split_sentences("single long sentence without punctuation") == [
+                "single long sentence without punctuation"
+            ]
+            assert _split_sentences("short") == ["short"]
+
+    def test_classify_all_python_fallback_patterns(self):
+        cases = {
+            "We decided to keep BM25.": "decision",
+            "Correction: BM25 is active.": "correction",
+            "Always verify the evidence.": "principle",
+            "I promise to update the index tomorrow.": "commitment",
+            "How to configure Rust indexing.": "skill",
+            "I will rebuild the graph next.": "plan",
+            "I prefer deterministic tests.": "preference",
+            "The status changed to green.": "state",
+            "The daemon logs output.": "event",
+        }
+        with _without_native_fact():
+            for sentence, expected in cases.items():
+                assert _classify_fact(sentence) == expected
+
+    def test_fact_confidence_update_events(self):
+        fact = AtomicFact(text="test", session_idx=0, turn_idx=0, role="user", fact_type="event")
+
+        fact.update_confidence("confirmed")
+        assert fact.confirmation_count == 1
+        assert fact.last_confirmed
+        fact.update_confidence("contradicted")
+        assert fact.contradiction_count == 1
+        before = fact.confidence
+        fact.update_confidence("accessed")
+        assert fact.confidence > before
+        fact.update_confidence("stale")
+        assert fact.confidence >= 0.1
+
+    def test_fact_index_python_query_scoring_filtering_and_recency(self):
+        facts = [
+            AtomicFact(
+                text="Alice likes BM25 retrieval",
+                session_idx=0,
+                turn_idx=0,
+                role="user",
+                fact_type="preference",
+                entities=["Alice"],
+                confidence=1.0,
+            ),
+            AtomicFact(
+                text="Alice changed to vector retrieval",
+                session_idx=2,
+                turn_idx=0,
+                role="user",
+                fact_type="state",
+                entities=["Alice"],
+                valid_until="2020-01-01",
+                supersedes=True,
+                confidence=1.0,
+            ),
+            AtomicFact(
+                text="Alice current retrieval uses vectors",
+                session_idx=3,
+                turn_idx=0,
+                role="user",
+                fact_type="state",
+                entities=["Alice"],
+                supersedes=True,
+                confidence=1.0,
+            ),
+        ]
+        idx = FactIndex(facts)
+        idx._rust_index = None
+
+        filtered = idx.query("Where is Alice current retrieval", reference_date="2024-01-01")
+        unfiltered = idx.query(
+            "Where is Alice current retrieval",
+            reference_date="2024-01-01",
+            filter_expired=False,
+        )
+
+        assert facts[1] not in [fact for fact, _score in filtered]
+        assert facts[1] in [fact for fact, _score in unfiltered]
+        assert filtered[0][0] is facts[2]
+
+    def test_extract_dates_with_normaliser_and_bad_session_date_are_tolerated(self):
+        assert _extract_dates_with_normaliser("yesterday", date(2023, 4, 10)) == ["2023-04-09"]
+
+        facts = decompose_sessions(
+            [[{"role": "user", "content": "I started running yesterday with Alice."}]],
+            session_dates=["not/a/date"],
+        )
+
+        assert facts
