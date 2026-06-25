@@ -8,12 +8,26 @@
 
 from __future__ import annotations
 
+import builtins
+from unittest.mock import patch
+
 from answer_normalizer import (
     answers_match,
     extract_answer_items,
     normalize_answer,
     semantic_similarity,
 )
+
+
+def _without_native_normalizer():
+    original_import = builtins.__import__
+
+    def import_without_native(name, *args, **kwargs):
+        if name == "remanentia_answer_normalizer":
+            raise ImportError(name)
+        return original_import(name, *args, **kwargs)
+
+    return patch("builtins.__import__", side_effect=import_without_native)
 
 
 class TestNormalizeAnswer:
@@ -218,6 +232,36 @@ class TestNormalizerEdgeCases:
     def test_very_long_input(self):
         result = normalize_answer("yes " * 1000 + ", because reasons")
         assert "yes" in result
+
+
+class TestPythonFallbackNormalizer:
+    def test_normalize_answer_without_native_extension(self):
+        with _without_native_normalizer():
+            assert normalize_answer("Likely yes, because she reads") == "likely yes"
+            assert (
+                normalize_answer("Based on the note Swimming, because it relaxes her")
+                == "the note swimming"
+            )
+            assert normalize_answer("Liberal.") == "liberal"
+            assert normalize_answer("   ") == ""
+
+    def test_extract_items_without_native_extension(self):
+        with _without_native_normalizer():
+            assert extract_answer_items("running, swimming, and painting") == {
+                "running",
+                "swimming",
+                "painting",
+            }
+
+    def test_answers_match_without_native_extension(self):
+        with _without_native_normalizer():
+            assert answers_match("", "Yes") is False
+            assert answers_match("Yes", "Yes") is True
+            assert answers_match("Sweden", "She moved from Sweden") is True
+            assert answers_match("Likely yes", "probably yes") is True
+            assert answers_match("Likely yes", "probably no") is False
+            assert answers_match("pottery, running", "pottery, camping, painting") is True
+            assert answers_match("coding, gaming", "pottery, camping") is False
 
     def test_normalize_roundtrip(self):
         """Normalising twice produces same result (idempotent)."""

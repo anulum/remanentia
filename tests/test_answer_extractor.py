@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 
 from answer_extractor import (
     extract_all_candidates,
@@ -27,6 +29,10 @@ from answer_extractor import (
     _is_who_question,
     _is_yes_no_question,
 )
+
+
+def _without_native():
+    return patch("answer_extractor.import_module", side_effect=ImportError)
 
 
 # ── Question type detection ──────────────────────────────────────
@@ -76,6 +82,70 @@ class TestExtractDate:
 
     def test_multiple_dates_returns_first(self):
         assert _extract_date_answer("Started 2026-03-10, finished 2026-03-15.") == "2026-03-10"
+
+    def test_query_terms_choose_nearest_date(self):
+        text = (
+            "The design review happened on 2026-01-01. "
+            + "x " * 100
+            + "The release candidate shipped on 2026-02-03."
+        )
+
+        assert _extract_date_answer(text, query="when did release candidate ship") == "2026-02-03"
+
+
+class TestPythonFallbackDispatch:
+    def test_extract_answer_dispatches_question_types_without_native_extension(self):
+        with _without_native():
+            assert extract_answer("when did it ship", "It shipped on 2026-02-03.") == "2026-02-03"
+            assert extract_answer("how many tests passed", "Exactly 42 tests passed.") == "42"
+            assert extract_answer("what version shipped", "Release v1.2.3 is live.") == "v1.2.3"
+            assert extract_answer("who approved it", "Alice approved the release.") == "Alice"
+            assert extract_answer("did it pass", "Yes, the suite passed.") == "Yes"
+            assert extract_answer("what percent passed", "Coverage reached 99.5%.") == "99.5%"
+            assert extract_answer("how long did it take", "The run took 14 days.") == "14"
+            assert extract_answer("what percentage passed", "Coverage reached 98%.") == "98%"
+
+    def test_extract_answer_generic_fallback_order_without_native_extension(self):
+        with _without_native():
+            assert extract_answer("tell me the metric", "Coverage reached 88%.") == "88%"
+            assert extract_answer("tell me the version", "Release v2.0 is live.") == "v2.0"
+            assert extract_answer("tell me the date", "Shipped on 2026-03-04.") == "2026-03-04"
+            assert extract_answer("tell me the number", "There were 123 failures.") == "123"
+            assert extract_answer("tell me something", "No extractable answer here.") is None
+
+    def test_number_extraction_empty_and_queryless_paths(self):
+        assert _extract_number_answer("No digits here.", "how many") is None
+        assert _extract_number_answer("There were 2 and then 5.", "") == "2"
+        assert (
+            _extract_number_answer(
+                "The old count was 2. " + "x " * 100 + "The release count was 5.",
+                "release count",
+            )
+            == "5"
+        )
+
+    def test_fuzzy_match_python_fallback_paths(self):
+        with _without_native():
+            assert fuzzy_match("", "gold") is False
+            assert fuzzy_match("March 15", "march 15") is True
+            assert fuzzy_match("answer", "the answer was used") is True
+            assert fuzzy_match("kitten", "sitting", threshold=0.5) is True
+            assert fuzzy_match("alpha", "omega", threshold=0.9) is False
+
+    def test_normalize_number_python_fallback_paths(self):
+        with _without_native():
+            assert normalize_number("1,234%") == "1234"
+            assert normalize_number("one hundred and five") == "105"
+            assert normalize_number("forty-two") == "42"
+            assert normalize_number("no number") is None
+
+    def test_extract_best_sentence_python_fallback(self):
+        paragraph = "Alpha is unrelated. Beta retrieval passed all checks."
+        with _without_native():
+            assert extract_best_sentence("retrieval checks", paragraph) == (
+                "Beta retrieval passed all checks."
+            )
+            assert extract_best_sentence("missing terms", paragraph) is None
 
 
 # ── Number extraction ────────────────────────────────────────────
