@@ -357,7 +357,9 @@ class TestRecall:
                 "trace": "trace.md",
                 "trace_score": 0.8,
                 "trace_snippet": "Some snippet content here",
-                "semantic_memories": [],
+                "semantic_memories": [
+                    {"path": "memory/semantic/test.md", "key_point": "Stored fact"}
+                ],
                 "entities": ["stdp"],
                 "related_entities": [],
                 "before": [],
@@ -369,18 +371,24 @@ class TestRecall:
             },
         )()
 
-        with patch("api.recall_endpoint"):
-            # Actually patch the import inside
-            pass
+        with patch("memory_recall.recall", return_value=mock_ctx) as mock_recall:
+            resp = client.post(
+                "/recall",
+                json={"query": "test", "top_k": 2, "include_content": True},
+            )
 
-        # Direct approach: patch the recall import
-        from unittest.mock import MagicMock
-
-        mock_recall = MagicMock(return_value=mock_ctx)
-        with patch.dict("sys.modules", {}):
-            with patch("memory_recall.recall", mock_recall, create=True):
-                # Test the endpoint format
-                pass
+        mock_recall.assert_called_once_with("test", top_k=2, include_content=True)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["query"] == "test"
+        assert data["trace"] == "trace.md"
+        assert data["score"] == pytest.approx(0.8)
+        assert data["snippet"] == "Some snippet content here"
+        assert data["semantic_memories"] == [
+            {"path": "memory/semantic/test.md", "key_point": "Stored fact"}
+        ]
+        assert data["entities"] == ["stdp"]
+        assert data["elapsed_ms"] == 15.0
 
     def test_recall_summary_format(self, client, tmp_traces, tmp_path):
         from unittest.mock import MagicMock

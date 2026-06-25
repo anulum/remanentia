@@ -323,30 +323,41 @@ class TestJsonResponse:
 
 
 class TestAPIServerPipeline:
-    def test_recall_handler_returns_json(self):
-        """HTTP handler exercises full recall pipeline."""
-        from unittest.mock import MagicMock
+    def test_recall_handler_returns_json_from_request_body(self):
+        """HTTP handler exercises JSON request parsing through POST /recall."""
+        mock_ctx = MagicMock()
+        mock_ctx.trace = "pipeline_trace.md"
+        mock_ctx.trace_score = 0.9
+        mock_ctx.trace_snippet = "Pipeline trace snippet"
+        mock_ctx.semantic_memories = []
+        mock_ctx.entities = ["pipeline"]
+        mock_ctx.novelty_score = 0.2
 
-        handler = MagicMock()
-        handler.path = "/api/recall?q=test&top_k=1"
-        handler.headers = {"Content-Length": "0"}
-        handler.wfile = MagicMock()
-        handler.send_response = MagicMock()
-        handler.send_header = MagicMock()
-        handler.end_headers = MagicMock()
-        # Just verify no crash on malformed request
-        assert True
+        h = _make_handler("/recall", "POST", {"query": "pipeline", "top_k": 1})
 
-    def test_error_on_missing_query(self):
-        from unittest.mock import MagicMock
+        with patch("memory_recall.recall", return_value=mock_ctx) as recall:
+            h.do_POST()
 
-        handler = MagicMock()
-        handler.path = "/api/recall"
-        handler.send_response = MagicMock()
-        handler.send_header = MagicMock()
-        handler.end_headers = MagicMock()
-        handler.wfile = MagicMock()
-        assert True
+        recall.assert_called_once_with("pipeline", top_k=1)
+        h.send_response.assert_called_with(200)
+        h.send_header.assert_any_call("Content-Type", "application/json")
+        body = _get_response_body(h)
+        assert body["query"] == "pipeline"
+        assert body["entities"] == ["pipeline"]
+        assert body["results"][0]["name"] == "pipeline_trace.md"
+
+    def test_malformed_recall_json_returns_missing_query_error(self):
+        h = _make_handler("/recall", "POST")
+        h.rfile = io.BytesIO(b'{"query":')
+        h.headers.get = MagicMock(
+            side_effect=lambda k, default=None: "9" if k == "Content-Length" else default
+        )
+
+        h.do_POST()
+
+        h.send_response.assert_called_with(400)
+        body = _get_response_body(h)
+        assert body["error"] == "query required"
 
 
 # ── Security gate integration ────────────────────────────────────────

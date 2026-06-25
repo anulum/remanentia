@@ -12,6 +12,7 @@ import json
 import time
 from unittest.mock import MagicMock, patch
 
+import pytest
 
 from cli import (
     _read_freshness_report,
@@ -653,55 +654,103 @@ class TestCLIEdgeCases:
     """Empty inputs, error handling, pipeline flow."""
 
     def test_empty_query_recall(self, capsys):
-        from unittest.mock import patch
+        from unittest.mock import MagicMock, patch
 
-        with patch("sys.argv", ["remanentia", "recall", "", "--top", "1"]):
-            try:
-                from cli import main
+        mock_ctx = MagicMock()
+        mock_ctx.summary = "No direct match."
 
-                main()
-            except SystemExit:
-                pass
-        # Should not crash
+        with (
+            patch("sys.argv", ["remanentia", "recall", "", "--top", "1"]),
+            patch("memory_recall.recall", return_value=mock_ctx) as recall,
+        ):
+            from cli import main
+
+            main()
+
+        recall.assert_called_once_with("", top_k=1, include_content=False)
+        assert "No direct match." in capsys.readouterr().out
 
     def test_nonexistent_command(self, capsys):
         from unittest.mock import patch
 
         with patch("sys.argv", ["remanentia", "nonexistent"]):
-            try:
-                from cli import main
+            from cli import main
 
+            with pytest.raises(SystemExit) as exc:
                 main()
-            except SystemExit:
-                pass
 
-    def test_recall_with_llm_backend_flag(self):
+        assert exc.value.code == 2
+        assert "invalid choice" in capsys.readouterr().err
+
+    def test_recall_with_llm_backend_flag(self, capsys):
         """Pipeline: --llm-backend wires through to answer_extractor."""
         from unittest.mock import patch, MagicMock
 
         mock_idx = MagicMock()
-        mock_idx.search.return_value = []
+        result = MagicMock()
+        result.source = "memory"
+        result.name = "trace.md"
+        result.score = 0.75
+        result.answer = "answer"
+        result.snippet = "snippet text"
+        mock_idx.search.return_value = [result]
 
         with (
             patch(
-                "sys.argv", ["remanentia", "recall", "test query", "--llm", "--llm-backend", "none"]
+                "sys.argv",
+                [
+                    "remanentia",
+                    "recall",
+                    "test query",
+                    "--project",
+                    "remanentia",
+                    "--llm",
+                    "--llm-backend",
+                    "none",
+                ],
             ),
-            patch("memory_index.auto_rebuild_if_needed", return_value=mock_idx),
+            patch("memory_index.auto_rebuild_if_needed", return_value=mock_idx) as rebuild,
+            patch("llm_backend.resolve_backend", return_value="backend") as resolve_backend,
+            patch("answer_extractor.set_llm_backend") as set_llm_backend,
         ):
-            try:
-                from cli import main
+            from cli import main
 
-                main()
-            except SystemExit:
-                pass
+            main()
 
-    def test_status_command_runs(self):
+        rebuild.assert_called_once_with(use_gpu=False)
+        resolve_backend.assert_called_once_with("none")
+        set_llm_backend.assert_called_once_with("backend")
+        mock_idx.search.assert_called_once_with(
+            "test query",
+            top_k=3,
+            project="remanentia",
+            after="",
+            before="",
+            use_llm=True,
+        )
+        assert "trace.md" in capsys.readouterr().out
+
+    def test_status_command_runs(self, tmp_path, capsys):
         from unittest.mock import patch
 
-        with patch("sys.argv", ["remanentia", "status"]):
-            try:
-                from cli import main
+        state_dir = tmp_path / "snn_state"
+        state_dir.mkdir()
+        graph_dir = tmp_path / "memory" / "graph"
+        graph_dir.mkdir(parents=True)
+        (tmp_path / "reasoning_traces").mkdir()
+        (tmp_path / "memory" / "semantic").mkdir(parents=True)
 
-                main()
-            except SystemExit:
-                pass
+        with (
+            patch("sys.argv", ["remanentia", "status"]),
+            patch("cli.STATE_DIR", state_dir),
+            patch("cli.GRAPH_DIR", graph_dir),
+            patch("cli.BASE", tmp_path),
+        ):
+            from cli import main
+
+            main()
+
+        out = capsys.readouterr().out
+        assert "Vector worker: NOT RUNNING" in out
+        assert "Legacy daemon: NOT RUNNING" in out
+        assert "Memory:" in out
