@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import math
 import os
+import types
 import time
 from datetime import date
 from unittest.mock import patch
@@ -270,6 +271,7 @@ class TestObserverPerformance:
 
     def test_observe_once_budget(self, tmp_path):
         from observer import ObserverState, observe_once
+        import knowledge_store
 
         d = tmp_path / "traces"
         d.mkdir()
@@ -280,10 +282,19 @@ class TestObserverPerformance:
             )
         store_path = tmp_path / "notes.jsonl"
         triggers_path = tmp_path / "triggers.jsonl"
+
+        def observer_import(name: str):
+            if name == "knowledge_store":
+                return knowledge_store
+            if name == "mcp_server":
+                return types.SimpleNamespace(_UNIFIED_INDEX=None)
+            raise ImportError(name)
+
         with (
             patch.dict(os.environ, {"REMANENTIA_ARCANE_CE_DISABLE": "1"}),
             patch("knowledge_store.STORE_PATH", store_path),
             patch("knowledge_store.TRIGGERS_PATH", triggers_path),
+            patch("observer.import_module", side_effect=observer_import),
         ):
             state = ObserverState()
             t0 = time.perf_counter()
