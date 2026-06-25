@@ -417,8 +417,8 @@ def run_vector_cli(
         _write_json(out, [_result_to_dict(result) for result in results])
         return 0
 
-    parser.print_help(file=out)
-    return 1
+    parser.print_help(file=out)  # pragma: no cover - argparse requires a subcommand.
+    return 1  # pragma: no cover - paired with unreachable argparse fallback.
 
 
 def main(argv: list[str] | None = None) -> int:
