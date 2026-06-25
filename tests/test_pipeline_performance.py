@@ -281,6 +281,7 @@ class TestObserverPerformance:
         store_path = tmp_path / "notes.jsonl"
         triggers_path = tmp_path / "triggers.jsonl"
         with (
+            patch.dict(os.environ, {"REMANENTIA_ARCANE_CE_DISABLE": "1"}),
             patch("knowledge_store.STORE_PATH", store_path),
             patch("knowledge_store.TRIGGERS_PATH", triggers_path),
         ):

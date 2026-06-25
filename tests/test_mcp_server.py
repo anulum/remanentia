@@ -413,6 +413,8 @@ class TestHandleRecallWithIndex:
             requested.append((module_name, attr_name))
             if (module_name, attr_name) == ("memory_index", "MemoryIndex"):
                 return lambda: mock_idx
+            if (module_name, attr_name) == ("answer_extractor", "get_llm_backend"):
+                return lambda: object()
             if attr_name == "facts_from_results":
                 return lambda results: ["fact"]
             if attr_name == "is_available":
@@ -424,6 +426,8 @@ class TestHandleRecallWithIndex:
         old_idx = mcp_server._UNIFIED_INDEX
         mcp_server._UNIFIED_INDEX = mock_idx
         monkeypatch.setenv("REMANENTIA_GUARDED", "1")
+        monkeypatch.delenv("REMANENTIA_LLM_ANSWERS", raising=False)
+        monkeypatch.delenv("REMANENTIA_LLM_BACKEND", raising=False)
         try:
             with patch("mcp_server._runtime_attr", side_effect=runtime_attr):
                 result = handle_recall("guarded query", top_k=1)
