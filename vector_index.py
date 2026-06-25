@@ -417,7 +417,7 @@ def _parse_embedding_response(body: Any, expected_count: int) -> np.ndarray:
             raise VectorIndexError("embedding row must contain a non-empty embedding list")
         vectors.append(embedding)
     matrix = np.asarray(vectors, dtype=np.float32)
-    if matrix.ndim != 2:
+    if matrix.ndim != 2:  # pragma: no cover - guarded by row-level list validation.
         raise VectorIndexError("embedding response must form a two-dimensional matrix")
     return matrix
 

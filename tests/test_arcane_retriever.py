@@ -8,9 +8,11 @@
 
 from __future__ import annotations
 
+import builtins
 import os
 from unittest.mock import patch
 
+import arcane_retriever
 from arcane_retriever import ArcaneRetriever, FusedResult, RetrievalResult
 from fact_decomposer import AtomicFact
 
@@ -130,6 +132,18 @@ class TestCrossEncoderRerankDefault:
         mock_load.assert_called_once()
         assert out is results  # model not ready this call → un-reranked
 
+    def test_model_ready_with_no_pairs_returns_original_results(self):
+        ar = ArcaneRetriever(SESSIONS)
+        results: list[FusedResult] = []
+        with (
+            patch.object(ArcaneRetriever, "_ce_model", _FakeCrossEncoder([])),
+            patch.object(ArcaneRetriever, "_ce_loading", False),
+            patch.dict(os.environ, {}, clear=False),
+        ):
+            os.environ.pop("REMANENTIA_ARCANE_CE_DISABLE", None)
+            out = ar._cross_encoder_rerank("q", results, top_n=10)
+        assert out is results
+
 
 # ── Gate (channel selection) ─────────────────────────────────────
 
@@ -195,6 +209,25 @@ class TestChannels:
 
 
 class TestParallelRetrieve:
+    class _FailingFuture:
+        def result(self):
+            raise RuntimeError("channel failed")
+
+    class _FailingExecutor:
+        def __init__(self, *args, **kwargs) -> None:
+            self.submitted = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+        def submit(self, *args, **kwargs):
+            future = TestParallelRetrieve._FailingFuture()
+            self.submitted.append((future, args, kwargs))
+            return future
+
     def test_runs_channels(self):
         ar = ArcaneRetriever(SESSIONS)
         results = ar._parallel_retrieve(
@@ -218,6 +251,15 @@ class TestParallelRetrieve:
         with patch.object(ar, "_ch_bm25", side_effect=RuntimeError("crash")):
             results = ar._parallel_retrieve("test", "x", ["bm25"], top_k=5)
         assert results["bm25"] == []
+
+    def test_future_exception_records_empty_channel(self):
+        ar = ArcaneRetriever(SESSIONS)
+        with (
+            patch.object(arcane_retriever, "ThreadPoolExecutor", self._FailingExecutor),
+            patch.object(arcane_retriever, "as_completed", lambda futures: list(futures)),
+        ):
+            results = ar._parallel_retrieve("test", "x", ["temporal"], top_k=5)
+        assert results == {"temporal": []}
 
 
 # ── RRF Fusion ───────────────────────────────────────────────────
@@ -345,6 +387,23 @@ class TestCheckSufficiency:
         results = [self._fact("Caroline teaches in Boston at school")]
         ok, _ = ar._check_sufficiency("Caroline Boston", "general", results)
         assert ok
+
+    def test_sufficiency_uses_python_tokenizer_when_rust_extension_missing(self, monkeypatch):
+        original_import = builtins.__import__
+
+        def import_without_rust(name, *args, **kwargs):
+            if name == "remanentia_fact_decomposer":
+                raise ImportError(name)
+            return original_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", import_without_rust)
+        ar = ArcaneRetriever(SESSIONS)
+        results = [self._fact("Caroline teaches in Boston at school")]
+
+        ok, reason = ar._check_sufficiency("Caroline Boston", "general", results)
+
+        assert ok
+        assert reason == ""
 
 
 # ── Query rewriting ──────────────────────────────────────────────

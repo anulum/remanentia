@@ -19,6 +19,7 @@ from typing import Any
 import numpy as np
 import pytest
 
+import vector_index
 from memory_index import Document, MemoryIndex
 from vector_pipeline import (
     PublicVectorResultPolicy,
@@ -132,6 +133,34 @@ class TestPersistentVectorIndex:
         with pytest.raises(VectorIndexError, match="dimension"):
             index.search("alpha", WrongDimProvider())
 
+    def test_search_rejects_non_positive_top_k(self, tmp_path: Path):
+        index = PersistentVectorIndex(tmp_path / "vec")
+
+        with pytest.raises(ValueError, match="top_k"):
+            index.search("alpha", KeywordEmbeddingProvider(), top_k=0)
+
+    def test_search_rejects_missing_index(self, tmp_path: Path):
+        index = PersistentVectorIndex(tmp_path / "missing")
+
+        with pytest.raises(VectorIndexError, match="not been built"):
+            index.search("alpha", KeywordEmbeddingProvider())
+
+    def test_search_returns_empty_for_unmatched_source_filter(self, tmp_path: Path):
+        index = PersistentVectorIndex(tmp_path / "vec")
+        provider = KeywordEmbeddingProvider()
+        index.build(_chunks(), provider)
+
+        assert index.search("alpha", provider, source="absent") == []
+
+    def test_search_rejects_malformed_stored_vectors(self, tmp_path: Path):
+        index = PersistentVectorIndex(tmp_path / "vec")
+        provider = KeywordEmbeddingProvider()
+        index.build(_chunks(), provider)
+        np.savez_compressed(index.vectors_path, vectors=np.asarray([1.0, 2.0], dtype=np.float32))
+
+        with pytest.raises(VectorIndexError, match="two-dimensional"):
+            index.search("alpha", provider)
+
     def test_duplicate_chunk_ids_are_rejected(self, tmp_path: Path):
         index = PersistentVectorIndex(tmp_path / "vec")
         chunks = [
@@ -149,6 +178,39 @@ class TestPersistentVectorIndex:
         assert large.vector_bytes == small.vector_bytes * 2_000
         assert large.metadata_bytes == small.metadata_bytes * 2_000
         assert large.total_bytes > 700_000_000
+
+    def test_storage_estimate_rejects_negative_count(self):
+        with pytest.raises(ValueError, match="count"):
+            PersistentVectorIndex.estimate_storage(-1, dimension=768)
+
+    def test_build_rejects_invalid_provider_matrix(self, tmp_path: Path):
+        class ShortProvider:
+            def embed_texts(self, texts):
+                return np.ones((1, 4), dtype=np.float32)
+
+        index = PersistentVectorIndex(tmp_path / "vec")
+
+        with pytest.raises(VectorIndexError, match="invalid vector matrix"):
+            index.build(_chunks(), ShortProvider())
+
+    def test_build_rejects_empty_blank_or_textless_chunks(self, tmp_path: Path):
+        index = PersistentVectorIndex(tmp_path / "vec")
+
+        with pytest.raises(VectorIndexError, match="zero chunks"):
+            index.build([], KeywordEmbeddingProvider())
+        with pytest.raises(VectorIndexError, match="chunk_id"):
+            index.build([VectorChunk(chunk_id=" ", text="alpha")], KeywordEmbeddingProvider())
+        with pytest.raises(VectorIndexError, match="empty text"):
+            index.build([VectorChunk(chunk_id="a", text=" ")], KeywordEmbeddingProvider())
+
+    def test_write_metadata_replaces_stale_temp_file(self, tmp_path: Path):
+        metadata_path = tmp_path / "chunks.sqlite"
+        metadata_path.with_suffix(".sqlite.tmp").write_text("stale", encoding="utf-8")
+
+        size = vector_index._write_metadata(metadata_path, _chunks())
+
+        assert size > 0
+        assert not metadata_path.with_suffix(".sqlite.tmp").exists()
 
 
 class _EmbeddingHandler(BaseHTTPRequestHandler):
@@ -195,6 +257,18 @@ def embedding_server():
 
 
 class TestHttpEmbeddingClient:
+    @pytest.mark.parametrize(
+        ("base_url", "model", "match"),
+        [
+            ("", "local-test", "base_url"),
+            ("http://127.0.0.1:1", "", "model"),
+            ("ftp://127.0.0.1", "local-test", "http or https"),
+        ],
+    )
+    def test_constructor_rejects_invalid_configuration(self, base_url: str, model: str, match: str):
+        with pytest.raises(ValueError, match=match):
+            HttpEmbeddingClient(base_url=base_url, model=model)
+
     def test_client_parses_embedding_response(self, embedding_server: str):
         client = HttpEmbeddingClient(base_url=embedding_server, model="local-test")
 
@@ -209,6 +283,110 @@ class TestHttpEmbeddingClient:
 
         with pytest.raises(VectorIndexError, match="empty"):
             client.embed_texts([])
+
+    def test_from_env_sends_authorization_header(self, monkeypatch):
+        class FakeResponse:
+            status = 200
+
+            def read(self):
+                return b'{"data":[{"index":0,"embedding":[1.0,0.0]}]}'
+
+        class FakeConnection:
+            request_headers: dict[str, str] = {}
+
+            def __init__(self, host, port, timeout):
+                self.host = host
+                self.port = port
+                self.timeout = timeout
+
+            def request(self, method, path, body, headers):
+                self.request_headers = headers
+                assert path == "/v1/embeddings"
+
+            def getresponse(self):
+                return FakeResponse()
+
+            def close(self):
+                return None
+
+        monkeypatch.setenv("TEST_EMBED_BASE_URL", "http://localhost:8080/v1")
+        monkeypatch.setenv("TEST_EMBED_MODEL", "local-test")
+        monkeypatch.setenv("TEST_EMBED_API_KEY", "secret")
+        monkeypatch.setenv("TEST_EMBED_TIMEOUT_S", "3.5")
+        monkeypatch.setattr(vector_index.http_client, "HTTPConnection", FakeConnection)
+
+        client = HttpEmbeddingClient.from_env("TEST_EMBED")
+        vectors = client.embed_texts(["alpha"])
+
+        assert vectors.shape == (1, 2)
+        assert client.timeout_s == 3.5
+        assert client.api_key == "secret"
+
+    def test_client_reports_http_status_errors(self, monkeypatch):
+        class FakeResponse:
+            status = 500
+
+            def read(self):
+                return b"provider down"
+
+        class FakeConnection:
+            def __init__(self, *args, **kwargs):
+                return None
+
+            def request(self, *args, **kwargs):
+                return None
+
+            def getresponse(self):
+                return FakeResponse()
+
+            def close(self):
+                return None
+
+        monkeypatch.setattr(vector_index.http_client, "HTTPConnection", FakeConnection)
+        client = HttpEmbeddingClient(base_url="http://localhost", model="local-test")
+
+        with pytest.raises(VectorIndexError, match="HTTP 500"):
+            client.embed_texts(["alpha"])
+
+    def test_client_wraps_invalid_json_response(self, monkeypatch):
+        class FakeResponse:
+            status = 200
+
+            def read(self):
+                return b"{"
+
+        class FakeConnection:
+            def __init__(self, *args, **kwargs):
+                return None
+
+            def request(self, *args, **kwargs):
+                return None
+
+            def getresponse(self):
+                return FakeResponse()
+
+            def close(self):
+                return None
+
+        monkeypatch.setattr(vector_index.http_client, "HTTPConnection", FakeConnection)
+        client = HttpEmbeddingClient(base_url="http://localhost", model="local-test")
+
+        with pytest.raises(VectorIndexError, match="embedding request failed"):
+            client.embed_texts(["alpha"])
+
+    def test_parse_embedding_response_rejects_malformed_payloads(self):
+        with pytest.raises(VectorIndexError, match="data list"):
+            vector_index._parse_embedding_response({}, expected_count=1)
+        with pytest.raises(VectorIndexError, match="expected 2"):
+            vector_index._parse_embedding_response(
+                {"data": [{"index": 0, "embedding": [1.0]}]}, expected_count=2
+            )
+        with pytest.raises(VectorIndexError, match="non-empty embedding"):
+            vector_index._parse_embedding_response({"data": [{"index": 0, "embedding": []}]}, 1)
+
+    def test_normalise_matrix_rejects_one_dimensional_input(self):
+        with pytest.raises(VectorIndexError, match="two-dimensional"):
+            vector_index._normalise_matrix(np.asarray([1.0, 2.0], dtype=np.float32))
 
 
 class TestMemoryVectorPipeline:
