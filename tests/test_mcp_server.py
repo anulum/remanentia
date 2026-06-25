@@ -36,8 +36,8 @@ def _disable_default_mcp_audit(monkeypatch):
 
 
 class TestToolDefinitions:
-    def test_five_tools_defined(self):
-        assert len(TOOLS) == 5
+    def test_six_tools_defined(self):
+        assert len(TOOLS) == 6
 
     def test_tool_names(self):
         names = {t["name"] for t in TOOLS}
@@ -47,6 +47,7 @@ class TestToolDefinitions:
             "remanentia_status",
             "remanentia_graph",
             "remanentia_recall_feedback",
+            "remanentia_recall_correctness",
         }
 
     def test_recall_schema(self):
@@ -61,6 +62,14 @@ class TestToolDefinitions:
         props = graph_tool["inputSchema"]["properties"]
         assert "entity" in props
         assert "top" in props
+
+    def test_recall_correctness_schema(self):
+        correctness_tool = next(t for t in TOOLS if t["name"] == "remanentia_recall_correctness")
+        schema = correctness_tool["inputSchema"]
+        props = schema["properties"]
+        assert "query" in props
+        assert "was_correct" in props
+        assert schema["required"] == ["query", "was_correct"]
 
 
 # ── MCP Protocol ─────────────────────────────────────────────────
@@ -77,7 +86,7 @@ class TestMCPProtocol:
     def test_tools_list(self):
         req = {"jsonrpc": "2.0", "id": 2, "method": "tools/list"}
         resp = handle_request(req)
-        assert len(resp["result"]["tools"]) == 5
+        assert len(resp["result"]["tools"]) == 6
 
     def test_notifications_initialized(self):
         req = {"jsonrpc": "2.0", "method": "notifications/initialized"}
@@ -123,6 +132,20 @@ class TestMCPProtocol:
             }
             resp = handle_request(req)
         assert "Graph data" in resp["result"]["content"][0]["text"]
+
+    def test_tools_call_recall_correctness(self):
+        with patch("mcp_server.handle_recall_correctness", return_value="Correctness recorded"):
+            req = {
+                "jsonrpc": "2.0",
+                "id": 61,
+                "method": "tools/call",
+                "params": {
+                    "name": "remanentia_recall_correctness",
+                    "arguments": {"query": "calibration query", "was_correct": True},
+                },
+            }
+            resp = handle_request(req)
+        assert "Correctness recorded" in resp["result"]["content"][0]["text"]
 
     def test_tools_call_unknown_tool(self):
         req = {

@@ -268,7 +268,7 @@ def recall_correctness_endpoint(req: RecallCorrectnessRequest):
     the most recent matching recall in the query-stream ledger, and the conformal
     abstention gate calibrates on this label (distinct from the usage-only
     ``was_used``, which the server derives automatically). An auth-protected
-    write; unknown queries return 404 so a mis-targeted verdict is not silently
+    write; unknown queries return 404 so a misdirected verdict is not silently
     swallowed.
     """
     from recall_ledger import default_ledger

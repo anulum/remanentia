@@ -17,7 +17,6 @@ and extractable on its own. A final integration test drives the real
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
 
