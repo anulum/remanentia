@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from unittest.mock import patch
@@ -458,6 +459,12 @@ class TestPublicVectorSearch:
 
         assert resp.status_code == 400
 
+    def test_public_vector_search_top_k_zero_short_circuits(self, client):
+        resp = client.post("/vector/search/public", json={"query": "beta", "top_k": 0})
+
+        assert resp.status_code == 200
+        assert resp.json() == {"query": "beta", "results": []}
+
     def test_public_vector_search_no_allowlist_returns_no_results(self, client):
         raw_result = VectorSearchResult(
             chunk_id="one",
@@ -514,6 +521,25 @@ class TestPublicVectorSearch:
         assert payload["results"][0]["metadata"]["document"] == "[redacted]-paper.md"
         assert payload["results"][0]["redactions"] == 3
 
+    def test_public_vector_search_backend_error_returns_503(self, client):
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            patch(
+                "vector_index.HttpEmbeddingClient.from_env", side_effect=ValueError("no endpoint")
+            ),
+        ):
+            resp = client.post("/vector/search/public", json={"query": "beta", "top_k": 1})
+
+        assert resp.status_code == 503
+        assert resp.json()["detail"] == "no endpoint"
+
+    def test_missing_redaction_file_is_rejected(self, tmp_path, monkeypatch):
+        missing = tmp_path / "missing_terms.txt"
+        monkeypatch.setenv("REMANENTIA_PUBLIC_VECTOR_REDACTION_FILE", str(missing))
+
+        with pytest.raises(ValueError, match="REMANENTIA_PUBLIC_VECTOR_REDACTION_FILE"):
+            api._read_terms_from_env("REMANENTIA_PUBLIC_VECTOR_REDACTION_FILE")
+
     def test_consolidate_endpoint(self, client):
         mock_result = {"status": "ok", "traces_processed": 5}
         with patch("consolidation_engine.consolidate", return_value=mock_result):
@@ -548,6 +574,17 @@ class TestPublicVectorSearch:
         assert "daemon" in data
         assert data["daemon"]["cycle"] == 5
 
+    def test_health_reports_unreadable_legacy_daemon_state(self, client, tmp_path):
+        state_dir = tmp_path / "snn_state"
+        state_dir.mkdir()
+        (state_dir / "current_state.json").write_text("{", encoding="utf-8")
+
+        with patch("api.STATE_DIR", state_dir):
+            resp = client.get("/health")
+
+        assert resp.status_code == 200
+        assert resp.json()["legacy_daemon"] == "unreadable"
+
     def test_status_with_vector_worker_state(self, client, tmp_path):
         state_dir = tmp_path / "snn_state"
         state_dir.mkdir()
@@ -576,6 +613,70 @@ class TestPublicVectorSearch:
         data = resp.json()
         assert data["vector_worker"]["state"] == "alive"
         assert data["vector_worker"]["last_action"] == "skipped"
+
+    def test_status_reports_unreadable_vector_worker_state(self, client, tmp_path):
+        state_dir = tmp_path / "snn_state"
+        state_dir.mkdir()
+        (state_dir / "vector_refresh_worker.json").write_text("{", encoding="utf-8")
+        graph_dir = tmp_path / "memory" / "graph"
+        graph_dir.mkdir(parents=True)
+        (tmp_path / "reasoning_traces").mkdir()
+        (tmp_path / "memory" / "semantic").mkdir(parents=True)
+
+        with (
+            patch("api.BASE", tmp_path),
+            patch("api.STATE_DIR", state_dir),
+            patch("api.GRAPH_DIR", graph_dir),
+        ):
+            resp = client.get("/status")
+
+        assert resp.status_code == 200
+        assert resp.json()["vector_worker"]["state"] == "unreadable"
+
+
+class TestAPIHelpers:
+    def test_json_safe_keeps_value_when_item_conversion_rejects(self):
+        class RejectingScalar:
+            def item(self):
+                raise ValueError("not scalar")
+
+        value = RejectingScalar()
+
+        assert api._json_safe(value) is value
+
+    def test_middleware_audits_handler_exception(self, monkeypatch, tmp_path):
+        audit_path = tmp_path / "audit.jsonl"
+        monkeypatch.setattr(api, "AUTH", BearerAuth(None, warn_on_disabled=False), raising=False)
+        monkeypatch.setattr(api, "AUDIT_LOGGER", RequestAuditLogger(audit_path), raising=False)
+        monkeypatch.setattr(
+            api,
+            "LIMITER",
+            TokenBucketLimiter(rate_per_minute=60000, burst=1000),
+            raising=False,
+        )
+        request = api.Request(
+            {
+                "type": "http",
+                "method": "GET",
+                "path": "/status",
+                "headers": [],
+                "client": ("127.0.0.1", 12345),
+                "server": ("testserver", 80),
+                "scheme": "http",
+                "query_string": b"",
+            }
+        )
+
+        async def failing_handler(_request):
+            raise RuntimeError("handler boom")
+
+        with pytest.raises(RuntimeError, match="handler boom"):
+            asyncio.run(api.require_bearer_token(request, failing_handler))
+
+        payload = json.loads(audit_path.read_text(encoding="utf-8"))
+        assert payload["path"] == "/status"
+        assert payload["status"] == 500
+        assert payload["outcome"] == "exception"
 
 
 # ── Missing patterns: pipeline, roundtrip ─────────────────────

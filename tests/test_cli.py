@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+import cli
 from cli import (
     _read_freshness_report,
     cmd_consolidate,
@@ -128,6 +129,69 @@ class TestCmdStatus:
         assert "Vector worker: ALIVE" in out
         assert "Cycle: 7" in out
         assert "Last action: skipped" in out
+
+    def test_unreadable_vector_worker_state_printed(self, tmp_path, capsys):
+        state_dir = tmp_path / "snn_state"
+        state_dir.mkdir()
+        (state_dir / "vector_refresh_worker.json").write_text("{", encoding="utf-8")
+        graph_dir = tmp_path / "memory" / "graph"
+        graph_dir.mkdir(parents=True)
+        (tmp_path / "reasoning_traces").mkdir()
+        (tmp_path / "memory" / "semantic").mkdir(parents=True)
+
+        with (
+            patch("cli.STATE_DIR", state_dir),
+            patch("cli.GRAPH_DIR", graph_dir),
+            patch("cli.BASE", tmp_path),
+        ):
+            cmd_status(type("Args", (), {})())
+
+        assert "Vector worker: UNREADABLE" in capsys.readouterr().out
+
+    def test_dashboard_up_probe_reads_health_payload(self, tmp_path, capsys):
+        state_dir = tmp_path / "snn_state"
+        state_dir.mkdir()
+        graph_dir = tmp_path / "memory" / "graph"
+        graph_dir.mkdir(parents=True)
+        (tmp_path / "reasoning_traces").mkdir()
+        (tmp_path / "memory" / "semantic").mkdir(parents=True)
+
+        class Response:
+            def read(self):
+                return b'{"port": 8888, "uptime_s": 2}'
+
+        class Connection:
+            requested = False
+            closed = False
+
+            def __init__(self, host, port, timeout):
+                assert host == "127.0.0.1"
+                assert port == 8888
+                assert timeout == 2
+
+            def request(self, method, path):
+                assert method == "GET"
+                assert path == "/api/health"
+                Connection.requested = True
+
+            def getresponse(self):
+                return Response()
+
+            def close(self):
+                Connection.closed = True
+
+        with (
+            patch("cli.STATE_DIR", state_dir),
+            patch("cli.GRAPH_DIR", graph_dir),
+            patch("cli.BASE", tmp_path),
+            patch("http.client.HTTPConnection", Connection),
+        ):
+            cmd_status(type("Args", (), {})())
+
+        out = capsys.readouterr().out
+        assert "Dashboard: UP" in out
+        assert Connection.requested is True
+        assert Connection.closed is True
 
     def test_memory_counts(self, tmp_path, capsys):
         state_dir = tmp_path / "snn_state"
@@ -575,6 +639,34 @@ class TestCmdDaemon:
         out = capsys.readouterr().out
         assert "start requested" in out
 
+    def test_daemon_start_uses_systemd_unit_when_available(self, capsys):
+        from cli import cmd_daemon
+
+        with (
+            patch("cli._systemd_user_unit_available", return_value=True),
+            patch("cli._systemctl_user") as systemctl,
+            patch("subprocess.Popen") as popen,
+        ):
+            cmd_daemon(type("Args", (), {"action": "start"})())
+
+        systemctl.assert_called_once_with("start", "remanentia-vector-worker.service")
+        popen.assert_not_called()
+        assert "service start requested" in capsys.readouterr().out
+
+    def test_daemon_stop_uses_systemd_unit_when_available(self, capsys):
+        from cli import cmd_daemon
+
+        with (
+            patch("cli._systemd_user_unit_available", return_value=True),
+            patch("cli._systemctl_user") as systemctl,
+            patch("os.kill") as kill,
+        ):
+            cmd_daemon(type("Args", (), {"action": "stop"})())
+
+        systemctl.assert_called_once_with("stop", "remanentia-vector-worker.service")
+        kill.assert_not_called()
+        assert "service stop requested" in capsys.readouterr().out
+
     def test_daemon_status(self, tmp_path, capsys):
         from cli import cmd_daemon
 
@@ -592,6 +684,30 @@ class TestCmdDaemon:
             cmd_daemon(type("Args", (), {"action": "status"})())
         out = capsys.readouterr().out
         assert "Daemon" in out or "NOT RUNNING" in out
+
+
+class TestSystemdHelpers:
+    def test_systemctl_user_invokes_systemctl(self):
+        with patch("subprocess.run") as run:
+            cli._systemctl_user("start", "unit.service")
+
+        run.assert_called_once_with(["systemctl", "--user", "start", "unit.service"], check=True)
+
+    def test_systemd_user_unit_available_true(self):
+        completed = type("Completed", (), {"returncode": 0})()
+        with patch("subprocess.run", return_value=completed) as run:
+            assert cli._systemd_user_unit_available("unit.service") is True
+
+        run.assert_called_once()
+
+    def test_systemd_user_unit_available_false(self):
+        completed = type("Completed", (), {"returncode": 1})()
+        with patch("subprocess.run", return_value=completed):
+            assert cli._systemd_user_unit_available("unit.service") is False
+
+    def test_systemd_user_unit_available_handles_os_error(self):
+        with patch("subprocess.run", side_effect=OSError("missing systemctl")):
+            assert cli._systemd_user_unit_available("unit.service") is False
 
 
 # ── cmd_status stale daemon ─────────────────────────────────────
