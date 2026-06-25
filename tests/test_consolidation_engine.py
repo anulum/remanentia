@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
+import consolidation_engine
 import numpy as np
 
 from consolidation_engine import (
@@ -824,7 +825,7 @@ class TestMemoryLifecycle:
             ce.SEMANTIC_DIR = orig
 
     def test_age_memories_empty_dir(self, tmp_path):
-        """age_memories on nonexistent dir should not crash."""
+        """age_memories reports zero scanned files when semantic memory is absent."""
         import consolidation_engine as ce
 
         orig = ce.SEMANTIC_DIR
@@ -1126,3 +1127,151 @@ class TestSummaryDAG:
         loaded = json.loads(path.read_text(encoding="utf-8"))
         results = search_summary_dag(loaded, "accuracy BM25")
         assert len(results) > 0
+
+
+class TestConsolidationPythonFallbackContracts:
+    def test_native_free_extraction_helpers_cover_dynamic_trace_features(self, monkeypatch):
+        real_import = consolidation_engine.import_module
+
+        def reject_native(name: str):
+            if name == "remanentia_consolidation":
+                raise ImportError(name)
+            return real_import(name)
+
+        monkeypatch.setattr(consolidation_engine, "import_module", reject_native)
+
+        text = (
+            "# Header\n\n"
+            "We decided to fix compute_order_parameter in src/solver.py because BM25 "
+            "accuracy improved to 92.5% for Remanentia v3.9.0 on GPU.\n"
+            "The next context line explains the root cause and measured result.\n"
+            "Another context line keeps the decision grounded.\n"
+            "ArcaneNeuron replaced OldRetriever and depends on FastAPI."
+        )
+
+        entities = _extract_entities(text)
+        key_lines = _extract_key_lines(text)
+        paragraphs = _extract_paragraphs(text)
+        relations = _extract_typed_relations(text, ["ArcaneNeuron", "OldRetriever", "FastAPI"])
+        depends_relations = _extract_typed_relations(
+            "ArcaneNeuron depends on FastAPI.",
+            ["ArcaneNeuron", "FastAPI"],
+        )
+        co_occurs_relations = _extract_typed_relations(
+            "ArcaneNeuron and FastAPI are mentioned together.",
+            ["ArcaneNeuron", "MissingEntity", "FastAPI"],
+        )
+
+        assert {"remanentia", "bm25", "gpu", "v3.9.0", "92.5%", "solver.py"} <= set(entities)
+        assert "compute_order_parameter" in entities
+        assert key_lines and "root cause" in key_lines[0]
+        assert paragraphs and not paragraphs[0].startswith("#")
+        assert relations[("ArcaneNeuron", "OldRetriever")] == "replaced"
+        assert depends_relations[("ArcaneNeuron", "FastAPI")] == "depends_on"
+        assert co_occurs_relations[("ArcaneNeuron", "FastAPI")] == "co_occurs"
+
+    def test_native_free_clustering_splits_by_project_and_date_gap(self, monkeypatch):
+        real_import = consolidation_engine.import_module
+
+        def reject_native(name: str):
+            if name == "remanentia_consolidation":
+                raise ImportError(name)
+            return real_import(name)
+
+        monkeypatch.setattr(consolidation_engine, "import_module", reject_native)
+        traces = {
+            "a.md": {"project": "remanentia", "date": "2026-03-01"},
+            "b.md": {"project": "remanentia", "date": "2026-03-02"},
+            "c.md": {"project": "remanentia", "date": "2026-03-10"},
+            "d.md": {"project": "director-ai", "date": "not-a-date"},
+            "e.md": {"project": "director-ai", "date": ""},
+        }
+
+        clusters = _cluster_traces(traces)
+
+        assert ["a.md", "b.md"] in clusters
+        assert ["c.md"] in clusters
+        assert {"d.md", "e.md"} in [set(cluster) for cluster in clusters]
+
+    def test_native_free_summary_dag_builds_hierarchy_and_frontmatter_parses(self, monkeypatch):
+        real_import = consolidation_engine.import_module
+
+        def reject_native(name: str):
+            if name == "remanentia_consolidation":
+                raise ImportError(name)
+            return real_import(name)
+
+        monkeypatch.setattr(consolidation_engine, "import_module", reject_native)
+        trace_data = {
+            f"trace_{idx}.md": {
+                "date": f"2026-03-{idx + 1:02d}",
+                "project": "remanentia" if idx < 5 else "director-ai",
+                "entities": ["bm25", f"entity{idx}"],
+                "key_lines": [f"BM25 retrieval finding {idx}"],
+                "text": f"Full trace text {idx} about retrieval accuracy.",
+            }
+            for idx in range(9)
+        }
+
+        dag = build_summary_dag(trace_data)
+        parent_nodes = [node for node in dag if node["level"] > 0]
+
+        assert len(dag) > len(trace_data)
+        assert parent_nodes
+        assert parent_nodes[0]["date_range"][0] <= parent_nodes[0]["date_range"][1]
+        assert _parse_frontmatter("plain text") is None
+        assert _parse_frontmatter("---\nmissing end") is None
+        assert _parse_frontmatter("---\nvalidity_state: active\n- ignored\n---\nbody") == {
+            "validity_state": "active"
+        }
+
+    def test_forced_consolidation_processes_temp_traces_and_updates_outputs(self, tmp_path):
+        traces = tmp_path / "traces"
+        semantic = tmp_path / "semantic"
+        graph = tmp_path / "graph"
+        consolidation = tmp_path / "consolidation"
+        traces.mkdir()
+        (traces / "2026-03-15_remanentia_decision.md").write_text(
+            "# Decision\n\n"
+            "We decided BM25 retrieval fixed the Remanentia daemon because accuracy improved.\n\n"
+            "The fix produced a measured 92.5% result in retrieval.py.",
+            encoding="utf-8",
+        )
+
+        patches = (
+            patch("consolidation_engine.TRACES_DIR", traces),
+            patch("consolidation_engine.SEMANTIC_DIR", semantic),
+            patch("consolidation_engine.GRAPH_DIR", graph),
+            patch("consolidation_engine.CONSOLIDATION_DIR", consolidation),
+            patch("consolidation_engine.PENDING_PATH", consolidation / "pending.json"),
+            patch(
+                "consolidation_engine.LAST_RUN_PATH",
+                consolidation / "last_consolidation.json",
+            ),
+            patch("consolidation_engine.CONFLICTS_PATH", consolidation / "conflicts.json"),
+            patch("consolidation_engine.ENTITIES_PATH", graph / "entities.jsonl"),
+            patch("consolidation_engine.RELATIONS_PATH", graph / "relations.jsonl"),
+            patch("consolidation_engine.CLUSTERS_PATH", graph / "trace_clusters.json"),
+            patch("consolidation_engine.SUMMARY_DAG_PATH", consolidation / "summary_dag.json"),
+        )
+        with (
+            patches[0],
+            patches[1],
+            patches[2],
+            patches[3],
+            patches[4],
+            patches[5],
+            patches[6],
+            patches[7],
+            patches[8],
+            patches[9],
+            patches[10],
+        ):
+            stats = consolidate(force=True)
+
+        assert stats["traces_processed"] == 1
+        assert stats["memories_written"] == 1
+        assert list(semantic.rglob("*.md"))
+        assert (graph / "entities.jsonl").exists()
+        assert (graph / "relations.jsonl").exists()
+        assert (consolidation / "pending.json").exists()

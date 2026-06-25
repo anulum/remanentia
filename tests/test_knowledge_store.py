@@ -8,7 +8,10 @@
 
 from __future__ import annotations
 
+import json
+import types
 
+import knowledge_store
 from knowledge_store import (
     KnowledgeNote,
     KnowledgeStore,
@@ -20,6 +23,7 @@ from knowledge_store import (
     _tokenize,
     extract_person_names,
 )
+from signal_detector import DetectedSignal, SignalType
 
 
 # ── Utilities ───────────────────────────────────────────────────
@@ -749,3 +753,172 @@ class TestKnowledgeStorePipeline:
             n2_loaded = store2.notes.get(n2.id)
             assert n2_loaded is not None
             assert len(n2_loaded.links) >= 0  # links may or may not exist depending on overlap
+
+
+class TestKnowledgeStorePythonFallbackContracts:
+    def test_native_free_text_helpers_extract_real_retrieval_terms(self, monkeypatch):
+        real_import = __import__
+
+        def reject_native(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "remanentia_knowledge_store":
+                raise ImportError(name)
+            return real_import(name, globals, locals, fromlist, level)
+
+        monkeypatch.setattr("builtins.__import__", reject_native)
+
+        text = (
+            "Alice: BM25 retrieval improved to 88.5% in Remanentia v3.9.0. "
+            "Alice enjoys pottery, works as a researcher, is allergic to peanuts, "
+            "visited Zurich, and started learning Rust."
+        )
+
+        assert {"bm25", "retrieval", "remanentia", "88.5%", "v3.9.0"} <= _extract_entities(text)
+        assert "alice" in extract_person_names(text)
+        assert "retrieval" in _extract_keywords("retrieval retrieval BM25 BM25")
+        queries = _generate_prospective_queries(
+            text,
+            "Alice Memory",
+            ["alice"],
+            ["retrieval"],
+        )
+        assert "what happened to alice" in queries
+        assert "what is the score for alice" in queries
+        assert "what does alice like" in queries
+        assert "where does alice work" in queries
+        assert "what is alice allergic to" in queries
+        assert _tokenize("Native free BM25 retrieval") == {"native", "free", "bm25", "retrieval"}
+
+    def test_confidence_events_and_store_aging_update_notes(self):
+        note = KnowledgeNote(
+            id="n",
+            title="BM25",
+            content="BM25 retrieval works.",
+            keywords=["bm25"],
+            source="trace.md",
+            created="2026-01-01",
+            updated="2026-01-01",
+            entities=["bm25"],
+            confidence=0.5,
+        )
+
+        note.update_confidence("confirmed")
+        assert note.confirmation_count == 1
+        assert note.confidence > 0.5
+        assert note.last_confirmed
+        note.update_confidence("contradicted")
+        assert note.contradiction_count == 1
+        note.update_confidence("accessed")
+        before_stale = note.confidence
+        note.update_confidence("stale")
+        assert note.confidence < before_stale
+
+        store = KnowledgeStore()
+        store.notes[note.id] = note
+        superseded = KnowledgeNote(
+            id="old",
+            title="Old",
+            content="Old fact",
+            keywords=[],
+            source="old.md",
+            created="2026-01-01",
+            updated="2026-01-01",
+            superseded_by="new",
+        )
+        store.notes[superseded.id] = superseded
+        stats = store.age_memories()
+
+        assert stats == {"scanned": 2, "stale": 1}
+
+    def test_signal_feedback_updates_related_note_confidence(self, monkeypatch):
+        store = KnowledgeStore()
+        related = store.add_note(
+            "BM25 retrieval reached 80 percent accuracy.",
+            source="trace.md",
+            redact_pii=False,
+        )
+
+        monkeypatch.setattr(
+            store,
+            "search",
+            lambda *_args, **_kwargs: [types.SimpleNamespace(id=related.id)],
+        )
+        monkeypatch.setattr(
+            knowledge_store,
+            "detect_signals",
+            lambda _text: [
+                DetectedSignal(
+                    SignalType.CORRECTION,
+                    0.95,
+                    "correction",
+                    "correction: update BM25 accuracy",
+                )
+            ],
+        )
+        store.add_note(
+            "correction: BM25 retrieval reached 90 percent accuracy.",
+            source="correction.md",
+            redact_pii=False,
+        )
+        assert related.contradiction_count == 1
+
+        monkeypatch.setattr(
+            knowledge_store,
+            "detect_signals",
+            lambda _text: [DetectedSignal(SignalType.REINFORCEMENT, 0.9, "confirmed", "confirmed")],
+        )
+        store.add_note(
+            "confirmed: BM25 retrieval reached 90 percent accuracy.",
+            source="confirm.md",
+            redact_pii=False,
+        )
+        assert related.confirmation_count == 1
+
+    def test_native_free_search_related_and_graph_paths(self, monkeypatch):
+        real_import = __import__
+
+        def reject_native(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "remanentia_knowledge_store":
+                raise ImportError(name)
+            return real_import(name, globals, locals, fromlist, level)
+
+        monkeypatch.setattr("builtins.__import__", reject_native)
+
+        store = KnowledgeStore()
+        seed = store.add_note(
+            "BM25 retrieval depends on embeddings and improves Remanentia search.",
+            source="seed.md",
+            redact_pii=False,
+        )
+        related = store.add_note(
+            "Embeddings improve Remanentia retrieval quality with BM25.",
+            source="related.md",
+            redact_pii=False,
+        )
+        store.add_typed_link(seed.id, related.id, "depends_on")
+
+        assert store.search("BM25 retrieval", top_k=2)
+        assert related in store.get_related(seed.id, depth=1, edge_types={"depends_on"})
+        graph_results = store.graph_search("BM25 embeddings retrieval", top_k=3)
+        assert {note.id for note in graph_results} >= {seed.id, related.id}
+
+        seed.superseded_by = related.id
+        assert seed not in store.search("BM25 retrieval", top_k=3)
+        assert store.graph_search("no matching query tokens", top_k=3) == []
+
+    def test_load_rebuilds_token_index_and_triggers_from_files(self, tmp_path):
+        store = KnowledgeStore()
+        note = store.add_note(
+            "BM25 retrieval memory note with durable search terms.",
+            source="trace.md",
+            redact_pii=False,
+        )
+        trigger = store.add_trigger("BM25 retrieval", "Inspect retrieval quality")
+        notes_path = tmp_path / "notes.jsonl"
+        triggers_path = tmp_path / "triggers.jsonl"
+        notes_path.write_text(json.dumps(note.to_dict()) + "\n\n", encoding="utf-8")
+        triggers_path.write_text(json.dumps(trigger.to_dict()) + "\n\n", encoding="utf-8")
+
+        loaded = KnowledgeStore()
+        assert loaded.load(notes_path, triggers_path) is True
+        assert note.id in loaded._token_index
+        assert loaded.triggers[0].id == trigger.id

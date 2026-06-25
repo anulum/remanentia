@@ -10,7 +10,12 @@ from __future__ import annotations
 
 
 import math
+import re
+import sys
+import types
+from datetime import date
 
+import temporal_graph
 from temporal_graph import (
     TemporalEvent,
     TemporalGraph,
@@ -50,12 +55,72 @@ class TestParseDates:
         assert len(dates) == 1
         assert dates[0].endswith("-03-20")
 
+    def test_python_fallback_parses_absolute_relative_and_vague_dates(self, monkeypatch):
+        real_import_module = temporal_graph.import_module
+        real_import = __import__
+
+        def reject_temporal_native(name: str):
+            if name == "remanentia_temporal":
+                raise ImportError(name)
+            return real_import_module(name)
+
+        def reject_date_normalizer(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "date_normalizer":
+                raise ImportError(name)
+            return real_import(name, globals, locals, fromlist, level)
+
+        monkeypatch.setattr(temporal_graph, "import_module", reject_temporal_native)
+        monkeypatch.setattr("builtins.__import__", reject_date_normalizer)
+
+        dates = parse_dates(
+            "Fixed on 2026-03-15. Released March 20, 2026. Reviewed yesterday and this month.",
+            reference_date=date(2026, 4, 10),
+        )
+
+        assert dates == ["2026-03-15", "2026-03-20", "2026-04-01", "2026-04-09"]
+
+    def test_resolve_relative_date_all_supported_expressions(self):
+        ref = date(2026, 4, 10)
+
+        assert temporal_graph._resolve_relative_date("yesterday", ref) == "2026-04-09"
+        assert temporal_graph._resolve_relative_date("today", ref) == "2026-04-10"
+        assert temporal_graph._resolve_relative_date("last week", ref) == "2026-04-03"
+        assert temporal_graph._resolve_relative_date("last month", ref) == "2026-03-10"
+        assert temporal_graph._resolve_relative_date("last year", ref) == "2025-04-10"
+        assert temporal_graph._resolve_relative_date("this week", ref) == "2026-04-06"
+        assert temporal_graph._resolve_relative_date("this month", ref) == "2026-04-01"
+        assert temporal_graph._resolve_relative_date("this year", ref) == "2026-01-01"
+        assert temporal_graph._resolve_relative_date("next week", ref) is None
+
 
 class TestTemporalEvent:
     def test_creation(self):
         ev = TemporalEvent(date="2026-03-15", text="Bug fixed", source="trace.md")
         assert ev.date == "2026-03-15"
         assert ev.paragraph_idx == 0
+
+
+class TestDatePhaseAndResonanceFallback:
+    def test_date_to_phase_python_fallback_invalid_and_valid_dates(self, monkeypatch):
+        monkeypatch.setattr(temporal_graph, "_rust_date_to_phase", None)
+
+        assert date_to_phase("not-a-date") == 0.0
+        assert 0.0 < date_to_phase("2026-03-15") < 2.0 * math.pi
+
+    def test_resonance_search_python_fallback_scores_matching_phases(self, monkeypatch):
+        monkeypatch.setattr(temporal_graph, "_rust_resonance_search", None)
+        tg = TemporalGraph()
+        tg.add_events(
+            [
+                TemporalEvent(date="2026-03-15", text="Bug fixed", source="a.md"),
+                TemporalEvent(date="2026-09-15", text="Distant event", source="b.md"),
+            ]
+        )
+
+        results = tg.resonance_search("2026-03-15", tolerance=0.2)
+
+        assert results
+        assert results[0][0].date == "2026-03-15"
 
 
 class TestTemporalGraph:
@@ -68,6 +133,19 @@ class TestTemporalGraph:
         assert len(events) == 2
         assert events[0].date == "2026-03-15"
         assert events[1].date == "2026-03-20"
+
+    def test_extract_events_resolves_reference_and_chained_dates(self):
+        tg = TemporalGraph()
+
+        events = tg.extract_events(
+            "Last week the daemon failed. The repair landed 2 days after 2026-03-15.",
+            "trace.md",
+            reference_date="2026-04-10",
+        )
+        dates = {event.date for event in events}
+
+        assert "2026-04-03" in dates
+        assert "2026-03-17" in dates
 
     def test_add_events_builds_edges(self):
         tg = TemporalGraph()
@@ -82,6 +160,37 @@ class TestTemporalGraph:
         relations = {e.relation for e in tg.edges}
         # B and C are same_day; A is before B and C
         assert "same_day" in relations or "before" in relations
+
+    def test_add_events_links_old_and_new_same_day_and_adjacent_dates(self, monkeypatch):
+        real_import = temporal_graph.import_module
+
+        def reject_temporal_native(name: str):
+            if name == "remanentia_temporal":
+                raise ImportError(name)
+            return real_import(name)
+
+        monkeypatch.setattr(temporal_graph, "import_module", reject_temporal_native)
+
+        tg = TemporalGraph()
+        tg.add_events(
+            [
+                TemporalEvent(date="2026-03-10", text="Earlier event", source="early.md"),
+                TemporalEvent(date="2026-03-15", text="Original event", source="a.md"),
+            ]
+        )
+        tg.add_events(
+            [
+                TemporalEvent(date="2026-03-15", text="Second same-day event", source="b.md"),
+                TemporalEvent(date="2026-03-15", text="Third same-day event", source="d.md"),
+                TemporalEvent(date="2026-03-20", text="Later event", source="c.md"),
+            ]
+        )
+
+        same_day_edges = [edge for edge in tg.edges if edge.relation == "same_day"]
+        before_edges = [edge for edge in tg.edges if edge.relation == "before"]
+
+        assert any(edge.source_event.startswith("Original") for edge in same_day_edges)
+        assert before_edges
 
     def test_build_from_documents(self):
         tg = TemporalGraph()
@@ -117,6 +226,57 @@ class TestTemporalGraph:
         )
         results = tg.query_temporal("what happened after 2026-03-15", top_k=5)
         assert all(ev.date >= "2026-03-15" for ev in results)
+
+    def test_query_temporal_python_filters_and_sort_orders(self, monkeypatch):
+        real_import = temporal_graph.import_module
+
+        def reject_temporal_native(name: str):
+            if name == "remanentia_temporal":
+                raise ImportError(name)
+            return real_import(name)
+
+        monkeypatch.setattr(temporal_graph, "import_module", reject_temporal_native)
+
+        tg = TemporalGraph()
+        tg.add_events(
+            [
+                TemporalEvent(date="2026-03-10", text="Alpha release started", source="a.md"),
+                TemporalEvent(date="2026-03-20", text="Alpha release finished", source="b.md"),
+                TemporalEvent(date="2026-03-25", text="Beta release started", source="c.md"),
+            ]
+        )
+
+        before = tg.query_temporal("release before 2026-03-20", top_k=5)
+        after = tg.query_temporal("release after 2026-03-20", top_k=5)
+        between = tg.query_temporal("release between 2026-03-10 and 2026-03-25", top_k=5)
+        latest = tg.query_temporal("latest release", top_k=1)
+        earliest = tg.query_temporal("first release", top_k=1)
+
+        assert all(event.date <= "2026-03-20" for event in before)
+        assert all(event.date >= "2026-03-20" for event in after)
+        assert {event.date for event in between} == {"2026-03-10", "2026-03-20", "2026-03-25"}
+        assert latest[0].date == "2026-03-25"
+        assert earliest[0].date == "2026-03-10"
+
+    def test_parse_dates_accepts_high_confidence_vague_date_normalizer(self, monkeypatch):
+        real_import_module = temporal_graph.import_module
+
+        def reject_temporal_native(name: str):
+            if name == "remanentia_temporal":
+                raise ImportError(name)
+            return real_import_module(name)
+
+        fake_normalizer = types.ModuleType("date_normalizer")
+        fake_normalizer.VAGUE_DATE_RE = re.compile(r"next sprint")
+        fake_normalizer.normalize_date_expression = lambda _expr, _ref: types.SimpleNamespace(
+            confidence=0.95,
+            iso_date="2026-04-15",
+        )
+
+        monkeypatch.setattr(temporal_graph, "import_module", reject_temporal_native)
+        monkeypatch.setitem(sys.modules, "date_normalizer", fake_normalizer)
+
+        assert parse_dates("next sprint", reference_date=date(2026, 4, 10)) == ["2026-04-15"]
 
     def test_query_temporal_before(self):
         tg = TemporalGraph()
