@@ -8,13 +8,16 @@
 
 from __future__ import annotations
 
+import sys
 import json
 import shutil
 from pathlib import Path
 from unittest.mock import patch
 
+import memory_index
 import numpy as np
 
+from compiled_memory import CompiledFact
 from memory_index import (
     Document,
     MemoryIndex,
@@ -90,6 +93,23 @@ class TestTokenize:
         assert "bm25" in tokens
         assert "score" in tokens
         assert "stdp" in tokens
+
+    def test_python_fallback_when_native_tokenizer_missing(self, monkeypatch):
+        real_import = memory_index.import_module
+
+        def import_without_native(name: str):
+            if name == "remanentia_search":
+                raise ImportError(name)
+            return real_import(name)
+
+        monkeypatch.setattr(memory_index, "import_module", import_without_native)
+
+        assert _tokenize("Native-free BM25 tokenizer") == [
+            "native",
+            "free",
+            "bm25",
+            "tokenizer",
+        ]
 
 
 # ── Paragraph splitting ──────────────────────────────────────────
@@ -195,6 +215,24 @@ class TestClassifyParagraph:
 
     def test_discussion_default(self):
         assert _classify_paragraph("Some general discussion about approaches") == "discussion"
+
+    def test_python_fallback_when_native_classifier_missing(self, monkeypatch):
+        real_import = memory_index.import_module
+
+        def import_without_native(name: str):
+            if name == "remanentia_search":
+                raise ImportError(name)
+            return real_import(name)
+
+        monkeypatch.setattr(memory_index, "import_module", import_without_native)
+
+        assert _classify_paragraph("class SearchEngine:", is_code=True) == "function"
+        assert _classify_paragraph("x = 42", is_code=True) == "code"
+        assert _classify_paragraph("We decided to keep BM25 scoring.") == "decision"
+        assert _classify_paragraph("We found a measurable retrieval result.") == "finding"
+        assert _classify_paragraph("P@1 accuracy reached 99 percent.") == "metric"
+        assert _classify_paragraph("Released version v3.9.0.") == "version"
+        assert _classify_paragraph("General operational note.") == "discussion"
 
 
 # ── Query classification ─────────────────────────────────────────
@@ -380,6 +418,22 @@ class TestMemoryIndex:
         assert stats["paragraphs"] > 0
         assert stats["unique_tokens"] > 0
         assert stats["has_embeddings"] is False
+        assert idx._built is True
+
+    def test_build_continues_when_compiled_fact_refresh_fails(self, tmp_path, monkeypatch):
+        docs_dir = self._build_mini_index(tmp_path)
+
+        def fail_compile(_repo: Path) -> list[object]:
+            raise RuntimeError("compiled memory unavailable")
+
+        monkeypatch.setattr("compiled_memory.compile_facts", fail_compile)
+
+        idx = MemoryIndex()
+        with patch("memory_index.SOURCES", {"test": docs_dir}):
+            with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md", ".py"}}):
+                stats = idx.build(use_gpu_embeddings=False, use_gliner=False)
+
+        assert stats["documents"] >= 3
         assert idx._built is True
 
     def test_search_finds_relevant(self, tmp_path):
@@ -623,6 +677,35 @@ class TestAddFile:
 
         assert idx.embeddings is None
 
+    def test_rebuild_sparse_index_from_existing_code_documents(self):
+        idx = MemoryIndex()
+        idx.documents = [
+            Document(
+                name="worker.py",
+                source="code",
+                path="/tmp/worker.py",
+                paragraphs=[
+                    "def refresh_memory_index():\n    return 'done'",
+                    "class VectorWorker:\n    pass",
+                ],
+                doc_type="code",
+            ),
+            Document(
+                name="note.md",
+                source="notes",
+                path="/tmp/note.md",
+                paragraphs=["We decided to keep BM25 scoring for the retrieval worker."],
+                doc_type="notes",
+            ),
+        ]
+
+        idx._rebuild_sparse_index_from_documents()
+
+        assert len(idx.paragraph_index) == 3
+        assert idx.documents[0].tokens
+        assert idx.paragraph_types[:2] == ["function", "function"]
+        assert idx.paragraph_types[2] == "decision"
+
     def test_add_file_not_built(self, tmp_path):
         idx = MemoryIndex()
         assert idx.add_file(tmp_path / "nope.md") == 0
@@ -785,6 +868,35 @@ class TestPythonBm25Weights:
         assert 0 not in scores
         assert scores[1] > 0
 
+    def test_weight_index_skips_zero_idf_and_stale_postings(self):
+        idx = MemoryIndex()
+        idx._built = True
+        idx._inverted_index = {"zero": [0], "stale": [3], "alpha": [0]}
+        idx.idf = {"zero": 0.0, "stale": 1.0, "alpha": 1.0}
+        idx.paragraph_token_counts = [{"alpha": 1}]
+        idx._para_lengths = np.array([1], dtype=np.float32)
+        idx._avg_dl = 1.0
+
+        weights = idx._build_bm25_weight_index()
+
+        assert "zero" not in weights
+        assert "stale" not in weights
+        assert weights["alpha"][0][0] == 0
+
+    def test_uncached_bm25_handles_missing_idf_filters_and_default_tf(self):
+        idx = MemoryIndex()
+        idx._built = True
+        idx._inverted_index = {"missing": [], "zero": [0], "alpha": [0, 1]}
+        idx.idf = {"zero": 0.0, "alpha": 1.0}
+        idx.paragraph_token_counts = [{"alpha": 2}]
+        idx._para_lengths = np.array([2, 1], dtype=np.float32)
+        idx._avg_dl = 1.5
+
+        scores = idx._score_python_bm25_uncached({"missing", "zero", "alpha"}, {0})
+
+        assert set(scores) == {1}
+        assert scores[1] > 0.0
+
 
 # ── Dataclass sanity ─────────────────────────────────────────────
 
@@ -805,6 +917,70 @@ class TestDataclasses:
     def test_paragraph(self):
         p = Paragraph(text="some text", para_type="decision")
         assert p.prospective_queries == []
+
+
+class TestCompiledFactPriorityResults:
+    def test_compiled_fact_results_import_failure(self, monkeypatch):
+        real_import = __import__
+
+        def reject_compiled(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "compiled_memory":
+                raise ImportError(name)
+            return real_import(name, globals, locals, fromlist, level)
+
+        monkeypatch.setattr("builtins.__import__", reject_compiled)
+
+        assert memory_index._compiled_fact_results("vector worker", top_k=3) == []
+
+    def test_compiled_fact_results_search_failure(self, monkeypatch):
+        import compiled_memory
+
+        monkeypatch.setattr(compiled_memory, "load_compiled_facts", lambda: [])
+
+        def fail_search(*_args):
+            raise RuntimeError("compiled facts unavailable")
+
+        monkeypatch.setattr(compiled_memory, "search_compiled_facts", fail_search)
+
+        assert memory_index._compiled_fact_results("vector worker", top_k=3) == []
+
+    def test_compiled_fact_results_filters_low_scores_and_formats_hits(self, monkeypatch):
+        import compiled_memory
+
+        fact = CompiledFact(
+            fact_id="service.vector_worker",
+            fact_type="continuity",
+            subject="Vector worker",
+            fact="The vector worker refreshes durable memory indexes.",
+            source="ops.md",
+        )
+        monkeypatch.setattr(compiled_memory, "load_compiled_facts", lambda: [fact])
+        monkeypatch.setattr(
+            compiled_memory,
+            "search_compiled_facts",
+            lambda *_args, **_kwargs: [(fact, 7.5), (fact, 9.25)],
+        )
+
+        results = memory_index._compiled_fact_results("vector worker", top_k=3)
+
+        assert len(results) == 1
+        assert results[0].name == "service.vector_worker.fact"
+        assert results[0].source == "compiled"
+        assert results[0].score == 1009.25
+
+    def test_merge_priority_results_deduplicates_and_respects_top_k(self):
+        priority = SearchResult(name="a.md", source="compiled", score=10, snippet="same")
+        duplicate = SearchResult(name="a.md", source="compiled", score=8, snippet="same")
+        ranked = SearchResult(name="b.md", source="notes", score=2, snippet="other")
+        extra = SearchResult(name="c.md", source="notes", score=1, snippet="extra")
+
+        merged = memory_index._merge_priority_results(
+            [priority],
+            [duplicate, ranked, extra],
+            top_k=2,
+        )
+
+        assert [result.name for result in merged] == ["a.md", "b.md"]
 
 
 # ── _has_date_expression ────────────────────────────────────────
@@ -1002,6 +1178,24 @@ class TestSaveLoadEmbeddings:
         assert idx.documents[0].name == "test.md"
         assert idx.documents[0].date == ""
 
+    def test_validated_loaded_embeddings_rejects_bad_quantized_and_nonfinite_data(self):
+        idx = MemoryIndex()
+        idx.paragraph_index = [(0, 0)]
+
+        assert (
+            idx._validated_loaded_embeddings(np.ones((1, 2), dtype=np.int8), None, quantized=True)
+            is None
+        )
+        assert idx._validated_loaded_embeddings(object(), np.ones((1, 1)), quantized=True) is None
+        assert (
+            idx._validated_loaded_embeddings(
+                np.array([[np.nan]], dtype=np.float32),
+                None,
+                quantized=False,
+            )
+            is None
+        )
+
 
 # ── Temporal query sorting ──────────────────────────────────────
 
@@ -1192,6 +1386,25 @@ class TestBuildEdgeCases:
             idx.search("automated build", top_k=3)
         assert idx._built is True
 
+    def test_build_skips_temporal_graph_when_corpus_exceeds_threshold(self, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "test.md").write_text(
+            "# Test\n\nContent about automated build testing with enough searchable detail.",
+            encoding="utf-8",
+        )
+
+        idx = MemoryIndex()
+        with (
+            patch("memory_index.SOURCES", {"test": docs_dir}),
+            patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md"}}),
+            patch("memory_index.TEMPORAL_GRAPH_MAX_DOCUMENTS", 0),
+        ):
+            stats = idx.build(use_gpu_embeddings=False, use_gliner=False)
+
+        assert stats["documents"] == 1
+        assert idx._temporal_graph is None
+
     def test_add_file_short_content(self, tmp_path):
         docs_dir = tmp_path / "docs"
         docs_dir.mkdir()
@@ -1312,6 +1525,21 @@ class TestEntityGraphHelpers:
         score = _entity_boost_score("BM25 retrieval improved after the fix.", {"e1"}, graph)
 
         assert score >= 0.15
+
+    def test_relation_neighbors_skip_incomplete_edges(self):
+        neighbors = memory_index._build_relation_neighbors(
+            {"e1": {"label": "alpha"}, "e2": {"label": "beta"}},
+            [
+                {"source": "e1", "target": "e2", "type": "fixed_by"},
+                {"source": "", "target": "e2"},
+                {"source": "e1", "target": ""},
+            ],
+        )
+
+        assert neighbors == {
+            "e1": [("e2", "beta", "fixed_by")],
+            "e2": [("e1", "alpha", "fixed_by")],
+        }
 
     def test_entity_boost_score_no_match(self):
         graph = {
@@ -2097,6 +2325,21 @@ class TestReciprocalRankFusion:
         result = _reciprocal_rank_fusion([[(5, 1.0), (3, 0.5)]])
         assert len(result) == 2
 
+    def test_python_fallback_when_native_rrf_missing(self, monkeypatch):
+        real_import = memory_index.import_module
+
+        def import_without_native(name: str):
+            if name == "remanentia_retrieve":
+                raise ImportError(name)
+            return real_import(name)
+
+        monkeypatch.setattr(memory_index, "import_module", import_without_native)
+
+        result = _reciprocal_rank_fusion([[(0, 1.0)], [(0, 0.5), (1, 0.4)]], k=60)
+
+        assert result[0][0] == 0
+        assert result[0][1] > result[1][1]
+
 
 # ── Additional memory-index behaviours ──────────────────────────────────────
 
@@ -2134,7 +2377,6 @@ class TestGetRustBm25ClassSuccessImport:
         memory_index._RUST_BM25_CLASS = None
 
         mock_bm25_cls = MagicMock()
-        import sys
 
         fake_module = type(sys)("remanentia_search")
         fake_module.BM25Index = mock_bm25_cls
@@ -2437,3 +2679,22 @@ class TestContentHashIndexing:
         files = list(memory_index._iter_source_files("arcane_stimuli", tmp_path))
 
         assert [path.name for path in files] == ["stimulus.json"]
+
+    def test_manuscript_source_skips_archives_and_indexes_current_text(self, tmp_path):
+        """Manuscript indexing excludes archive trees but keeps current source text."""
+        current = tmp_path / "current"
+        archive = tmp_path / "ARCHIVE"
+        current.mkdir()
+        archive.mkdir()
+        (current / "paper.md").write_text(
+            "Current manuscript text with enough retrieval context.",
+            encoding="utf-8",
+        )
+        (archive / "old.md").write_text(
+            "Archived manuscript text with enough retrieval context.",
+            encoding="utf-8",
+        )
+
+        files = list(memory_index._iter_source_files("manuscripts", tmp_path))
+
+        assert [path.name for path in files] == ["paper.md"]

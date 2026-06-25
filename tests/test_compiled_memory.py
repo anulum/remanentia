@@ -12,6 +12,7 @@ import gzip
 import json
 from pathlib import Path
 
+import compiled_memory
 import memory_index
 from benchmark_suites import current_operational_queries, historical_regression_queries
 from compiled_memory import CompiledFact, compile_facts, load_compiled_facts, search_compiled_facts
@@ -115,6 +116,34 @@ def test_compile_facts_writes_loadable_jsonl(tmp_path):
     assert any(f.fact_id == "index.current_size" for f in facts)
 
 
+def test_load_compiled_facts_skips_missing_blank_and_malformed_records(tmp_path):
+    missing = tmp_path / "missing.jsonl"
+    assert load_compiled_facts(missing) == []
+
+    good = CompiledFact(
+        fact_id="memory.vector_worker",
+        fact_type="continuity",
+        subject="Vector worker",
+        fact="The vector worker refreshes the memory index.",
+        source="ops.md",
+        aliases=["vector worker refresh"],
+    )
+    path = tmp_path / "facts.jsonl"
+    path.write_text(
+        "\n"
+        "{bad json}\n"
+        + json.dumps(good.to_record())
+        + "\n"
+        + json.dumps({"fact_id": "broken", "aliases": 5})
+        + "\n",
+        encoding="utf-8",
+    )
+
+    facts = load_compiled_facts(path)
+
+    assert [fact.fact_id for fact in facts] == ["memory.vector_worker"]
+
+
 def test_compile_facts_adds_historical_benchmark_expected_facts(tmp_path):
     repo = tmp_path
     _write_index(repo / "snn_state" / "memory_index.json.gz")
@@ -153,6 +182,35 @@ def test_search_compiled_facts_prefers_alias_and_type():
 
     assert result[0][0].fact_id == "retrieval.embedding_weight"
     assert result[0][0].fact.endswith("0.45.")
+
+
+def test_search_compiled_facts_handles_empty_query_exact_subject_and_low_scores():
+    current_fact = CompiledFact(
+        fact_id="service.vector_worker",
+        fact_type="continuity",
+        subject="Vector worker service",
+        fact="The vector worker service refreshes the index from durable sources.",
+        source="ops.md",
+        priority=2.0,
+        aliases=[],
+    )
+    stale_fact = CompiledFact(
+        fact_id="legacy.archive",
+        fact_type="factual",
+        subject="Legacy Archive Removed",
+        fact="Legacy archive data is obsolete.",
+        source="old.md",
+        truth_mode="historical",
+        priority=0.1,
+        aliases=[],
+    )
+
+    assert search_compiled_facts("", [current_fact]) == []
+    assert (
+        search_compiled_facts("Vector worker service", [current_fact], top_k=1)[0][0].fact_id
+        == "service.vector_worker"
+    )
+    assert search_compiled_facts("Legacy Archive", [stale_fact]) == []
 
 
 def test_search_compiled_facts_rejects_type_only_matches():
@@ -251,6 +309,172 @@ def test_search_compiled_facts_can_select_benchmark_expected_truth():
     )
 
     assert result[0][0].fact_id == "index.historical_size"
+
+
+def test_benchmark_facts_include_retrieval_and_local_model_reports(tmp_path):
+    repo = tmp_path
+    bench_dir = repo / ".coordination" / "benchmarks" / "REMANENTIA"
+    bench_dir.mkdir(parents=True)
+    (bench_dir / "retrieval_sweep_2026-05-01_120000.json").write_text(
+        json.dumps(
+            {"recall_at_k": {"1": 25, "5": 50, "10": 75, "20": 100}, "timing_ms": {"p50": 12.5}}
+        ),
+        encoding="utf-8",
+    )
+    (bench_dir / "local_llm_retrieval_2026-05-01_121500.json").write_text(
+        json.dumps(
+            {
+                "top1_accuracy": 33.3,
+                "topk_accuracy": 66.6,
+                "local_answer_accuracy": 55.5,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    facts = compiled_memory._benchmark_facts(repo)
+    by_id = {fact.fact_id: fact for fact in facts}
+
+    assert "Recall@1 25%" in by_id["benchmark.latest_retrieval_sweep"].fact
+    assert by_id["benchmark.latest_retrieval_sweep"].valid_from == "2026-05-01T12:00:00"
+    assert "answer accuracy 55.5%" in by_id["benchmark.latest_local_model_retrieval"].fact
+
+
+def test_compiled_memory_file_helpers_cover_branch_contracts(tmp_path, monkeypatch, capsys):
+    assert compiled_memory._named_benchmark({"name": "api_recall"}, "api_recall") == {}
+    assert compiled_memory._named_benchmark([{"name": "api_health"}], "api_recall") == {}
+
+    reports = tmp_path / "reports"
+    assert compiled_memory._load_reports(reports, "*.json") == []
+    reports.mkdir()
+    (reports / "bad.json").write_text("{not json", encoding="utf-8")
+    (reports / "good.json").write_text('{"metric": 1}', encoding="utf-8")
+    assert [report[1] for report in compiled_memory._load_reports(reports, "*.json")] == [
+        {"metric": 1}
+    ]
+
+    syntax_error = tmp_path / "broken.py"
+    syntax_error.write_text("def broken(:\n", encoding="utf-8")
+    symbol_file = tmp_path / "symbols.py"
+    symbol_file.write_text(
+        "async def fetch():\n    return 1\n\nclass Store:\n    pass\n",
+        encoding="utf-8",
+    )
+    assert compiled_memory._top_level_symbols(syntax_error) == []
+    assert compiled_memory._top_level_symbols(symbol_file) == ["fetch", "Store"]
+
+    text_file = tmp_path / "note.md"
+    text_file.write_text("note text", encoding="utf-8")
+    folder = tmp_path / "folder"
+    folder.mkdir()
+    (folder / "a.txt").write_text("ignored", encoding="utf-8")
+    (folder / "b.md").write_text("included", encoding="utf-8")
+    (folder / "c.md").write_text("second included", encoding="utf-8")
+    assert compiled_memory._read_many_texts([text_file], max_files=5) == ["note text"]
+    assert compiled_memory._read_many_texts([tmp_path / "missing", folder], max_files=1) == [
+        "included"
+    ]
+
+    assert compiled_memory._query_intent("where is vector worker") == "location"
+    assert compiled_memory._query_intent("when was the index built") == "temporal"
+    assert compiled_memory._query_intent("how does scpn relate to remanentia") == "cross_project"
+    assert compiled_memory._query_intent("where was the report stored") == "location"
+    assert compiled_memory._query_intent("recent report stored path") == "continuity"
+    assert compiled_memory._query_truth_mode("deprecated service path") == "historical"
+    assert compiled_memory._timestamp_to_iso("2026-05-01T12:00:00Z") == "2026-05-01T12:00:00Z"
+    monkeypatch.setattr(compiled_memory, "_now_iso", lambda: "now")
+    assert compiled_memory._timestamp_to_iso(None) == "now"
+    assert compiled_memory._path_date(Path("report.txt")) == ""
+    assert compiled_memory._path_date(Path("report_2026-05-01.json")) == "2026-05-01"
+    assert compiled_memory._path_date(Path("report_2026-05-01_1215.json")) == "2026-05-01T12:15"
+
+    monkeypatch.setattr(
+        compiled_memory,
+        "compile_facts",
+        lambda: [
+            CompiledFact(
+                fact_id="a",
+                fact_type="factual",
+                subject="A",
+                fact="A fact.",
+                source="source",
+            )
+        ],
+    )
+    compiled_memory.main()
+    assert json.loads(capsys.readouterr().out)["facts"] == 1
+
+
+def test_module_symbol_facts_skip_tests_and_empty_modules(tmp_path):
+    (tmp_path / "test_helper.py").write_text("def test_only():\n    pass\n", encoding="utf-8")
+    (tmp_path / "empty.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (tmp_path / "entity_extractor.py").write_text(
+        "def extract_entities(text):\n    return []\n",
+        encoding="utf-8",
+    )
+
+    facts = compiled_memory._module_symbol_facts(tmp_path)
+
+    assert [fact.fact_id for fact in facts] == ["symbols.entity_extractor"]
+    assert "entity extraction functions" in facts[0].aliases
+
+
+def test_fact_builders_read_operational_source_files(tmp_path):
+    (tmp_path / ".coordination" / "sessions" / "REMANENTIA").mkdir(parents=True)
+    (tmp_path / ".coordination" / "sessions" / "REMANENTIA" / "hardware.md").write_text(
+        "Local hardware has GTX 1060 6GB and RX 6600 XT cards.",
+        encoding="utf-8",
+    )
+    (tmp_path / "memory" / "semantic").mkdir(parents=True)
+    (tmp_path / "memory" / "semantic" / "cross.md").write_text(
+        "sc-neurocore connects to scpn-quantum-control through identity and quantum control.",
+        encoding="utf-8",
+    )
+    (tmp_path / "disposition").mkdir()
+    (tmp_path / "disposition" / "relationship.md").write_text(
+        "The substrate is provided elsewhere and the mathematics binds Remanentia.",
+        encoding="utf-8",
+    )
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "benchmark_internal.py").write_text(
+        "identity coherence R metric historical wording",
+        encoding="utf-8",
+    )
+    (tmp_path / "retrieve.py").write_text(
+        "embedding_weight = 0.45  # embedding contribution",
+        encoding="utf-8",
+    )
+    (tmp_path / "encoding.py").write_text(
+        "BACKENDS = ['hash', 'lsh', 'embedding']",
+        encoding="utf-8",
+    )
+    (tmp_path / "consolidation_engine.py").write_text(
+        "The heuristic cluster implementation keeps nearby traces together.",
+        encoding="utf-8",
+    )
+    (tmp_path / "hooks.py").write_text(
+        "identity coherence hooks compute the score at session boundaries.",
+        encoding="utf-8",
+    )
+
+    facts = (
+        compiled_memory._hardware_facts(tmp_path)
+        + compiled_memory._relationship_facts(tmp_path)
+        + compiled_memory._incident_facts(tmp_path)
+        + compiled_memory._source_derived_facts(tmp_path)
+    )
+    fact_ids = {fact.fact_id for fact in facts}
+
+    assert {
+        "hardware.local_gpu",
+        "relationship.scpn_remanentia",
+        "relationship.neurocore_quantum_control",
+        "incident.identity_coherence_metric_historical",
+        "retrieval.embedding_weight",
+        "encoding.backends",
+        "consolidation.approach",
+        "identity.coherence_hook_location",
+    }.issubset(fact_ids)
 
 
 def test_current_operational_queries_use_live_stats(tmp_path):
