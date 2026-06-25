@@ -70,3 +70,29 @@ class TestReleaseIntegrityWorkflow:
 
         assert not result.ok
         assert "sigstore action verifies generated bundles before release" in result.format()
+
+    def test_action_ref_pin_check_fails_when_no_actions_are_referenced(self):
+        checker = _load_module()
+
+        assert checker._action_refs_are_pinned("name: release\n") is False
+
+    def test_main_returns_zero_for_current_workflow(self, capsys):
+        checker = _load_module()
+
+        code = checker.main([str(RELEASE_WORKFLOW)])
+
+        assert code == 0
+        assert "PASS: workflow action refs are pinned" in capsys.readouterr().out
+
+    def test_main_returns_one_for_broken_workflow_from_sys_argv(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        checker = _load_module()
+        workflow = tmp_path / "release.yml"
+        workflow.write_text("name: release\n", encoding="utf-8")
+        monkeypatch.setattr(sys, "argv", ["check_release_integrity.py", str(workflow)])
+
+        code = checker.main()
+
+        assert code == 1
+        assert "FAIL: workflow action refs are pinned" in capsys.readouterr().out
