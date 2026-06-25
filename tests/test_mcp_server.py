@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import os
 from unittest.mock import patch
 
 import pytest
@@ -18,6 +19,8 @@ from mcp_server import (
     TOOLS,
     handle_graph,
     handle_recall,
+    handle_recall_correctness,
+    handle_recall_feedback,
     handle_remember,
     handle_request,
     handle_status,
@@ -146,6 +149,31 @@ class TestMCPProtocol:
             }
             resp = handle_request(req)
         assert "Correctness recorded" in resp["result"]["content"][0]["text"]
+
+    def test_tools_call_recall_feedback(self):
+        with patch("mcp_server.handle_recall_feedback", return_value="Feedback recorded"):
+            req = {
+                "jsonrpc": "2.0",
+                "id": 62,
+                "method": "tools/call",
+                "params": {
+                    "name": "remanentia_recall_feedback",
+                    "arguments": {"query": "calibration query", "was_used": True},
+                },
+            }
+            resp = handle_request(req)
+        assert "Feedback recorded" in resp["result"]["content"][0]["text"]
+
+    def test_tools_call_coerces_non_dict_arguments(self):
+        with patch("mcp_server.handle_status", return_value="Status info"):
+            req = {
+                "jsonrpc": "2.0",
+                "id": 63,
+                "method": "tools/call",
+                "params": {"name": "remanentia_status", "arguments": "not a dict"},
+            }
+            resp = handle_request(req)
+        assert "Status info" in resp["result"]["content"][0]["text"]
 
     def test_tools_call_unknown_tool(self):
         req = {
@@ -362,6 +390,50 @@ class TestHandleRecallWithIndex:
         finally:
             mcp_server._UNIFIED_INDEX = old_idx
             answer_extractor._BACKEND = old_backend
+
+    def test_guarded_mode_loads_guard_dependencies_when_results_exist(self, monkeypatch):
+        from unittest.mock import MagicMock
+        from memory_index import SearchResult
+        import mcp_server
+
+        mock_idx = MagicMock()
+        mock_idx._built = True
+        mock_idx.search.return_value = [
+            SearchResult(
+                name="guarded.md",
+                source="trace",
+                score=0.9,
+                snippet="Guarded snippet",
+                answer="Guarded answer",
+            )
+        ]
+        requested: list[tuple[str, str]] = []
+
+        def runtime_attr(module_name: str, attr_name: str):
+            requested.append((module_name, attr_name))
+            if (module_name, attr_name) == ("memory_index", "MemoryIndex"):
+                return lambda: mock_idx
+            if attr_name == "facts_from_results":
+                return lambda results: ["fact"]
+            if attr_name == "is_available":
+                return lambda: False
+            if attr_name == "score_memory_answer":
+                return lambda query, answer, facts: None
+            raise AssertionError(attr_name)
+
+        old_idx = mcp_server._UNIFIED_INDEX
+        mcp_server._UNIFIED_INDEX = mock_idx
+        monkeypatch.setenv("REMANENTIA_GUARDED", "1")
+        try:
+            with patch("mcp_server._runtime_attr", side_effect=runtime_attr):
+                result = handle_recall("guarded query", top_k=1)
+        finally:
+            mcp_server._UNIFIED_INDEX = old_idx
+
+        assert isinstance(result, str)
+        assert ("memory_guarded", "facts_from_results") in requested
+        assert ("memory_guarded", "is_available") in requested
+        assert ("memory_guarded", "score_memory_answer") in requested
 
 
 class TestHandleRecallLightweight:
@@ -612,6 +684,117 @@ class TestMCPToolAudit:
         assert record["tool"] == "remanentia_status"
         assert record["outcome"] == "error"
         assert record["error_type"] == "RuntimeError"
+
+
+class TestMCPTelemetryAndCli:
+    def test_emit_recall_bus_uses_cached_emitter(self, monkeypatch):
+        import mcp_server
+
+        class FakeEmitter:
+            def __init__(self) -> None:
+                self.calls = []
+
+            def emit(self, query, **kwargs):
+                self.calls.append((query, kwargs))
+
+        emitter = FakeEmitter()
+        monkeypatch.setattr(mcp_server, "_BUS_EMITTER", emitter)
+        monkeypatch.setattr(mcp_server, "_BUS_EMITTER_INIT", True)
+
+        mcp_server._emit_recall_bus("query", ["trace:one"])
+
+        assert emitter.calls == [
+            (
+                "query",
+                {
+                    "returned_claim_ids": ["trace:one"],
+                    "was_used": False,
+                    "abstained": False,
+                },
+            )
+        ]
+
+    def test_observe_and_close_noop_when_disabled_or_missing_event(self, monkeypatch):
+        import mcp_server
+
+        mcp_server._observe_recall(None, ["text"])
+        monkeypatch.setenv("REMANENTIA_RECALL_LEDGER_DISABLE", "1")
+        mcp_server._observe_recall("event", ["text"])
+        mcp_server._close_recall_loops("remembered text")
+
+    def test_python_mcp_tokenizer_fallback(self, monkeypatch):
+        import mcp_server
+
+        monkeypatch.setattr(mcp_server, "_rust_mcp_tok", None)
+
+        assert mcp_server._mcp_tok("Alpha be beta_42") == {"alpha", "beta_42"}
+
+    def test_recall_feedback_disabled_no_prior_and_recorded(self, monkeypatch):
+        import mcp_server
+
+        monkeypatch.setenv("REMANENTIA_RECALL_LEDGER_DISABLE", "1")
+        assert "disabled" in handle_recall_feedback("query", True)
+        monkeypatch.delenv("REMANENTIA_RECALL_LEDGER_DISABLE")
+
+        class FakeLedger:
+            def __init__(self, event_id):
+                self.event_id = event_id
+                self.outcomes = []
+
+            def latest_for(self, query, by=None):
+                return self.event_id
+
+            def record_outcome(self, event_id, **kwargs):
+                self.outcomes.append((event_id, kwargs))
+
+        missing = FakeLedger(None)
+        monkeypatch.setattr(mcp_server, "_get_recall_ledger", lambda: missing)
+        assert "No prior recall" in handle_recall_feedback("query", True)
+
+        ledger = FakeLedger("evt-1")
+        monkeypatch.setattr(mcp_server, "_get_recall_ledger", lambda: ledger)
+        assert "was_used=True" in handle_recall_feedback("query", True, by="agent")
+        assert ledger.outcomes == [("evt-1", {"was_used": True})]
+
+    def test_recall_correctness_disabled_no_prior_and_recorded(self, monkeypatch):
+        import mcp_server
+
+        monkeypatch.setenv("REMANENTIA_RECALL_LEDGER_DISABLE", "1")
+        assert "disabled" in handle_recall_correctness("query", False)
+        monkeypatch.delenv("REMANENTIA_RECALL_LEDGER_DISABLE")
+
+        class FakeLedger:
+            def __init__(self, event_id):
+                self.event_id = event_id
+                self.outcomes = []
+
+            def latest_for(self, query, by=None):
+                return self.event_id
+
+            def record_outcome(self, event_id, **kwargs):
+                self.outcomes.append((event_id, kwargs))
+
+        missing = FakeLedger(None)
+        monkeypatch.setattr(mcp_server, "_get_recall_ledger", lambda: missing)
+        assert "No prior recall" in handle_recall_correctness("query", False)
+
+        ledger = FakeLedger("evt-2")
+        monkeypatch.setattr(mcp_server, "_get_recall_ledger", lambda: ledger)
+        assert "was_correct=False" in handle_recall_correctness("query", False, by="agent")
+        assert ledger.outcomes == [("evt-2", {"was_correct": False})]
+
+    def test_parse_cli_sets_requested_environment(self, monkeypatch):
+        import mcp_server
+
+        monkeypatch.delenv("REMANENTIA_LLM_ANSWERS", raising=False)
+        monkeypatch.delenv("REMANENTIA_LLM_BACKEND", raising=False)
+        monkeypatch.delenv("REMANENTIA_GUARDED", raising=False)
+
+        mcp_server._parse_cli(["--llm", "--local-llm", "--guarded"])
+
+        assert os.environ["REMANENTIA_LLM_ANSWERS"] == "1"
+        assert os.environ["REMANENTIA_LLM_BACKEND"] == "local"
+        assert os.environ["REMANENTIA_GUARDED"] == "1"
 
 
 # ── Pipeline integration ─────────────────────────────────────
