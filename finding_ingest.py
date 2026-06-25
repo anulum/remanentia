@@ -164,7 +164,7 @@ def ingest_findings(
         try:
             finding = parse_finding(event.payload)
         except Exception as exc:  # noqa: BLE001 — a bad payload is a rejection, not a crash
-            rejections.append((event.seq, f"unparseable payload: {exc}"))
+            rejections.append((event.seq, f"unparsable payload: {exc}"))
             continue
         decision = admit(finding)
         if decision.verdict in admitting:

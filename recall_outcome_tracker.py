@@ -66,9 +66,41 @@ _TOKEN_RE = re.compile(r"[a-z0-9]+")
 # from "containing" a returned one purely through shared connective tissue.
 _STOPWORDS = frozenset(
     {
-        "the", "a", "an", "and", "or", "but", "of", "to", "in", "on", "for", "with",
-        "is", "are", "was", "were", "be", "been", "it", "this", "that", "as", "at",
-        "by", "from", "we", "i", "you", "they", "he", "she", "not", "no", "do", "did",
+        "the",
+        "a",
+        "an",
+        "and",
+        "or",
+        "but",
+        "of",
+        "to",
+        "in",
+        "on",
+        "for",
+        "with",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "it",
+        "this",
+        "that",
+        "as",
+        "at",
+        "by",
+        "from",
+        "we",
+        "i",
+        "you",
+        "they",
+        "he",
+        "she",
+        "not",
+        "no",
+        "do",
+        "did",
     }
 )
 
@@ -136,9 +168,7 @@ class RecallOutcomeTracker:
         """
         moment = time.time() if now is None else now
         usable = tuple(
-            tokens
-            for text in returned_texts
-            if len(tokens := tokenize(text)) >= self.min_tokens
+            tokens for text in returned_texts if len(tokens := tokenize(text)) >= self.min_tokens
         )
         with self._lock:
             self._expire_locked(ledger, moment)

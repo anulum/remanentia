@@ -82,7 +82,9 @@ class TestLoopClosure:
         led = FakeLedger()
         t = self._tracker()
         t.observe_recall("e1", "agentA", ["incremental vector index reuse content hash"], now=0.0)
-        used = t.note_text("completely different topic about coffee brewing", "agentA", led, now=1.0)
+        used = t.note_text(
+            "completely different topic about coffee brewing", "agentA", led, now=1.0
+        )
         assert used == []
         assert led.outcomes == []
         assert t.pending_count == 1  # still pending, not ruled used

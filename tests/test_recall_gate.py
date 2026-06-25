@@ -73,9 +73,10 @@ class TestPresentNegativeAndSelfClaim:
     def test_producer_asserted_is_boundary_always(self):
         # §5: an unverified self-claim is never validated, independent of freshness.
         assert present("producer-asserted", "reference-validated", "admitted", None) == BOUNDARY
-        assert present(
-            "producer-asserted", "reference-validated", "admitted", "verified-at-source"
-        ) == BOUNDARY
+        assert (
+            present("producer-asserted", "reference-validated", "admitted", "verified-at-source")
+            == BOUNDARY
+        )
 
 
 class TestPresentUnknownAxes:

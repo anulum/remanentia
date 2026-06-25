@@ -372,7 +372,9 @@ class TestRecallLoopClosure:
         mcp_server._close_recall_loops("notes about coffee brewing temperature")
         assert list(led.queries())[0].was_used is None
         # The echoing memory does.
-        mcp_server._close_recall_loops("we did incremental vector index reuse via content hash dedup")
+        mcp_server._close_recall_loops(
+            "we did incremental vector index reuse via content hash dedup"
+        )
         assert list(led.queries())[0].was_used is True
 
     def test_observe_noop_when_event_id_none(self, monkeypatch):

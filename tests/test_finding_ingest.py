@@ -123,7 +123,7 @@ class TestIngestCore:
         assert report.scanned == 1
         assert cursor.load() == 12
 
-    def test_unparseable_payload_is_a_rejection_not_a_crash(self, tmp_path):
+    def test_unparsable_payload_is_a_rejection_not_a_crash(self, tmp_path):
         def boom_parse(payload):
             if payload.get("statement") == "bad":
                 raise ValueError("corrupt")

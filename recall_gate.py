@@ -147,9 +147,7 @@ def renders_validated(
     freshness: str | None,
 ) -> bool:
     """Whether one finding renders as the assertive ``validated`` mode."""
-    return (
-        present(evidence_kind, claim_status, admission, freshness) == VALIDATED
-    )
+    return present(evidence_kind, claim_status, admission, freshness) == VALIDATED
 
 
 def render_synthesis(input_modes: Iterable[str]) -> str:
