@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import builtins
 import time
 from unittest.mock import patch
 
@@ -62,6 +63,25 @@ class TestClusterNotes:
 
     def test_empty(self):
         assert _cluster_notes([]) == []
+
+    def test_python_cluster_fallback_without_native_extension(self):
+        original_import = builtins.__import__
+
+        def import_without_native(name, *args, **kwargs):
+            if name == "remanentia_consolidation":
+                raise ImportError(name)
+            return original_import(name, *args, **kwargs)
+
+        notes = [
+            _make_note("first", keywords=["bm25", "retrieval"], entities=["remanentia"]),
+            _make_note("second", keywords=["bm25", "retrieval"], entities=["index"]),
+            _make_note("third", keywords=["temporal"], entities=["graph"]),
+        ]
+
+        with patch("builtins.__import__", side_effect=import_without_native):
+            clusters = _cluster_notes(notes)
+
+        assert clusters == [[0, 1]]
 
     def test_clusters_by_entities(self):
         notes = [

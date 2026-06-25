@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import re
+from unittest.mock import patch
 
 import pytest
 
@@ -271,3 +272,15 @@ class TestRustPythonParity:
 
     def test_parity_utf8(self):
         self._parity("Tokyo ¥500 🎯 alice@example.com")
+
+
+class TestCustomPolicy:
+    def test_extra_patterns_are_redacted_and_counted(self):
+        policy = RedactionPolicy(extra=(("PROJECT", re.compile(r"\bProject\s+Artemis\b")),))
+
+        with patch("pii_redactor._try_rust_redact", return_value=None):
+            result = redact("Project Artemis owner is alice@example.com", policy)
+
+        assert "Project Artemis" not in result.text
+        assert result.counts["PROJECT"] == 1
+        assert result.counts["EMAIL"] == 1

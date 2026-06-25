@@ -358,3 +358,34 @@ class TestRustPythonParity:
             py = _agg.precompute_sum(q, text)
         rust = _agg.precompute_sum(q, text)
         assert py is None and rust is None
+
+
+class TestPythonAggregateBranchCoverage:
+    def test_unlabelled_unit_quantity_is_skipped(self):
+        with _PythonOnlyFacts():
+            facts = _agg.extract_numeric_facts("there were 42 views with no proper label.")
+
+        assert facts == []
+
+    def test_precompute_sum_rejects_non_sum_question(self):
+        with _PythonOnlyFacts():
+            assert (
+                _agg.precompute_sum("Which video was best?", "YouTube: 4 views. TikTok: 5 views.")
+                is None
+            )
+
+    def test_precompute_sum_rejects_when_no_unit_group_has_two_facts(self):
+        text = "Monday: 4 hours. Market: 9 dollars."
+
+        with _PythonOnlyFacts():
+            assert _agg.precompute_sum("What is the total?", text) is None
+
+    def test_precompute_sum_formats_decimal_total(self):
+        text = "Market: 4.5 dollars. Cafe: 2.25 dollars."
+
+        with _PythonOnlyFacts():
+            result = _agg.precompute_sum("How much total money?", text)
+
+        assert result is not None
+        assert result.value == 6.75
+        assert "6.75 dollars" in result.message
