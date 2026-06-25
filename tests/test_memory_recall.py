@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -209,6 +210,19 @@ class TestSearchSemantic:
             assert results[0]["project"] == "remanentia"
             assert results[0]["type"] == "decision"
 
+    def test_python_overlap_fallback_scores_matching_memory(self, tmp_semantic):
+        with (
+            patch("memory_recall.SEMANTIC_DIR", tmp_semantic),
+            patch("memory_recall.BASE", tmp_semantic.parent),
+            patch("memory_recall.import_module", side_effect=ImportError),
+        ):
+            results = _search_semantic("embedding weight", top_k=5)
+
+        assert results
+        assert results[0]["score"] > 0
+        assert results[0]["key_point"] == "Removed SNN from retrieval scoring"
+        assert "Embedding weight increased" in results[0]["content"]
+
 
 # ── Temporal context ─────────────────────────────────────────────
 
@@ -267,6 +281,21 @@ class TestAssessNovelty:
         }
         novelty = _assess_novelty("stdp quantum fidelity", entities)
         assert 0.0 < novelty < 1.0
+
+    def test_python_fallback_without_native_extension(self):
+        entities = {
+            "stdp": {"id": "stdp", "label": "STDP"},
+        }
+        with patch("memory_recall.import_module", side_effect=ImportError):
+            novelty = _assess_novelty("stdp quantum fidelity", entities)
+
+        assert novelty == 2 / 3
+
+    def test_python_fallback_empty_token_query_has_zero_novelty(self):
+        with patch("memory_recall.import_module", side_effect=ImportError):
+            novelty = _assess_novelty("!!!", {})
+
+        assert novelty == 0.0
 
 
 # ── Cross-project insights ──────────────────────────────────────
@@ -365,6 +394,43 @@ class TestRecall:
         ):
             ctx = recall("completely unknown topic xyzfoo", top_k=1)
         assert ctx.novelty_score > 0
+
+    def test_recall_builds_unloaded_memory_index_and_extracts_trace_entities(
+        self, tmp_traces, tmp_graph, tmp_semantic, monkeypatch
+    ):
+        class FakeMemoryIndex:
+            def __init__(self) -> None:
+                self.build_kwargs = None
+
+            def load(self) -> bool:
+                return False
+
+            def build(self, **kwargs) -> None:
+                self.build_kwargs = kwargs
+
+            def search(self, query, top_k):
+                return [
+                    SimpleNamespace(
+                        name="2026-03-15_decision_stdp_removal.md",
+                        score=0.91,
+                        snippet="SNN removal and embedding weight changed.",
+                    )
+                ]
+
+        fake = FakeMemoryIndex()
+        monkeypatch.setattr("memory_index.MemoryIndex", lambda: fake)
+
+        with (
+            patch("memory_recall.TRACES_DIR", tmp_traces),
+            patch("memory_recall.SEMANTIC_DIR", tmp_semantic),
+            patch("memory_recall.GRAPH_DIR", tmp_graph),
+            patch("memory_recall.BASE", tmp_traces.parent),
+        ):
+            ctx = recall("unrelated wording", top_k=1)
+
+        assert fake.build_kwargs == {"use_gpu_embeddings": False, "use_gliner": False}
+        assert ctx.trace == "2026-03-15_decision_stdp_removal.md"
+        assert "embedding" in ctx.entities
 
 
 # ── MemoryContext summary/llm with cross-project ────────────────
