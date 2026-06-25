@@ -22,7 +22,10 @@ from api_security import (
     RequestAuditLogger,
     ToolAuditLogger,
     TokenBucketLimiter,
+    _RotatingJsonlWriter,
+    _read_int_env,
     enforce_body_size,
+    retry_after_seconds,
 )
 
 
@@ -167,6 +170,24 @@ class TestTokenBucketLimiter:
         assert TokenBucketLimiter(rate_per_minute=30).retry_after_seconds() == "2"
         assert TokenBucketLimiter(rate_per_minute=7).retry_after_seconds() == "9"
 
+    def test_retry_after_rejects_non_positive_rate(self):
+        with pytest.raises(ValueError, match="positive"):
+            retry_after_seconds(0)
+
+
+class TestEnvParsing:
+    def test_read_int_env_returns_default_for_unset_or_blank(self, monkeypatch):
+        monkeypatch.delenv("REMANENTIA_TEST_INT", raising=False)
+        assert _read_int_env("REMANENTIA_TEST_INT", 7) == 7
+
+        monkeypatch.setenv("REMANENTIA_TEST_INT", " ")
+        assert _read_int_env("REMANENTIA_TEST_INT", 7) == 7
+
+    def test_read_int_env_rejects_negative_values(self, monkeypatch):
+        monkeypatch.setenv("REMANENTIA_TEST_INT", "-1")
+        with pytest.raises(ValueError, match="non-negative"):
+            _read_int_env("REMANENTIA_TEST_INT", 7)
+
 
 # ── enforce_body_size ────────────────────────────────────────────────
 
@@ -281,6 +302,35 @@ class TestRequestAuditLogger:
         assert logger.backups == 4
 
 
+class TestRotatingJsonlWriter:
+    def test_rejects_negative_rotation_controls(self, tmp_path):
+        with pytest.raises(ValueError, match="max_bytes"):
+            _RotatingJsonlWriter(tmp_path / "audit.jsonl", max_bytes=-1)
+        with pytest.raises(ValueError, match="backups"):
+            _RotatingJsonlWriter(tmp_path / "audit.jsonl", backups=-1)
+
+    def test_rotation_without_backups_replaces_active_file(self, tmp_path):
+        path = tmp_path / "audit.jsonl"
+        path.write_text("x" * 20, encoding="utf-8")
+        writer = _RotatingJsonlWriter(path, max_bytes=21, backups=0)
+
+        writer.write_payload({"event": "new"})
+
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        assert payload == {"event": "new"}
+
+    def test_no_rotation_when_record_fits_cap(self, tmp_path):
+        path = tmp_path / "audit.jsonl"
+        path.write_text('{"event":"old"}\n', encoding="utf-8")
+        writer = _RotatingJsonlWriter(path, max_bytes=200, backups=1)
+
+        writer.write_payload({"event": "new"})
+
+        lines = path.read_text(encoding="utf-8").splitlines()
+        assert [json.loads(line)["event"] for line in lines] == ["old", "new"]
+        assert not path.with_name("audit.jsonl.1").exists()
+
+
 # ── ToolAuditLogger ──────────────────────────────────────────────────
 
 
@@ -325,6 +375,24 @@ class TestToolAuditLogger:
         assert "arguments" not in payload
         assert "authorization" not in payload
         assert "body" not in payload
+
+    def test_record_includes_error_type_when_present(self, tmp_path):
+        path = tmp_path / "mcp_audit.jsonl"
+        logger = ToolAuditLogger(path)
+
+        logger.record(
+            server="mcp",
+            method="tools/call",
+            tool="remanentia_recall",
+            request_id="err",
+            argument_keys=["query"],
+            outcome="error",
+            duration_ms=3.25,
+            error_type="ValueError",
+        )
+
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        assert payload["error_type"] == "ValueError"
 
     def test_from_env_can_disable_logging(self, monkeypatch, tmp_path):
         monkeypatch.setenv("REMANENTIA_MCP_AUDIT_LOG", "off")

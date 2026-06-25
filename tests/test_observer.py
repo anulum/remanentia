@@ -514,6 +514,26 @@ class TestHeartbeat:
             ce.RELATIONS_PATH = orig_relations
             ce.SUMMARY_DAG_PATH = orig_dag
 
+    def test_heartbeat_reports_no_pending_traces(self):
+        state = ObserverState()
+        with (
+            patch("observer.observe_once", return_value={"files_scanned": 1}),
+            patch("consolidation_engine.get_pending_traces", return_value=[]),
+            patch("consolidation_engine.consolidate") as consolidate,
+            patch("consolidation_engine.age_memories", return_value={"aged": 0}),
+            patch("consolidation_engine.capacity_report", return_value={}),
+        ):
+            result = heartbeat(state, {"traces": MagicMock()})
+
+        consolidate.assert_not_called()
+        assert result["consolidate"] == {"status": "nothing_to_consolidate", "pending": 0}
+        assert result["aging"] == {"aged": 0}
+        assert result["capacity"] == {
+            "categories_checked": 0,
+            "categories_over_threshold": 0,
+            "over_capacity": [],
+        }
+
     def test_heartbeat_empty_dirs_no_crash(self, tmp_path):
         """Heartbeat with empty watched dirs should return cleanly."""
         state = ObserverState()

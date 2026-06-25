@@ -14,6 +14,7 @@ import random
 import numpy as np
 import pytest
 
+import seed_utils
 from seed_utils import build_reproducibility_manifest, seed_everything, seed_from_env
 
 
@@ -113,6 +114,20 @@ class TestReproducibilityManifest:
         encoded = json.dumps(manifest, sort_keys=True)
         assert '"seed": 42' in encoded
         assert '"alpha": 0.1' in encoded
+
+    def test_manifest_records_blank_version_for_missing_optional_package(self, monkeypatch):
+        real_version = seed_utils.importlib.metadata.version
+
+        def version(name: str) -> str:
+            if name == "sentence-transformers":
+                raise seed_utils.importlib.metadata.PackageNotFoundError(name)
+            return real_version(name)
+
+        monkeypatch.setattr(seed_utils.importlib.metadata, "version", version)
+
+        manifest = build_reproducibility_manifest(seed=42, workload="unit-test")
+
+        assert manifest["packages"]["sentence-transformers"] == ""
 
 
 class TestEndToEnd:

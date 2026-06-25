@@ -452,6 +452,18 @@ class TestModelLoading:
         assert date_normalizer._load_model() is True
         date_normalizer._model = None  # cleanup
 
+    def test_model_normalise_returns_none_when_loaded_state_is_incomplete(self):
+        import date_normalizer
+
+        date_normalizer._model = MagicMock()
+        date_normalizer._tokenizer = None
+        try:
+            with patch("date_normalizer._load_model", return_value=True):
+                assert date_normalizer._model_normalise("spring", date(2023, 1, 1)) is None
+        finally:
+            date_normalizer._model = None
+            date_normalizer._tokenizer = None
+
     def test_load_model_exception_returns_false(self):
         """_load_model returns False when model construction raises."""
         import date_normalizer
