@@ -33,25 +33,19 @@ Contact: www.anulum.li | protoscience@anulum.li
 
 BM25+embedding hybrid retrieval with RRF | 11 typed entity relation types | temporal reasoning with date arithmetic | async consolidation | thread-safe MCP server
 
-[remanentia.com](https://www.remanentia.com) | [GitHub](https://github.com/anulum/remanentia) | [ANULUM Ecosystem](https://www.anulum.li)
+[remanentia.com](https://www.remanentia.com) | [GitHub](https://github.com/anulum/remanentia)
 
 ---
 
-## ANULUM Ecosystem
+## Integration Positioning
 
-Remanentia is the **memory layer** of the [ANULUM](https://www.anulum.li) scientific computing ecosystem — a suite of interconnected tools for neuromorphic engineering, AI verification, and stochastic computing research.
+Remanentia is a standalone, local-first memory engine for projects that need
+auditable recall over notes, source code, research documents, and structured
+findings. It can run as a repository-local CLI, an MCP server, or an HTTP API.
 
-| Project | Role | Link |
-|---------|------|------|
-| **Remanentia** | Persistent AI memory (this repo) | [remanentia.com](https://www.remanentia.com) |
-| **SC-NeuroCore** | Stochastic computing SNN framework (122 neuron models, Rust SIMD, FPGA) | [GitHub](https://github.com/anulum/sc-neurocore) |
-| **Director-AI** | RAG-grounded AI claim verification (PyPI live) | [GitHub](https://github.com/anulum/director-ai) |
-| **SCPN-Fusion-Core** | Spike Codec Prediction Network fusion engine | [GitHub](https://github.com/anulum/SCPN-Fusion-Core) |
-| **scpn-phase-orchestrator** | Multi-engine phase orchestration (9 engines, 32 domainpacks) | [GitHub](https://github.com/anulum/scpn-phase-orchestrator) |
-| **scpn-quantum-control** | Quantum-classical hybrid control (IBM Quantum, Rust engine) | [GitHub](https://github.com/anulum/scpn-quantum-control) |
-| **scpn-control** | Core SCPN control system | [GitHub](https://github.com/anulum/scpn-control) |
-
-Remanentia provides cross-project memory retrieval across all repositories — session logs, reasoning traces, code, and research documents are indexed into a unified search layer that any agent can query via MCP.
+Cross-project retrieval is an integration pattern, not a packaging assumption:
+deployments may add additional source roots for external repositories or shared
+archives, but the public package does not require a private monorepo layout.
 
 ---
 

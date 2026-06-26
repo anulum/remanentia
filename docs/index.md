@@ -4,7 +4,9 @@
 
 BM25+embedding hybrid retrieval with RRF | 11 typed entity relation types | temporal reasoning | async consolidation | thread-safe MCP server
 
-Part of the [ANULUM](https://www.anulum.li) scientific computing ecosystem — the memory layer connecting SC-NeuroCore, Director-AI, SCPN-Fusion-Core, and other projects via cross-project retrieval.
+Remanentia is a standalone, local-first memory engine. It can index a single
+project, expose recall through MCP or HTTP, and optionally federate additional
+source roots when a deployment needs cross-project retrieval.
 
 ## Quick Start
 
@@ -58,10 +60,10 @@ Knowledge store (multi-hop graph search) ...... Zettelkasten + prospective queri
 
 | Benchmark | Score | Questions | Committed |
 |-----------|------:|----------:|:---------:|
-| LongMemEval | 69.0% | 500 | Yes |
+| LongMemEval full-S | 56.6% | 500 | Yes |
 | LOCOMO (no LLM) | 74.7% | 1,986 | No |
 
-Current local full-suite baseline: 2,143 passed, 3 skipped on 2026-05-12. The CI coverage job enforces the repository's 100% coverage gate. 7 Rust acceleration crates (up to 14× speedup). Pluggable LLM backend (local/cloud/null).
+Current local full-suite baseline: 2,143 passed, 3 skipped on 2026-05-12. The CI coverage job enforces the repository's 100% coverage gate. Rust acceleration spans 16 crates with Python fallbacks. Pluggable LLM backend (local/cloud/null).
 
 ## MCP Server
 

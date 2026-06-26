@@ -121,8 +121,8 @@ enables live search over newly added content without a full rebuild.
 |--------|------|---------|
 | traces | `reasoning_traces/` | Raw session decisions and findings |
 | semantic | `memory/semantic/` | Consolidated semantic memories |
-| sessions | `.coordination/sessions/arcane-sapience/` | Session state files |
-| handovers | `.coordination/handovers/arcane-sapience/` | Handover documents |
+| sessions | Optional local session directory | Session state files |
+| handovers | Optional local handover directory | Handover documents |
 
 Custom directories can be passed to `observe_once()` and `heartbeat()`:
 

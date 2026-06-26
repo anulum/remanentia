@@ -1,10 +1,10 @@
-Loading LongMemEval from ./data/longmemeval_oracle.json...
+Loading LongMemEval from <repo>/data/longmemeval_oracle.json...
 Questions: 300
 LLM mode: False
 Arcane mode: True
 
 [1/300] processed qid=gpt4_2655b836
-[local-home]/venv-rocm/lib/python3.12/site-packages/torch/nn/modules/linear.py:125: UserWarning: Attempting to use hipBLASLt on an unsupported architecture! Overriding blas backend to hipblas (Triggered internally at ../aten/src/ATen/Context.cpp:296.)
+<venv>/lib/python3.12/site-packages/torch/nn/modules/linear.py:125: UserWarning: Attempting to use hipBLASLt on an unsupported architecture! Overriding blas backend to hipblas (Triggered internally at ../aten/src/ATen/Context.cpp:296.)
   return F.linear(input, self.weight, self.bias)
 [2/300] processed qid=gpt4_2487a7cb
 [3/300] processed qid=gpt4_76048e76
@@ -318,7 +318,7 @@ Arcane mode: True
 [300/300] processed qid=3b6f954b
 [300/300] local_match=59/300 (19.7%) elapsed=2535s
 
-Hypotheses saved to ./data/longmemeval_hypotheses.jsonl
+Hypotheses saved to <repo>/data/longmemeval_hypotheses.jsonl
 
 ============================================================
 LongMemEval Local Results (fuzzy match, NOT GPT-judge)

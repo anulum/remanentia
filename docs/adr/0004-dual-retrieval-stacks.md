@@ -17,8 +17,8 @@ The LongMemEval bench routes temporal, multi-session,
 knowledge-update and single-session-preference to ``ArcaneRetriever``;
 single-session factoid goes to ``MemoryIndex``. The WORKING channel
 in ``ArcaneRetriever`` currently calls ``FactIndex.query`` which is
-structurally identical to the FAST channel — documented in
-``docs/internal/INTEGRATION_PLAN_V04_GAPS.md`` §GAP 1.
+structurally identical to the FAST channel, as recorded in the private v0.4
+integration gap audit.
 
 ## Decision
 

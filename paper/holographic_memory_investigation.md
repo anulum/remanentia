@@ -42,9 +42,9 @@ that's ~2,800 distinct memories.
 
 ## Existing Infrastructure
 
-All pieces already exist across the SCPN ecosystem:
+All pieces already exist across the related research stack:
 
-### scpn-phase-orchestrator (v0.4.1)
+### Phase-Orchestration Prototype
 - Kuramoto solver with phase lags α: `upde/engine.py` (RK45, Dormand-Prince)
 - Stuart-Landau amplitude dynamics: μ > 0 self-sustains, μ < 0 decays
   (memory strength modulation, `identity_coherence/run.py`)
@@ -57,7 +57,7 @@ All pieces already exist across the SCPN ecosystem:
 - Rust engine parity: `spo-kernel/` (UPDE + Stuart-Landau)
 - Order parameter: R = |mean(exp(iθ))| via `upde/order_params.py`
 
-### scpn-quantum-control (v0.9.0)
+### Quantum-Control Prototype
 - XY Hamiltonian mapping: K_ij sin(θ_j - θ_i) ↔ -J_ij(X_iX_j + Y_iY_j)
   (`bridge/knm_hamiltonian.py`)
 - Coherence budget: fidelity vs depth bounds (`identity/coherence_budget.py`)
@@ -67,7 +67,7 @@ All pieces already exist across the SCPN ecosystem:
 - Rust Kuramoto engine: ~100x speedup (`scpn_quantum_engine/src/lib.rs`)
 - build_kuramoto_ring: generic ring topology for arbitrary N
 
-### Remanentia / workspace-internal
+### Remanentia Memory Stack
 - GPU SNN daemon: 20K LIF neurons on GTX 1060 (`gpu_daemon.py`)
 - Embedding encoding: sentence-transformers MiniLM (`encoding.py`)
 - Hybrid retrieval: TF-IDF + SNN + name + embedding (`retrieve.py`)

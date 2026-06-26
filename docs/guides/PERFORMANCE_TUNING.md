@@ -4,9 +4,9 @@ All benchmarks measured 2026-03-31 on verified hardware:
 
 - **CPU:** Intel Core i5-11600K @ 3.90GHz (from `/proc/cpuinfo`)
 - **RAM:** 31 GB DDR4 (from `free -h`)
-- **Disk:** 1.8 TB NTFS (project-workspace partition, `df -h [legacy-storage]`)
+- **Disk:** Local workstation SSD/HDD dataset checkout
 - **Kernel:** 6.17.0-19-generic (from `uname -r`)
-- **Rust:** 13 PyO3 crates (54 functions) installed locally (built via maturin from `workspace-internal/rust_*/`); CI uses Python fallbacks
+- **Rust:** Optional PyO3 extension crates installed locally; CI uses Python fallbacks
 - **Method:** `time.perf_counter()`, budget assertions in CI
 
 ## Regex Pipeline (core retrieval path)
@@ -63,7 +63,7 @@ regex matches. Previously measured (2026-03-31 morning session):
 The cross-over point where Rust beats Python is typically ~1K-5K
 characters per call.
 
-### All 12 Rust crates
+### Rust acceleration crates
 
 | Crate | Module(s) | Short-text speedup |
 |-------|-----------|-------------------|

@@ -16,7 +16,7 @@ the best speed/quality tradeoff:
 - Date arithmetic is delegated to Python (`temporal_code_execute`) so the LLM
   never has to count days
 
-Full evaluation: `docs/internal/benchmark_2026-04-10_local_llm_evaluation.md`.
+Full evaluation notes were recorded in the private development audit log.
 
 ## 1. Install Ollama
 

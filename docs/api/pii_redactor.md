@@ -117,8 +117,7 @@ every CI run so drift is caught immediately.
 
 - [`aggregate_precompute`](aggregate_precompute.md) — sister module,
   also Rust-accelerated with a Python fallback.
-- `remanentia_pii_redactor` crate at
-  `../../../../workspace-internal/rust_pii_redactor/` — Rust
-  implementation.
+- Optional `remanentia_pii_redactor` PyO3 extension — Rust
+  implementation used when installed.
 - `PRIVACY.md` (repo root) — data-handling policy this module
   enforces at ingest.

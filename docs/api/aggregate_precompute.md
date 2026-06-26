@@ -97,7 +97,7 @@ them on every CI run.
 - **Mixed-unit totals.** If a retrieval returns views + followers +
   dollars, the module refuses and lets the LLM sort it out.
 - **Temporal reasoning.** Routed to `_tremu_precompute`, the temporal
-  sibling module.
+  peer module.
 
 ## Invariants
 
@@ -129,6 +129,5 @@ else:
 - [`pii_redactor`](pii_redactor.md) — sister module, same Rust-first
   + Python-fallback pattern.
 - `bench_longmemeval.py` — primary consumer.
-- `remanentia_aggregate_precompute` crate at
-  `../../../../workspace-internal/rust_aggregate_precompute/` — Rust
-  implementation.
+- Optional `remanentia_aggregate_precompute` PyO3 extension — Rust
+  implementation used when installed.
