@@ -9,7 +9,13 @@ name: CI
 on:
   push:
     branches: [main]
-    paths: ["*.py", "tests/**", "pyproject.toml", ".github/workflows/ci.yml"]
+    paths:
+      - "*.py"
+      - "tests/**"
+      - "pyproject.toml"
+      - "rust_recall/**"
+      - "remanentia_topology/**"
+      - ".github/workflows/ci.yml"
   pull_request:
     branches: [main]
 
@@ -85,3 +91,29 @@ jobs:
         if: matrix.python-version == '3.12'
         run: |
           python -m pytest tests/ --cov=. --cov-config=pyproject.toml --cov-report=term-missing --cov-fail-under=100 -q --tb=short
+
+  rust:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        crate: [rust_recall, remanentia_topology]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Install Rust components
+        run: rustup component add clippy rustfmt
+
+      - name: Cargo format
+        working-directory: ${{ matrix.crate }}
+        run: cargo fmt --check
+
+      - name: Cargo tests
+        working-directory: ${{ matrix.crate }}
+        run: cargo test
+
+      - name: Cargo clippy
+        working-directory: ${{ matrix.crate }}
+        run: cargo clippy -- -D warnings
