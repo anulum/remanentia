@@ -6,6 +6,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- `memory_sources.py` provides neutral repository-local MemoryIndex source
+  defaults plus JSON/env configuration through
+  `REMANENTIA_MEMORY_SOURCES_CONFIG` and `REMANENTIA_MEMORY_SOURCES_JSON`.
 - `data/compiled_seed_facts.jsonl` supplies durable historical and cross-project
   compiled-memory seed facts as data instead of Python control flow.
 - `feed_ingest.py` and the `remanentia-feed-ingest` console script ingest explicit
@@ -29,6 +32,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `REMANENTIA_ARCANE_CE_DISABLE=1` for latency-sensitive live/MCP use.
 
 ### Changed
+- `memory_index.py` no longer hardcodes deployment-specific source roots; it
+  consumes the resolved `memory_sources.SourceConfig` while preserving the
+  existing `SOURCES` / `SOURCE_EXTENSIONS` compatibility globals for tests and
+  callers that patch them.
 - `compiled_memory.py` loads seed facts from tracked JSONL data, with an installed
   data-file fallback, and no longer mines the removed internal benchmark script.
 - Benchmark reporting reconciled around the two LongMemEval settings. The headline is

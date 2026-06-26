@@ -6,7 +6,7 @@
 # Contact: www.anulum.li | protoscience@anulum.li
 # Remanentia — Unified memory index
 
-"""Unified index over all project-workspace knowledge sources.
+"""Unified index over configured Remanentia knowledge sources.
 
 BM25 first pass + optional GPU embedding rerank.
 
@@ -20,10 +20,10 @@ Usage::
 from __future__ import annotations
 
 import ast
+import gzip
 import json
 import math
 import os
-import gzip
 import logging
 import re
 import time
@@ -31,96 +31,27 @@ from collections import Counter
 from dataclasses import dataclass, field
 from importlib import import_module
 from pathlib import Path
-from typing import Any, Iterator, cast
+from typing import Any, Callable, Iterator, cast
 
 import numpy as np
 
 import hashlib as _hashlib
 
+from memory_sources import DEFAULT_TEXT_EXTENSIONS, load_source_config
+
 BASE = Path(__file__).parent
-CODE_ROOT = BASE.parent
-project-workspace_ROOT = CODE_ROOT.parent
-SHARED_ROOT = project-workspace_ROOT.parent / "shared-coordination"
-ARCANE_ROOT = project-workspace_ROOT / "workspace-internal"
 INDEX_PATH = BASE / "snn_state" / "memory_index.json.gz"
 _LEGACY_INDEX_PATH = BASE / "snn_state" / "memory_index.pkl"
 INDEX_EMB_PATH = BASE / "snn_state" / "memory_index_embeddings.npz"
 HASH_CACHE_PATH = BASE / "snn_state" / "content_hashes.json"
 GRAPH_DIR = BASE / "memory" / "graph"
 log = logging.getLogger(__name__)
-_SECONDARY_AGENT_DIR = "".join(("CO", "DEX"))
-_SECONDARY_HANDOVER_DIR = "".join(("co", "dex"))
-_LOCAL_AGENT_HOME = "." + "".join(("cla", "ude"))
-
-# All knowledge sources to index
-SOURCES = {
-    # Arcane Sapience core
-    "traces": BASE / "reasoning_traces",
-    "paper": BASE / "paper",
-    "semantic": BASE / "memory" / "semantic",
-    "compiled": BASE / "memory" / "compiled",
-    "manuscripts": project-workspace_ROOT / "01_MANUSCRIPTS",
-    "disposition": BASE / "disposition",
-    # Coordination and operational continuity
-    "coordination_sessions": project-workspace_ROOT / ".coordination" / "sessions",
-    "coordination_handovers": project-workspace_ROOT / ".coordination" / "handovers",
-    "repo_coordination": CODE_ROOT,
-    "webmaster_coordination": project-workspace_ROOT / "06_WEBMASTER",
-    "local_sessions": BASE / ".coordination" / "sessions",
-    "local_handovers": BASE / ".coordination" / "handovers",
-    "arcane_session_states": ARCANE_ROOT / "session_states",
-    "arcane_stimuli": ARCANE_ROOT / "snn_stimuli",
-    "shared_session_logs": SHARED_ROOT / "session_logs",
-    # Cross-repo research
-    "qc_research": project-workspace_ROOT / ".coordination" / "handovers" / "scpn-quantum-control",
-    "po_research": project-workspace_ROOT / ".coordination" / "handovers" / "scpn-phase-orchestrator",
-    "nc_research": CODE_ROOT / "SC-NEUROCORE" / "docs" / "internal",
-    # Local agent memory
-    "local_agent_memory": Path.home()
-    / _LOCAL_AGENT_HOME
-    / "projects"
-    / "C--aaa-God-of-the-Math-Collection"
-    / "memory",
-    # INDEXER catalog
-    "indexer": project-workspace_ROOT / "INDEXER",
-    # Code: Remanentia
-    "code_remanentia": BASE,
-    # Code: key repos (top-level Python files only, not venvs/node_modules)
-    "code_orchestrator": CODE_ROOT / "SCPN-PHASE-ORCHESTRATOR" / "src",
-    "code_quantum": CODE_ROOT / "SCPN-QUANTUM-CONTROL" / "src",
-    "code_neurocore": CODE_ROOT / "SC-NEUROCORE" / "src",
-    "code_director": CODE_ROOT / "DIRECTOR-AI" / "src",
-}
-
-# File extensions to index per source type
-SOURCE_EXTENSIONS = {
-    "code_remanentia": {".py"},
-    "code_orchestrator": {".py", ".rs"},
-    "code_quantum": {".py", ".rs"},
-    "code_neurocore": {".py", ".rs"},
-    "code_director": {".py"},
-    "compiled": {".md", ".jsonl"},
-    "manuscripts": {
-        ".bib",
-        ".csv",
-        ".htm",
-        ".html",
-        ".log",
-        ".md",
-        ".tex",
-        ".txt",
-    },
-    "indexer": {".md", ".yaml"},
-    "coordination_sessions": {".md", ".jsonl"},
-    "coordination_handovers": {".md", ".jsonl"},
-    "repo_coordination": {".md", ".json", ".jsonl"},
-    "webmaster_coordination": {".md", ".json", ".jsonl"},
-    "local_sessions": {".md", ".jsonl"},
-    "local_handovers": {".md", ".jsonl"},
-    "arcane_session_states": {".md", ".json", ".jsonl"},
-    "arcane_stimuli": {".json", ".jsonl", ".md"},
-    "shared_session_logs": {".md", ".jsonl"},
-}
+_SOURCE_CONFIG = load_source_config(BASE)
+SOURCES = dict(_SOURCE_CONFIG.sources)
+SOURCE_EXTENSIONS = {label: set(suffixes) for label, suffixes in _SOURCE_CONFIG.extensions.items()}
+AnswerExtractor = Callable[[str, str], str | None]
+Entity = dict[str, Any]
+EntityGraph = dict[str, Any]
 
 SKIP_PATH_PARTS = (
     ".venv",
@@ -174,7 +105,7 @@ LOCATION_STOPWORDS = {
     "show",
 }
 
-_RUST_BM25_CLASS = None
+_RUST_BM25_CLASS: Any | bool | None = None
 _RUST_BM25_IMPORT_ATTEMPTED = False
 
 
@@ -260,7 +191,7 @@ def _has_operational_compiled_memory(index: MemoryIndex) -> bool:
 
 
 class MemoryIndex:
-    def __init__(self):
+    def __init__(self) -> None:
         self.documents: list[Document] = []
         self.paragraph_index: list[tuple[int, int]] = []  # (doc_idx, para_idx)
         self.paragraph_tokens: list[set[str]] = []
@@ -273,16 +204,16 @@ class MemoryIndex:
         self._bm25_weight_dirty = True
         self.embeddings: np.ndarray | None = None
         self._built = False
-        self._embed_model = None
-        self._cross_encoder = None
+        self._embed_model: Any | None = None
+        self._cross_encoder: Any | bool | None = None
         self._ce_loading = False
         self._embed_loading = False
-        self._temporal_graph = None
+        self._temporal_graph: Any | None = None
         self._para_lengths: np.ndarray = np.array([], dtype=np.float32)
         self._avg_dl: float = 1.0
-        self._answer_extractor = None
-        self._llm_answer_extractor = None
-        self._rust_bm25 = None
+        self._answer_extractor: AnswerExtractor | bool | None = None
+        self._llm_answer_extractor: AnswerExtractor | bool | None = None
+        self._rust_bm25: Any | bool | None = None
         self._rust_bm25_dirty = False
         self._content_hashes: dict[str, str] = {}  # file path → SHA-256 of content
         self._hash_hits = 0  # files skipped because hash unchanged
@@ -294,7 +225,7 @@ class MemoryIndex:
         use_gliner: bool = True,
         use_llm_indexing: bool = False,
         incremental: bool = True,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Scan all sources, build BM25 index + GPU embeddings + GLiNER entities.
 
         When *incremental* is True and a hash cache exists, files whose
@@ -314,8 +245,8 @@ class MemoryIndex:
         self._inverted_index = {}
         self._bm25_weight_index = {}
         self._bm25_weight_dirty = True
-        self.all_entities: list[dict] = []
-        self.all_relations: list[dict] = []
+        self.all_entities: list[dict[str, Any]] = []
+        self.all_relations: list[dict[str, Any]] = []
 
         try:
             from compiled_memory import compile_facts
@@ -406,7 +337,7 @@ class MemoryIndex:
 
         # Build inverted index + IDF
         n_docs = len(self.paragraph_tokens)
-        df: Counter = Counter()
+        df: Counter[str] = Counter()
         inv: dict[str, list[int]] = {}
         for i, tokens in enumerate(self.paragraph_tokens):
             for t in tokens:
@@ -452,7 +383,7 @@ class MemoryIndex:
 
         elapsed = time.monotonic() - t0
 
-        stats = {
+        stats: dict[str, Any] = {
             "documents": len(self.documents),
             "paragraphs": len(self.paragraph_index),
             "unique_tokens": len(self.idf),
@@ -469,7 +400,7 @@ class MemoryIndex:
         }
         return stats
 
-    def _compute_embeddings(self):  # pragma: no cover
+    def _compute_embeddings(self) -> None:  # pragma: no cover
         """Compute paragraph embeddings on GPU via sentence-transformers."""
         try:
             from sentence_transformers import SentenceTransformer
@@ -484,27 +415,30 @@ class MemoryIndex:
             _model_id = str(_local) if _local.exists() else "all-MiniLM-L6-v2"
             self._embed_model = SentenceTransformer(_model_id, device=device)
 
-        texts = []
+        texts: list[str] = []
         for doc_idx, para_idx in self.paragraph_index:
             texts.append(self.documents[doc_idx].paragraphs[para_idx][:512])
 
         # Batch encode on GPU
-        self.embeddings = self._embed_model.encode(
-            texts,
-            batch_size=64,
-            show_progress_bar=False,
-            convert_to_numpy=True,
-            normalize_embeddings=True,
+        self.embeddings = cast(
+            np.ndarray,
+            self._embed_model.encode(
+                texts,
+                batch_size=64,
+                show_progress_bar=False,
+                convert_to_numpy=True,
+                normalize_embeddings=True,
+            ),
         )
 
-    def _rebuild_sparse_index_from_documents(self):
+    def _rebuild_sparse_index_from_documents(self) -> None:
         """Rebuild BM25 structures after document-level replacement."""
         self.paragraph_index = []
         self.paragraph_tokens = []
         self.paragraph_token_counts = []
         self.paragraph_types = []
 
-        df: Counter = Counter()
+        df: Counter[str] = Counter()
         inv: dict[str, list[int]] = {}
         for doc_idx, doc in enumerate(self.documents):
             is_code = doc.doc_type == "code" or Path(doc.path).suffix in (
@@ -639,18 +573,18 @@ class MemoryIndex:
 
         return len(paragraphs)
 
-    def warm_models(self):  # pragma: no cover — requires GPU models
+    def warm_models(self) -> None:  # pragma: no cover — requires GPU models
         """Opt-in model warmup for embedding and cross-encoder rerankers."""
         self._start_model_warmup()
 
-    def _start_model_warmup(self):  # pragma: no cover — requires GPU models
+    def _start_model_warmup(self) -> None:  # pragma: no cover — requires GPU models
         """Start loading embedding + cross-encoder models in background."""
         import threading
 
         if self._embed_model is None and not self._embed_loading and self.embeddings is not None:
             self._embed_loading = True
 
-            def _load_embed():  # pragma: no cover — downloads real model
+            def _load_embed() -> None:  # pragma: no cover — downloads real model
                 try:
                     from sentence_transformers import SentenceTransformer
 
@@ -669,7 +603,7 @@ class MemoryIndex:
         if self._cross_encoder is None and not self._ce_loading:
             self._ce_loading = True
 
-            def _load_ce():  # pragma: no cover — downloads real model
+            def _load_ce() -> None:  # pragma: no cover — downloads real model
                 try:
                     from sentence_transformers import CrossEncoder
 
@@ -701,6 +635,7 @@ class MemoryIndex:
             return None
         if self._cross_encoder is None or self._ce_loading:
             return None
+        cross_encoder = cast(Any, self._cross_encoder)
 
         pairs = []
         for para_idx, _ in candidates:
@@ -709,7 +644,7 @@ class MemoryIndex:
             pairs.append((query, text))
 
         try:
-            ce_scores = self._cross_encoder.predict(pairs, show_progress_bar=False)
+            ce_scores = cross_encoder.predict(pairs, show_progress_bar=False)
             reranked = [(candidates[i][0], float(ce_scores[i])) for i in range(len(candidates))]
             reranked.sort(key=lambda x: -x[1])
             return reranked
@@ -1077,7 +1012,7 @@ class MemoryIndex:
         return results
 
     def _multi_hop_search(
-        self, original_query: str, sub_queries: list[str], top_k: int = 5, **kwargs
+        self, original_query: str, sub_queries: list[str], top_k: int = 5, **kwargs: Any
     ) -> list[SearchResult]:
         """Run sub-queries, combine results, re-rank by original query."""
         all_results: dict[str, SearchResult] = {}
@@ -1089,7 +1024,7 @@ class MemoryIndex:
 
         # Re-rank combined results by relevance to original query
         q_tokens = set(_tokenize(original_query))
-        scored = []
+        scored: list[tuple[SearchResult, float]] = []
         for r in all_results.values():
             combined_text = (r.snippet + " " + r.answer).lower()
             overlap = sum(1 for t in q_tokens if t in combined_text)
@@ -1204,7 +1139,7 @@ class MemoryIndex:
             return force not in {"0", "false", "no", "off"}
         return len(self.paragraph_index) >= RUST_BM25_MIN_PARAGRAPHS
 
-    def _ensure_rust_bm25(self):
+    def _ensure_rust_bm25(self) -> Any | None:
         if self._rust_bm25 is False:
             return None
         if self._rust_bm25 is not None and not self._rust_bm25_dirty:
@@ -1230,7 +1165,7 @@ class MemoryIndex:
             self._rust_bm25_dirty = False
             return None
 
-    def _get_answer_extractor(self):
+    def _get_answer_extractor(self) -> AnswerExtractor | None:
         if self._answer_extractor is None:
             try:
                 from answer_extractor import extract_answer
@@ -1238,9 +1173,9 @@ class MemoryIndex:
                 self._answer_extractor = extract_answer
             except ImportError:  # pragma: no cover
                 self._answer_extractor = False
-        return self._answer_extractor if self._answer_extractor else None
+        return self._answer_extractor if callable(self._answer_extractor) else None
 
-    def _get_llm_answer_extractor(self):
+    def _get_llm_answer_extractor(self) -> AnswerExtractor | None:
         if self._llm_answer_extractor is None:
             try:
                 from answer_extractor import llm_extract_answer
@@ -1248,7 +1183,7 @@ class MemoryIndex:
                 self._llm_answer_extractor = llm_extract_answer
             except ImportError:  # pragma: no cover
                 self._llm_answer_extractor = False
-        return self._llm_answer_extractor if self._llm_answer_extractor else None
+        return self._llm_answer_extractor if callable(self._llm_answer_extractor) else None
 
     @staticmethod
     def _load_content_hashes(path: Path | None = None) -> dict[str, str]:
@@ -1257,18 +1192,18 @@ class MemoryIndex:
         if not path.exists():
             return {}
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
+            return cast(dict[str, str], json.loads(path.read_text(encoding="utf-8")))
         except (json.JSONDecodeError, OSError):
             return {}
 
     @staticmethod
-    def _save_content_hashes(hashes: dict[str, str], path: Path | None = None):
+    def _save_content_hashes(hashes: dict[str, str], path: Path | None = None) -> None:
         """Persist SHA-256 content hashes for the next incremental build."""
         path = path or HASH_CACHE_PATH
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(hashes), encoding="utf-8")
 
-    def save(self, path: Path | None = None, quantize: bool = True):
+    def save(self, path: Path | None = None, quantize: bool = True) -> None:
         """Save index to disk as JSON+gzip (metadata) + npz (embeddings).
 
         Quantizes embeddings to int8 by default (~4x smaller).
@@ -1389,7 +1324,7 @@ class MemoryIndex:
         if emb_data is None:
             return None
         try:
-            embeddings = np.asarray(emb_data)
+            embeddings = cast(np.ndarray, np.asarray(emb_data))
             if quantized:
                 if emb_scale is None:
                     return None
@@ -1413,7 +1348,7 @@ class MemoryIndex:
             return None
         return embeddings
 
-    def _load_index_data(self, path: Path) -> dict | None:
+    def _load_index_data(self, path: Path) -> dict[str, Any] | None:
         """Load index data from JSON+gzip (new) or pickle (legacy).
 
         Format is detected by file magic bytes (gzip = 0x1f8b), not extension.
@@ -1434,7 +1369,7 @@ class MemoryIndex:
             # gzip JSON format
             try:
                 with gzip.open(path, "rb") as f:
-                    meta = json.loads(f.read())
+                    meta = cast(dict[str, Any], json.loads(f.read()))
                 # Load embeddings from companion npz
                 stem = path.stem.replace(".json", "")
                 emb_path = path.with_name(stem + "_embeddings.npz")
@@ -1455,7 +1390,7 @@ class MemoryIndex:
 
 # ── Entity graph for retrieval boosting ──────────────────────────
 
-_ENTITY_GRAPH: dict | None = None
+_ENTITY_GRAPH: EntityGraph | None = None
 _ENTITY_GRAPH_SIGNATURE: tuple[tuple[str, int | None, int | None], ...] | None = None
 
 
@@ -1470,7 +1405,7 @@ def _entity_graph_signature() -> tuple[tuple[str, int | None, int | None], ...]:
     return tuple(signature)
 
 
-def _load_entity_graph() -> dict:
+def _load_entity_graph() -> EntityGraph:
     """Load entities + relations from JSONL. Cached after first call."""
     global _ENTITY_GRAPH, _ENTITY_GRAPH_SIGNATURE
     signature = _entity_graph_signature()
@@ -1478,17 +1413,17 @@ def _load_entity_graph() -> dict:
         return _ENTITY_GRAPH
     entities_path = GRAPH_DIR / "entities.jsonl"
     relations_path = GRAPH_DIR / "relations.jsonl"
-    entities: dict[str, dict] = {}
-    relations: list[dict] = []
+    entities: dict[str, Entity] = {}
+    relations: list[Entity] = []
     if entities_path.exists():
         for line in entities_path.read_text(encoding="utf-8").strip().split("\n"):
             if line.strip():
-                e = json.loads(line)
-                entities[e["id"]] = e
+                e = cast(Entity, json.loads(line))
+                entities[str(e["id"])] = e
     if relations_path.exists():
         for line in relations_path.read_text(encoding="utf-8").strip().split("\n"):
             if line.strip():
-                relations.append(json.loads(line))
+                relations.append(cast(Entity, json.loads(line)))
     _ENTITY_GRAPH = {
         "entities": entities,
         "relations": relations,
@@ -1499,7 +1434,7 @@ def _load_entity_graph() -> dict:
 
 
 def _build_relation_neighbors(
-    entities: dict[str, dict], relations: list[dict]
+    entities: dict[str, Entity], relations: list[Entity]
 ) -> dict[str, list[tuple[str, str, str]]]:
     neighbors: dict[str, list[tuple[str, str, str]]] = {}
     for rel in relations:
@@ -1515,19 +1450,20 @@ def _build_relation_neighbors(
     return neighbors
 
 
-def _query_entity_ids(query: str, graph: dict) -> set[str]:
+def _query_entity_ids(query: str, graph: EntityGraph) -> set[str]:
     """Find entity IDs mentioned in query text."""
     q_lower = query.lower()
     q_tokens = set(re.findall(r"[a-z0-9][a-z0-9_-]{2,}", q_lower))
-    matched = set()
-    for eid, e in graph["entities"].items():
-        label = e.get("label", eid).lower()
+    matched: set[str] = set()
+    entities = cast(dict[str, Entity], graph["entities"])
+    for eid, e in entities.items():
+        label = str(e.get("label", eid)).lower()
         if label in q_lower or label in q_tokens:
             matched.add(eid)
     return matched
 
 
-def _entity_boost_score(para_text: str, query_entities: set[str], graph: dict) -> float:
+def _entity_boost_score(para_text: str, query_entities: set[str], graph: EntityGraph) -> float:
     """Score how many query-related entities appear in paragraph text.
 
     Typed relations (caused_by, fixed_by, etc.) get 2x the boost of co_occurs,
@@ -1537,16 +1473,17 @@ def _entity_boost_score(para_text: str, query_entities: set[str], graph: dict) -
         return 0.0
     p_lower = para_text.lower()
     boost = 0.0
+    entities = cast(dict[str, Entity], graph["entities"])
     for eid in query_entities:
-        label = graph["entities"].get(eid, {}).get("label", eid).lower()
+        label = str(entities.get(eid, {}).get("label", eid)).lower()
         if label in p_lower:
             boost += 0.1
     # Extra boost for typed relations between query entities and paragraph entities.
     relation_neighbors = graph.get("relation_neighbors")
     if relation_neighbors is None:
         relation_neighbors = _build_relation_neighbors(
-            graph.get("entities", {}),
-            graph.get("relations", []),
+            cast(dict[str, Entity], graph.get("entities", {})),
+            cast(list[Entity], graph.get("relations", [])),
         )
         graph["relation_neighbors"] = relation_neighbors
     for eid in query_entities:
@@ -1652,7 +1589,7 @@ def _classify_paragraph(text: str, is_code: bool = False) -> str:
     try:
         _rust_cls = import_module("remanentia_search").classify_paragraph
 
-        return _rust_cls(text, is_code)  # pragma: no cover
+        return cast(str, _rust_cls(text, is_code))  # pragma: no cover
     except ImportError:
         pass
     t = text.lower()
@@ -1998,7 +1935,7 @@ def _tokenize(text: str) -> list[str]:
     try:
         _rust_tok = import_module("remanentia_search").tokenize
 
-        return _rust_tok(text)  # pragma: no cover
+        return cast(list[str], _rust_tok(text))  # pragma: no cover
     except ImportError:
         pass
     return re.findall(r"[a-z0-9][a-z0-9_]{2,}", text.lower())
@@ -2102,7 +2039,7 @@ def _reciprocal_rank_fusion(
     try:
         _rust_rrf = import_module("remanentia_retrieve").reciprocal_rank_fusion
 
-        return _rust_rrf(ranked_lists, k)  # pragma: no cover
+        return cast(list[tuple[int, float]], _rust_rrf(ranked_lists, k))  # pragma: no cover
     except ImportError:
         pass
     rrf_scores: dict[int, float] = {}
@@ -2113,7 +2050,7 @@ def _reciprocal_rank_fusion(
     return result
 
 
-def _get_rust_bm25_class():
+def _get_rust_bm25_class() -> Any | None:
     global _RUST_BM25_CLASS, _RUST_BM25_IMPORT_ATTEMPTED
     if not _RUST_BM25_IMPORT_ATTEMPTED:
         _RUST_BM25_IMPORT_ATTEMPTED = True
@@ -2134,7 +2071,7 @@ def _source_roots(source_name: str, source_dir: Path) -> list[Path]:
 
 
 def _iter_source_files(source_name: str, source_dir: Path) -> Iterator[Path]:
-    exts = SOURCE_EXTENSIONS.get(source_name, {".md"})
+    exts = SOURCE_EXTENSIONS.get(source_name, set(DEFAULT_TEXT_EXTENSIONS))
     files: list[Path] = []
     for root in _source_roots(source_name, source_dir):
         for ext in exts:

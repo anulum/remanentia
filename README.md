@@ -123,6 +123,7 @@ Knowledge store (multi-hop graph search) ...... Zettelkasten + prospective queri
 | File | Role |
 |------|------|
 | `memory_index.py` | Unified BM25 + embedding index, all scoring and ranking |
+| `memory_sources.py` | Neutral default source roots plus JSON/env source configuration |
 | `memory_recall.py` | Deep recall: retrieval + graph + temporal context |
 | `compiled_memory.py` | Typed fact-card compiler for durable seed and operational facts |
 | `mcp_server.py` | Thread-safe MCP server (stdio JSON-RPC), async consolidation |

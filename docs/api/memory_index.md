@@ -20,7 +20,7 @@ for true single-file incremental updates.
 ## Architecture
 
 ```
-SOURCES (18 directories)
+Configured source roots
         │
         ▼
   build(incremental=True)
@@ -106,11 +106,11 @@ changed paragraph splitting logic) and all files need reprocessing.
 
 ## Knowledge Sources
 
-The index is organized around named source roots. Public deployments should keep
-these roots local to the application or point them at explicitly configured
-archives. Some deployments add external repositories and shared coordination
-archives; those deployment-specific paths are not part of the public package
-contract.
+The index is organized around named source roots loaded by
+`memory_sources.load_source_config(BASE)` when `memory_index.py` is imported.
+The public defaults are repository-local and neutral. Deployments add external
+repositories, shared archives, or application data with JSON configuration
+instead of editing `memory_index.py`.
 
 | Source | Path | Content |
 |--------|------|---------|
@@ -118,15 +118,36 @@ contract.
 | paper | `paper/` | Research papers and drafts |
 | semantic | `memory/semantic/` | Consolidated semantic memories |
 | compiled | `memory/compiled/` | Built memory snapshots |
-| coordination | Optional local coordination roots | Session and handover records |
-| archives | Optional local archive roots | Imported research or project notes |
-| agent_memory | Optional local agent memory directories | Agent persistent memory |
-| indexer | Optional catalog roots | Catalog files |
 | code_remanentia | `.` (this repo) | Python source code |
-| code_external | Optional configured source roots | External Python or Rust code |
 
-Code sources index `.py` and `.rs` files. All other sources index `.md`
-files by default.
+Configured sources use operator-defined labels such as `decision_archive` or
+`external_code`. Relative paths in a config file resolve from that file's
+directory; relative paths in inline JSON resolve from the repository root.
+Sources without an explicit extension list use text-document suffixes
+(`.md`, `.txt`, `.json`, `.jsonl`, `.yaml`, `.yml`).
+
+### Source configuration
+
+`REMANENTIA_MEMORY_SOURCES_CONFIG` points at a JSON file:
+
+```json
+{
+  "sources": {
+    "decision_archive": {
+      "path": "../archives/decisions",
+      "extensions": [".md", ".jsonl"]
+    },
+    "external_code": {
+      "path": "/srv/project/src",
+      "extensions": [".py", ".rs"]
+    }
+  }
+}
+```
+
+`REMANENTIA_MEMORY_SOURCES_JSON` accepts the same JSON inline. Set
+`"extends_defaults": false` to replace the default roots with only configured
+sources.
 
 ## BM25 Scoring
 
@@ -293,6 +314,9 @@ Tests in `tests/test_memory_index.py` (relevant to new features):
 - **Incremental build**: first build (all misses), second build preserves
   searchable unchanged documents, changed file detected, non-incremental ignores cache
 - **Build stats**: hash_hits and hash_misses in return value
+- **Configured source roots**: `tests/test_memory_sources.py` validates neutral
+  defaults, JSON/env configuration, validation errors, and production
+  `MemoryIndex.build()` wiring
 
 Plus all existing tests for BM25, search, reranking, incremental add,
 temporal graph integration, etc. (200+ tests total in the file).

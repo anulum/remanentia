@@ -65,6 +65,7 @@ nav:
     - Fact Validity (C5): models/fact_validity.md
   - API Reference:
     - memory_index: api/memory_index.md
+    - memory_sources: api/memory_sources.md
     - memory_recall: api/memory_recall.md
     - compiled_memory: api/compiled_memory.md
     - mcp_server: api/mcp_server.md
