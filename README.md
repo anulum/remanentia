@@ -142,6 +142,7 @@ Knowledge store (multi-hop graph search) ...... Zettelkasten + prospective queri
 | `reflector.py` | Periodic cluster summarisation + gap detection |
 | `arcane_retriever.py` | 4-channel parallel retrieval with RRF fusion |
 | `fact_decomposer.py` | Atomic fact decomposition with temporal validity windows |
+| `finding_envelope.py` | Signed finding envelopes with recomputed recall-gate grades |
 | `cli.py` | Command-line interface |
 | `api.py` | FastAPI REST server |
 | `api_server.py` | Lightweight HTTP API for cross-service integration |
@@ -158,6 +159,7 @@ Knowledge store (multi-hop graph search) ...... Zettelkasten + prospective queri
 ```bash
 pip install -e ".[all]"     # everything
 pip install -e ".[api]"     # REST API only
+pip install -e ".[seal]"    # signed finding envelopes (Python 3.12+)
 pip install -e ".[dev]"     # test dependencies
 ```
 

@@ -88,6 +88,7 @@ nav:
     - aggregate_precompute: api/aggregate_precompute.md
     - device_utils: api/device_utils.md
     - file_utils: api/file_utils.md
+    - finding_envelope: api/finding_envelope.md
     - memory_guarded: api/memory_guarded.md
     - pii_redactor: api/pii_redactor.md
     - seed_utils: api/seed_utils.md

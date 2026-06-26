@@ -55,13 +55,13 @@ jobs:
 
       - name: Mypy type check (advisory)
         continue-on-error: true
-        run: mypy memory_index.py mcp_server.py recall_ledger.py recall_outcome_tracker.py recall_gate.py bus_recall.py finding_ingest.py index_freshness.py consolidation_engine.py cli.py api.py api_server.py answer_extractor.py answer_normalizer.py knowledge_store.py temporal_graph.py entity_extractor.py observer.py reflector.py memory_recall.py arcane_retriever.py fact_decomposer.py --ignore-missing-imports --explicit-package-bases
+        run: mypy memory_index.py mcp_server.py recall_ledger.py recall_outcome_tracker.py recall_gate.py bus_recall.py finding_ingest.py finding_envelope.py index_freshness.py consolidation_engine.py cli.py api.py api_server.py answer_extractor.py answer_normalizer.py knowledge_store.py temporal_graph.py entity_extractor.py observer.py reflector.py memory_recall.py arcane_retriever.py fact_decomposer.py --ignore-missing-imports --explicit-package-bases
 
       - name: Bandit SAST
         # B301 (pickle.load) + B403 (import pickle) re-enabled 2026-04-17
         # after removing pickle from all production loaders (runtime now
         # refuses legacy pickle; operators run tools/migrate_pickle_to_npz.py).
-        run: bandit -r memory_index.py mcp_server.py recall_ledger.py recall_outcome_tracker.py recall_gate.py bus_recall.py finding_ingest.py index_freshness.py consolidation_engine.py cli.py api.py api_server.py api_security.py answer_extractor.py answer_normalizer.py knowledge_store.py temporal_graph.py entity_extractor.py observer.py reflector.py memory_recall.py arcane_retriever.py fact_decomposer.py date_normalizer.py device_utils.py -s B101,B110,B112,B310,B311,B324,B404,B603,B607,B615 -q
+        run: bandit -r memory_index.py mcp_server.py recall_ledger.py recall_outcome_tracker.py recall_gate.py bus_recall.py finding_ingest.py finding_envelope.py index_freshness.py consolidation_engine.py cli.py api.py api_server.py api_security.py answer_extractor.py answer_normalizer.py knowledge_store.py temporal_graph.py entity_extractor.py observer.py reflector.py memory_recall.py arcane_retriever.py fact_decomposer.py date_normalizer.py device_utils.py -s B101,B110,B112,B310,B311,B324,B404,B603,B607,B615 -q
 
   test:
     runs-on: ubuntu-latest

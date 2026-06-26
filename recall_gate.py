@@ -35,7 +35,7 @@ that does not recognise a value renders it at the boundary, never above it.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
 # ── The render lattice ───────────────────────────────────────────────────────
 
@@ -84,9 +84,13 @@ VERIFIED_AT_SOURCE = "verified-at-source"
 FRESHNESSES = frozenset({VERIFIED_AT_SOURCE, "traceable-unchecked", "untraceable"})
 
 
-def _norm(value: str | None) -> str | None:
+def _norm(value: object) -> str | None:
     """Canonicalise a wire value: lower-case, ``_``→``-``; ``None`` stays ``None``."""
-    return value.replace("_", "-").lower() if isinstance(value, str) else value
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value.replace("_", "-").lower()
+    return ""
 
 
 def freshness_permits(freshness: str | None) -> bool:
@@ -171,7 +175,7 @@ def renders_validated_synthesis(input_modes: Iterable[str]) -> bool:
     return bool(modes) and all(mode == VALIDATED for mode in modes)
 
 
-def mode_for_record(record: dict) -> str:
+def mode_for_record(record: Mapping[str, object]) -> str:
     """Presentation mode for one stored finding (a :mod:`finding_ingest` record).
 
     Bridges the ingest frontmatter to :func:`present`: the stored ``verdict``
@@ -182,8 +186,8 @@ def mode_for_record(record: dict) -> str:
     verdict = _norm(record.get("verdict"))
     admission = ADMITTED if verdict == "accept" else "floored"
     return present(
-        record.get("evidence_kind"),
-        record.get("claim_status"),
+        _norm(record.get("evidence_kind")),
+        _norm(record.get("claim_status")),
         admission,
-        record.get("freshness"),
+        _norm(record.get("freshness")),
     )
