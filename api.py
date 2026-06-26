@@ -112,9 +112,9 @@ async def require_bearer_token(request: Request, call_next):
     if request.method in {"POST", "PUT", "PATCH"}:
         try:
             enforce_body_size(int(request.headers.get("content-length", "0")), BODY_LIMIT)
-        except ValueError as exc:
+        except ValueError:
             _audit_request(request, 413, "body_too_large")
-            return JSONResponse({"detail": str(exc)}, status_code=413)
+            return JSONResponse({"detail": "request body too large"}, status_code=413)
 
     if request.url.path not in _RATE_EXEMPT_PATHS:
         client = request.client.host if request.client else "unknown"

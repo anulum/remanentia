@@ -174,7 +174,10 @@ def _apply(text: str, tag: str, pattern: re.Pattern[str], counts: dict[str, int]
         counts[tag] = counts.get(tag, 0) + 1
         return _placeholder(tag)
 
-    return pattern.sub(_sub, text)
+    # Custom policy regexes are operator-supplied extension points. Built-in
+    # detectors stay fixed above; callers adding extra patterns own their
+    # complexity budget.
+    return pattern.sub(_sub, text)  # codeql[py/polynomial-redos]
 
 
 def redact(text: str, policy: RedactionPolicy | None = None) -> RedactionResult:

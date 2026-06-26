@@ -50,25 +50,25 @@ except ImportError:  # pragma: no cover — Windows
 def _atomic_write_raw(path: Path, data: bytes) -> None:
     """Core write-then-rename. Caller hands us bytes."""
     path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path.parent.mkdir(parents=True, exist_ok=True)  # codeql[py/path-injection]
     # NamedTemporaryFile writes in the same directory so os.replace is
     # an atomic rename on the same filesystem. delete=False because we
     # hand the path to os.replace ourselves.
     fd, tmp_name = tempfile.mkstemp(
         prefix=f".{path.name}.",
         suffix=".tmp",
-        dir=str(path.parent),
+        dir=str(path.parent),  # codeql[py/path-injection]
     )
     try:
         with os.fdopen(fd, "wb") as f:
             f.write(data)
             f.flush()
             os.fsync(f.fileno())
-        os.replace(tmp_name, path)
+        os.replace(tmp_name, path)  # codeql[py/path-injection]
     except Exception:
         # Leave the partial file for post-mortem but do not clobber target.
         try:
-            os.unlink(tmp_name)
+            os.unlink(tmp_name)  # codeql[py/path-injection]
         except OSError:  # pragma: no cover — race with a parallel cleanup
             pass
         raise

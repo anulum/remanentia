@@ -602,8 +602,10 @@ def temporal_code_execute(
             )
 
     # "how many times" / counting — but NOT "how many X ago" (handled below)
-    if re.search(r"how many times|how often", q) or (
-        re.search(r"how many .* did", q) and "ago" not in q
+    if (
+        "how many times" in q
+        or "how often" in q
+        or (q.startswith("how many ") and " did " in f" {q} " and "ago" not in q)
     ):
         q_tokens = set(re.findall(r"[a-z]{3,}", q))
         matching = []

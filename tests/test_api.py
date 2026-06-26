@@ -146,7 +146,7 @@ class TestAPISecurityBoundary:
         resp = client.post("/recall", json={"query": "body is too large"})
 
         assert resp.status_code == 413
-        assert "exceeds limit" in resp.json()["detail"]
+        assert resp.json()["detail"] == "request body too large"
 
     def test_private_endpoint_rate_limit_is_enforced(self, client, monkeypatch, tmp_path):
         monkeypatch.setattr(

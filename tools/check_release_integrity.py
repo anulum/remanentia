@@ -47,27 +47,40 @@ def _contains(text: str, pattern: str) -> bool:
     return re.search(pattern, text, flags=re.MULTILINE) is not None
 
 
+def _indented_block_after(lines: list[str], start: int, key: str) -> str:
+    for idx in range(start, len(lines)):
+        if lines[idx].lstrip().startswith(f"{key}:"):
+            base_indent = len(lines[idx]) - len(lines[idx].lstrip())
+            block: list[str] = []
+            for line in lines[idx + 1 :]:
+                stripped = line.strip()
+                indent = len(line) - len(line.lstrip())
+                if stripped and indent <= base_indent:
+                    break
+                block.append(line)
+            return "\n".join(block)
+    return ""
+
+
+def _block_after_uses(text: str, action: str, key: str) -> str:
+    lines = text.splitlines()
+    needle = f"uses: {action}@"
+    for idx, line in enumerate(lines):
+        if line.strip().startswith(needle):
+            return _indented_block_after(lines, idx + 1, key)
+    return ""
+
+
 def _release_files_block(text: str) -> str:
-    match = re.search(
-        r"uses:\s+softprops/action-gh-release@[^\n]+\n"
-        r"(?:[ \t]+[^\n]*\n)*?"
-        r"[ \t]+files:\s*\|\n"
-        r"(?P<files>(?:[ \t]{12}[^\n]+\n)+)",
-        text,
-        flags=re.MULTILINE,
-    )
-    return match.group("files") if match else ""
+    return _block_after_uses(text, "softprops/action-gh-release", "files")
 
 
 def _sigstore_block(text: str) -> str:
-    match = re.search(
-        r"uses:\s+sigstore/gh-action-sigstore-python@[^\n]+\n"
-        r"[ \t]+with:\n"
-        r"(?P<block>(?:[ \t]{10}[^\n]+\n|[ \t]{12}[^\n]+\n)+)",
-        text,
-        flags=re.MULTILINE,
-    )
-    return match.group("block") if match else ""
+    return _block_after_uses(text, "sigstore/gh-action-sigstore-python", "with")
+
+
+def _block_has_exact_value(block: str, key: str, expected: str) -> bool:
+    return any(line.strip() == f"{key}: {expected}" for line in block.splitlines())
 
 
 def _action_refs_are_pinned(text: str) -> bool:
@@ -114,7 +127,11 @@ def check_release_workflow(path: str | Path = DEFAULT_WORKFLOW) -> CheckResult:
             "sigstore action verifies generated bundles before release",
             "verify: true" in sigstore_block
             and "verify-cert-identity:" in sigstore_block
-            and "https://token.actions.githubusercontent.com" in sigstore_block,
+            and _block_has_exact_value(
+                sigstore_block,
+                "verify-oidc-issuer",
+                "https://token.actions.githubusercontent.com",
+            ),
         ),
         (
             "SLSA provenance attests built sdist and wheel",
