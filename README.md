@@ -125,6 +125,7 @@ Knowledge store (multi-hop graph search) ...... Zettelkasten + prospective queri
 | `memory_index.py` | Unified BM25 + embedding index, all scoring and ranking |
 | `memory_sources.py` | Neutral default source roots plus JSON/env source configuration |
 | `memory_recall.py` | Deep recall: retrieval + graph + temporal context |
+| `recall_calibration.py` | Recall abstention calibration from correctness-labelled ledger outcomes |
 | `compiled_memory.py` | Typed fact-card compiler for durable seed and operational facts |
 | `mcp_server.py` | Thread-safe MCP server (stdio JSON-RPC), async consolidation |
 | `consolidation_engine.py` | Episodic -> semantic compression, typed relation extraction |
@@ -163,6 +164,7 @@ pip install -e ".[dev]"     # test dependencies
 
 ```bash
 remanentia-feed-ingest  # consume explicit Finding:/Decision: rows from ~/synapse/feed.ndjson
+remanentia-recall-calibration --json  # report calibrated recall abstention evidence
 ```
 
 ## Search Pipeline

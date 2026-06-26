@@ -66,6 +66,7 @@ dev = [
 [project.scripts]
 remanentia = "cli:main"
 remanentia-feed-ingest = "feed_ingest:main"
+remanentia-recall-calibration = "recall_calibration:main"
 
 [project.urls]
 Homepage = "https://www.remanentia.com"
@@ -80,6 +81,7 @@ Author = "https://www.anulum.li"
 py-modules = [
     "memory_index",
     "memory_sources",
+    "recall_calibration",
     "recall_ledger",
     "recall_outcome_tracker",
     "bus_recall",

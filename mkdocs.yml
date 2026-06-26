@@ -67,6 +67,7 @@ nav:
     - memory_index: api/memory_index.md
     - memory_sources: api/memory_sources.md
     - memory_recall: api/memory_recall.md
+    - recall_calibration: api/recall_calibration.md
     - compiled_memory: api/compiled_memory.md
     - mcp_server: api/mcp_server.md
     - knowledge_store: api/knowledge_store.md

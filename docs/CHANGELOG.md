@@ -6,6 +6,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Recall abstention calibration CLI/API with held-out coverage, accuracy, and
+  calibration-error reporting from correctness-labelled recall ledger outcomes.
 - Rust STDP/LIF acceleration (arcane_stdp) — 2–3x speedup, bit-exact with numpy
 - Enterprise hardening: ARCHITECTURE, CONTRIBUTING, SECURITY, GOVERNANCE, ROADMAP, VALIDATION, NOTICE, CITATION.cff
 - MkDocs documentation site with 4 guides, 9 API refs, benchmarks, research
