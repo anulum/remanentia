@@ -128,6 +128,26 @@ class _AcceptDecision:
 
 
 class TestFeedRecordToFinding:
+    def test_sender_identity_and_iso_timestamp_are_normalised(self) -> None:
+        record = _chat(
+            "Decision: normalise noisy feed provenance",
+            sender="scpn-fusion-core/worker-7f3a",
+        )
+        record["t"] = "2026-06-26T15:04:05Z"
+
+        finding = feed_record_to_finding(record, line_no=7)
+
+        assert finding is not None
+        provenance = _mapping(finding["provenance"])
+        validity = _mapping(finding["validity"])
+        source_check = _mapping(finding["verified_at_source"])
+        assert provenance["project"] == "SCPN-FUSION-CORE"
+        assert provenance["actor"] == "worker"
+        assert provenance["ts"] == pytest.approx(1_782_486_245.0)
+        assert validity["observed_at"] == pytest.approx(1_782_486_245.0)
+        assert source_check["by"] == "SCPN-FUSION-CORE"
+        assert finding["entities"] == ["SCPN-FUSION-CORE"]
+
     def test_explicit_decision_marker_becomes_boundary_finding(self) -> None:
         finding = feed_record_to_finding(_chat("Decision: keep BM25 as the fallback"), line_no=7)
 
@@ -205,13 +225,25 @@ class TestFeedRecordToFinding:
     def test_mapping_finding_payload_keeps_axes_and_adds_feed_defaults(self) -> None:
         record = {
             "ty": "finding",
-            "s": "REMANENTIA",
+            "s": "remanentia/worker-9abc",
             "p": {
                 "statement": "full-S benchmark page now states the comparable score",
                 "evidence_kind": "measured",
                 "claim_status": "reference_validated",
                 "freshness": "verified_at_source",
                 "evidence_ref": "commit:37ae044",
+                "provenance": {
+                    "project": " remanentia ",
+                    "actor": "Arcane Sapience",
+                    "session": "syn-test",
+                    "source_event_seq": "9",
+                    "ts": "2026-06-26T15:04:05Z",
+                },
+                "validity": {
+                    "valid_from": "2026-06-26T15:04:05Z",
+                    "valid_to": None,
+                    "observed_at": "2026-06-26T15:04:05Z",
+                },
                 "verified_at_source": {"checked_this_session": True},
             },
             "t": 1_782_019_238_735,
@@ -225,11 +257,36 @@ class TestFeedRecordToFinding:
         assert finding["evidence_kind"] == "measured"
         assert finding["claim_status"] == "reference_validated"
         assert finding["evidence_ref"] == "commit:37ae044"
-        assert _mapping(finding["validity"])["observed_at"] == pytest.approx(1_782_019_238.735)
+        assert _mapping(finding["validity"])["observed_at"] == pytest.approx(1_782_486_245.0)
+        assert _mapping(finding["provenance"])["project"] == "REMANENTIA"
+        assert _mapping(finding["provenance"])["actor"] == "arcane-sapience"
         assert _mapping(finding["provenance"])["source_event_seq"] == 9
 
 
 class TestIngestFromFeed:
+    def test_noisy_identity_ingests_with_normalised_provenance(self, tmp_path: Path) -> None:
+        feed = tmp_path / "feed.ndjson"
+        _append_feed(
+            feed,
+            _chat(
+                "Decision: normalise feed project and actor vocabulary",
+                seq=1,
+                sender="scpn-fusion-core/worker-7f3a",
+            ),
+        )
+
+        report = ingest_from_feed(
+            feed,
+            MarkdownFindingSink(tmp_path / "findings"),
+            tmp_path / "feed_cursor.json",
+        )
+
+        front = _frontmatters(tmp_path / "findings")[0]
+        provenance = _mapping(front["provenance"])
+        assert report.admitted == 1
+        assert provenance["project"] == "SCPN-FUSION-CORE"
+        assert provenance["actor"] == "worker"
+
     def test_explicit_feed_records_ingest_through_real_gate(self, tmp_path: Path) -> None:
         feed = tmp_path / "feed.ndjson"
         _append_feed(

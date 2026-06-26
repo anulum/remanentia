@@ -87,6 +87,7 @@ py-modules = [
     "bus_recall",
     "finding_ingest",
     "feed_ingest",
+    "feed_normalization",
     "finding_envelope",
     "recall_gate",
     "index_freshness",

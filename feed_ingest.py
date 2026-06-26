@@ -42,6 +42,13 @@ from finding_ingest import (
     SeqCursor,
     default_findings_dir,
 )
+from feed_normalization import (
+    normalise_entities,
+    normalise_provenance,
+    normalise_source_check,
+    normalise_timestamp,
+    normalise_validity,
+)
 
 DEFAULT_PROJECT = "REMANENTIA"
 DEFAULT_FEED_PATH = Path.home() / "synapse" / "feed.ndjson"
@@ -242,7 +249,7 @@ def ingest_from_feed(
 
 def default_feed_cursor(base: str | Path | None = None) -> Path:
     """Return the default file cursor for ``feed.ndjson`` ingestion."""
-    return default_findings_dir(base).parent / DEFAULT_FEED_CURSOR_NAME
+    return cast(Path, default_findings_dir(base).parent / DEFAULT_FEED_CURSOR_NAME)
 
 
 def main() -> int:  # pragma: no cover - CLI/cron entry point
@@ -325,7 +332,7 @@ def _finding_from_mapping(
     project: str,
     default_subkind: str,
 ) -> dict[str, object]:
-    timestamp = _timestamp_seconds(record.get("t"))
+    timestamp = normalise_timestamp(record.get("t"))
     statement = _text(payload.get("statement"))
     source_ref = _text(payload.get("evidence_ref")) or f"synapse-feed:{line_no}"
     result: dict[str, object] = dict(payload)
@@ -335,14 +342,24 @@ def _finding_from_mapping(
     result.setdefault("claim_status", "bounded_support")
     result.setdefault("freshness", "traceable_unchecked")
     result.setdefault("evidence_ref", source_ref)
-    result.setdefault("provenance", _provenance(record, line_no=line_no, project=project))
-    result.setdefault("validity", _validity(timestamp))
+    result["provenance"] = _provenance(
+        result.get("provenance"),
+        record=record,
+        line_no=line_no,
+        project=project,
+    )
+    result["validity"] = _validity(result.get("validity"), timestamp=timestamp)
     result.setdefault("lifecycle", "active")
     result.setdefault("supersedes", None)
-    result.setdefault("verified_at_source", _source_check(record, line_no=line_no))
+    result["verified_at_source"] = _source_check(
+        result.get("verified_at_source"),
+        record=record,
+        line_no=line_no,
+        project=project,
+    )
     result.setdefault("producer_confidence", None)
     result.setdefault("execution_substrate", None)
-    result.setdefault("entities", _entities(record))
+    result.setdefault("entities", _entities(record, project=project))
     result.setdefault("tags", _tags(default_subkind))
     return result
 
@@ -373,33 +390,42 @@ def _marked_text(text: str) -> tuple[str, str] | None:
     return subkind, match.group("statement").strip()
 
 
-def _provenance(record: Mapping[str, object], *, line_no: int, project: str) -> dict[str, object]:
-    source = _text(record.get("s")) or "synapse"
-    return {
-        "project": project,
-        "actor": source,
-        "session": _text(record.get("h")) or f"feed-line-{line_no}",
-        "source_event_seq": _int_or_default(record.get("i"), line_no),
-        "ts": _timestamp_seconds(record.get("t")),
-    }
+def _provenance(
+    value: object,
+    *,
+    record: Mapping[str, object],
+    line_no: int,
+    project: str,
+) -> dict[str, object]:
+    return normalise_provenance(
+        value,
+        record=record,
+        line_no=line_no,
+        default_project=project,
+    )
 
 
-def _validity(timestamp: float) -> dict[str, object]:
-    return {"valid_from": timestamp, "valid_to": None, "observed_at": timestamp}
+def _validity(value: object, *, timestamp: float) -> dict[str, object]:
+    return normalise_validity(value, fallback_timestamp=timestamp)
 
 
-def _source_check(record: Mapping[str, object], *, line_no: int) -> dict[str, object]:
-    return {
-        "checked_this_session": False,
-        "source_ref": f"synapse-feed:{line_no}",
-        "by": _text(record.get("s")) or "synapse",
-        "at": _timestamp_seconds(record.get("t")),
-    }
+def _source_check(
+    value: object,
+    *,
+    record: Mapping[str, object],
+    line_no: int,
+    project: str,
+) -> dict[str, object]:
+    return normalise_source_check(
+        value,
+        record=record,
+        line_no=line_no,
+        default_project=project,
+    )
 
 
-def _entities(record: Mapping[str, object]) -> list[str]:
-    values = [_text(record.get("s")), _text(record.get("to"))]
-    return [value for value in values if value and value != "all"]
+def _entities(record: Mapping[str, object], *, project: str) -> list[str]:
+    return normalise_entities(record, default_project=project)
 
 
 def _tags(subkind: str) -> list[str]:
@@ -408,35 +434,6 @@ def _tags(subkind: str) -> list[str]:
 
 def _text(value: object) -> str:
     return value.strip() if isinstance(value, str) else ""
-
-
-def _int_or_default(value: object, default: int) -> int:
-    if isinstance(value, bool):
-        return default
-    if isinstance(value, int):
-        return value
-    if isinstance(value, str):
-        try:
-            return int(value)
-        except ValueError:
-            return default
-    return default
-
-
-def _timestamp_seconds(value: object) -> float:
-    raw: float
-    if isinstance(value, bool):
-        raw = 0.0
-    elif isinstance(value, int | float):
-        raw = float(value)
-    elif isinstance(value, str):
-        try:
-            raw = float(value)
-        except ValueError:
-            raw = 0.0
-    else:
-        raw = 0.0
-    return raw / 1000.0 if raw > 10_000_000_000 else raw
 
 
 if __name__ == "__main__":  # pragma: no cover

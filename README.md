@@ -140,6 +140,7 @@ Knowledge store (multi-hop graph search) ...... Zettelkasten + prospective queri
 | `arcane_retriever.py` | 4-channel parallel retrieval with RRF fusion |
 | `fact_decomposer.py` | Atomic fact decomposition with temporal validity windows |
 | `feed_ingest.py` | SYNAPSE feed.ndjson ingest for explicit findings and decisions |
+| `feed_normalization.py` | Controlled project, actor, sequence, and timestamp vocabulary for feed ingest |
 | `finding_envelope.py` | Signed finding envelopes with recomputed recall-gate grades |
 | `cli.py` | Command-line interface |
 | `api.py` | FastAPI REST server |
