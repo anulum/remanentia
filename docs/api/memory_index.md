@@ -119,7 +119,7 @@ The index scans 18 configured source directories:
 | qc_research | `.coordination/handovers/scpn-quantum-control/` | Quantum research |
 | po_research | `.coordination/handovers/scpn-phase-orchestrator/` | Phase orchestrator |
 | nc_research | `sc-neurocore/docs/internal/` | SC-NeuroCore internals |
-| claude_memory | `~/.claude/projects/.../memory/` | Claude persistent memory |
+| agent_memory | Local agent memory directories | Agent persistent memory |
 | indexer | `INDEXER/` | Catalog files |
 | code_remanentia | `.` (this repo) | Python source code |
 | code_orchestrator | `scpn-phase-orchestrator/src/` | Orchestrator code |

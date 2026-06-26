@@ -31,6 +31,7 @@ import sys
 import time
 from collections import defaultdict
 from pathlib import Path
+from typing import Any, cast
 
 if __name__ == "__main__":  # pragma: no cover — avoid breaking pytest capture
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -106,7 +107,7 @@ def _hypothesis_complete(prompt: str, max_tokens: int = 400) -> str | None:
         backend = LocalLLMBackend(timeout=120.0)
         if backend.is_available():
             try:
-                return backend.complete(prompt, max_tokens=max_tokens)
+                return cast(str | None, backend.complete(prompt, max_tokens=max_tokens))
             except Exception:  # pragma: no cover — network / runtime errors
                 return None
         return None
@@ -120,29 +121,30 @@ def _hypothesis_complete(prompt: str, max_tokens: int = 400) -> str | None:
             max_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt}],
         )
-        return response.choices[0].message.content.strip()
+        content = response.choices[0].message.content
+        return content.strip() if isinstance(content, str) else None
     except Exception as e:  # pragma: no cover — surface the cause
         print(f"[openai error] {type(e).__name__}: {e}", file=sys.stderr, flush=True)
         return None
 
 
-def _flatten_sessions(sessions: list[list[dict]]) -> str:
+def _flatten_sessions(sessions: list[list[dict[str, Any]]]) -> str:
     """Flatten chat sessions into a single searchable text."""
-    parts = []
+    parts: list[str] = []
     for sess_idx, session in enumerate(sessions):
-        lines = []
+        lines: list[str] = []
         for turn in session:
-            role = turn["role"].upper()
-            content = turn["content"]
+            role = str(turn.get("role", "")).upper()
+            content = str(turn.get("content", ""))
             lines.append(f"[{role}]: {content}")
         parts.append(f"--- Session {sess_idx + 1} ---\n" + "\n".join(lines))
     return "\n\n".join(parts)
 
 
 def _build_index_for_question(
-    sessions: list[list[dict]],
+    sessions: list[list[dict[str, Any]]],
     haystack_dates: list[str] | None = None,
-):
+) -> Any:
     """Build a MemoryIndex over the haystack sessions for one question.
 
     When *haystack_dates* are provided, each document carries the session
@@ -176,7 +178,7 @@ def _build_index_for_question(
 
         # Each turn becomes a paragraph
         for turn_idx, turn in enumerate(session):
-            content = turn["content"]
+            content = str(turn.get("content", ""))
             if len(content) < 20:
                 continue
 
@@ -184,7 +186,7 @@ def _build_index_for_question(
             if sess_date:
                 content = normalise_in_context(content, sess_date)
 
-            role = turn["role"]
+            role = str(turn.get("role", ""))
             doc_name = f"session_{sess_idx}_turn_{turn_idx}_{role}"
             doc = Document(
                 name=doc_name,
@@ -224,8 +226,8 @@ def _build_index_for_question(
 
 def _answer_from_retrieval(
     question: str,
-    idx,
-    sessions: list,
+    idx: Any,
+    sessions: list[list[dict[str, Any]]],
     qtype: str,
     use_llm: bool = False,
     haystack_dates: list[str] | None = None,
@@ -239,8 +241,8 @@ def _answer_from_retrieval(
 
     if not use_llm:
         if results[0].answer:
-            return results[0].answer
-        return results[0].snippet[:500]
+            return str(results[0].answer)
+        return str(results[0].snippet[:500])
 
     # Build context based on question type
     context = _build_context(
@@ -260,15 +262,15 @@ def _answer_from_retrieval(
         return answer
 
     if results[0].answer:
-        return results[0].answer
-    return results[0].snippet[:500]
+        return str(results[0].answer)
+    return str(results[0].snippet[:500])
 
 
 def _build_context(
     question: str,
-    idx,
-    results,
-    sessions: list,
+    idx: Any,
+    results: list[Any],
+    sessions: list[list[dict[str, Any]]],
     qtype: str,
     haystack_dates: list[str] | None = None,
     question_date: str = "",
@@ -289,7 +291,7 @@ def _build_context(
             )
 
         # Cross-session + temporal + knowledge-update: full session content
-        parts = []
+        parts: list[str] = []
         for order, (orig_idx, session) in enumerate(indexed_sessions):
             sess_date = (
                 haystack_dates[orig_idx]
@@ -300,10 +302,10 @@ def _build_context(
             if sess_date:
                 header += f" ({sess_date})"
             header += " ==="
-            turns = []
+            turns: list[str] = []
             for turn in session:
-                role = turn["role"].upper()
-                turns.append(f"[{role}]: {turn['content']}")
+                role = str(turn.get("role", "")).upper()
+                turns.append(f"[{role}]: {turn.get('content', '')}")
             parts.append(header + "\n" + "\n".join(turns))
         context = "\n\n".join(parts)
 
@@ -327,23 +329,23 @@ def _build_context(
         return context
 
     # Single-session types: focused BM25 results (no noise from surrounding turns)
-    paras = []
+    paras: list[str] = []
     for r in results[:5]:
         doc_idx = next((di for di, d in enumerate(idx.documents) if d.name == r.name), None)
         if doc_idx is not None:
             full_text = idx.documents[doc_idx].paragraphs[r.paragraph_idx]
             paras.append(full_text[:1500])
         else:
-            paras.append(r.snippet)
+            paras.append(str(r.snippet))
 
     return "\n\n---\n\n".join(paras)
 
 
-def _extract_temporal_facts(sessions: list) -> str:
+def _extract_temporal_facts(sessions: list[list[dict[str, Any]]]) -> str:
     """Extract dates and temporal references from sessions for pre-computation."""
     import re
 
-    events = []
+    events: list[str] = []
     date_patterns = [
         r"(?:on\s+|since\s+|from\s+)?(\w+ \d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{4})?)",
         r"(\d{1,2}/\d{1,2}/\d{2,4})",
@@ -352,9 +354,9 @@ def _extract_temporal_facts(sessions: list) -> str:
 
     for sess_idx, session in enumerate(sessions):
         for turn in session:
-            if turn["role"] != "user":
+            if turn.get("role") != "user":
                 continue
-            text = turn["content"]
+            text = str(turn.get("content", ""))
             for pattern in date_patterns:
                 for m in re.finditer(pattern, text):
                     date_str = m.group(1) if m.lastindex else m.group()
@@ -372,7 +374,7 @@ def _extract_temporal_facts(sessions: list) -> str:
 
 def _tremu_precompute(
     question: str,
-    sessions: list[list[dict]],
+    sessions: list[list[dict[str, Any]]],
     haystack_dates: list[str] | None = None,
     question_date: str = "",
 ) -> str | None:
@@ -391,14 +393,14 @@ def _tremu_precompute(
         sess_date = ""
         if haystack_dates and sess_idx < len(haystack_dates):
             sess_date = haystack_dates[sess_idx]
-        text = " ".join(t["content"] for t in session if t["role"] == "user")
+        text = " ".join(str(t.get("content", "")) for t in session if t.get("role") == "user")
         events = tg.extract_events(text, f"session_{sess_idx}", reference_date=sess_date)
         tg.add_events(events)
 
     if not tg.events:
         return None
 
-    return temporal_code_execute(question, tg.events, question_date=question_date)
+    return cast(str | None, temporal_code_execute(question, tg.events, question_date=question_date))
 
 
 def _type_prompt(question: str, qtype: str, context: str) -> str:
@@ -483,7 +485,7 @@ def _type_prompt(question: str, qtype: str, context: str) -> str:
 
 def _arcane_answer(
     question: str,
-    sessions: list,
+    sessions: list[list[dict[str, Any]]],
     qtype: str,
     haystack_dates: list[str] | None = None,
     question_date: str = "",
@@ -546,7 +548,7 @@ def _arcane_answer(
                     key=lambda x: haystack_dates[x[0]] if x[0] < len(haystack_dates) else ""
                 )
 
-            session_parts = []
+            session_parts: list[str] = []
             for order, (orig_idx, session) in enumerate(indexed_sessions):
                 sess_date = (
                     haystack_dates[orig_idx]
@@ -557,10 +559,10 @@ def _arcane_answer(
                 if sess_date:
                     header += f" ({sess_date})"
                 header += " ==="
-                turns = []
+                turns: list[str] = []
                 for turn in session:
-                    role = turn["role"].upper()
-                    turns.append(f"[{role}]: {turn['content']}")
+                    role = str(turn.get("role", "")).upper()
+                    turns.append(f"[{role}]: {turn.get('content', '')}")
                 session_parts.append(header + "\n" + "\n".join(turns))
             full_context = "\n\n".join(session_parts)
 
@@ -616,11 +618,11 @@ def _arcane_answer(
     return results[0].fact.text[:500] if results else "Unknown"
 
 
-def run_benchmark():
+def run_benchmark() -> None:
     """Run LongMemEval and output hypothesis file."""
     print(f"Loading LongMemEval from {DATA_PATH}...")
     with open(DATA_PATH, encoding="utf-8") as f:
-        data = json.load(f)
+        data = cast(list[dict[str, Any]], json.load(f))
 
     if _LIMIT:
         data = data[:_LIMIT]
@@ -640,20 +642,21 @@ def run_benchmark():
     print(f"Seed: {_EFFECTIVE_SEED}")
     print()
 
-    type_correct = defaultdict(int)
-    type_total = defaultdict(int)
+    type_correct: defaultdict[str, int] = defaultdict(int)
+    type_total: defaultdict[str, int] = defaultdict(int)
 
-    hypotheses = []
+    hypotheses: list[dict[str, str]] = []
     t0 = time.monotonic()
 
     for i, item in enumerate(data):
-        qid = item["question_id"]
-        qtype = item["question_type"]
-        question = item["question"]
+        qid = str(item["question_id"])
+        qtype = str(item["question_type"])
+        question = str(item["question"])
         gold = str(item["answer"])
 
-        item_dates = item.get("haystack_dates")
-        item_question_date = item.get("question_date", "")
+        item_dates = cast(list[str] | None, item.get("haystack_dates"))
+        item_question_date = str(item.get("question_date", ""))
+        haystack_sessions = cast(list[list[dict[str, Any]]], item["haystack_sessions"])
 
         q_start = time.monotonic()
         if _USE_ARCANE:
@@ -666,20 +669,18 @@ def run_benchmark():
             ):
                 hypothesis = _arcane_answer(
                     question,
-                    item["haystack_sessions"],
+                    haystack_sessions,
                     qtype,
                     haystack_dates=item_dates,
                     question_date=item_question_date,
                 )
             else:
                 # Single-session factoid: legacy BM25 pipeline (full paragraphs) + GPT-4o-mini
-                idx = _build_index_for_question(
-                    item["haystack_sessions"], haystack_dates=item_dates
-                )
+                idx = _build_index_for_question(haystack_sessions, haystack_dates=item_dates)
                 hypothesis = _answer_from_retrieval(
                     question,
                     idx,
-                    item["haystack_sessions"],
+                    haystack_sessions,
                     qtype,
                     use_llm=True,
                     haystack_dates=item_dates,
@@ -687,11 +688,11 @@ def run_benchmark():
                 )
         else:
             # Legacy pipeline
-            idx = _build_index_for_question(item["haystack_sessions"], haystack_dates=item_dates)
+            idx = _build_index_for_question(haystack_sessions, haystack_dates=item_dates)
             hypothesis = _answer_from_retrieval(
                 question,
                 idx,
-                item["haystack_sessions"],
+                haystack_sessions,
                 qtype,
                 use_llm=_USE_LLM,
                 haystack_dates=item_dates,
@@ -778,7 +779,7 @@ def _fuzzy_overlap(a: str, b: str) -> float:
     return overlap / max(len(tokens_a), len(tokens_b))
 
 
-def run_evaluation():
+def run_evaluation() -> None:
     """Run GPT-judge evaluation on saved hypotheses (GPT-4o-mini judge)."""
     from openai import OpenAI
 
@@ -790,27 +791,27 @@ def run_evaluation():
     client = OpenAI(api_key=api_key, timeout=_OPENAI_TIMEOUT)
 
     with open(DATA_PATH, encoding="utf-8") as f:
-        references = json.load(f)
-    qid_to_ref = {r["question_id"]: r for r in references}
+        references = cast(list[dict[str, Any]], json.load(f))
+    qid_to_ref: dict[str, dict[str, Any]] = {str(r["question_id"]): r for r in references}
 
     with open(OUTPUT_PATH, encoding="utf-8") as f:
-        hypotheses = [json.loads(line) for line in f if line.strip()]
+        hypotheses = cast(list[dict[str, Any]], [json.loads(line) for line in f if line.strip()])
 
     print(f"Evaluating {len(hypotheses)} hypotheses with GPT-4o-mini as judge...")
 
-    type_scores = defaultdict(list)
-    results = []
+    type_scores: defaultdict[str, list[int]] = defaultdict(list)
+    results: list[dict[str, Any]] = []
 
     for i, hyp in enumerate(hypotheses):
-        qid = hyp["question_id"]
+        qid = str(hyp["question_id"])
         ref = qid_to_ref.get(qid)
         if not ref:
             continue
 
-        qtype = ref["question_type"]
-        question = ref["question"]
+        qtype = str(ref["question_type"])
+        question = str(ref["question"])
         gold = str(ref["answer"])
-        response = hyp["hypothesis"]
+        response = str(hyp["hypothesis"])
 
         prompt = _judge_prompt(qtype, question, gold, response)
 
@@ -820,7 +821,8 @@ def run_evaluation():
                 max_tokens=10,
                 messages=[{"role": "user", "content": prompt}],
             )
-            judge_answer = msg.choices[0].message.content.strip().lower()
+            content = msg.choices[0].message.content
+            judge_answer = content.strip().lower() if isinstance(content, str) else ""
             correct = "yes" in judge_answer
         except Exception as e:
             print(f"  Judge error on {qid}: {e}")
@@ -839,7 +841,7 @@ def run_evaluation():
 
     # Final results
     print(f"\n{'=' * 60}")
-    print(f"LongMemEval Results (Claude-judge)")
+    print("LongMemEval Results (LLM judge)")
     print(f"{'=' * 60}")
     all_scores = [s for scores in type_scores.values() for s in scores]
     print(
@@ -877,7 +879,7 @@ def _coverage_tokens(text: str) -> set[str]:
 
 
 def compute_coverage_buckets(
-    results: list[dict], oracle: dict[str, dict]
+    results: list[dict[str, Any]], oracle: dict[str, dict[str, Any]]
 ) -> dict[str, list[float]]:
     """Per-qtype answer-session coverage ratios for failed questions.
 
@@ -892,34 +894,36 @@ def compute_coverage_buckets(
     for r in results:
         if r.get("judge_label"):
             continue
-        ref = oracle.get(r["question_id"])
+        ref = oracle.get(str(r["question_id"]))
         if not ref:
             continue
         answer_sessions = ref.get("answer_session_ids", [])
         if not answer_sessions:
             continue
-        hypothesis_toks = _coverage_tokens(r.get("hypothesis", ""))
+        hypothesis_toks = _coverage_tokens(str(r.get("hypothesis", "")))
         if not hypothesis_toks:
             continue
 
         sessions = ref.get("haystack_sessions", [])
-        session_id_to_idx = {sid: i for i, sid in enumerate(ref.get("haystack_session_ids", []))}
+        session_id_to_idx = {
+            str(sid): i for i, sid in enumerate(ref.get("haystack_session_ids", []))
+        }
         covered = 0
         for ans_sid in answer_sessions:
-            sess_idx = session_id_to_idx.get(ans_sid)
+            sess_idx = session_id_to_idx.get(str(ans_sid))
             if sess_idx is None or sess_idx >= len(sessions):
                 continue
             sess_toks = _coverage_tokens(
-                " ".join(turn.get("content", "") for turn in sessions[sess_idx])
+                " ".join(str(turn.get("content", "")) for turn in sessions[sess_idx])
             )
             overlap = len(sess_toks & hypothesis_toks)
             if overlap >= 2:
                 covered += 1
-        buckets[r["question_type"]].append(covered / len(answer_sessions))
+        buckets[str(r["question_type"])].append(covered / len(answer_sessions))
     return buckets
 
 
-def _coverage_report(results: list[dict], oracle: dict[str, dict]) -> None:
+def _coverage_report(results: list[dict[str, Any]], oracle: dict[str, dict[str, Any]]) -> None:
     """Print the R3 answer-session coverage histogram per qtype."""
     buckets = compute_coverage_buckets(results, oracle)
     if not buckets:
@@ -1006,7 +1010,9 @@ def _parse_cli() -> None:
         prog="bench_longmemeval.py",
         description="Run the LongMemEval benchmark or judge prior outputs.",
     )
-    p.add_argument("--llm", action="store_true", help="use the hosted GPT-4o-mini endpoint for synthesis")
+    p.add_argument(
+        "--llm", action="store_true", help="use the hosted GPT-4o-mini endpoint for synthesis"
+    )
     p.add_argument(
         "--evaluate", action="store_true", help="after generation, run GPT-judge on outputs"
     )

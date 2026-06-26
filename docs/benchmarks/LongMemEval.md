@@ -61,7 +61,7 @@ the April snapshot is model drift, not a Remanentia pipeline regression.
 
 | Round | Score | Change | Temporal | Key change |
 |-------|------:|-------:|---------:|------------|
-| R1 | 43.4% | - | - | First run with Claude judge |
+| R1 | 43.4% | - | - | First run with an LLM judge |
 | R2 | ~59% | +16pp | - | Fixed Sonnet 404, temporal pre-computation |
 | R3 | ~62% | +3pp | - | Fixed preference context |
 | R4 | ~64% | +2pp | - | Python date computation + GPT-4o-mini judge |

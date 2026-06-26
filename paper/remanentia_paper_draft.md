@@ -49,7 +49,7 @@ Remanentia scans 18 configured source directories:
 - Session logs and handovers (coordination artifacts)
 - Cross-repository research documents
 - Source code (Python, Rust) from 5 codebases
-- Claude memory files (auto-persisted)
+- Local agent memory files (auto-persisted)
 - Semantic memories (consolidated from traces)
 - Entity graph (JSONL)
 - INDEXER catalog
