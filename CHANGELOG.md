@@ -6,6 +6,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- `feed_ingest.py` and the `remanentia-feed-ingest` console script ingest explicit
+  `Finding:` / `Decision:` rows from `~/synapse/feed.ndjson`, reuse the
+  `synapse_channel` finding parser and admission gate, and persist admitted
+  candidates through the existing Markdown finding sink.
 - Full LongMemEval-S benchmark mode (`bench_longmemeval.py --full`): runs the realistic
   ~50-session haystack instead of the oracle (gold-only) setting, with a new
   retrieved-context reader that feeds the reader only the top retrieved sessions rather
