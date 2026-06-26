@@ -66,6 +66,7 @@ nav:
   - API Reference:
     - memory_index: api/memory_index.md
     - memory_recall: api/memory_recall.md
+    - compiled_memory: api/compiled_memory.md
     - mcp_server: api/mcp_server.md
     - knowledge_store: api/knowledge_store.md
     - consolidation_engine: api/consolidation_engine.md

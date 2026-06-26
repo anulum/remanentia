@@ -6,6 +6,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- `data/compiled_seed_facts.jsonl` supplies durable historical and cross-project
+  compiled-memory seed facts as data instead of Python control flow.
 - `feed_ingest.py` and the `remanentia-feed-ingest` console script ingest explicit
   `Finding:` / `Decision:` rows from `~/synapse/feed.ndjson`, reuse the
   `synapse_channel` finding parser and admission gate, and persist admitted
@@ -27,6 +29,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `REMANENTIA_ARCANE_CE_DISABLE=1` for latency-sensitive live/MCP use.
 
 ### Changed
+- `compiled_memory.py` loads seed facts from tracked JSONL data, with an installed
+  data-file fallback, and no longer mines the removed internal benchmark script.
 - Benchmark reporting reconciled around the two LongMemEval settings. The headline is
   now the full-S retrieval setting (3-run mean 56.6% overall on the current
   `gpt-4o-mini`), which is what published leaderboards measure; the 72.2%/~71% figures
@@ -36,6 +40,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `arcane_retriever.py` is strict-mypy clean.
 
 ### Documentation
+- `compiled_memory` now has a MkDocs API page documenting seed facts and generated
+  compiled-fact outputs.
 - **Model cards published** (2026-04-17) at `docs/models/` for the five
   trained components (C1 embedding, C2 cross-encoder, C3 relation
   classifier, C4 date normaliser, C5 fact-validity). Each card states

@@ -124,6 +124,7 @@ Knowledge store (multi-hop graph search) ...... Zettelkasten + prospective queri
 |------|------|
 | `memory_index.py` | Unified BM25 + embedding index, all scoring and ranking |
 | `memory_recall.py` | Deep recall: retrieval + graph + temporal context |
+| `compiled_memory.py` | Typed fact-card compiler for durable seed and operational facts |
 | `mcp_server.py` | Thread-safe MCP server (stdio JSON-RPC), async consolidation |
 | `consolidation_engine.py` | Episodic -> semantic compression, typed relation extraction |
 | `knowledge_store.py` | Zettelkasten atomic notes, prospective triggers, graph search |

@@ -11,6 +11,7 @@ from __future__ import annotations
 import gzip
 import json
 from pathlib import Path
+from typing import Any
 
 import compiled_memory
 import memory_index
@@ -52,7 +53,93 @@ def _write_performance_report(path: Path) -> None:
     )
 
 
-def test_compile_facts_reads_index_snapshot(tmp_path):
+def _write_seed_facts(path: Path) -> None:
+    """Write data-driven seed facts that do not depend on internal test files."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    records = [
+        CompiledFact(
+            fact_id="index.historical_march_size_expected",
+            fact_type="metric",
+            subject="Historical March unified index expected size",
+            fact=(
+                "The historical March unified index benchmark expected 1,217 documents "
+                "and 15,938 paragraphs."
+            ),
+            source="data/compiled_seed_facts.jsonl",
+            valid_from="2026-03-20",
+            valid_to="2026-03-22",
+            scope="benchmark",
+            truth_mode="benchmark_expected",
+            priority=3.5,
+            aliases=[
+                "historical March unified index benchmark documents",
+                "historical March unified index benchmark paragraphs",
+                "historical unified index expected size",
+            ],
+        ),
+        CompiledFact(
+            fact_id="incident.identity_coherence_metric_historical",
+            fact_type="debugging",
+            subject="Identity coherence R metric historical incident",
+            fact=(
+                "The historical benchmark expectation for the identity coherence R metric "
+                "incident records the failure wording as never called, garbage, and theatre."
+            ),
+            source="data/compiled_seed_facts.jsonl",
+            scope="benchmark",
+            truth_mode="benchmark_expected",
+            priority=4.0,
+            aliases=[
+                "what happened with the identity coherence R metric",
+                "historical identity coherence R metric incident",
+                "identity coherence R metric benchmark expected",
+            ],
+        ),
+        CompiledFact(
+            fact_id="relationship.scpn_remanentia",
+            fact_type="cross_project",
+            subject="SCPN relationship to Remanentia",
+            fact=(
+                "The continuity research relationship is that sc-neurocore provides the "
+                "substrate, the SCPN framework provides the mathematics, and Remanentia "
+                "connects that work into persistent memory binding."
+            ),
+            source="data/compiled_seed_facts.jsonl",
+            scope="cross_project",
+            priority=4.0,
+            aliases=[
+                "how does the SCPN framework relate to remanentia",
+                "SCPN framework Remanentia relationship",
+                "substrate mathematics binding",
+            ],
+        ),
+        CompiledFact(
+            fact_id="relationship.neurocore_quantum_control",
+            fact_type="cross_project",
+            subject="sc-neurocore and quantum-control relationship",
+            fact=(
+                "sc-neurocore and scpn-quantum-control are connected through the "
+                "identity, quantum, and classical control stack: neurocore provides "
+                "the identity substrate and quantum-control handles the quantum/classical "
+                "control layer."
+            ),
+            source="data/compiled_seed_facts.jsonl",
+            scope="cross_project",
+            priority=4.5,
+            aliases=[
+                "what connects sc-neurocore and scpn-quantum-control",
+                "sc-neurocore quantum-control identity quantum classical",
+                "identity quantum classical connection",
+            ],
+        ),
+    ]
+    path.write_text(
+        "\n".join(json.dumps(record.to_record(), sort_keys=True) for record in records) + "\n",
+        encoding="utf-8",
+    )
+
+
+def test_compile_facts_reads_index_snapshot(tmp_path: Path) -> None:
     repo = tmp_path
     _write_index(repo / "snn_state" / "memory_index.json.gz")
 
@@ -66,7 +153,7 @@ def test_compile_facts_reads_index_snapshot(tmp_path):
     assert size_fact.scope == "remanentia"
 
 
-def test_compile_facts_reads_benchmark_locations(tmp_path):
+def test_compile_facts_reads_benchmark_locations(tmp_path: Path) -> None:
     repo = tmp_path
     bench_dir = repo / ".coordination" / "benchmarks" / "REMANENTIA"
     report_path = bench_dir / "remanentia_performance_2026-04-28_172825.json"
@@ -90,7 +177,7 @@ def test_compile_facts_reads_benchmark_locations(tmp_path):
     assert recall_fact.truth_mode == "current"
 
 
-def test_compile_facts_indexes_module_symbols(tmp_path):
+def test_compile_facts_indexes_module_symbols(tmp_path: Path) -> None:
     repo = tmp_path
     module = repo / "entity_extractor.py"
     module.write_text(
@@ -105,7 +192,7 @@ def test_compile_facts_indexes_module_symbols(tmp_path):
     assert "EntityGraph" in fact.fact
 
 
-def test_compile_facts_writes_loadable_jsonl(tmp_path):
+def test_compile_facts_writes_loadable_jsonl(tmp_path: Path) -> None:
     repo = tmp_path
     _write_index(repo / "snn_state" / "memory_index.json.gz")
     out_dir = repo / "memory" / "compiled"
@@ -116,7 +203,7 @@ def test_compile_facts_writes_loadable_jsonl(tmp_path):
     assert any(f.fact_id == "index.current_size" for f in facts)
 
 
-def test_load_compiled_facts_skips_missing_blank_and_malformed_records(tmp_path):
+def test_load_compiled_facts_skips_missing_blank_and_malformed_records(tmp_path: Path) -> None:
     missing = tmp_path / "missing.jsonl"
     assert load_compiled_facts(missing) == []
 
@@ -134,6 +221,17 @@ def test_load_compiled_facts_skips_missing_blank_and_malformed_records(tmp_path)
         "{bad json}\n"
         + json.dumps(good.to_record())
         + "\n"
+        + json.dumps(
+            {
+                "fact_id": "fallback.priority",
+                "fact_type": "factual",
+                "subject": "Priority fallback",
+                "fact": "Invalid priority records fall back to priority 1.0.",
+                "source": "test",
+                "priority": "not numeric",
+            }
+        )
+        + "\n"
         + json.dumps({"fact_id": "broken", "aliases": 5})
         + "\n",
         encoding="utf-8",
@@ -141,22 +239,26 @@ def test_load_compiled_facts_skips_missing_blank_and_malformed_records(tmp_path)
 
     facts = load_compiled_facts(path)
 
-    assert [fact.fact_id for fact in facts] == ["memory.vector_worker"]
+    assert [fact.fact_id for fact in facts] == ["memory.vector_worker", "fallback.priority"]
+    assert facts[1].priority == 1.0
 
 
-def test_compile_facts_adds_historical_benchmark_expected_facts(tmp_path):
+def test_compile_facts_adds_historical_benchmark_expected_facts(tmp_path: Path) -> None:
     repo = tmp_path
     _write_index(repo / "snn_state" / "memory_index.json.gz")
+    _write_seed_facts(repo / "data" / "compiled_seed_facts.jsonl")
 
     facts = compile_facts(repo, out_dir=repo / "memory" / "compiled")
     fact = next(f for f in facts if f.fact_id == "index.historical_march_size_expected")
 
     assert fact.truth_mode == "benchmark_expected"
     assert fact.scope == "benchmark"
+    assert fact.source == "data/compiled_seed_facts.jsonl"
+    assert "benchmark_internal.py" not in fact.source
     assert "1,217" in fact.fact
 
 
-def test_search_compiled_facts_prefers_alias_and_type():
+def test_search_compiled_facts_prefers_alias_and_type() -> None:
     facts = [
         CompiledFact(
             fact_id="retrieval.embedding_weight",
@@ -184,7 +286,7 @@ def test_search_compiled_facts_prefers_alias_and_type():
     assert result[0][0].fact.endswith("0.45.")
 
 
-def test_search_compiled_facts_handles_empty_query_exact_subject_and_low_scores():
+def test_search_compiled_facts_handles_empty_query_exact_subject_and_low_scores() -> None:
     current_fact = CompiledFact(
         fact_id="service.vector_worker",
         fact_type="continuity",
@@ -213,7 +315,7 @@ def test_search_compiled_facts_handles_empty_query_exact_subject_and_low_scores(
     assert search_compiled_facts("Legacy Archive", [stale_fact]) == []
 
 
-def test_search_compiled_facts_rejects_type_only_matches():
+def test_search_compiled_facts_rejects_type_only_matches() -> None:
     facts = [
         CompiledFact(
             fact_id="retrieval.embedding_weight",
@@ -231,7 +333,7 @@ def test_search_compiled_facts_rejects_type_only_matches():
     assert result == []
 
 
-def test_search_compiled_facts_rejects_generic_benchmark_overlap():
+def test_search_compiled_facts_rejects_generic_benchmark_overlap() -> None:
     facts = [
         CompiledFact(
             fact_id="benchmark.latest_retrieval_sweep",
@@ -249,7 +351,7 @@ def test_search_compiled_facts_rejects_generic_benchmark_overlap():
     assert result == []
 
 
-def test_search_compiled_facts_prefers_current_truth_by_default():
+def test_search_compiled_facts_prefers_current_truth_by_default() -> None:
     facts = [
         CompiledFact(
             fact_id="index.current_size",
@@ -278,7 +380,7 @@ def test_search_compiled_facts_prefers_current_truth_by_default():
     assert result[0][0].fact_id == "index.current_size"
 
 
-def test_search_compiled_facts_can_select_benchmark_expected_truth():
+def test_search_compiled_facts_can_select_benchmark_expected_truth() -> None:
     facts = [
         CompiledFact(
             fact_id="index.current_size",
@@ -311,7 +413,7 @@ def test_search_compiled_facts_can_select_benchmark_expected_truth():
     assert result[0][0].fact_id == "index.historical_size"
 
 
-def test_benchmark_facts_include_retrieval_and_local_model_reports(tmp_path):
+def test_benchmark_facts_include_retrieval_and_local_model_reports(tmp_path: Path) -> None:
     repo = tmp_path
     bench_dir = repo / ".coordination" / "benchmarks" / "REMANENTIA"
     bench_dir.mkdir(parents=True)
@@ -340,7 +442,9 @@ def test_benchmark_facts_include_retrieval_and_local_model_reports(tmp_path):
     assert "answer accuracy 55.5%" in by_id["benchmark.latest_local_model_retrieval"].fact
 
 
-def test_compiled_memory_file_helpers_cover_branch_contracts(tmp_path, monkeypatch, capsys):
+def test_compiled_memory_file_helpers_cover_branch_contracts(
+    tmp_path: Path, monkeypatch: Any, capsys: Any
+) -> None:
     assert compiled_memory._named_benchmark({"name": "api_recall"}, "api_recall") == {}
     assert compiled_memory._named_benchmark([{"name": "api_health"}], "api_recall") == {}
 
@@ -405,7 +509,7 @@ def test_compiled_memory_file_helpers_cover_branch_contracts(tmp_path, monkeypat
     assert json.loads(capsys.readouterr().out)["facts"] == 1
 
 
-def test_module_symbol_facts_skip_tests_and_empty_modules(tmp_path):
+def test_module_symbol_facts_skip_tests_and_empty_modules(tmp_path: Path) -> None:
     (tmp_path / "test_helper.py").write_text("def test_only():\n    pass\n", encoding="utf-8")
     (tmp_path / "empty.py").write_text("VALUE = 1\n", encoding="utf-8")
     (tmp_path / "entity_extractor.py").write_text(
@@ -419,7 +523,7 @@ def test_module_symbol_facts_skip_tests_and_empty_modules(tmp_path):
     assert "entity extraction functions" in facts[0].aliases
 
 
-def test_fact_builders_read_operational_source_files(tmp_path):
+def test_fact_builders_read_operational_source_files(tmp_path: Path) -> None:
     (tmp_path / ".coordination" / "sessions" / "REMANENTIA").mkdir(parents=True)
     (tmp_path / ".coordination" / "sessions" / "REMANENTIA" / "hardware.md").write_text(
         "Local hardware has GTX 1060 6GB and RX 6600 XT cards.",
@@ -435,11 +539,7 @@ def test_fact_builders_read_operational_source_files(tmp_path):
         "The substrate is provided elsewhere and the mathematics binds Remanentia.",
         encoding="utf-8",
     )
-    (tmp_path / "tests").mkdir()
-    (tmp_path / "tests" / "benchmark_internal.py").write_text(
-        "identity coherence R metric historical wording",
-        encoding="utf-8",
-    )
+    _write_seed_facts(tmp_path / "data" / "compiled_seed_facts.jsonl")
     (tmp_path / "retrieve.py").write_text(
         "embedding_weight = 0.45  # embedding contribution",
         encoding="utf-8",
@@ -477,7 +577,43 @@ def test_fact_builders_read_operational_source_files(tmp_path):
     }.issubset(fact_ids)
 
 
-def test_current_operational_queries_use_live_stats(tmp_path):
+def test_compiled_facts_do_not_require_internal_benchmark_script(tmp_path: Path) -> None:
+    repo = tmp_path
+    _write_seed_facts(repo / "data" / "compiled_seed_facts.jsonl")
+
+    facts = compile_facts(repo, out_dir=None)
+    by_id = {fact.fact_id: fact for fact in facts}
+
+    assert "index.historical_march_size_expected" in by_id
+    assert "incident.identity_coherence_metric_historical" in by_id
+    assert not (repo / "tests" / "benchmark_internal.py").exists()
+    assert all("benchmark_internal.py" not in fact.source for fact in by_id.values())
+
+
+def test_seed_facts_use_installed_data_fallback(tmp_path: Path, monkeypatch: Any) -> None:
+    source_seed = tmp_path / "share" / "remanentia" / "data" / "source_seed.jsonl"
+    _write_seed_facts(source_seed)
+    monkeypatch.setattr(compiled_memory, "BASE", tmp_path)
+    monkeypatch.setattr(compiled_memory, "SEED_FACTS_PATH", source_seed)
+
+    source_facts = compiled_memory._seed_facts(tmp_path)
+
+    assert any(fact.fact_id == "index.historical_march_size_expected" for fact in source_facts)
+
+    installed_seed = tmp_path / "share" / "remanentia" / "data" / "compiled_seed_facts.jsonl"
+    _write_seed_facts(installed_seed)
+    monkeypatch.setattr(compiled_memory, "SEED_FACTS_PATH", tmp_path / "missing.jsonl")
+    monkeypatch.setattr(compiled_memory, "INSTALLED_SEED_FACTS_PATH", installed_seed)
+
+    facts = compiled_memory._seed_facts(tmp_path)
+
+    assert {fact.fact_id for fact in facts} >= {
+        "index.historical_march_size_expected",
+        "incident.identity_coherence_metric_historical",
+    }
+
+
+def test_current_operational_queries_use_live_stats(tmp_path: Path) -> None:
     repo = tmp_path
     _write_index(repo / "snn_state" / "memory_index.json.gz")
     _write_performance_report(
@@ -499,7 +635,7 @@ def test_current_operational_queries_use_live_stats(tmp_path):
     assert "1,103" in combined_gold
 
 
-def test_historical_regression_queries_are_explicitly_historical():
+def test_historical_regression_queries_are_explicitly_historical() -> None:
     queries = historical_regression_queries()
 
     assert queries
@@ -507,7 +643,7 @@ def test_historical_regression_queries_are_explicitly_historical():
     assert all("historical" in query["q"] for query in queries)
 
 
-def test_memory_index_search_merges_compiled_facts(monkeypatch):
+def test_memory_index_search_merges_compiled_facts(monkeypatch: Any) -> None:
     idx = MemoryIndex()
     idx._built = True
     idx.paragraph_index = [(0, 0)] * 1001

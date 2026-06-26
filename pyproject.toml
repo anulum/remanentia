@@ -120,6 +120,9 @@ py-modules = [
     "memory/**/*.jsonl",
 ]
 
+[tool.setuptools.data-files]
+"share/remanentia/data" = ["data/compiled_seed_facts.jsonl"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v --tb=short"
@@ -153,7 +156,6 @@ omit = [
     "fact_validity_model.py",
     "temporal_relation.py",
     "run_exp*.py",
-    "tests/benchmark_internal.py",
     "experimental/*",
     # Training infrastructure (not product code)
     "training/*",

@@ -14,6 +14,7 @@ import ast
 import gzip
 import json
 import re
+import sys
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -24,6 +25,10 @@ BASE = Path(__file__).parent
 DEFAULT_OUT_DIR = BASE / "memory" / "compiled"
 DEFAULT_INDEX_PATH = BASE / "snn_state" / "memory_index.json.gz"
 DEFAULT_BENCHMARK_DIR = BASE / ".coordination" / "benchmarks" / "REMANENTIA"
+SEED_FACTS_PATH = BASE / "data" / "compiled_seed_facts.jsonl"
+INSTALLED_SEED_FACTS_PATH = (
+    Path(sys.prefix) / "share" / "remanentia" / "data" / "compiled_seed_facts.jsonl"
+)
 FACTS_JSONL = "facts.jsonl"
 FACTS_MARKDOWN = "compiled_facts.md"
 FACT_SCHEMA_VERSION = 2
@@ -78,14 +83,34 @@ class CompiledFact:
 
     @classmethod
     def from_record(cls, record: dict[str, Any]) -> CompiledFact:
-        data = {k: record.get(k) for k in cls.__dataclass_fields__}
-        data["aliases"] = list(data.get("aliases") or [])
-        data["priority"] = float(data.get("priority") or 1.0)
-        data["valid_from"] = str(data.get("valid_from") or "")
-        data["valid_to"] = str(data.get("valid_to") or "")
-        data["scope"] = str(data.get("scope") or "remanentia")
-        data["truth_mode"] = str(data.get("truth_mode") or "current")
-        return cls(**data)
+        required = ("fact_id", "fact_type", "subject", "fact", "source")
+        values: dict[str, str] = {}
+        for key in required:
+            value = record.get(key)
+            if not isinstance(value, str) or not value:
+                raise ValueError(f"compiled fact record missing {key}")
+            values[key] = value
+
+        aliases_raw = record.get("aliases", [])
+        aliases = [str(alias) for alias in aliases_raw] if isinstance(aliases_raw, list) else []
+        try:
+            priority = float(record.get("priority", 1.0))
+        except (TypeError, ValueError):
+            priority = 1.0
+
+        return cls(
+            fact_id=values["fact_id"],
+            fact_type=values["fact_type"],
+            subject=values["subject"],
+            fact=values["fact"],
+            source=values["source"],
+            valid_from=str(record.get("valid_from") or ""),
+            valid_to=str(record.get("valid_to") or ""),
+            scope=str(record.get("scope") or "remanentia"),
+            truth_mode=str(record.get("truth_mode") or "current"),
+            priority=priority,
+            aliases=aliases,
+        )
 
     def card(self) -> str:
         aliases = ", ".join(self.aliases) if self.aliases else "none"
@@ -108,10 +133,9 @@ def compile_facts(repo: Path = BASE, out_dir: Path | None = DEFAULT_OUT_DIR) -> 
     repo = repo.resolve()
     facts: list[CompiledFact] = []
     facts.extend(_index_snapshot_facts(repo))
+    facts.extend(_seed_facts(repo))
     facts.extend(_benchmark_facts(repo))
     facts.extend(_hardware_facts(repo))
-    facts.extend(_relationship_facts(repo))
-    facts.extend(_incident_facts(repo))
     facts.extend(_module_symbol_facts(repo))
     facts.extend(_source_derived_facts(repo))
     facts = _dedupe_facts(facts)
@@ -143,7 +167,7 @@ def load_compiled_facts(path: Path | None = None) -> list[CompiledFact]:
             continue
         try:
             facts.append(CompiledFact.from_record(json.loads(line)))
-        except (TypeError, json.JSONDecodeError):
+        except (TypeError, ValueError, json.JSONDecodeError):
             continue
     return facts
 
@@ -233,46 +257,18 @@ def _index_snapshot_facts(repo: Path) -> list[CompiledFact]:
                 "memory index timestamp",
             ],
         ),
-        CompiledFact(
-            fact_id="index.historical_march_size_expected",
-            fact_type="metric",
-            subject="Historical March unified index expected size",
-            fact=(
-                "The historical March unified index benchmark expected 1,217 documents "
-                "and 15,938 paragraphs."
-            ),
-            source=str(repo / "tests" / "benchmark_internal.py"),
-            valid_from="2026-03-20",
-            valid_to="2026-03-22",
-            scope="benchmark",
-            truth_mode="benchmark_expected",
-            priority=3.5,
-            aliases=[
-                "historical March unified index benchmark documents",
-                "historical March unified index benchmark paragraphs",
-                "historical unified index expected size",
-            ],
-        ),
-        CompiledFact(
-            fact_id="index.historical_march_timestamp_expected",
-            fact_type="temporal",
-            subject="Historical March unified index expected build date",
-            fact=(
-                "The historical March unified index benchmark expected the build date "
-                "to be 2026-03-20 or 2026-03-22."
-            ),
-            source=str(repo / "tests" / "benchmark_internal.py"),
-            valid_from="2026-03-20",
-            valid_to="2026-03-22",
-            scope="benchmark",
-            truth_mode="benchmark_expected",
-            priority=3.5,
-            aliases=[
-                "historical March unified index benchmark built",
-                "historical unified index expected build date",
-            ],
-        ),
     ]
+
+
+def _seed_facts(repo: Path) -> list[CompiledFact]:
+    path = repo / "data" / "compiled_seed_facts.jsonl"
+    if path.exists():
+        return load_compiled_facts(path)
+    if repo == BASE and SEED_FACTS_PATH.exists():
+        return load_compiled_facts(SEED_FACTS_PATH)
+    if repo == BASE and INSTALLED_SEED_FACTS_PATH.exists():
+        return load_compiled_facts(INSTALLED_SEED_FACTS_PATH)
+    return []
 
 
 def _benchmark_facts(repo: Path) -> list[CompiledFact]:
@@ -473,92 +469,11 @@ def _hardware_facts(repo: Path) -> list[CompiledFact]:
 
 
 def _relationship_facts(repo: Path) -> list[CompiledFact]:
-    facts: list[CompiledFact] = []
-    relationship = _read_text(repo / "disposition" / "relationship.md")
-    if "substrate" in relationship.lower() and "mathematics" in relationship.lower():
-        facts.append(
-            CompiledFact(
-                fact_id="relationship.scpn_remanentia",
-                fact_type="cross_project",
-                subject="SCPN relationship to Remanentia",
-                fact=(
-                    "The continuity research relationship is that sc-neurocore provides the "
-                    "substrate, the SCPN framework provides the mathematics, and Remanentia "
-                    "connects that work into persistent memory binding."
-                ),
-                source=str(repo / "disposition" / "relationship.md"),
-                scope="cross_project",
-                priority=4.0,
-                aliases=[
-                    "how does the SCPN framework relate to remanentia",
-                    "SCPN framework Remanentia relationship",
-                    "substrate mathematics binding",
-                ],
-            )
-        )
-    cross_text = "\n".join(
-        _read_many_texts(
-            [
-                repo / ".coordination" / "sessions" / "REMANENTIA",
-                repo / "memory" / "semantic",
-            ],
-            max_files=120,
-        )
-    )
-    if (
-        "sc-neurocore" in cross_text.lower()
-        and "scpn-quantum-control" in cross_text.lower()
-        and ("identity" in cross_text.lower() or "quantum" in cross_text.lower())
-    ):
-        facts.append(
-            CompiledFact(
-                fact_id="relationship.neurocore_quantum_control",
-                fact_type="cross_project",
-                subject="sc-neurocore and quantum-control relationship",
-                fact=(
-                    "sc-neurocore and scpn-quantum-control are connected through the "
-                    "identity, quantum, and classical control stack: neurocore provides "
-                    "the identity substrate and quantum-control handles the quantum/classical "
-                    "control layer."
-                ),
-                source="cross-project memory notes",
-                scope="cross_project",
-                priority=4.5,
-                aliases=[
-                    "what connects sc-neurocore and scpn-quantum-control",
-                    "sc-neurocore quantum-control identity quantum classical",
-                    "identity quantum classical connection",
-                ],
-            )
-        )
-    return facts
+    return [fact for fact in _seed_facts(repo) if fact.fact_type == "cross_project"]
 
 
 def _incident_facts(repo: Path) -> list[CompiledFact]:
-    facts: list[CompiledFact] = []
-    benchmark = _read_text(repo / "tests" / "benchmark_internal.py")
-    if "identity coherence R metric" in benchmark:
-        facts.append(
-            CompiledFact(
-                fact_id="incident.identity_coherence_metric_historical",
-                fact_type="debugging",
-                subject="Identity coherence R metric historical incident",
-                fact=(
-                    "The historical benchmark expectation for the identity coherence R metric "
-                    "incident records the failure wording as never called, garbage, and theatre."
-                ),
-                source=str(repo / "tests" / "benchmark_internal.py"),
-                scope="benchmark",
-                truth_mode="benchmark_expected",
-                priority=4.0,
-                aliases=[
-                    "what happened with the identity coherence R metric",
-                    "historical identity coherence R metric incident",
-                    "identity coherence R metric benchmark expected",
-                ],
-            )
-        )
-    return facts
+    return [fact for fact in _seed_facts(repo) if fact.fact_id.startswith("incident.")]
 
 
 def _module_symbol_facts(repo: Path) -> list[CompiledFact]:
@@ -653,27 +568,6 @@ def _source_derived_facts(repo: Path) -> list[CompiledFact]:
                     "what approach was chosen for memory consolidation",
                     "memory consolidation approach",
                     "heuristic cluster consolidation",
-                ],
-            )
-        )
-    relationship = _read_text(repo / "disposition" / "relationship.md")
-    if "substrate" in relationship.lower() and "mathematics" in relationship.lower():
-        facts.append(
-            CompiledFact(
-                fact_id="relationship.scpn_remanentia",
-                fact_type="cross_project",
-                subject="SCPN relationship to Remanentia",
-                fact=(
-                    "The continuity research relationship is that sc-neurocore provides the "
-                    "substrate, the SCPN framework provides the mathematics, and Remanentia "
-                    "connects that work into persistent memory binding."
-                ),
-                source=str(repo / "disposition" / "relationship.md"),
-                priority=4.0,
-                aliases=[
-                    "how does the SCPN framework relate to remanentia",
-                    "SCPN framework Remanentia relationship",
-                    "substrate mathematics binding",
                 ],
             )
         )
