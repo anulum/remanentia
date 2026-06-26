@@ -94,6 +94,7 @@ nav:
     - feed_normalization: api/feed_normalization.md
     - file_utils: api/file_utils.md
     - finding_envelope: api/finding_envelope.md
+    - recall_gate: api/recall_gate.md
     - memory_guarded: api/memory_guarded.md
     - pii_redactor: api/pii_redactor.md
     - seed_utils: api/seed_utils.md

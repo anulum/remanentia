@@ -94,6 +94,9 @@ class TestPresentUnknownAxes:
             BOUNDARY
         )
 
+    def test_non_string_axis_is_boundary(self):
+        assert present(42, "reference-validated", "admitted", "verified-at-source") == BOUNDARY
+
     def test_falsified_with_unknown_status_floors_to_boundary(self):
         # Faithful to the platform: the unknown-gating-axis check is strictly
         # first, so an unknown sibling axis floors even a falsified finding to
