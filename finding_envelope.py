@@ -37,6 +37,7 @@ if TYPE_CHECKING:  # pragma: no cover
 
 FINDING_SCHEMA = "remanentia.finding.v1"
 GRADER_NAME = "remanentia.recall_gate.present"
+TimeLike = float | int | str | datetime
 
 
 class SealDependencyError(RuntimeError):
@@ -79,12 +80,78 @@ class FindingSealPolicy:
 
 
 FindingInput = Mapping[str, Any] | SupportsAsDict
-TimeLike = float | int | str | datetime
+
+
+@dataclass(frozen=True, slots=True)
+class LineageClosureEntry:
+    """Audit record for a signed finding superseded by a newer finding.
+
+    Parameters
+    ----------
+    content_digest
+        Signed platform content digest that must no longer verify as current.
+    reason
+        Human-auditable reason the older finding was superseded.
+    superseded_at
+        Optional timestamp when the replacement became effective.
+    successor_digest
+        Optional platform content digest for the replacing finding.
+    """
+
+    content_digest: str
+    reason: str
+    superseded_at: float | None = None
+    successor_digest: str | None = None
+
+    def __post_init__(self) -> None:
+        """Normalise and validate closure metadata after dataclass creation."""
+        object.__setattr__(
+            self,
+            "content_digest",
+            _required_text(self.content_digest, "content_digest"),
+        )
+        object.__setattr__(self, "reason", _required_text(self.reason, "reason"))
+        object.__setattr__(
+            self,
+            "successor_digest",
+            _optional_text(self.successor_digest, "successor_digest"),
+        )
+
+    @classmethod
+    def from_mapping(cls, entry: Mapping[str, object]) -> "LineageClosureEntry":
+        """Build one closure entry from an external audit mapping.
+
+        Parameters
+        ----------
+        entry
+            Mapping with ``content_digest`` and ``reason`` string fields, plus
+            optional ``superseded_at`` and ``successor_digest`` metadata.
+
+        Returns
+        -------
+        LineageClosureEntry
+            Validated lineage closure entry.
+
+        Raises
+        ------
+        ValueError
+            If the entry omits required audit fields or carries an invalid
+            timestamp.
+        """
+        return cls(
+            content_digest=_required_text(entry.get("content_digest"), "content_digest"),
+            reason=_required_text(entry.get("reason"), "reason"),
+            superseded_at=_optional_time(entry.get("superseded_at"), "superseded_at"),
+            successor_digest=_optional_text(entry.get("successor_digest"), "successor_digest"),
+        )
+
+
+LineageClosureInput = LineageClosureEntry | Mapping[str, object]
 
 
 def _installed_remanentia_version() -> str:
     try:
-        return metadata.version("remanentia")
+        return str(metadata.version("remanentia"))
     except metadata.PackageNotFoundError:
         return "0.3.1"
 
@@ -153,7 +220,7 @@ def regrade_finding_unit(unit: Mapping[str, Any]) -> str:
         raise ValueError("finding unit must carry a finding mapping")
     record = dict(finding)
     record["verdict"] = str(unit.get("admission_verdict", "floor"))
-    return mode_for_record(record)
+    return str(mode_for_record(record))
 
 
 def seal_finding(
@@ -196,6 +263,27 @@ def seal_finding(
     )
 
 
+def lineage_closure_digests(entries: Iterable[LineageClosureInput]) -> frozenset[str]:
+    """Return all superseded content digests from a lineage closure.
+
+    Parameters
+    ----------
+    entries
+        Supersession entries carrying both digest and audit reason metadata.
+
+    Returns
+    -------
+    frozenset[str]
+        Content digests that must be downgraded from verified to ungraded.
+
+    Raises
+    ------
+    ValueError
+        If any closure entry is missing a digest, reason, or parseable timestamp.
+    """
+    return frozenset(_lineage_entry(entry).content_digest for entry in entries)
+
+
 def verify_finding(
     envelope: Mapping[str, Any] | None,
     rendered_grade: str | None,
@@ -203,6 +291,7 @@ def verify_finding(
     keyring: "Keyring",
     as_of: TimeLike | None = None,
     voided_digests: Iterable[str] = (),
+    supersession_closure: Iterable[LineageClosureInput] = (),
 ) -> "Verdict":
     """Verify a rendered finding grade and apply Remanentia recall gates.
 
@@ -219,6 +308,9 @@ def verify_finding(
         interval must contain it.
     voided_digests
         Content digests voided by an upstream retraction closure.
+    supersession_closure
+        Audit entries for findings superseded by newer signed content. Each
+        entry must include the superseded digest and the reason it was replaced.
 
     Returns
     -------
@@ -237,7 +329,12 @@ def verify_finding(
     unit = envelope.get("unit")
     if not isinstance(unit, Mapping):
         return cast("Verdict", verdict.FORGED)
-    if str(envelope.get("content_digest", "")) in set(voided_digests):
+    content_digest = str(envelope.get("content_digest", ""))
+    try:
+        superseded_digests = lineage_closure_digests(supersession_closure)
+    except ValueError:
+        return cast("Verdict", verdict.UNGRADED)
+    if content_digest in set(voided_digests) or content_digest in superseded_digests:
         return cast("Verdict", verdict.UNGRADED)
     if not _lifecycle_is_active(unit):
         return cast("Verdict", verdict.UNGRADED)
@@ -251,6 +348,12 @@ def _lifecycle_is_active(unit: Mapping[str, Any]) -> bool:
     if not isinstance(finding, Mapping):
         return False
     return str(finding.get("lifecycle", "")).replace("_", "-").lower() == "active"
+
+
+def _lineage_entry(entry: LineageClosureInput) -> LineageClosureEntry:
+    if isinstance(entry, LineageClosureEntry):
+        return entry
+    return LineageClosureEntry.from_mapping(entry)
 
 
 def _valid_at(unit: Mapping[str, Any], as_of: TimeLike) -> bool:
@@ -268,6 +371,29 @@ def _valid_at(unit: Mapping[str, Any], as_of: TimeLike) -> bool:
     if start is not None and instant < start:
         return False
     return not (stop is not None and instant > stop)
+
+
+def _required_text(value: object, field_name: str) -> str:
+    if isinstance(value, str):
+        text = value.strip()
+        if text:
+            return text
+    raise ValueError(f"lineage closure {field_name} must be a non-empty string")
+
+
+def _optional_text(value: object, field_name: str) -> str | None:
+    if value is None:
+        return None
+    return _required_text(value, field_name)
+
+
+def _optional_time(value: object, field_name: str) -> float | None:
+    if value is None:
+        return None
+    parsed = _coerce_time(value)
+    if parsed is None:
+        raise ValueError(f"lineage closure {field_name} must be a parseable time")
+    return parsed
 
 
 def _coerce_time(value: object) -> float | None:

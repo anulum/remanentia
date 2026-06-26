@@ -38,8 +38,10 @@ import finding_envelope as finding_envelope_module
 from finding_envelope import (
     FINDING_SCHEMA,
     FindingSealPolicy,
+    LineageClosureEntry,
     SealDependencyError,
     finding_unit,
+    lineage_closure_digests,
     regrade_finding_unit,
     seal_finding,
     verify_finding,
@@ -324,6 +326,110 @@ class TestSealAndVerify:
             )
             is Verdict.UNGRADED
         )
+
+    def test_supersession_closure_digest_is_ungraded_not_verified(self) -> None:
+        signer, keyring = _signer_and_keyring()
+        envelope = seal_finding(_finding(), signer=signer)
+
+        assert (
+            verify_finding(
+                envelope.to_dict(),
+                VALIDATED,
+                keyring=keyring,
+                as_of=15.0,
+                supersession_closure=(
+                    LineageClosureEntry(
+                        content_digest=envelope.content_digest,
+                        reason="newer source measurement superseded this finding",
+                        superseded_at=21.0,
+                        successor_digest="sha256:newer",
+                    ),
+                ),
+            )
+            is Verdict.UNGRADED
+        )
+
+    def test_unrelated_supersession_closure_keeps_verified_finding(self) -> None:
+        signer, keyring = _signer_and_keyring()
+        envelope = seal_finding(_finding(), signer=signer)
+
+        assert (
+            verify_finding(
+                envelope.to_dict(),
+                VALIDATED,
+                keyring=keyring,
+                as_of=15.0,
+                supersession_closure=(
+                    {
+                        "content_digest": "sha256:unrelated",
+                        "reason": "different finding was replaced",
+                        "superseded_at": 21.0,
+                        "successor_digest": "sha256:newer",
+                    },
+                ),
+            )
+            is Verdict.VERIFIED
+        )
+
+    def test_malformed_supersession_closure_fails_closed_to_ungraded(self) -> None:
+        signer, keyring = _signer_and_keyring()
+        envelope = seal_finding(_finding(), signer=signer)
+
+        assert (
+            verify_finding(
+                envelope.to_dict(),
+                VALIDATED,
+                keyring=keyring,
+                as_of=15.0,
+                supersession_closure=(
+                    {
+                        "content_digest": envelope.content_digest,
+                        "reason": "",
+                    },
+                ),
+            )
+            is Verdict.UNGRADED
+        )
+
+    def test_lineage_closure_requires_digest_and_reason(self) -> None:
+        assert lineage_closure_digests(
+            (
+                {
+                    "content_digest": "sha256:older",
+                    "reason": "newer source measurement superseded this finding",
+                    "superseded_at": "1970-01-01T00:00:21Z",
+                },
+            )
+        ) == frozenset({"sha256:older"})
+
+        with pytest.raises(ValueError, match="reason"):
+            lineage_closure_digests(({"content_digest": "sha256:older", "reason": ""},))
+
+        with pytest.raises(ValueError, match="content_digest"):
+            lineage_closure_digests(({"reason": "newer source measurement superseded it"},))
+
+    def test_lineage_closure_allows_missing_superseded_at_but_rejects_invalid_time(
+        self,
+    ) -> None:
+        assert lineage_closure_digests(
+            (
+                {
+                    "content_digest": "sha256:older",
+                    "reason": "newer source measurement superseded this finding",
+                },
+            )
+        ) == frozenset({"sha256:older"})
+
+        with pytest.raises(ValueError, match="superseded_at"):
+            lineage_closure_digests(
+                (
+                    {
+                        "content_digest": "sha256:older",
+                        "reason": "newer source measurement superseded this finding",
+                        "superseded_at": "not-a-time",
+                    },
+                )
+            )
 
     def test_floored_admission_verifies_as_boundary(self) -> None:
         signer, keyring = _signer_and_keyring()

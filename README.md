@@ -141,7 +141,7 @@ Knowledge store (multi-hop graph search) ...... Zettelkasten + prospective queri
 | `fact_decomposer.py` | Atomic fact decomposition with temporal validity windows |
 | `feed_ingest.py` | SYNAPSE feed.ndjson ingest for explicit findings and decisions |
 | `feed_normalization.py` | Controlled project, actor, sequence, and timestamp vocabulary for feed ingest |
-| `finding_envelope.py` | Signed finding envelopes with recomputed recall-gate grades |
+| `finding_envelope.py` | Signed finding envelopes with recall-gate, validity, void, and lineage closure checks |
 | `cli.py` | Command-line interface |
 | `api.py` | FastAPI REST server |
 | `api_server.py` | Lightweight HTTP API for cross-service integration |

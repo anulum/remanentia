@@ -8,6 +8,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 - Recall abstention calibration CLI/API with held-out coverage, accuracy, and
   calibration-error reporting from correctness-labelled recall ledger outcomes.
+- Finding envelope verification now accepts audited supersession closures and
+  downgrades superseded signed findings to ungraded after signature verification.
 - SYNAPSE feed ingest now normalises project, actor, sequence, and timestamp
   provenance before admitted findings enter memory.
 - Rust STDP/LIF acceleration (arcane_stdp) — 2–3x speedup, bit-exact with numpy
