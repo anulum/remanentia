@@ -291,6 +291,29 @@ class TestAssessNovelty:
 
         assert novelty == 2 / 3
 
+    def test_native_extension_assesses_novelty_with_known_tokens(self):
+        calls = []
+
+        def assess_novelty(query, known_tokens):
+            calls.append((query, known_tokens))
+            return 0.25
+
+        native = SimpleNamespace(assess_novelty=assess_novelty)
+
+        entities = {
+            "stdp": {"id": "stdp", "label": "Spike Timing Dependent Plasticity"},
+        }
+        with patch("memory_recall.import_module", return_value=native):
+            novelty = _assess_novelty("stdp quantum fidelity", entities)
+
+        assert novelty == 0.25
+        assert calls == [
+            (
+                "stdp quantum fidelity",
+                {"stdp", "spike", "timing", "dependent", "plasticity"},
+            ),
+        ]
+
     def test_python_fallback_empty_token_query_has_zero_novelty(self):
         with patch("memory_recall.import_module", side_effect=ImportError):
             novelty = _assess_novelty("!!!", {})
