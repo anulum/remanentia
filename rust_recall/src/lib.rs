@@ -68,7 +68,7 @@ fn assess_novelty(query: &str, known_tokens: HashSet<String>) -> f64 {
 }
 
 #[pymodule]
-fn remanentia_recall(_py: Python, m: &PyModule) -> PyResult<()> {
+fn remanentia_recall(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(tokenize_words, m)?)?;
     m.add_function(wrap_pyfunction!(tokenize_words_min, m)?)?;
     m.add_function(wrap_pyfunction!(token_overlap_score, m)?)?;

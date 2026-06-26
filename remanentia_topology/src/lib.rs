@@ -30,11 +30,7 @@ fn betti_1(num_nodes: usize, edges: &[(usize, usize)]) -> usize {
     let c = connected_components(&graph);
 
     // Betti-1 (first Betti number) = E - V + C for undirected graphs
-    if e + c >= v {
-        e + c - v
-    } else {
-        0
-    }
+    (e + c).saturating_sub(v)
 }
 
 /// Normalised persistence metric: ln(1 + B₁) / ln(1 + V).
@@ -57,7 +53,7 @@ fn calculate_persistence(num_nodes: usize, edges: Vec<(usize, usize)>) -> PyResu
 }
 
 #[pymodule]
-fn remanentia_topology(_py: Python, m: &PyModule) -> PyResult<()> {
+fn remanentia_topology(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(calculate_betti_1, m)?)?;
     m.add_function(wrap_pyfunction!(calculate_persistence, m)?)?;
     Ok(())
@@ -127,7 +123,10 @@ mod tests {
         let p_empty = persistence(1, &[]);
         let p_tree = persistence(4, &[(0, 1), (1, 2), (2, 3)]);
         let p_cycle = persistence(3, &[(0, 1), (1, 2), (2, 0)]);
-        assert!(p_cycle > p_tree, "cycle ({p_cycle}) should > tree ({p_tree})");
+        assert!(
+            p_cycle > p_tree,
+            "cycle ({p_cycle}) should > tree ({p_tree})"
+        );
         assert!(
             p_tree >= p_empty,
             "tree ({p_tree}) should >= empty ({p_empty})"
