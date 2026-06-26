@@ -76,6 +76,11 @@ class TestReleaseIntegrityWorkflow:
 
         assert checker._action_refs_are_pinned("name: release\n") is False
 
+    def test_indented_block_after_returns_empty_for_missing_key(self):
+        checker = _load_module()
+
+        assert checker._indented_block_after(["name: release"], 0, "files") == ""
+
     def test_main_returns_zero_for_current_workflow(self, capsys):
         checker = _load_module()
 

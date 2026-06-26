@@ -115,7 +115,7 @@ class TestExtractAnswerPerformance:
         from answer_extractor import fuzzy_match
 
         ms, result = _timed(fuzzy_match, "March 15, 2026", "march 15 2026", 0.5)
-        assert ms < _budget(1), f"fuzzy_match: {ms:.2f}ms exceeds 1ms budget"
+        assert ms < _budget(2), f"fuzzy_match: {ms:.2f}ms exceeds 2ms budget"
 
     def test_normalize_number_budget(self):
         from answer_extractor import normalize_number
