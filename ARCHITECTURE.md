@@ -188,7 +188,7 @@ Thread-safe with singleton index. Async consolidation on every write
 
 All compute-bound Python functions have a Rust path via PyO3/maturin.
 Every module falls back silently to Python when the crate is absent (CI).
-Crate sources live in `workspace-internal/rust_*/` (outside git repo).
+Crate sources live in the tracked Rust crate directories in this repository.
 
 Build: `VIRTUAL_ENV=.venv maturin develop --release`
 

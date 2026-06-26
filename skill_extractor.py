@@ -22,9 +22,9 @@ reusable skills. A skill is a structured pattern:
 
 Usage::
 
-    python workspace-internal/skill_extractor.py
-    python workspace-internal/skill_extractor.py --list
-    python workspace-internal/skill_extractor.py --query "CI failure"
+    python skill_extractor.py
+    python skill_extractor.py --list
+    python skill_extractor.py --query "CI failure"
 """
 
 from __future__ import annotations

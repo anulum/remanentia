@@ -39,12 +39,12 @@ Architecture::
 
 Usage — CLI::
 
-    python workspace-internal/retrieve.py "disruption prediction"
-    python workspace-internal/retrieve.py "gyrokinetic" --top 5 --content
-    python workspace-internal/retrieve.py "sawtooth NTM" --context
-    python workspace-internal/retrieve.py --summary
-    python workspace-internal/retrieve.py --rebuild
-    python workspace-internal/retrieve.py --eval   # precision benchmark
+    python retrieve.py "disruption prediction"
+    python retrieve.py "gyrokinetic" --top 5 --content
+    python retrieve.py "sawtooth NTM" --context
+    python retrieve.py --summary
+    python retrieve.py --rebuild
+    python retrieve.py --eval   # precision benchmark
 
 Usage — Python API::
 

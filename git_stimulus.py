@@ -15,13 +15,13 @@ a stimulus tagged with the repo name.
 Usage::
 
     # One-shot scan (run from monorepo root)
-    python workspace-internal/git_stimulus.py
+    python git_stimulus.py
 
     # Continuous watch (every 5 minutes)
-    python workspace-internal/git_stimulus.py --watch --interval 300
+    python git_stimulus.py --watch --interval 300
 
     # Scan specific repo only
-    python workspace-internal/git_stimulus.py --repo 03_CODE/scpn-control
+    python git_stimulus.py --repo 03_CODE/scpn-control
 """
 
 from __future__ import annotations

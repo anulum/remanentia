@@ -1,4 +1,11 @@
 repos:
+  - repo: local
+    hooks:
+      - id: public-leak-audit
+        name: public leak audit
+        entry: python tools/public_leak_audit.py
+        language: system
+        pass_filenames: false
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:

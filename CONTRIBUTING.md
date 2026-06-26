@@ -42,8 +42,8 @@ pytest tests/ --cov=. --cov-config=pyproject.toml -q
 
 ## Rust Modules
 
-13 PyO3 crates (54 functions). Sources live in `workspace-internal/rust_*/` (external)
-and `rust_recall/`, `rust_search/` (in-repo). Build with maturin:
+PyO3 acceleration crates live in the tracked Rust crate directories. Build with
+maturin:
 
 ```bash
 cd rust_recall  # or any rust_* directory

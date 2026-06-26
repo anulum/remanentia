@@ -18,14 +18,14 @@ Provides six tools:
   - remanentia_recall_correctness: Rate whether a recall was correct (gate label)
 
 Usage (stdio transport)::
-    python workspace-internal/mcp_server.py
+    python mcp_server.py
 
 Configure in .mcp.json::
     {
       "mcpServers": {
         "remanentia": {
           "command": "python",
-          "args": ["workspace-internal/mcp_server.py"]
+          "args": ["mcp_server.py"]
         }
       }
     }

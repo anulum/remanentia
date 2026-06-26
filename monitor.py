@@ -9,7 +9,7 @@
 """Arcane Sapience SNN Daemon Monitor — live dashboard.
 
 Usage::
-    python workspace-internal/monitor.py
+    python monitor.py
     # Opens http://localhost:8888 in browser
 """
 
@@ -544,8 +544,8 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .sources { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:6px; }
   .source-tag { padding:2px 8px; border-radius:3px; font-size:11px; }
   .source-tag.arcane    { background:#2a1a4a; color:#a080ff; }
-  .source-tag.codex     { background:#1a3a1a; color:#40c040; }
-  .source-tag.gemini    { background:#3a2a1a; color:#c0a040; }
+  .source-tag.worker    { background:#1a3a1a; color:#40c040; }
+  .source-tag.partner   { background:#3a2a1a; color:#c0a040; }
   .source-tag.unknown   { background:#2a2a2a; color:#808080; }
   .source-tag.dashboard { background:#1a2a3a; color:#4080c0; }
   .source-tag.git       { background:#1a2a1a; color:#60a060; }
@@ -973,7 +973,7 @@ function renderInstances(agents) {
     document.getElementById('instances').innerHTML = '<span style="color:#505070">No heartbeats detected</span>';
     return;
   }
-  const typeColors = {'snn-daemon':'#8080ff','claude':'#c080ff','codex':'#40c040','gemini':'#c0a040'};
+  const typeColors = {'snn-daemon':'#8080ff','worker':'#40c040','partner':'#c0a040'};
   document.getElementById('instances').innerHTML = agents.map(a => {
     const age = a.age_seconds;
     const ageStr = age < 60 ? age+'s ago' : age < 3600 ? Math.floor(age/60)+'m ago' : Math.floor(age/3600)+'h ago';
@@ -1675,7 +1675,7 @@ def spawn_detached():
     """Spawn monitor as a fully detached process that survives parent exit.
 
     Uses CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS | CREATE_BREAKAWAY_FROM_JOB
-    so the monitor is not a child of any Claude bash shell.
+    so the monitor is not a child of the launching shell.
     """
     import subprocess
 

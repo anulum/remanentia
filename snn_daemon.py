@@ -15,10 +15,10 @@ based on stimulus patterns derived from reasoning traces.
 Usage::
 
     # Start daemon (runs until killed)
-    python workspace-internal/snn_daemon.py
+    python snn_daemon.py
 
     # Start with custom parameters
-    python workspace-internal/snn_daemon.py --neurons 500 --interval 60
+    python snn_daemon.py --neurons 500 --interval 60
 
 The daemon:
 1. Loads or creates the identity network
@@ -439,15 +439,14 @@ def heartbeat(agent: str, project: str = "", status: str = "active", detail: str
     Usage::
 
         python -c "
-        import sys; sys.path.insert(0, 'workspace-internal')
         from snn_daemon import heartbeat
-        heartbeat('claude-session-1', project='director-ai', status='active', detail='CI audit')
+        heartbeat('memory-worker-1', project='remanentia', status='active', detail='CI audit')
         "
 
     Or write JSON directly::
 
-        echo '{"agent":"codex","project":"sc-neurocore","status":"active","detail":"lint fixes"}' \\
-          > workspace-internal/heartbeats/codex.json
+        echo '{"agent":"memory-worker","project":"remanentia","status":"active","detail":"lint fixes"}' \\
+          > heartbeats/memory-worker.json
     """
     import os
 
@@ -479,12 +478,12 @@ def drop_stimulus(text: str, source: str = "unknown"):
 
         python -c "
         from snn_daemon import drop_stimulus
-        drop_stimulus('Fixed ruff 0.11.2→0.15.6 in scpn-control, 47 lint violations resolved', source='codex')
+        drop_stimulus('Fixed lint violations in remanentia', source='memory-worker')
         "
 
     Or write JSON directly::
 
-        echo '{"text":"...", "source":"gemini", "project":"sc-neurocore"}' > workspace-internal/snn_stimuli/gemini_1710700000.json
+        echo '{"text":"...", "source":"memory-worker", "project":"remanentia"}' > snn_stimuli/memory-worker_1710700000.json
     """
     STIMULUS_DIR.mkdir(parents=True, exist_ok=True)
     ts = int(time.time())

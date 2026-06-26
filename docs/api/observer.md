@@ -121,8 +121,12 @@ enables live search over newly added content without a full rebuild.
 |--------|------|---------|
 | traces | `reasoning_traces/` | Raw session decisions and findings |
 | semantic | `memory/semantic/` | Consolidated semantic memories |
-| sessions | Optional local session directory | Session state files |
-| handovers | Optional local handover directory | Handover documents |
+| sessions | `.coordination/sessions/remanentia/` by default | Session state files |
+| handovers | `.coordination/handovers/remanentia/` by default | Handover documents |
+
+Set `REMANENTIA_COORDINATION_ROOT` when production coordination logs live
+outside the repository checkout. The observer appends `sessions/remanentia/`
+and `handovers/remanentia/` below that root.
 
 Custom directories can be passed to `observe_once()` and `heartbeat()`:
 

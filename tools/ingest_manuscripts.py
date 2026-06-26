@@ -6,7 +6,7 @@
 # Contact: www.anulum.li | protoscience@anulum.li
 # Remanentia — manuscript corpus normaliser
 
-"""Normalise project-workspace manuscripts into Remanentia memory chunks."""
+"""Normalise manuscript corpora into Remanentia memory chunks."""
 
 from __future__ import annotations
 
@@ -24,12 +24,10 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Iterable
 
-from defusedxml import ElementTree
+from defusedxml import ElementTree  # type: ignore[import-untyped]
 
 BASE = Path(__file__).resolve().parents[1]
-CODE_ROOT = BASE.parent
-project-workspace_ROOT = CODE_ROOT.parent
-DEFAULT_ROOT = project-workspace_ROOT / "01_MANUSCRIPTS"
+DEFAULT_ROOT = Path(os.environ.get("REMANENTIA_MANUSCRIPTS_ROOT", BASE / "manuscripts"))
 DEFAULT_OUTPUT = BASE / "memory" / "manuscripts"
 
 TEXT_EXTENSIONS = {

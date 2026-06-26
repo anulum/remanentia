@@ -17,7 +17,7 @@ resume across hub restarts), runs each finding through the admission gate, and
 writes the admitted ones to a sink. Structurally invalid findings (a missing
 validity window, an invariant breach) are gated out and logged, never indexed.
 
-The core (:func:`ingest_findings`) is deliberately free of any SYNAPSE or project-workspace
+The core (:func:`ingest_findings`) is deliberately free of any message-bus or workspace
 coupling: the event store, the finding parser, the admission gate, and the sink
 are all injected, so it is unit-testable with fakes and extractable as the
 read-side core of a standalone fleet-memory package. Only :func:`ingest_from_hub`
@@ -278,7 +278,7 @@ def ingest_from_hub(
 
 
 def default_findings_dir(base: str | Path | None = None) -> Path:
-    """Where Remanentia keeps ingested findings (env-pointed, project-workspace default)."""
+    """Where Remanentia keeps ingested findings."""
     if base is None:
         base = os.environ.get("REMANENTIA_BASE")
     root = Path(base) if base is not None else Path(__file__).resolve().parent

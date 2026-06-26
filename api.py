@@ -9,7 +9,6 @@
 """FastAPI server for Remanentia memory system.
 
 Usage::
-    cd workspace-internal
     uvicorn api:app --port 8001
     # or
     python api.py

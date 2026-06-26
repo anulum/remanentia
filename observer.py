@@ -24,21 +24,22 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 from importlib import import_module
 from pathlib import Path
 from typing import Any, cast
 
 BASE = Path(__file__).parent
-project-workspace_ROOT = BASE.parent
+COORDINATION_ROOT = Path(os.environ.get("REMANENTIA_COORDINATION_ROOT", BASE / ".coordination"))
 STATE_PATH = BASE / "memory" / "observer_state.json"
 _LOGGER = logging.getLogger(__name__)
 
 WATCHED_DIRS = {
     "traces": BASE / "reasoning_traces",
     "semantic": BASE / "memory" / "semantic",
-    "sessions": project-workspace_ROOT / ".coordination" / "sessions" / "arcane-sapience",
-    "handovers": project-workspace_ROOT / ".coordination" / "handovers" / "arcane-sapience",
+    "sessions": COORDINATION_ROOT / "sessions" / "remanentia",
+    "handovers": COORDINATION_ROOT / "handovers" / "remanentia",
 }
 
 # Paragraph must contain one of these to become a knowledge note
@@ -80,7 +81,7 @@ _SIGNAL_WORDS = {
 class ObserverState:
     """Track which files have been processed and their last modification time."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.processed: dict[str, float] = {}  # path → mtime
 
     def is_new_or_changed(self, path: Path) -> bool:
@@ -93,13 +94,13 @@ class ObserverState:
             return True
         return False
 
-    def mark_processed(self, path: Path):
+    def mark_processed(self, path: Path) -> None:
         try:
             self.processed[str(path)] = path.stat().st_mtime
         except OSError:  # pragma: no cover
             pass
 
-    def save(self, path: Path | None = None):
+    def save(self, path: Path | None = None) -> None:
         path = path or STATE_PATH
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(self.processed, indent=2), encoding="utf-8")
@@ -109,9 +110,12 @@ class ObserverState:
         if not path.exists():
             return False
         try:
-            self.processed = json.loads(path.read_text(encoding="utf-8"))
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(loaded, dict):
+                return False
+            self.processed = {str(key): float(value) for key, value in loaded.items()}
             return True
-        except (json.JSONDecodeError, OSError):  # pragma: no cover
+        except (TypeError, ValueError, json.JSONDecodeError, OSError):  # pragma: no cover
             return False
 
 
@@ -131,7 +135,7 @@ def _split_into_paragraphs(text: str) -> list[str]:
     return paragraphs
 
 
-def extract_notes_from_file(path: Path) -> list[dict]:
+def extract_notes_from_file(path: Path) -> list[dict[str, str]]:
     """Extract knowledge note candidates from a file.
 
     Returns list of dicts with 'content' and 'source' keys.
@@ -145,13 +149,16 @@ def extract_notes_from_file(path: Path) -> list[dict]:
         return []
 
     paragraphs = _split_into_paragraphs(text)
-    notes = []
+    notes: list[dict[str, str]] = []
     for para in paragraphs:
         notes.append({"content": para, "source": path.name})
     return notes
 
 
-def observe_once(state: ObserverState, watched_dirs: dict[str, Path] | None = None) -> dict:
+def observe_once(
+    state: ObserverState,
+    watched_dirs: dict[str, Path] | None = None,
+) -> dict[str, Any]:
     """Scan all watched directories, create notes for new/changed files.
 
     Returns stats: files_scanned, files_new, notes_created.
@@ -214,13 +221,16 @@ def observe_once(state: ObserverState, watched_dirs: dict[str, Path] | None = No
     }
 
 
-def heartbeat(state: ObserverState, watched_dirs: dict[str, Path] | None = None) -> dict:
+def heartbeat(
+    state: ObserverState,
+    watched_dirs: dict[str, Path] | None = None,
+) -> dict[str, Any]:
     """Run one heartbeat cycle: observe + consolidate + age + capacity check.
 
     This is the autonomous maintenance tick inspired by OpenClaw's Heartbeat.
     Returns combined stats from all sub-operations.
     """
-    result: dict = {"observe": {}, "consolidate": {}, "aging": {}, "capacity": {}}
+    result: dict[str, Any] = {"observe": {}, "consolidate": {}, "aging": {}, "capacity": {}}
 
     # 1. Observe filesystem changes
     result["observe"] = observe_once(state, watched_dirs)
@@ -269,7 +279,7 @@ def heartbeat(state: ObserverState, watched_dirs: dict[str, Path] | None = None)
 
 def observe_loop(
     interval: int = 30, watched_dirs: dict[str, Path] | None = None
-):  # pragma: no cover
+) -> None:  # pragma: no cover
     """Poll watched directories forever, creating notes on changes."""
     state = ObserverState()
     state.load()

@@ -13,6 +13,9 @@ the operator's way to prove we actually did that**.
 - [ ] README test badge / count matches `pytest --collect-only -q`.
 - [ ] `docs/benchmarks/*` reflect the committed result files, not a
       superseded number.
+- [ ] `python tools/public_leak_audit.py` passes. This scans tracked public
+      text surfaces for private workspace paths, private workspace labels, and
+      agent-identity labels before packaging or publication.
 - [ ] ADR log updated if this release makes an architectural change.
 - [ ] `git status` clean; no untracked source files committed.
 

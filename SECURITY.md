@@ -52,6 +52,10 @@ The following are out of scope:
   path
 - Memory-store writes use atomic `os.replace` and advisory `flock` so
   concurrent writers cannot tear files or lose updates
+- Public-release leak audit (`python tools/public_leak_audit.py`) scans
+  tracked public text files for private workspace paths, private workspace
+  labels, and agent-identity labels; it is wired into pre-commit and the
+  release checklist.
 
 ## Verifying a Released Artefact
 
@@ -81,3 +85,6 @@ Maintainers can run `python tools/check_release_integrity.py` before tagging
 to verify that the tracked release workflow still builds the SBOM, signs and
 locally verifies release artefacts, emits SLSA provenance, and uploads the
 `.sigstore` bundles advertised above.
+
+Maintainers must also run `python tools/public_leak_audit.py` before tagging.
+The audit must report zero findings before publishing a release candidate.

@@ -19,7 +19,7 @@
 Called automatically by an MCP client's SessionStart hook, or
 manually with ``<agent_id> <project> <status> [note]``::
 
-    python workspace-internal/heartbeat_register.py arcane-sapience scpn-control active "physics deepening"
+    python heartbeat_register.py memory-worker remanentia active "index refresh"
 """
 
 from __future__ import annotations
