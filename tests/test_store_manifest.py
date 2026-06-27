@@ -36,6 +36,7 @@ def test_manifest_records_selected_store_paths_and_artifacts(tmp_path: Path) -> 
     _touch(store / "memory" / "semantic" / "findings" / "f.md", text="fff", mtime=200.0)
     _touch(store / "memory" / "graph" / "entities.jsonl", text="{}\n", mtime=300.0)
     (store / "memory" / "graph" / "not-an-artifact.json").mkdir(parents=True)
+    _touch(store / "snn_state" / "memory_index.json.gz", text="idx", mtime=350.0)
     _touch(store / "snn_state" / "vector_index" / "index.npz", text="vec", mtime=400.0)
     _touch(store / "snn_state" / "index_freshness.json", text='{"stale": true}', mtime=500.0)
 
@@ -51,6 +52,7 @@ def test_manifest_records_selected_store_paths_and_artifacts(tmp_path: Path) -> 
     assert artifacts["stimuli"]["bytes"] == 2
     assert artifacts["semantic"]["count"] == 1
     assert artifacts["graph"]["count"] == 1
+    assert artifacts["memory_index"]["count"] == 1
     assert artifacts["vector_index"]["count"] == 1
     assert data["freshness_report_present"] is True
 

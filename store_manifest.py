@@ -71,6 +71,8 @@ class StoreSelectionManifest:
             "traces_dir": str(self.paths.traces_dir),
             "state_dir": str(self.paths.state_dir),
             "vector_index_dir": str(self.paths.vector_index_dir),
+            "memory_index": str(self.paths.memory_index),
+            "memory_sources_config": str(self.paths.memory_sources_config),
             "freshness_report": str(self.paths.freshness_report),
             "freshness_report_present": self.paths.freshness_report.is_file(),
             "checked_at_unix": self.checked_at_unix,
@@ -116,6 +118,7 @@ def build_store_manifest(
         "semantic": _artifact_reading(paths.semantic_dir, ("**/*.md",)),
         "findings": _artifact_reading(paths.findings_dir, ("*.md",)),
         "digests": _artifact_reading(paths.digests_dir, ("*.md",)),
+        "memory_index": _artifact_reading(paths.state_dir, ("memory_index.json.gz",)),
         "graph": _artifact_reading(paths.graph_dir, ("*.json", "*.jsonl")),
         "vector_index": _artifact_reading(paths.vector_index_dir, ("*.npz", "*.sqlite")),
     }
@@ -139,7 +142,9 @@ def write_store_manifest(
     out = default_manifest_path(manifest) if path is None else Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(out.suffix + ".tmp")
-    tmp.write_text(json.dumps(manifest.as_dict(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp.write_text(
+        json.dumps(manifest.as_dict(), indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     tmp.replace(out)
     return out
 
@@ -155,8 +160,7 @@ def render_store_manifest(manifest: StoreSelectionManifest) -> str:
     for name, reading in manifest.artifacts.items():
         newest = "none" if reading.newest is None else f"{reading.newest:.0f}"
         lines.append(
-            f"  {name:<12} {reading.count:>5} file(s), "
-            f"{reading.bytes:>8} bytes, newest={newest}"
+            f"  {name:<12} {reading.count:>5} file(s), {reading.bytes:>8} bytes, newest={newest}"
         )
     return "\n".join(lines)
 

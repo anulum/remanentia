@@ -126,6 +126,7 @@ Knowledge store (multi-hop graph search) ...... Zettelkasten + prospective queri
 | `memory_sources.py` | Neutral default source roots plus JSON/env source configuration |
 | `store_paths.py` | Canonical memory-store paths shared by ingest and freshness monitoring |
 | `store_manifest.py` | Store-selection manifest for reconsolidation and freshness operations |
+| `store_sources.py` | Selected-store MemoryIndex source config for backfill indexing |
 | `memory_recall.py` | Deep recall: retrieval + graph + temporal context |
 | `recall_calibration.py` | Recall abstention calibration from correctness-labelled ledger outcomes |
 | `compiled_memory.py` | Typed fact-card compiler for durable seed and operational facts |
@@ -171,6 +172,7 @@ pip install -e ".[dev]"     # test dependencies
 remanentia-feed-ingest  # consume explicit Finding:/Decision: rows from ~/synapse/feed.ndjson
 remanentia-recall-calibration --json  # report calibrated recall abstention evidence
 remanentia-store-manifest --write --json  # record the selected memory-store manifest
+remanentia-store-sources --write --json   # write MemoryIndex sources for that store
 python tools/install_user_services.py --base /path/to/store --stimuli-dir /path/to/snn_stimuli
 ```
 
@@ -342,6 +344,7 @@ remanentia consolidate                       # consolidate new traces
 remanentia consolidate --force               # reconsolidate all
 remanentia status                            # system stats for REMANENTIA_BASE
 remanentia store-manifest --write --json     # record selected store paths/counts
+remanentia store-sources --write --json      # write selected MemoryIndex source config
 remanentia graph --top 15                    # entity relationships
 remanentia entities                          # list all entities
 remanentia init                              # create directory structure

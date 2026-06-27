@@ -269,6 +269,23 @@ def cmd_store_manifest(args: argparse.Namespace) -> None:
         print(render_store_manifest(manifest))
 
 
+def cmd_store_sources(args: argparse.Namespace) -> None:
+    """Show or persist the selected-store MemoryIndex source config."""
+    from store_sources import (
+        build_store_source_config,
+        render_store_source_config,
+        write_store_source_config,
+    )
+
+    config = build_store_source_config(base=args.base, stimuli_dir=args.stimuli_dir)
+    if args.write:
+        write_store_source_config(base=args.base, stimuli_dir=args.stimuli_dir, output=args.output)
+    if args.json:
+        print(json.dumps(config, indent=2, sort_keys=True))
+    else:
+        print(render_store_source_config(config))
+
+
 def cmd_graph(args: argparse.Namespace) -> None:
     """Show top entity relationships."""
     relations_path = GRAPH_DIR / "relations.jsonl"
@@ -543,6 +560,18 @@ def main() -> None:
     p_store.add_argument("--output", default=None, help="Manifest output path when writing")
     p_store.add_argument("--json", action="store_true", help="Print JSON instead of text")
 
+    # store sources
+    p_sources = sub.add_parser("store-sources", help="Show selected MemoryIndex sources")
+    p_sources.add_argument("--base", default=None, help="Override REMANENTIA_BASE for this run")
+    p_sources.add_argument(
+        "--stimuli-dir",
+        default=None,
+        help="Override REMANENTIA_STIMULI_DIR for this run",
+    )
+    p_sources.add_argument("--write", action="store_true", help="Write the source config JSON")
+    p_sources.add_argument("--output", default=None, help="Source config output path")
+    p_sources.add_argument("--json", action="store_true", help="Print JSON instead of text")
+
     # graph
     p_graph = sub.add_parser("graph", help="Show entity relationships")
     p_graph.add_argument("--top", type=int, default=15, help="Number of relationships")
@@ -608,6 +637,7 @@ def main() -> None:
         "consolidate": cmd_consolidate,
         "status": cmd_status,
         "store-manifest": cmd_store_manifest,
+        "store-sources": cmd_store_sources,
         "graph": cmd_graph,
         "entities": cmd_entities,
         "daemon": cmd_daemon,

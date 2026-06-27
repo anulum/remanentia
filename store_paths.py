@@ -67,6 +67,10 @@ class StorePaths:
         Consolidated digest root.
     vector_index_dir
         Retriever vector-index artifact root.
+    memory_index
+        BM25 MemoryIndex metadata cache used by the primary retrieval path.
+    memory_sources_config
+        JSON source config that points MemoryIndex at the selected store.
     graph_dir
         Entity/relation graph artifact root.
     traces_dir
@@ -89,6 +93,8 @@ class StorePaths:
     findings_dir: Path
     digests_dir: Path
     vector_index_dir: Path
+    memory_index: Path
+    memory_sources_config: Path
     graph_dir: Path
     traces_dir: Path
     state_dir: Path
@@ -103,6 +109,7 @@ class StorePaths:
             StageRoot("stimuli", self.stimuli_dir, ("*.json",)),
             StageRoot("findings", self.semantic_dir, ("**/*.md",)),
             StageRoot("digests", self.digests_dir, ("*.md",)),
+            StageRoot("memory-index", self.state_dir, ("memory_index.json.gz",)),
             StageRoot("vector-index", self.vector_index_dir, ("*.npz", "*.sqlite")),
         )
 
@@ -150,6 +157,8 @@ def resolve_store_paths(
         findings_dir=semantic_dir / "findings",
         digests_dir=root / "memory" / "digests",
         vector_index_dir=root / "snn_state" / "vector_index",
+        memory_index=root / "snn_state" / "memory_index.json.gz",
+        memory_sources_config=root / "snn_state" / "memory_sources.json",
         graph_dir=root / "memory" / "graph",
         traces_dir=root / "reasoning_traces",
         state_dir=root / "snn_state",

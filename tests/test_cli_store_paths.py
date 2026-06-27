@@ -51,7 +51,7 @@ def test_status_uses_remanentia_base_for_store_counts_and_freshness(
     monkeypatch.setattr(cli, "STATE_DIR", stale_constants / "snn_state")
     monkeypatch.setattr(cli, "GRAPH_DIR", stale_constants / "memory" / "graph")
     monkeypatch.setattr("http.client.HTTPConnection", _raise_dashboard_down)
-    monkeypatch.setattr(cli, "_runtime_attr", lambda *_args: (lambda: {}))
+    monkeypatch.setattr(cli, "_runtime_attr", lambda *_args: lambda: {})
 
     cmd_status(argparse.Namespace())
 
@@ -80,7 +80,7 @@ def test_status_uses_patched_base_when_no_operator_base_is_selected(
     monkeypatch.setattr(cli, "STATE_DIR", base / "snn_state")
     monkeypatch.setattr(cli, "GRAPH_DIR", base / "memory" / "graph")
     monkeypatch.setattr("http.client.HTTPConnection", _raise_dashboard_down)
-    monkeypatch.setattr(cli, "_runtime_attr", lambda *_args: (lambda: {}))
+    monkeypatch.setattr(cli, "_runtime_attr", lambda *_args: lambda: {})
 
     cmd_status(argparse.Namespace())
 
@@ -135,3 +135,52 @@ def test_store_manifest_command_prints_text(
     cli.main()
 
     assert f"Selected store: {tmp_path}" in capsys.readouterr().out
+
+
+def test_store_sources_command_writes_selected_memory_index_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The top-level CLI exposes selected MemoryIndex source configuration."""
+    output = tmp_path / "sources.json"
+    firehose = tmp_path / "firehose"
+    monkeypatch.delenv("REMANENTIA_BASE", raising=False)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "remanentia",
+            "store-sources",
+            "--base",
+            str(tmp_path),
+            "--stimuli-dir",
+            str(firehose),
+            "--write",
+            "--output",
+            str(output),
+            "--json",
+        ],
+    )
+
+    cli.main()
+
+    printed = json.loads(capsys.readouterr().out)
+    written = json.loads(output.read_text(encoding="utf-8"))
+    assert printed == written
+    assert printed["sources"]["arcane_stimuli"]["path"] == str(firehose)
+
+
+def test_store_sources_command_prints_text(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The top-level CLI has a human-readable source config view."""
+    monkeypatch.setenv("REMANENTIA_BASE", str(tmp_path))
+    monkeypatch.setattr("sys.argv", ["remanentia", "store-sources"])
+
+    cli.main()
+
+    out = capsys.readouterr().out
+    assert "MemoryIndex selected sources:" in out
+    assert "arcane_stimuli" in out

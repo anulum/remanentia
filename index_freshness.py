@@ -235,7 +235,10 @@ def default_stages(base: str | Path | None = None) -> list[StageFreshness]:
     ordered chain is stimuli → findings → digests → vector-index.
     """
     paths = resolve_store_paths(base=base)
-    return [probe_stage(stage.name, stage.root, stage.patterns) for stage in paths.freshness_stage_roots()]
+    return [
+        probe_stage(stage.name, stage.root, stage.patterns)
+        for stage in paths.freshness_stage_roots()
+    ]
 
 
 def assess_default(

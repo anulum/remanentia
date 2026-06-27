@@ -6,6 +6,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- `store_sources.py`, `remanentia-store-sources`, and
+  `remanentia store-sources` write the selected-store `MemoryIndex` source
+  config used to index traces, semantic memory, compiled facts, and the
+  external stimulus firehose during MS.0 backfill refreshes.
 - `store_manifest.py`, `remanentia-store-manifest`, and
   `remanentia store-manifest` record the selected memory-store paths and current
   artifact counts before backlog reconsolidation mutates corpus state.

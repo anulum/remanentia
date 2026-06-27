@@ -41,6 +41,8 @@ def test_resolver_uses_explicit_base_and_default_corpus_layout(tmp_path: Path) -
     assert paths.findings_dir == tmp_path / "memory" / "semantic" / "findings"
     assert paths.digests_dir == tmp_path / "memory" / "digests"
     assert paths.vector_index_dir == tmp_path / "snn_state" / "vector_index"
+    assert paths.memory_index == tmp_path / "snn_state" / "memory_index.json.gz"
+    assert paths.memory_sources_config == tmp_path / "snn_state" / "memory_sources.json"
     assert paths.finding_cursor == tmp_path / "memory" / "semantic" / DEFAULT_FINDING_CURSOR_NAME
     assert paths.feed_cursor == tmp_path / "memory" / "semantic" / DEFAULT_FEED_CURSOR_NAME
 
@@ -89,5 +91,6 @@ def test_freshness_stage_roots_are_ordered_source_to_sink(tmp_path: Path) -> Non
         StageRoot("stimuli", tmp_path / "snn_stimuli", ("*.json",)),
         StageRoot("findings", tmp_path / "memory" / "semantic", ("**/*.md",)),
         StageRoot("digests", tmp_path / "memory" / "digests", ("*.md",)),
+        StageRoot("memory-index", tmp_path / "snn_state", ("memory_index.json.gz",)),
         StageRoot("vector-index", tmp_path / "snn_state" / "vector_index", ("*.npz", "*.sqlite")),
     )
