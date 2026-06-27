@@ -35,6 +35,25 @@ remanentia serve --require-auth --token-file /run/secrets/remanentia_api_token
 `--require-auth` refuses to start unless a token exists in either the environment
 or the configured token file.
 
+## OpenAPI Export
+
+Generate the published REST API schema with:
+
+```bash
+remanentia openapi --output docs/openapi/remanentia_openapi.json
+```
+
+The exporter builds from the live FastAPI app and then annotates each operation
+with the same bearer-auth policy enforced by runtime middleware:
+
+- `GET /health` is public.
+- `POST /vector/search/public` is public.
+- All other operations require the `BearerAuth` HTTP bearer scheme when
+  `REMANENTIA_API_TOKEN` is configured.
+
+The committed schema is deterministic JSON for client generation, contract
+reviews, and release audits.
+
 ## Request Limits
 
 The FastAPI surface applies the shared `api_security` request gates before

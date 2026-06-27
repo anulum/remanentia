@@ -19,6 +19,7 @@ Usage::
     remanentia daemon start
     remanentia daemon stop
     remanentia daemon status
+    remanentia openapi --output docs/openapi/remanentia_openapi.json
     remanentia serve --host 127.0.0.1 --port 8001 --require-auth
 """
 
@@ -284,6 +285,15 @@ def cmd_store_sources(args: argparse.Namespace) -> None:
         print(json.dumps(config, indent=2, sort_keys=True))
     else:
         print(render_store_source_config(config))
+
+
+def cmd_openapi(args: argparse.Namespace) -> None:
+    """Export the REST API OpenAPI schema."""
+    from openapi_export import write_openapi_schema
+
+    output = Path(str(args.output))
+    write_openapi_schema(output)
+    print(f"Wrote OpenAPI schema: {output}")
 
 
 def cmd_graph(args: argparse.Namespace) -> None:
@@ -594,6 +604,15 @@ def main() -> None:
     p_sources.add_argument("--output", default=None, help="Source config output path")
     p_sources.add_argument("--json", action="store_true", help="Print JSON instead of text")
 
+    # openapi
+    p_openapi = sub.add_parser("openapi", help="Export the FastAPI OpenAPI schema")
+    p_openapi.add_argument(
+        "--output",
+        type=Path,
+        default=Path("docs/openapi/remanentia_openapi.json"),
+        help="Destination JSON path",
+    )
+
     # graph
     p_graph = sub.add_parser("graph", help="Show entity relationships")
     p_graph.add_argument("--top", type=int, default=15, help="Number of relationships")
@@ -670,6 +689,7 @@ def main() -> None:
         "status": cmd_status,
         "store-manifest": cmd_store_manifest,
         "store-sources": cmd_store_sources,
+        "openapi": cmd_openapi,
         "graph": cmd_graph,
         "entities": cmd_entities,
         "daemon": cmd_daemon,

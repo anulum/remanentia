@@ -6,6 +6,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Deterministic REST OpenAPI schema export via `remanentia openapi`, including
+  runtime-aligned bearer-auth annotations and a committed schema artifact for
+  client generation and release audits.
 - Benchmark evidence reports via `remanentia-benchmark-report`, with
   LongMemEval judge prompt hashes, token accounting, and latency metadata on
   newly judged result rows.

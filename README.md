@@ -403,6 +403,13 @@ printf '%s\n' '<replace-with-a-random-token>' > secrets/remanentia_api_token
 docker compose up --build
 ```
 
+OpenAPI schema export:
+
+```bash
+remanentia openapi --output docs/openapi/remanentia_openapi.json
+```
+
+```bash
 curl -X POST http://localhost:8001/recall \
   -H "Content-Type: application/json" \
   -d '{"query": "STDP learning", "top_k": 3}'

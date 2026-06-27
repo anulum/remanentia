@@ -46,4 +46,13 @@ Starts the FastAPI REST server. Use `--require-auth` in deployments that must
 refuse open private endpoints, and use `--token-file` to load
 `REMANENTIA_API_TOKEN` before `api:app` imports.
 
+### openapi
+
+```bash
+remanentia openapi [--output PATH]
+```
+
+Writes the deterministic FastAPI OpenAPI schema, including bearer-auth
+annotations for private endpoints.
+
 ::: cli.main
