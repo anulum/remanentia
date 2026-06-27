@@ -42,6 +42,7 @@ SPDX-License-Identifier = "AGPL-3.0-or-later"
 # only our hypotheses and judge labels, not the source oracles).
 [[annotations]]
 path = [
+  "data/compiled_seed_facts.jsonl",
   "data/longmemeval_hypotheses*.jsonl",
   "benchmarks/*.jsonl",
   "paper/locomo_results.json",
