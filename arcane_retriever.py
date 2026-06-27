@@ -492,7 +492,7 @@ class ArcaneRetriever:
         h_ctx = build_hierarchical_context(
             facts, reference_date=self._reference_date, session_dates=self.session_dates
         )
-        return h_ctx.to_prompt_string()
+        return str(h_ctx.to_prompt_string())
 
 
 def _sort_results_chronologically(results: list[FusedResult]) -> list[FusedResult]:

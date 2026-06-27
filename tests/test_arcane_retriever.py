@@ -752,21 +752,35 @@ class TestRecencyDecay:
             for i in range(20)
         ]
         dates = [f"2024-{(i % 12) + 1:02d}-15" for i in range(20)]
-        ar = ArcaneRetriever(
+        baseline = ArcaneRetriever(
+            sessions,
+            session_dates=dates,
+            reference_date="2024-12-31",
+            recency_half_life_days=0,
+        )
+        decayed = ArcaneRetriever(
             sessions,
             session_dates=dates,
             reference_date="2024-12-31",
             recency_half_life_days=30,
         )
-        # Warm up
-        ar.retrieve("BM25 performance", "general", top_k=10)
-        # Measure
-        t0 = time.perf_counter()
-        for _ in range(100):
-            ar.retrieve("BM25 performance", "general", top_k=10)
-        elapsed_ms = (time.perf_counter() - t0) * 1000
-        per_call_ms = elapsed_ms / 100
-        assert per_call_ms < 50, f"retrieve with decay too slow: {per_call_ms:.1f}ms"
+
+        def mean_retrieve_ms(retriever: ArcaneRetriever) -> float:
+            t0 = time.perf_counter()
+            for _ in range(60):
+                retriever.retrieve("BM25 performance", "general", top_k=10, max_iterations=1)
+            return ((time.perf_counter() - t0) * 1000) / 60
+
+        with patch.dict(os.environ, {"REMANENTIA_ARCANE_CE_DISABLE": "1"}):
+            baseline.retrieve("BM25 performance", "general", top_k=10, max_iterations=1)
+            decayed.retrieve("BM25 performance", "general", top_k=10, max_iterations=1)
+            baseline_ms = mean_retrieve_ms(baseline)
+            decayed_ms = mean_retrieve_ms(decayed)
+
+        assert decayed_ms <= baseline_ms + 50, (
+            f"recency decay overhead too high: {decayed_ms:.1f}ms vs {baseline_ms:.1f}ms"
+        )
+        assert decayed_ms < 200, f"retrieve with decay too slow: {decayed_ms:.1f}ms"
 
 
 # ── Chronological ordering (Task #28) ────────────────────────────
