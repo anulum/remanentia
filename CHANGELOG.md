@@ -36,6 +36,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `REMANENTIA_ARCANE_CE_DISABLE=1` for latency-sensitive live/MCP use.
 
 ### Changed
+- `remanentia status` and `remanentia init` now use the same canonical
+  `store_paths.py` resolver as ingest and freshness monitoring, so
+  `REMANENTIA_BASE` selects one operator-visible store instead of leaving CLI
+  status on import-time repository paths.
 - `memory_index.py` no longer hardcodes deployment-specific source roots; it
   consumes the resolved `memory_sources.SourceConfig` while preserving the
   existing `SOURCES` / `SOURCE_EXTENSIONS` compatibility globals for tests and

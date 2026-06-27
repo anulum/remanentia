@@ -67,10 +67,20 @@ class StorePaths:
         Consolidated digest root.
     vector_index_dir
         Retriever vector-index artifact root.
+    graph_dir
+        Entity/relation graph artifact root.
+    traces_dir
+        Episodic reasoning-trace root.
+    state_dir
+        Runtime state root used by workers and watchdog reports.
+    consolidation_dir
+        Consolidation bookkeeping root.
     finding_cursor
         Hub-event cursor file.
     feed_cursor
         Feed-line cursor file.
+    freshness_report
+        JSON report written by the index-freshness watchdog.
     """
 
     base: Path
@@ -79,8 +89,13 @@ class StorePaths:
     findings_dir: Path
     digests_dir: Path
     vector_index_dir: Path
+    graph_dir: Path
+    traces_dir: Path
+    state_dir: Path
+    consolidation_dir: Path
     finding_cursor: Path
     feed_cursor: Path
+    freshness_report: Path
 
     def freshness_stage_roots(self) -> tuple[StageRoot, ...]:
         """Return the canonical source-to-sink freshness-monitor chain."""
@@ -135,8 +150,13 @@ def resolve_store_paths(
         findings_dir=semantic_dir / "findings",
         digests_dir=root / "memory" / "digests",
         vector_index_dir=root / "snn_state" / "vector_index",
+        graph_dir=root / "memory" / "graph",
+        traces_dir=root / "reasoning_traces",
+        state_dir=root / "snn_state",
+        consolidation_dir=root / "consolidation",
         finding_cursor=semantic_dir / DEFAULT_FINDING_CURSOR_NAME,
         feed_cursor=semantic_dir / DEFAULT_FEED_CURSOR_NAME,
+        freshness_report=root / "snn_state" / "index_freshness.json",
     )
 
 

@@ -32,15 +32,19 @@ import signal
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from importlib import import_module
 from pathlib import Path
 from typing import Any
+
+from store_paths import StorePaths, resolve_store_paths
 
 BASE = Path(__file__).parent
 STATE_DIR = BASE / "snn_state"
 GRAPH_DIR = BASE / "memory" / "graph"
 _HOSTED_BACKEND = "".join(("anth", "ropic"))
 VECTOR_WORKER_SERVICE = "remanentia-vector-worker.service"
+Command = Callable[[argparse.Namespace], None]
 
 
 def _runtime_attr(module_name: str, attr_name: str) -> Any:
@@ -48,7 +52,7 @@ def _runtime_attr(module_name: str, attr_name: str) -> Any:
     return getattr(import_module(module_name), attr_name)
 
 
-def _ensure_utf8():  # pragma: no cover
+def _ensure_utf8() -> None:  # pragma: no cover
     if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
@@ -62,7 +66,14 @@ def _setup_llm_backend(name: str = "auto") -> None:
     set_llm_backend(resolve_backend(backend_name))
 
 
-def cmd_recall(args):
+def _cli_store_paths() -> StorePaths:
+    """Resolve the store paths visible to operator-facing CLI commands."""
+    if os.environ.get("REMANENTIA_BASE") or os.environ.get("REMANENTIA_STIMULI_DIR"):
+        return resolve_store_paths()
+    return resolve_store_paths(base=BASE)
+
+
+def cmd_recall(args: argparse.Namespace) -> None:
     """Deep memory recall."""
     # Use filtered search if filters are specified
     has_filters = (
@@ -120,7 +131,7 @@ def cmd_recall(args):
         )
 
 
-def cmd_consolidate(args):
+def cmd_consolidate(args: argparse.Namespace) -> None:
     """Run memory consolidation."""
     consolidate = _runtime_attr("consolidation_engine", "consolidate")
 
@@ -132,10 +143,12 @@ def cmd_consolidate(args):
     print(json.dumps(result, indent=2))
 
 
-def cmd_status(args):
+def cmd_status(args: argparse.Namespace) -> None:
     """Show system status."""
+    paths = _cli_store_paths()
+
     # Vector worker — the maintained background path.
-    worker = _read_vector_worker_state()
+    worker = _read_vector_worker_state(paths.state_dir)
     if worker["state"] == "alive":
         print("Vector worker: ALIVE")
         print(f"  Cycle: {worker.get('cycle', '?')}")
@@ -147,7 +160,7 @@ def cmd_status(args):
         print(f"Vector worker: {str(worker['state']).upper()}")
 
     # Index freshness — the watchdog that catches a silently stalled index.
-    freshness = _read_freshness_report()
+    freshness = _read_freshness_report(paths.state_dir)
     if freshness["state"] == "missing":
         print("Index freshness: NO CHECK YET")
     elif freshness["state"] == "unreadable":
@@ -160,7 +173,7 @@ def cmd_status(args):
         print(f"  Checked: {freshness['checked_age']}")
 
     # Daemon
-    state_path = STATE_DIR / "current_state.json"
+    state_path = paths.state_dir / "current_state.json"
     if state_path.exists():
         s = json.loads(state_path.read_text(encoding="utf-8"))
         age = time.time() - s.get("timestamp", 0)
@@ -197,13 +210,13 @@ def cmd_status(args):
         print("Dashboard: DOWN")
 
     # Memory stats
-    traces_dir = BASE / "reasoning_traces"
-    semantic_dir = BASE / "memory" / "semantic"
+    traces_dir = paths.traces_dir
+    semantic_dir = paths.semantic_dir
     n_traces = len(list(traces_dir.glob("*.md"))) if traces_dir.exists() else 0
     n_semantic = len(list(semantic_dir.rglob("*.md"))) if semantic_dir.exists() else 0
 
-    entities_path = GRAPH_DIR / "entities.jsonl"
-    relations_path = GRAPH_DIR / "relations.jsonl"
+    entities_path = paths.graph_dir / "entities.jsonl"
+    relations_path = paths.graph_dir / "relations.jsonl"
     n_entities = 0
     n_relations = 0
     if entities_path.exists():
@@ -237,13 +250,13 @@ def cmd_status(args):
 
     # Disk usage
     total = 0
-    for d in [STATE_DIR, traces_dir, semantic_dir, GRAPH_DIR]:
+    for d in [paths.state_dir, traces_dir, semantic_dir, paths.graph_dir]:
         if d.exists():
             total += sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
     print(f"  Disk: {total / 1024 / 1024:.1f} MB")
 
 
-def cmd_graph(args):
+def cmd_graph(args: argparse.Namespace) -> None:
     """Show top entity relationships."""
     relations_path = GRAPH_DIR / "relations.jsonl"
     if not relations_path.exists():
@@ -259,7 +272,7 @@ def cmd_graph(args):
         )
 
 
-def cmd_entities(args):
+def cmd_entities(args: argparse.Namespace) -> None:
     """List all known entities."""
     entities_path = GRAPH_DIR / "entities.jsonl"
     if not entities_path.exists():
@@ -272,21 +285,22 @@ def cmd_entities(args):
         print(f"  {e['id']:30s}  type={e.get('type', '?'):10s}  traces={e.get('trace_count', 0)}")
 
 
-def cmd_init(args):
+def cmd_init(args: argparse.Namespace) -> None:
     """Create memory directory structure."""
+    paths = _cli_store_paths()
     dirs = [
-        BASE / "reasoning_traces",
-        BASE / "memory" / "semantic",
-        BASE / "memory" / "graph",
-        BASE / "consolidation",
-        BASE / "snn_state",
+        paths.traces_dir,
+        paths.semantic_dir,
+        paths.graph_dir,
+        paths.consolidation_dir,
+        paths.state_dir,
     ]
     created = 0
     for d in dirs:
         if not d.exists():
             d.mkdir(parents=True)
             created += 1
-            print(f"  Created {d.relative_to(BASE)}")
+            print(f"  Created {d.relative_to(paths.base)}")
     if created == 0:
         print("All directories already exist.")
     else:
@@ -294,7 +308,7 @@ def cmd_init(args):
         print("Add reasoning traces to reasoning_traces/ then run: remanentia consolidate")
 
 
-def cmd_daemon(args):
+def cmd_daemon(args: argparse.Namespace) -> None:
     """Background worker management."""
     if args.action == "start":
         if _systemd_user_unit_available(VECTOR_WORKER_SERVICE):
@@ -325,8 +339,9 @@ def cmd_daemon(args):
         cmd_status(args)
 
 
-def _read_vector_worker_state() -> dict[str, object]:
-    heartbeat = STATE_DIR / "vector_refresh_worker.json"
+def _read_vector_worker_state(state_dir: Path | None = None) -> dict[str, object]:
+    root = STATE_DIR if state_dir is None else state_dir
+    heartbeat = root / "vector_refresh_worker.json"
     if not heartbeat.exists():
         return {"state": "missing"}
     try:
@@ -345,14 +360,15 @@ def _read_vector_worker_state() -> dict[str, object]:
     }
 
 
-def _read_freshness_report() -> dict[str, object]:
+def _read_freshness_report(state_dir: Path | None = None) -> dict[str, object]:
     """Read the index-freshness watchdog's last verdict for the status view.
 
     The daily watchdog writes ``snn_state/index_freshness.json``; surfacing it
     here is the whole point of the watchdog — a stalled index was invisible for
     eight weeks because no status line ever reported the drift.
     """
-    report = STATE_DIR / "index_freshness.json"
+    root = STATE_DIR if state_dir is None else state_dir
+    report = root / "index_freshness.json"
     if not report.exists():
         return {"state": "missing"}
     try:
@@ -390,7 +406,7 @@ def _systemd_user_unit_available(unit: str) -> bool:
     return completed.returncode == 0
 
 
-def cmd_observe(args):  # pragma: no cover
+def cmd_observe(args: argparse.Namespace) -> None:  # pragma: no cover
     """Watch filesystem for changes, auto-create knowledge notes."""
     ObserverState = _runtime_attr("observer", "ObserverState")
     observe_once = _runtime_attr("observer", "observe_once")
@@ -406,7 +422,7 @@ def cmd_observe(args):  # pragma: no cover
         observe_loop(interval=args.interval)
 
 
-def cmd_reflect(args):  # pragma: no cover
+def cmd_reflect(args: argparse.Namespace) -> None:  # pragma: no cover
     """Run deep consolidation via reflector."""
     reflect_once = _runtime_attr("reflector", "reflect_once")
 
@@ -421,28 +437,28 @@ def cmd_reflect(args):  # pragma: no cover
         print(json.dumps(result, indent=2))
 
 
-def cmd_setup_llm(args):  # pragma: no cover
+def cmd_setup_llm(args: argparse.Namespace) -> None:  # pragma: no cover
     """Detect hardware and configure local LLM."""
     _setup = _runtime_attr("llm_setup", "cmd_setup_llm")
 
     _setup(args)
 
 
-def cmd_serve(args):  # pragma: no cover
+def cmd_serve(args: argparse.Namespace) -> None:  # pragma: no cover
     """Start the FastAPI REST server."""
     import uvicorn
 
     uvicorn.run("api:app", host=args.host, port=args.port)
 
 
-def cmd_serve_llm(args):  # pragma: no cover
+def cmd_serve_llm(args: argparse.Namespace) -> None:  # pragma: no cover
     """Start local LLM server."""
     _serve = _runtime_attr("llm_setup", "cmd_serve_llm")
 
     _serve(args)
 
 
-def cmd_notes(args):  # pragma: no cover
+def cmd_notes(args: argparse.Namespace) -> None:  # pragma: no cover
     """Show knowledge notes."""
     KnowledgeStore = _runtime_attr("knowledge_store", "KnowledgeStore")
 
@@ -469,7 +485,7 @@ def cmd_notes(args):  # pragma: no cover
         print()
 
 
-def main():
+def main() -> None:
     _ensure_utf8()
     parser = argparse.ArgumentParser(
         prog="remanentia",
@@ -561,7 +577,7 @@ def main():
         parser.print_help()
         return
 
-    cmd_map = {
+    cmd_map: dict[str, Command] = {
         "recall": cmd_recall,
         "search": cmd_recall,
         "consolidate": cmd_consolidate,
@@ -577,7 +593,8 @@ def main():
         "serve": cmd_serve,
         "serve-llm": cmd_serve_llm,
     }
-    cmd_map[args.command](args)
+    command = str(args.command)
+    cmd_map[command](args)
 
 
 if __name__ == "__main__":

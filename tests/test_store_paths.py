@@ -23,6 +23,7 @@ from store_paths import (
     DEFAULT_FEED_CURSOR_NAME,
     DEFAULT_FINDING_CURSOR_NAME,
     StageRoot,
+    default_base,
     default_feed_cursor,
     default_finding_cursor,
     default_findings_dir,
@@ -42,6 +43,13 @@ def test_resolver_uses_explicit_base_and_default_corpus_layout(tmp_path: Path) -
     assert paths.vector_index_dir == tmp_path / "snn_state" / "vector_index"
     assert paths.finding_cursor == tmp_path / "memory" / "semantic" / DEFAULT_FINDING_CURSOR_NAME
     assert paths.feed_cursor == tmp_path / "memory" / "semantic" / DEFAULT_FEED_CURSOR_NAME
+
+
+def test_default_base_falls_back_to_module_directory(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A fresh checkout has a repository-local store without env configuration."""
+    monkeypatch.delenv("REMANENTIA_BASE", raising=False)
+
+    assert default_base() == Path(__file__).resolve().parents[1]
 
 
 def test_resolver_accepts_external_stimuli_firehose(tmp_path: Path) -> None:

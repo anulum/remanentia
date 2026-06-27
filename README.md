@@ -319,7 +319,11 @@ Tools:
 - `remanentia_status` — system status
 - `remanentia_graph` — entity relationship query
 
-Set `REMANENTIA_BASE` env var to point to a custom memory directory.
+Set `REMANENTIA_BASE` to point ingest, freshness checks, `remanentia init`, and
+`remanentia status` at a custom memory store. `remanentia init` creates that
+store layout, while `remanentia status` reads its traces, semantic memory, graph
+files, state files, and freshness report from the same resolved root. Set
+`REMANENTIA_STIMULI_DIR` when the stimuli firehose lives outside that store.
 
 ## CLI
 
@@ -329,7 +333,7 @@ remanentia recall "query" --format context   # LLM-injectable context
 remanentia recall "query" --format json      # machine-readable
 remanentia consolidate                       # consolidate new traces
 remanentia consolidate --force               # reconsolidate all
-remanentia status                            # system stats
+remanentia status                            # system stats for REMANENTIA_BASE
 remanentia graph --top 15                    # entity relationships
 remanentia entities                          # list all entities
 remanentia init                              # create directory structure
