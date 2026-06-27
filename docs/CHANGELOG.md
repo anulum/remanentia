@@ -45,6 +45,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - README badges, header image, branding footer
 
 ### Fixed
+- `answer_normalizer.py` now has complete audited helper docstrings and its
+  dedicated normalisation tests are strict-mypy clean at 100% focused coverage,
+  with Rust-extension wiring and fallback behavior verified.
 - `api_security.py` now uses explicit typed path inputs and complete helper
   docstrings, with its dedicated security primitive tests strict-mypy clean at
   100% focused coverage.

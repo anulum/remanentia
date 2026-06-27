@@ -9,6 +9,8 @@
 from __future__ import annotations
 
 import builtins
+from contextlib import AbstractContextManager
+from types import ModuleType
 from unittest.mock import patch
 
 from answer_normalizer import (
@@ -19,160 +21,166 @@ from answer_normalizer import (
 )
 
 
-def _without_native_normalizer():
+def _without_native_normalizer() -> AbstractContextManager[object]:
     original_import = builtins.__import__
 
-    def import_without_native(name, *args, **kwargs):
+    def import_without_native(
+        name: str,
+        globals_: dict[str, object] | None = None,
+        locals_: dict[str, object] | None = None,
+        fromlist: tuple[str, ...] = (),
+        level: int = 0,
+    ) -> ModuleType:
         if name == "remanentia_answer_normalizer":
             raise ImportError(name)
-        return original_import(name, *args, **kwargs)
+        return original_import(name, globals_, locals_, fromlist, level)
 
     return patch("builtins.__import__", side_effect=import_without_native)
 
 
 class TestNormalizeAnswer:
-    def test_likely_yes(self):
+    def test_likely_yes(self) -> None:
         assert normalize_answer("Likely yes, because she enjoys reading") == "likely yes"
 
-    def test_likely_no(self):
+    def test_likely_no(self) -> None:
         assert (
             normalize_answer("Likely no; though she likes reading, she wants to be a counselor")
             == "likely no"
         )
 
-    def test_yes_since(self):
+    def test_yes_since(self) -> None:
         assert normalize_answer("Yes, since she collects classic children's books") == "yes"
 
-    def test_no_because(self):
+    def test_no_because(self) -> None:
         assert normalize_answer("No, because she never mentioned it") == "no"
 
-    def test_plain_yes(self):
+    def test_plain_yes(self) -> None:
         assert normalize_answer("Yes") == "yes"
 
-    def test_plain_no(self):
+    def test_plain_no(self) -> None:
         assert normalize_answer("No") == "no"
 
-    def test_probably_yes(self):
+    def test_probably_yes(self) -> None:
         assert normalize_answer("Probably yes, given her interests") == "probably yes"
 
-    def test_strip_whitespace(self):
+    def test_strip_whitespace(self) -> None:
         assert normalize_answer("  Running, pottery  ") == "running, pottery"
 
-    def test_empty(self):
+    def test_empty(self) -> None:
         assert normalize_answer("") == ""
 
-    def test_hedging_prefix(self):
+    def test_hedging_prefix(self) -> None:
         assert normalize_answer("I think yes") == "yes"
         assert normalize_answer("I believe no, because reasons") == "no"
 
-    def test_non_yesno_explanation_strip(self):
+    def test_non_yesno_explanation_strip(self) -> None:
         assert normalize_answer("Swimming, because it's relaxing") == "swimming"
 
-    def test_trailing_period(self):
+    def test_trailing_period(self) -> None:
         assert normalize_answer("Liberal.") == "liberal"
 
-    def test_simple_answer(self):
+    def test_simple_answer(self) -> None:
         assert normalize_answer("Liberal") == "liberal"
 
-    def test_multi_word(self):
+    def test_multi_word(self) -> None:
         assert normalize_answer("a stained glass window") == "a stained glass window"
 
-    def test_unlikely(self):
+    def test_unlikely(self) -> None:
         assert normalize_answer("Unlikely, since she prefers art") == "unlikely"
 
 
 class TestExtractAnswerItems:
-    def test_comma_list(self):
+    def test_comma_list(self) -> None:
         items = extract_answer_items("pottery, camping, painting, swimming")
         assert items == {"pottery", "camping", "painting", "swimming"}
 
-    def test_and_separator(self):
+    def test_and_separator(self) -> None:
         items = extract_answer_items("running and pottery")
         assert items == {"running", "pottery"}
 
-    def test_comma_and_mixed(self):
+    def test_comma_and_mixed(self) -> None:
         items = extract_answer_items("running, swimming, and painting")
         assert items == {"running", "swimming", "painting"}
 
-    def test_single_item(self):
+    def test_single_item(self) -> None:
         items = extract_answer_items("pottery")
         assert items == {"pottery"}
 
-    def test_empty(self):
+    def test_empty(self) -> None:
         assert extract_answer_items("") == set()
 
 
 class TestAnswersMatch:
-    def test_exact(self):
+    def test_exact(self) -> None:
         assert answers_match("Yes", "Yes")
 
-    def test_yes_polarity(self):
+    def test_yes_polarity(self) -> None:
         assert answers_match("Likely yes, because she loves books", "Yes")
 
-    def test_yes_polarity_both_variants(self):
+    def test_yes_polarity_both_variants(self) -> None:
         assert answers_match("probably yes", "most likely yes")
 
-    def test_no_polarity(self):
+    def test_no_polarity(self) -> None:
         assert answers_match("No", "Likely no")
 
-    def test_polarity_mismatch(self):
+    def test_polarity_mismatch(self) -> None:
         assert not answers_match("Yes", "No")
         assert not answers_match("Likely yes", "Likely no")
 
-    def test_containment(self):
+    def test_containment(self) -> None:
         assert answers_match("Sweden", "She moved from Sweden")
 
-    def test_list_overlap(self):
+    def test_list_overlap(self) -> None:
         assert answers_match("pottery, running", "pottery, camping, painting, swimming")
 
-    def test_list_no_overlap(self):
+    def test_list_no_overlap(self) -> None:
         assert not answers_match("coding, gaming", "pottery, camping, painting, swimming")
 
-    def test_normalized_containment(self):
+    def test_normalized_containment(self) -> None:
         assert answers_match("Liberal", "liberal")
 
-    def test_completely_different(self):
+    def test_completely_different(self) -> None:
         assert not answers_match("completely unrelated answer", "The actual answer")
 
-    def test_empty_predicted(self):
+    def test_empty_predicted(self) -> None:
         assert not answers_match("", "Yes")
 
-    def test_empty_ground_truth(self):
+    def test_empty_ground_truth(self) -> None:
         assert not answers_match("Yes", "")
 
-    def test_yes_with_explanation_matches_yes(self):
+    def test_yes_with_explanation_matches_yes(self) -> None:
         assert answers_match(
             "Yes, since she collects classic children's books",
             "Yes, since she collects classic children's books",
         )
 
-    def test_likely_no_matches_likely_no(self):
+    def test_likely_no_matches_likely_no(self) -> None:
         assert answers_match("Likely no, because she never said so", "Likely no")
 
 
 class TestSemanticSimilarity:
-    def test_similar_texts(self):
+    def test_similar_texts(self) -> None:
         sim = semantic_similarity("I enjoy painting and pottery", "I like art and ceramics")
         assert sim > 0.3  # should be somewhat similar
 
-    def test_dissimilar_texts(self):
+    def test_dissimilar_texts(self) -> None:
         sim = semantic_similarity("quantum computing algorithms", "chocolate cake recipe")
         assert sim < 0.3
 
-    def test_identical(self):
+    def test_identical(self) -> None:
         sim = semantic_similarity("hello world", "hello world")
         assert sim > 0.95
 
-    def test_range(self):
+    def test_range(self) -> None:
         sim = semantic_similarity("some text", "other text")
         assert -1.0 <= sim <= 1.0
 
-    def test_empty_strings(self):
+    def test_empty_strings(self) -> None:
         sim = semantic_similarity("", "hello")
         # Should not crash — returns some value
         assert isinstance(sim, float)
 
-    def test_lexical_fallback(self):
+    def test_lexical_fallback(self) -> None:
         """When embed model is unavailable, falls back to lexical similarity."""
         from answer_normalizer import _lexical_similarity
 
@@ -182,7 +190,7 @@ class TestSemanticSimilarity:
         sim_empty = _lexical_similarity("", "hello")
         assert sim_empty == 0.0
 
-    def test_semantic_similarity_no_model(self):
+    def test_semantic_similarity_no_model(self) -> None:
         """semantic_similarity falls back to lexical when model is None."""
         import answer_normalizer
 
@@ -199,20 +207,20 @@ class TestSemanticSimilarity:
 class TestRustWiring:
     """Verify Rust normaliser is wired in and produces correct results."""
 
-    def test_normalize_works_regardless_of_backend(self):
+    def test_normalize_works_regardless_of_backend(self) -> None:
         """normalize_answer must work whether Rust is installed or not."""
         assert normalize_answer("Likely yes, because reading") == "likely yes"
         assert normalize_answer("No, since never") == "no"
         assert normalize_answer("  pottery  ") == "pottery"
 
-    def test_answers_match_through_pipeline(self):
+    def test_answers_match_through_pipeline(self) -> None:
         """Full pipeline: normalize → polarity check → list overlap."""
         assert answers_match("Yes, I think so", "Yes") is True
         assert answers_match("No way", "Likely no") is True
         assert answers_match("pottery, hiking", "pottery, camping, hiking, reading") is True
         assert answers_match("completely wrong", "totally different") is False
 
-    def test_extract_items_preserves_semantics(self):
+    def test_extract_items_preserves_semantics(self) -> None:
         items = extract_answer_items("hiking, pottery and swimming")
         assert "hiking" in items
         assert "pottery" in items
@@ -223,19 +231,19 @@ class TestRustWiring:
 
 
 class TestNormalizerEdgeCases:
-    def test_empty_string(self):
+    def test_empty_string(self) -> None:
         assert normalize_answer("") == ""
 
-    def test_whitespace_only(self):
+    def test_whitespace_only(self) -> None:
         assert normalize_answer("   ") == ""
 
-    def test_very_long_input(self):
+    def test_very_long_input(self) -> None:
         result = normalize_answer("yes " * 1000 + ", because reasons")
         assert "yes" in result
 
 
 class TestPythonFallbackNormalizer:
-    def test_normalize_answer_without_native_extension(self):
+    def test_normalize_answer_without_native_extension(self) -> None:
         with _without_native_normalizer():
             assert normalize_answer("Likely yes, because she reads") == "likely yes"
             assert (
@@ -245,7 +253,7 @@ class TestPythonFallbackNormalizer:
             assert normalize_answer("Liberal.") == "liberal"
             assert normalize_answer("   ") == ""
 
-    def test_extract_items_without_native_extension(self):
+    def test_extract_items_without_native_extension(self) -> None:
         with _without_native_normalizer():
             assert extract_answer_items("running, swimming, and painting") == {
                 "running",
@@ -253,7 +261,7 @@ class TestPythonFallbackNormalizer:
                 "painting",
             }
 
-    def test_answers_match_without_native_extension(self):
+    def test_answers_match_without_native_extension(self) -> None:
         with _without_native_normalizer():
             assert answers_match("", "Yes") is False
             assert answers_match("Yes", "Yes") is True
@@ -263,7 +271,7 @@ class TestPythonFallbackNormalizer:
             assert answers_match("pottery, running", "pottery, camping, painting") is True
             assert answers_match("coding, gaming", "pottery, camping") is False
 
-    def test_normalize_roundtrip(self):
+    def test_normalize_roundtrip(self) -> None:
         """Normalising twice produces same result (idempotent)."""
         texts = ["Likely yes, because reading", "No way", "pottery, hiking"]
         for t in texts:
@@ -271,7 +279,7 @@ class TestPythonFallbackNormalizer:
             r2 = normalize_answer(r1)
             assert r1 == r2
 
-    def test_answers_match_error_inputs(self):
+    def test_answers_match_error_inputs(self) -> None:
         assert answers_match("", "yes") is False
         assert answers_match("yes", "") is False
         assert answers_match("", "") is False

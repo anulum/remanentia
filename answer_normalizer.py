@@ -183,6 +183,8 @@ _embed_model: _EmbeddingModel | Literal[False] | None = None
 
 
 def _get_embed_model() -> _EmbeddingModel | None:
+    """Load and cache the optional local sentence-transformer embedding model."""
+
     global _embed_model
     if _embed_model is None:
         try:
@@ -220,6 +222,8 @@ def _get_embed_model() -> _EmbeddingModel | None:
 
 
 def _lexical_similarity(text_a: str, text_b: str) -> float:
+    """Return normalized SequenceMatcher similarity for two answer strings."""
+
     a_norm = normalize_answer(text_a)
     b_norm = normalize_answer(text_b)
     if not a_norm or not b_norm:
