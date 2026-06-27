@@ -6,6 +6,11 @@ repos:
         entry: python tools/public_leak_audit.py
         language: system
         pass_filenames: false
+      - id: api-docs-wiring
+        name: api docs wiring
+        entry: python tools/check_api_docs_wiring.py
+        language: system
+        pass_filenames: false
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:

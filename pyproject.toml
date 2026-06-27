@@ -86,12 +86,14 @@ Author = "https://www.anulum.li"
 
 [tool.setuptools]
 py-modules = [
+    "active_retrieval",
     "memory_index",
     "memory_sources",
     "store_paths",
     "store_manifest",
     "store_sources",
     "openapi_export",
+    "aggregate_precompute",
     "benchmark_evidence",
     "benchmark_manifest",
     "benchmark_report",
@@ -112,6 +114,7 @@ py-modules = [
     "index_freshness",
     "compiled_memory",
     "benchmark_suites",
+    "memory_guarded",
     "memory_recall",
     "consolidation_engine",
     "entity_extractor",
@@ -133,6 +136,8 @@ py-modules = [
     "fact_validity_model",
     "llm_backend",
     "llm_setup",
+    "seed_utils",
+    "skill_extractor",
     "vector_index",
     "vector_pipeline",
     "context_builder",

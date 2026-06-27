@@ -70,12 +70,17 @@ nav:
     - store_paths: api/store_paths.md
     - store_manifest: api/store_manifest.md
     - store_sources: api/store_sources.md
+    - index_freshness: api/index_freshness.md
     - claim_axes: api/claim_axes.md
     - claim_schema: api/claim_schema.md
     - memory_recall: api/memory_recall.md
+    - recall_ledger: api/recall_ledger.md
+    - recall_outcome_tracker: api/recall_outcome_tracker.md
     - recall_calibration: api/recall_calibration.md
+    - bus_recall: api/bus_recall.md
     - retrieved_context: api/retrieved_context.md
     - full_s_diagnostics: api/full_s_diagnostics.md
+    - benchmark_suites: api/benchmark_suites.md
     - benchmark_evidence: api/benchmark_evidence.md
     - benchmark_manifest: api/benchmark_manifest.md
     - benchmark_report: api/benchmark_report.md
@@ -99,6 +104,10 @@ nav:
     - openapi_export: api/openapi_export.md
     - api_server: api/api_server.md
     - api_security: api/api_security.md
+    - llm_backend: api/llm_backend.md
+    - llm_setup: api/llm_setup.md
+    - context_builder: api/context_builder.md
+    - signal_detector: api/signal_detector.md
     - skill_extractor: api/skill_extractor.md
     - active_retrieval: api/active_retrieval.md
     - aggregate_precompute: api/aggregate_precompute.md

@@ -37,6 +37,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   category, no LLM calls).
 
 ### Fixed
+- API reference wiring now has a local gate that checks packaged Python
+  modules, `docs/api` pages, and MkDocs navigation stay in parity.
 - Knowledge-store note and trigger IDs now use SHA-256 digest prefixes, and
   optional embedding, GLiNER, and recall-bus shutdown failure paths log
   recoverable exceptions instead of silently swallowing them.
