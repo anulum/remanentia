@@ -25,6 +25,16 @@ The intentionally public endpoints are:
 Unset tokens keep local development open, but the server emits the
 standard `api_security` warning so operators can see that auth is disabled.
 
+For fail-closed production startup, use:
+
+```bash
+remanentia serve --require-auth --token-file /run/secrets/remanentia_api_token
+```
+
+`--token-file` loads `REMANENTIA_API_TOKEN` before `uvicorn` imports `api:app`.
+`--require-auth` refuses to start unless a token exists in either the environment
+or the configured token file.
+
 ## Request Limits
 
 The FastAPI surface applies the shared `api_security` request gates before

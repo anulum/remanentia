@@ -71,7 +71,14 @@ Parameters: `entity` (filter by entity name, optional), `top` (max relations to 
 
 ```bash
 pip install -e ".[api]"
-python api.py  # starts on http://localhost:8001
+remanentia serve --host 127.0.0.1 --port 8001
+```
+
+Set `REMANENTIA_API_TOKEN` for private endpoints. Production launchers can fail
+closed and load the token from a local secret file:
+
+```bash
+remanentia serve --require-auth --token-file /run/secrets/remanentia_api_token
 ```
 
 ### Endpoints
@@ -150,6 +157,10 @@ ks.save()
 | `REMANENTIA_BASE` | Script directory | Base path for all data |
 | `REMANENTIA_USE_RUST_BM25` | `0` | Force Rust BM25 (`1` to enable) |
 | `REMANENTIA_LLM_ANSWERS` | unset | Enable LLM answer synthesis |
+| `REMANENTIA_API_TOKEN` | unset | Bearer token required by private REST endpoints when configured |
+| `REMANENTIA_API_BODY_LIMIT_BYTES` | `1048576` | Maximum declared REST request body size |
+| `REMANENTIA_API_RATE_PER_MINUTE` | `60` | Sustained REST API requests per minute per client |
+| `REMANENTIA_API_RATE_BURST` | `10` | REST API request burst before throttling |
 | `REMANENTIA_MCP_RATE_LIMIT` | enabled | Set to `off`, `0`, `false`, or `no` to disable MCP tool-call throttling |
 | `REMANENTIA_MCP_RATE` | `600.0` | Sustained MCP `tools/call` requests per minute |
 | `REMANENTIA_MCP_BURST` | `120` | MCP `tools/call` burst size before throttling |

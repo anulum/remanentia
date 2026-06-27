@@ -34,7 +34,7 @@ The primary target: temporal-reasoning accuracy from 45.9% toward 70%+.
 - [ ] PyPI publish (v0.4.0 or v0.5.0 — first release with committed benchmark results)
 - [ ] Cloud-hosted demo at remanentia.com/demo
 - [ ] Docker deployment with health checks
-- [ ] REST API authentication
+- [x] REST API authentication
 - [x] Rate limiting on MCP server
 
 ## v1.0.0 — General Availability

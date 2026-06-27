@@ -19,7 +19,7 @@ Usage::
     remanentia daemon start
     remanentia daemon stop
     remanentia daemon status
-    remanentia serve --host 127.0.0.1 --port 8001
+    remanentia serve --host 127.0.0.1 --port 8001 --require-auth
 """
 
 from __future__ import annotations
@@ -478,7 +478,29 @@ def cmd_serve(args: argparse.Namespace) -> None:  # pragma: no cover
     """Start the FastAPI REST server."""
     import uvicorn
 
+    _configure_api_auth(args)
     uvicorn.run("api:app", host=args.host, port=args.port)
+
+
+def _configure_api_auth(args: argparse.Namespace) -> None:
+    """Apply REST API authentication CLI options before FastAPI imports."""
+    token_file = getattr(args, "token_file", None)
+    if token_file:
+        token = _read_api_token_file(Path(str(token_file)))
+        os.environ["REMANENTIA_API_TOKEN"] = token
+
+    if bool(getattr(args, "require_auth", False)) and not os.environ.get("REMANENTIA_API_TOKEN"):
+        raise SystemExit(
+            "--require-auth needs REMANENTIA_API_TOKEN or remanentia serve --token-file PATH"
+        )
+
+
+def _read_api_token_file(path: Path) -> str:
+    """Read a bearer token file without logging or echoing the token value."""
+    token = path.read_text(encoding="utf-8").strip()
+    if not token:
+        raise SystemExit(f"API token file is empty: {path}")
+    return token
 
 
 def cmd_serve_llm(args: argparse.Namespace) -> None:  # pragma: no cover
@@ -616,6 +638,16 @@ def main() -> None:
     p_serve = sub.add_parser("serve", help="Start the FastAPI REST server")
     p_serve.add_argument("--host", default="127.0.0.1", help="Bind host")
     p_serve.add_argument("--port", type=int, default=8001, help="Bind port")
+    p_serve.add_argument(
+        "--token-file",
+        default=None,
+        help="Read REMANENTIA_API_TOKEN from this local file before starting",
+    )
+    p_serve.add_argument(
+        "--require-auth",
+        action="store_true",
+        help="Refuse to start unless REMANENTIA_API_TOKEN or --token-file is configured",
+    )
 
     # serve-llm
     p_serve_llm = sub.add_parser("serve-llm", help="Start local LLM server")
