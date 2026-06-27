@@ -76,6 +76,7 @@ nav:
     - retrieved_context: api/retrieved_context.md
     - full_s_diagnostics: api/full_s_diagnostics.md
     - benchmark_evidence: api/benchmark_evidence.md
+    - benchmark_manifest: api/benchmark_manifest.md
     - benchmark_report: api/benchmark_report.md
     - efficiency_frontier: api/efficiency_frontier.md
     - compiled_memory: api/compiled_memory.md

@@ -84,6 +84,13 @@ remanentia-benchmark-report paper/locomo_results.json \
   --benchmark locomo \
   --output benchmarks/locomo_snapshot_report.json
 
+# Reproducibility manifest for committed reports and derived artefacts
+remanentia-benchmark-manifest \
+  --report benchmarks/longmemeval_oracle_snapshot_report.json \
+  --report benchmarks/locomo_snapshot_report.json \
+  --artifact benchmarks/efficiency_frontier_report.json \
+  --output benchmarks/reproducibility_manifest.json
+
 # Efficiency-frontier report from committed benchmark evidence
 remanentia-efficiency-frontier \
   --report benchmarks/longmemeval_oracle_snapshot_report.json \

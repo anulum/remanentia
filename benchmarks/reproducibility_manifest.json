@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-06-27T14:00:41+02:00",
+  "git": {
+    "head": "6aced0d81fda94ae38c2622591b73e5feeb0f310"
+  },
+  "environment": {
+    "python_version": "3.12.3",
+    "platform": "Linux-6.17.0-35-generic-x86_64-with-glibc2.39"
+  },
+  "commands": [
+    "remanentia-benchmark-report data/longmemeval_hypotheses.results.jsonl --benchmark longmemeval --output benchmarks/longmemeval_oracle_snapshot_report.json",
+    "remanentia-benchmark-report paper/locomo_results.json --benchmark locomo --output benchmarks/locomo_snapshot_report.json",
+    "remanentia-efficiency-frontier --report benchmarks/longmemeval_oracle_snapshot_report.json --report benchmarks/locomo_snapshot_report.json --baseline benchmarks/efficiency_baselines.json --output benchmarks/efficiency_frontier_report.json"
+  ],
+  "reports": [
+    {
+      "benchmark": "longmemeval",
+      "file": {
+        "path": "benchmarks/longmemeval_oracle_snapshot_report.json",
+        "exists": true,
+        "bytes": 1150,
+        "sha256": "93c13ddcd4b96effa8f21eb39f47985a690e12759b547eef1be115ac698495a8"
+      },
+      "source_artifact": {
+        "path": "data/longmemeval_hypotheses.results.jsonl",
+        "exists": true,
+        "bytes": 141293,
+        "sha256": "5803369dcf3a3c23ae96ba12638e592a4b9c2f80deace4153be0abde3c8018b1"
+      },
+      "source_format": "jsonl",
+      "n_records": 500,
+      "score": {
+        "correct": 361,
+        "total": 500,
+        "accuracy": 72.2
+      },
+      "runtime": {
+        "latency_ms": {
+          "mean": null,
+          "p50": null,
+          "p95": null
+        }
+      },
+      "tokens": {
+        "judge_prompt_estimate": 0,
+        "judge_completion": 0
+      },
+      "judge": {
+        "models": [],
+        "prompt_sha256": []
+      }
+    },
+    {
+      "benchmark": "locomo",
+      "file": {
+        "path": "benchmarks/locomo_snapshot_report.json",
+        "exists": true,
+        "bytes": 1057,
+        "sha256": "6f973f32652255cb024a2045e9ec42e08b3ce72c33d4168f205b5e6ad18430d2"
+      },
+      "source_artifact": {
+        "path": "paper/locomo_results.json",
+        "exists": true,
+        "bytes": 688,
+        "sha256": "2dcc10c2ed6ac3063d2a752b4bec2c6c82bef636c386ad3154ea03bd136ab93a"
+      },
+      "source_format": "json",
+      "n_records": 1986,
+      "score": {
+        "correct": 1651,
+        "total": 1986,
+        "accuracy": 83.1
+      },
+      "runtime": {
+        "elapsed_s": 927.3,
+        "mean_per_record_ms": 466.918
+      },
+      "tokens": {
+        "judge_prompt_estimate": 0,
+        "judge_completion": 0
+      },
+      "judge": {
+        "models": [],
+        "prompt_sha256": []
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "benchmarks/efficiency_frontier_report.json",
+      "exists": true,
+      "bytes": 1834,
+      "sha256": "f86591f3b566d59f8db300e2617a251384eea033099467063a1d2b0ed623a4e6"
+    }
+  ]
+}

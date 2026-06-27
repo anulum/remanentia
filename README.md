@@ -249,6 +249,20 @@ New `--evaluate` rows include judge prompt hashes, prompt-token estimates, exact
 when returned by the provider, and judge-call latency. Older committed rows still produce
 score reports, with unavailable runtime/token fields left empty.
 
+Generate the reproducibility manifest for committed benchmark artefacts:
+
+```bash
+remanentia-benchmark-manifest \
+  --report benchmarks/longmemeval_oracle_snapshot_report.json \
+  --report benchmarks/locomo_snapshot_report.json \
+  --artifact benchmarks/efficiency_frontier_report.json \
+  --output benchmarks/reproducibility_manifest.json
+```
+
+The manifest records report/source hashes, command strings, score summaries, Python
+runtime metadata, and the selected Git commit. It deliberately excludes environment
+variables, usernames, hostnames, and credentials.
+
 Generate the accuracy/token/latency frontier report from committed evidence:
 
 ```bash

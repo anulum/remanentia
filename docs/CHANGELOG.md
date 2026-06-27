@@ -6,6 +6,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Benchmark reproducibility manifests via `remanentia-benchmark-manifest`, with
+  report/source SHA-256 hashes, reproduction commands, score summaries, and
+  environment metadata for committed evidence artefacts.
 - Deterministic REST OpenAPI schema export via `remanentia openapi`, including
   runtime-aligned bearer-auth annotations and a committed schema artifact for
   client generation and release audits.

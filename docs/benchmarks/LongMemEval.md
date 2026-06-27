@@ -150,6 +150,17 @@ remanentia-benchmark-report data/longmemeval_hypotheses.results.jsonl \
 Older result files that predate judge evidence still produce score reports, but their
 prompt-hash, token, and latency sections are empty rather than inferred.
 
+The committed reproducibility manifest hashes this report and its source
+artefact:
+
+```bash
+remanentia-benchmark-manifest \
+  --report benchmarks/longmemeval_oracle_snapshot_report.json \
+  --report benchmarks/locomo_snapshot_report.json \
+  --artifact benchmarks/efficiency_frontier_report.json \
+  --output benchmarks/reproducibility_manifest.json
+```
+
 The committed efficiency-frontier report consumes this snapshot as one input:
 
 ```bash
