@@ -45,6 +45,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - README badges, header image, branding footer
 
 ### Fixed
+- `api_security.py` now uses explicit typed path inputs and complete helper
+  docstrings, with its dedicated security primitive tests strict-mypy clean at
+  100% focused coverage.
 - `benchmark_suites.py` now ignores non-object benchmark JSON reports, exposes
   explicit typed query rows, and is strict-mypy/docstring clean with 100%
   focused coverage.

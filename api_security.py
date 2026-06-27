@@ -35,6 +35,8 @@ import threading
 import time
 from pathlib import Path
 
+PathInput = str | os.PathLike[str]
+
 
 class BearerAuth:
     """Constant-time bearer-token check.
@@ -52,7 +54,9 @@ class BearerAuth:
 
     _WARNED: set[int] = set()  # avoid repeated warnings in same process
 
-    def __init__(self, token: str | None, *, warn_on_disabled: bool = True):
+    def __init__(self, token: str | None, *, warn_on_disabled: bool = True) -> None:
+        """Create a bearer-token checker from an optional token string."""
+
         self._token = token or None
         if self._token is None and warn_on_disabled and id(self) not in self._WARNED:
             print(
@@ -64,10 +68,14 @@ class BearerAuth:
 
     @classmethod
     def from_env(cls, var: str = "REMANENTIA_API_TOKEN") -> BearerAuth:
+        """Load a bearer-token checker from an environment variable."""
+
         return cls(os.environ.get(var))
 
     @classmethod
-    def from_file(cls, path: str | os.PathLike) -> BearerAuth:
+    def from_file(cls, path: PathInput) -> BearerAuth:
+        """Load a bearer-token checker from a newline-trimmed token file."""
+
         with open(path, encoding="utf-8") as f:
             token = f.read().strip()
         if not token:
@@ -76,6 +84,8 @@ class BearerAuth:
 
     @property
     def enabled(self) -> bool:
+        """Return whether the checker requires bearer-token authentication."""
+
         return self._token is not None
 
     def check_header(self, authorization_header: str | None) -> bool:
@@ -127,6 +137,8 @@ class TokenBucketLimiter:
         burst: int = 10,
         ttl_seconds: float = 3600.0,
     ) -> None:
+        """Create a thread-safe in-memory token bucket limiter."""
+
         if rate_per_minute <= 0:
             raise ValueError("rate_per_minute must be positive")
         if burst <= 0:
@@ -197,10 +209,14 @@ def retry_after_seconds(rate_per_minute: float) -> str:
 
 
 def _disabled_env_value(value: str | None) -> bool:
+    """Return whether an environment value explicitly disables a feature."""
+
     return value is not None and value.strip().lower() in {"", "0", "false", "off", "no"}
 
 
 def _read_int_env(var: str, default: int) -> int:
+    """Read a non-negative integer from an environment variable."""
+
     value = os.environ.get(var)
     if value is None or value.strip() == "":
         return default
@@ -215,11 +231,13 @@ class _RotatingJsonlWriter:
 
     def __init__(
         self,
-        path: str | os.PathLike | None,
+        path: PathInput | None,
         *,
         max_bytes: int = 0,
         backups: int = 0,
     ) -> None:
+        """Create a JSONL writer for an optional destination path."""
+
         if max_bytes < 0:
             raise ValueError("max_bytes must be non-negative")
         if backups < 0:
@@ -230,6 +248,8 @@ class _RotatingJsonlWriter:
         self._lock = threading.Lock()
 
     def write_payload(self, payload: dict[str, object]) -> None:
+        """Append one JSON-serializable payload, rotating first if needed."""
+
         if self.path is None:
             return
         line = json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
@@ -241,6 +261,8 @@ class _RotatingJsonlWriter:
                 handle.write(line)
 
     def _rotate_if_needed(self, incoming_bytes: int) -> None:
+        """Rotate the active file if appending would exceed the byte cap."""
+
         if self.path is None or self.max_bytes <= 0 or not self.path.exists():
             return
         current_size = self.path.stat().st_size
@@ -268,22 +290,26 @@ class RequestAuditLogger:
 
     def __init__(
         self,
-        path: str | os.PathLike | None,
+        path: PathInput | None,
         *,
         max_bytes: int = 0,
         backups: int = 0,
-    ):
+    ) -> None:
+        """Create an API request audit logger for an optional JSONL path."""
+
         self._writer = _RotatingJsonlWriter(path, max_bytes=max_bytes, backups=backups)
 
     @classmethod
     def from_env(
         cls,
-        default_path: str | os.PathLike,
+        default_path: PathInput,
         *,
         var: str = "REMANENTIA_API_AUDIT_LOG",
         max_bytes_var: str = "REMANENTIA_API_AUDIT_MAX_BYTES",
         backups_var: str = "REMANENTIA_API_AUDIT_BACKUPS",
     ) -> RequestAuditLogger:
+        """Create an API audit logger from environment configuration."""
+
         configured = os.environ.get(var)
         if _disabled_env_value(configured):
             return cls(None)
@@ -295,14 +321,20 @@ class RequestAuditLogger:
 
     @property
     def path(self) -> Path | None:
+        """Return the configured audit file path, or None when disabled."""
+
         return self._writer.path
 
     @property
     def max_bytes(self) -> int:
+        """Return the active audit-file rotation byte cap."""
+
         return self._writer.max_bytes
 
     @property
     def backups(self) -> int:
+        """Return the number of numbered audit-file backups to retain."""
+
         return self._writer.backups
 
     def record(
@@ -316,6 +348,8 @@ class RequestAuditLogger:
         outcome: str,
         auth_enabled: bool,
     ) -> None:
+        """Record one metadata-only API request audit row."""
+
         payload = {
             "timestamp_unix": time.time(),
             "server": server,
@@ -339,22 +373,26 @@ class ToolAuditLogger:
 
     def __init__(
         self,
-        path: str | os.PathLike | None,
+        path: PathInput | None,
         *,
         max_bytes: int = 0,
         backups: int = 0,
-    ):
+    ) -> None:
+        """Create an MCP tool-call audit logger for an optional JSONL path."""
+
         self._writer = _RotatingJsonlWriter(path, max_bytes=max_bytes, backups=backups)
 
     @classmethod
     def from_env(
         cls,
-        default_path: str | os.PathLike,
+        default_path: PathInput,
         *,
         var: str = "REMANENTIA_MCP_AUDIT_LOG",
         max_bytes_var: str = "REMANENTIA_MCP_AUDIT_MAX_BYTES",
         backups_var: str = "REMANENTIA_MCP_AUDIT_BACKUPS",
     ) -> ToolAuditLogger:
+        """Create an MCP audit logger from environment configuration."""
+
         configured = os.environ.get(var)
         if _disabled_env_value(configured):
             return cls(None)
@@ -366,14 +404,20 @@ class ToolAuditLogger:
 
     @property
     def path(self) -> Path | None:
+        """Return the configured MCP audit file path, or None when disabled."""
+
         return self._writer.path
 
     @property
     def max_bytes(self) -> int:
+        """Return the active MCP audit-file rotation byte cap."""
+
         return self._writer.max_bytes
 
     @property
     def backups(self) -> int:
+        """Return the number of numbered MCP audit-file backups to retain."""
+
         return self._writer.backups
 
     def record(
@@ -388,6 +432,8 @@ class ToolAuditLogger:
         duration_ms: float,
         error_type: str = "",
     ) -> None:
+        """Record one metadata-only MCP tool-call audit row."""
+
         payload = {
             "timestamp_unix": time.time(),
             "server": server,

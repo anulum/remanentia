@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -33,57 +34,57 @@ from api_security import (
 
 
 class TestBearerAuth:
-    def test_disabled_when_token_none(self):
+    def test_disabled_when_token_none(self) -> None:
         a = BearerAuth(None, warn_on_disabled=False)
         assert not a.enabled
         assert a.check_header(None) is True
         assert a.check_header("Bearer anything") is True  # open
 
-    def test_enabled_when_token_set(self):
+    def test_enabled_when_token_set(self) -> None:
         a = BearerAuth("secret", warn_on_disabled=False)
         assert a.enabled
 
-    def test_correct_bearer_passes(self):
+    def test_correct_bearer_passes(self) -> None:
         a = BearerAuth("secret", warn_on_disabled=False)
         assert a.check_header("Bearer secret") is True
 
-    def test_wrong_token_fails(self):
+    def test_wrong_token_fails(self) -> None:
         a = BearerAuth("secret", warn_on_disabled=False)
         assert a.check_header("Bearer wrong") is False
 
-    def test_missing_header_fails(self):
+    def test_missing_header_fails(self) -> None:
         a = BearerAuth("secret", warn_on_disabled=False)
         assert a.check_header(None) is False
         assert a.check_header("") is False
 
-    def test_non_bearer_scheme_fails(self):
+    def test_non_bearer_scheme_fails(self) -> None:
         a = BearerAuth("secret", warn_on_disabled=False)
         assert a.check_header("Basic secret") is False
         assert a.check_header("Token secret") is False
 
-    def test_empty_bearer_value_fails(self):
+    def test_empty_bearer_value_fails(self) -> None:
         a = BearerAuth("secret", warn_on_disabled=False)
         assert a.check_header("Bearer ") is False
 
-    def test_constant_time_compare(self):
+    def test_constant_time_compare(self) -> None:
         """Smoke: we use hmac.compare_digest, not ==."""
         a = BearerAuth("a" * 64, warn_on_disabled=False)
         # correctness only; timing is not testable here deterministically
         assert a.check_header("Bearer " + "a" * 64) is True
         assert a.check_header("Bearer " + "a" * 63 + "b") is False
 
-    def test_from_env_unset(self, monkeypatch):
+    def test_from_env_unset(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("REMANENTIA_API_TOKEN", raising=False)
         a = BearerAuth.from_env()
         assert not a.enabled
 
-    def test_from_env_set(self, monkeypatch):
+    def test_from_env_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("REMANENTIA_API_TOKEN", "tok")
         a = BearerAuth.from_env()
         assert a.enabled
         assert a.check_header("Bearer tok") is True
 
-    def test_from_file(self):
+    def test_from_file(self) -> None:
         with tempfile.NamedTemporaryFile("w", delete=False, suffix=".tok") as f:
             f.write("file-token-123\n")
             path = f.name
@@ -94,7 +95,7 @@ class TestBearerAuth:
         finally:
             os.unlink(path)
 
-    def test_from_file_empty(self):
+    def test_from_file_empty(self) -> None:
         with tempfile.NamedTemporaryFile("w", delete=False, suffix=".tok") as f:
             f.write("")
             path = f.name
@@ -109,38 +110,38 @@ class TestBearerAuth:
 
 
 class TestTokenBucketLimiter:
-    def test_rejects_invalid_rate(self):
+    def test_rejects_invalid_rate(self) -> None:
         with pytest.raises(ValueError):
             TokenBucketLimiter(rate_per_minute=0)
         with pytest.raises(ValueError):
             TokenBucketLimiter(rate_per_minute=-1)
 
-    def test_rejects_invalid_burst(self):
+    def test_rejects_invalid_burst(self) -> None:
         with pytest.raises(ValueError):
             TokenBucketLimiter(burst=0)
         with pytest.raises(ValueError):
             TokenBucketLimiter(burst=-5)
 
-    def test_first_burst_allowed(self):
+    def test_first_burst_allowed(self) -> None:
         lim = TokenBucketLimiter(rate_per_minute=60, burst=5)
         for _ in range(5):
             assert lim.allow("ip-a") is True
         # 6th is refused (no time advanced, no refill)
         assert lim.allow("ip-a", now=0.0) is False
 
-    def test_refill_over_time(self):
+    def test_refill_over_time(self) -> None:
         lim = TokenBucketLimiter(rate_per_minute=60, burst=1)  # 1/s refill
         assert lim.allow("k", now=0.0) is True
         assert lim.allow("k", now=0.1) is False
         assert lim.allow("k", now=1.0) is True
 
-    def test_keys_isolated(self):
+    def test_keys_isolated(self) -> None:
         lim = TokenBucketLimiter(rate_per_minute=60, burst=1)
         assert lim.allow("a", now=0.0) is True
         assert lim.allow("a", now=0.0) is False
         assert lim.allow("b", now=0.0) is True  # b has own bucket
 
-    def test_peek_does_not_spend(self):
+    def test_peek_does_not_spend(self) -> None:
         lim = TokenBucketLimiter(rate_per_minute=60, burst=3)
         lim.allow("k")  # spend one
         tokens = lim.peek("k")
@@ -148,14 +149,14 @@ class TestTokenBucketLimiter:
         # Peek a second time — still positive (no spend)
         assert lim.peek("k") == pytest.approx(tokens, abs=0.1)
 
-    def test_evict_stale(self):
+    def test_evict_stale(self) -> None:
         lim = TokenBucketLimiter(rate_per_minute=60, burst=1, ttl_seconds=10)
         lim.allow("old", now=0.0)
         lim.allow("fresh", now=1000.0)
         n = lim.evict_stale(now=1005.0)
         assert n == 1  # "old" evicted, "fresh" kept
 
-    def test_burst_cap(self):
+    def test_burst_cap(self) -> None:
         lim = TokenBucketLimiter(rate_per_minute=60, burst=3)
         # Advance time to refill above burst cap
         assert lim.allow("k", now=0.0) is True  # spends → bucket 2
@@ -165,25 +166,29 @@ class TestTokenBucketLimiter:
             assert lim.allow("k", now=10000.0) is True
         assert lim.allow("k", now=10000.0) is False
 
-    def test_retry_after_uses_configured_rate(self):
+    def test_retry_after_uses_configured_rate(self) -> None:
         assert TokenBucketLimiter(rate_per_minute=60).retry_after_seconds() == "1"
         assert TokenBucketLimiter(rate_per_minute=30).retry_after_seconds() == "2"
         assert TokenBucketLimiter(rate_per_minute=7).retry_after_seconds() == "9"
 
-    def test_retry_after_rejects_non_positive_rate(self):
+    def test_retry_after_rejects_non_positive_rate(self) -> None:
         with pytest.raises(ValueError, match="positive"):
             retry_after_seconds(0)
 
 
 class TestEnvParsing:
-    def test_read_int_env_returns_default_for_unset_or_blank(self, monkeypatch):
+    def test_read_int_env_returns_default_for_unset_or_blank(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.delenv("REMANENTIA_TEST_INT", raising=False)
         assert _read_int_env("REMANENTIA_TEST_INT", 7) == 7
 
         monkeypatch.setenv("REMANENTIA_TEST_INT", " ")
         assert _read_int_env("REMANENTIA_TEST_INT", 7) == 7
 
-    def test_read_int_env_rejects_negative_values(self, monkeypatch):
+    def test_read_int_env_rejects_negative_values(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("REMANENTIA_TEST_INT", "-1")
         with pytest.raises(ValueError, match="non-negative"):
             _read_int_env("REMANENTIA_TEST_INT", 7)
@@ -193,25 +198,25 @@ class TestEnvParsing:
 
 
 class TestEnforceBodySize:
-    def test_allows_small(self):
+    def test_allows_small(self) -> None:
         enforce_body_size(500, 1024)  # no raise
 
-    def test_allows_exact(self):
+    def test_allows_exact(self) -> None:
         enforce_body_size(1024, 1024)  # boundary: equal is ok
 
-    def test_rejects_over(self):
+    def test_rejects_over(self) -> None:
         with pytest.raises(ValueError, match="exceeds limit"):
             enforce_body_size(1025, 1024)
 
-    def test_rejects_negative_declared(self):
+    def test_rejects_negative_declared(self) -> None:
         with pytest.raises(ValueError):
             enforce_body_size(-1, 1024)
 
-    def test_rejects_negative_limit(self):
+    def test_rejects_negative_limit(self) -> None:
         with pytest.raises(ValueError):
             enforce_body_size(100, -1)
 
-    def test_zero_body_ok(self):
+    def test_zero_body_ok(self) -> None:
         enforce_body_size(0, 1024)
 
 
@@ -219,7 +224,7 @@ class TestEnforceBodySize:
 
 
 class TestRequestAuditLogger:
-    def test_disabled_logger_writes_nothing(self, tmp_path):
+    def test_disabled_logger_writes_nothing(self, tmp_path: Path) -> None:
         path = tmp_path / "audit.jsonl"
         logger = RequestAuditLogger(None)
         logger.record(
@@ -234,7 +239,7 @@ class TestRequestAuditLogger:
 
         assert not path.exists()
 
-    def test_record_writes_jsonl_without_sensitive_fields(self, tmp_path):
+    def test_record_writes_jsonl_without_sensitive_fields(self, tmp_path: Path) -> None:
         path = tmp_path / "nested" / "audit.jsonl"
         logger = RequestAuditLogger(path)
 
@@ -260,14 +265,16 @@ class TestRequestAuditLogger:
         assert "authorization" not in payload
         assert "body" not in payload
 
-    def test_from_env_can_disable_logging(self, monkeypatch, tmp_path):
+    def test_from_env_can_disable_logging(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         monkeypatch.setenv("REMANENTIA_API_AUDIT_LOG", "off")
 
         logger = RequestAuditLogger.from_env(tmp_path / "audit.jsonl")
 
         assert logger.path is None
 
-    def test_rotates_when_size_cap_would_be_exceeded(self, tmp_path):
+    def test_rotates_when_size_cap_would_be_exceeded(self, tmp_path: Path) -> None:
         path = tmp_path / "audit.jsonl"
         logger = RequestAuditLogger(path, max_bytes=220, backups=2)
 
@@ -289,7 +296,9 @@ class TestRequestAuditLogger:
         assert path.stat().st_size <= 220
         assert path.with_name("audit.jsonl.1").stat().st_size <= 220
 
-    def test_from_env_reads_rotation_controls(self, monkeypatch, tmp_path):
+    def test_from_env_reads_rotation_controls(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         path = tmp_path / "api_audit.jsonl"
         monkeypatch.setenv("REMANENTIA_API_AUDIT_LOG", str(path))
         monkeypatch.setenv("REMANENTIA_API_AUDIT_MAX_BYTES", "4096")
@@ -303,13 +312,13 @@ class TestRequestAuditLogger:
 
 
 class TestRotatingJsonlWriter:
-    def test_rejects_negative_rotation_controls(self, tmp_path):
+    def test_rejects_negative_rotation_controls(self, tmp_path: Path) -> None:
         with pytest.raises(ValueError, match="max_bytes"):
             _RotatingJsonlWriter(tmp_path / "audit.jsonl", max_bytes=-1)
         with pytest.raises(ValueError, match="backups"):
             _RotatingJsonlWriter(tmp_path / "audit.jsonl", backups=-1)
 
-    def test_rotation_without_backups_replaces_active_file(self, tmp_path):
+    def test_rotation_without_backups_replaces_active_file(self, tmp_path: Path) -> None:
         path = tmp_path / "audit.jsonl"
         path.write_text("x" * 20, encoding="utf-8")
         writer = _RotatingJsonlWriter(path, max_bytes=21, backups=0)
@@ -319,7 +328,7 @@ class TestRotatingJsonlWriter:
         payload = json.loads(path.read_text(encoding="utf-8"))
         assert payload == {"event": "new"}
 
-    def test_no_rotation_when_record_fits_cap(self, tmp_path):
+    def test_no_rotation_when_record_fits_cap(self, tmp_path: Path) -> None:
         path = tmp_path / "audit.jsonl"
         path.write_text('{"event":"old"}\n', encoding="utf-8")
         writer = _RotatingJsonlWriter(path, max_bytes=200, backups=1)
@@ -335,7 +344,7 @@ class TestRotatingJsonlWriter:
 
 
 class TestToolAuditLogger:
-    def test_disabled_logger_writes_nothing(self, tmp_path):
+    def test_disabled_logger_writes_nothing(self, tmp_path: Path) -> None:
         path = tmp_path / "mcp_audit.jsonl"
         logger = ToolAuditLogger(None)
         logger.record(
@@ -350,7 +359,7 @@ class TestToolAuditLogger:
 
         assert not path.exists()
 
-    def test_record_writes_argument_names_without_values(self, tmp_path):
+    def test_record_writes_argument_names_without_values(self, tmp_path: Path) -> None:
         path = tmp_path / "nested" / "mcp_audit.jsonl"
         logger = ToolAuditLogger(path)
         logger.record(
@@ -376,7 +385,7 @@ class TestToolAuditLogger:
         assert "authorization" not in payload
         assert "body" not in payload
 
-    def test_record_includes_error_type_when_present(self, tmp_path):
+    def test_record_includes_error_type_when_present(self, tmp_path: Path) -> None:
         path = tmp_path / "mcp_audit.jsonl"
         logger = ToolAuditLogger(path)
 
@@ -394,14 +403,16 @@ class TestToolAuditLogger:
         payload = json.loads(path.read_text(encoding="utf-8"))
         assert payload["error_type"] == "ValueError"
 
-    def test_from_env_can_disable_logging(self, monkeypatch, tmp_path):
+    def test_from_env_can_disable_logging(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         monkeypatch.setenv("REMANENTIA_MCP_AUDIT_LOG", "off")
 
         logger = ToolAuditLogger.from_env(tmp_path / "mcp_audit.jsonl")
 
         assert logger.path is None
 
-    def test_rotates_when_size_cap_would_be_exceeded(self, tmp_path):
+    def test_rotates_when_size_cap_would_be_exceeded(self, tmp_path: Path) -> None:
         path = tmp_path / "mcp_audit.jsonl"
         logger = ToolAuditLogger(path, max_bytes=240, backups=1)
 
@@ -421,7 +432,9 @@ class TestToolAuditLogger:
         assert not path.with_name("mcp_audit.jsonl.2").exists()
         assert path.stat().st_size <= 240
 
-    def test_from_env_reads_rotation_controls(self, monkeypatch, tmp_path):
+    def test_from_env_reads_rotation_controls(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         path = tmp_path / "mcp_audit.jsonl"
         monkeypatch.setenv("REMANENTIA_MCP_AUDIT_LOG", str(path))
         monkeypatch.setenv("REMANENTIA_MCP_AUDIT_MAX_BYTES", "8192")
@@ -438,11 +451,11 @@ class TestToolAuditLogger:
 
 
 class TestDefaults:
-    def test_body_limit_is_mib(self):
+    def test_body_limit_is_mib(self) -> None:
         assert DEFAULT_BODY_LIMIT == 1 * 1024 * 1024
 
-    def test_rate_default(self):
+    def test_rate_default(self) -> None:
         assert DEFAULT_RATE_PER_MINUTE == 60.0
 
-    def test_burst_default(self):
+    def test_burst_default(self) -> None:
         assert DEFAULT_BURST == 10

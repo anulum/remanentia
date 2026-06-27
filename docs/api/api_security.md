@@ -34,6 +34,9 @@ from api_security import (
 Constant-time bearer-token check. Pass an explicit token, or use
 `BearerAuth.from_env()` to read `REMANENTIA_API_TOKEN`, or
 `BearerAuth.from_file(path)` to load a local token file.
+Token-file and audit-log paths accept `str` or `os.PathLike[str]`, so callers can
+pass `pathlib.Path` values without converting them.
+
 **Configuration posture is intentionally loud-on-default-missing**:
 
 - Token set → every request must carry `Authorization: Bearer <token>`;
@@ -150,6 +153,8 @@ numbered backups are retained. A zero byte cap disables rotation.
 - **Bounded audit growth when configured**: audit writers rotate before
   appending a record that would exceed `*_AUDIT_MAX_BYTES`; numbered backups
   are capped by `*_AUDIT_BACKUPS`.
+- **Typed path inputs**: token and audit path loaders accept string paths and
+  `pathlib.Path`/`os.PathLike[str]` values consistently.
 - **MCP throttling before handlers**: the stdio bridge spends a token before
   tool handlers run, then audits blocked calls as metadata-only
   `rate_limited` events.
