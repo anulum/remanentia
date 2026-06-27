@@ -74,6 +74,7 @@ nav:
     - memory_recall: api/memory_recall.md
     - recall_calibration: api/recall_calibration.md
     - retrieved_context: api/retrieved_context.md
+    - full_s_diagnostics: api/full_s_diagnostics.md
     - compiled_memory: api/compiled_memory.md
     - mcp_server: api/mcp_server.md
     - knowledge_store: api/knowledge_store.md

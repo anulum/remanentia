@@ -228,7 +228,14 @@ retrieval miss; single-session losses are retrieval misses on the legacy BM25 pa
 Full-S Arcane benchmark hypotheses now include a `retrieval_diagnostics` object with
 selected session indices, answer-session recall, session-cap misses, and character-budget
 misses. Use that metadata to separate retrieval misses from reader synthesis failures
-before updating public scores.
+before updating public scores. After judging, run:
+
+```bash
+remanentia-full-s-diagnostics data/longmemeval_hypotheses.results.jsonl
+```
+
+The report groups failures as synthesis failures, ranking misses, session-cap misses,
+character-budget misses, or missing diagnostic data.
 
 #### Oracle setting (gold sessions only — retrieval NOT exercised)
 

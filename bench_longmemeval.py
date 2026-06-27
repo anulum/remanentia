@@ -890,6 +890,9 @@ def run_evaluation() -> None:
     # but the histogram tells us whether failures concentrate on low-
     # coverage retrieval vs high-coverage-but-wrong synthesis.
     _coverage_report(results, qid_to_ref)
+    from full_s_diagnostics import print_full_s_diagnostic_report
+
+    print_full_s_diagnostic_report(results)
 
 
 def _coverage_tokens(text: str) -> set[str]:

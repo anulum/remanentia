@@ -9,6 +9,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Full-S LongMemEval Arcane hypothesis rows now include retrieval-selection
   diagnostics: selected sessions, answer-session recall, session-limit misses,
   and character-budget misses.
+- Full-S LongMemEval evaluation now prints the same retrieval-vs-synthesis
+  taxonomy exposed by `remanentia-full-s-diagnostics`.
 - Dockerfile and Compose deployment for the REST API, with a non-root runtime,
   persistent `/data` store, secret-mounted API token, and `/health` healthcheck.
 - Shared claim-axis vocabulary now keeps finding ingest admission and recall

@@ -121,3 +121,14 @@ Full-S Arcane hypothesis rows include `retrieval_diagnostics`:
 
 These fields are diagnostic evidence only. They do not change the published score until a
 new three-run full-S variance round is recorded.
+
+After `--evaluate` writes `data/longmemeval_hypotheses.results.jsonl`, the same taxonomy
+printed by the benchmark runner is available as a standalone CLI:
+
+```bash
+remanentia-full-s-diagnostics data/longmemeval_hypotheses.results.jsonl
+```
+
+The taxonomy separates judged failures into synthesis failures, retrieval-ranking misses,
+session-cap misses, character-budget misses, missing answer-session metadata, and missing
+diagnostics.

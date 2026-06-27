@@ -66,6 +66,7 @@ dev = [
 [project.scripts]
 remanentia = "cli:main"
 remanentia-feed-ingest = "feed_ingest:main"
+remanentia-full-s-diagnostics = "full_s_diagnostics:main"
 remanentia-recall-calibration = "recall_calibration:main"
 remanentia-store-manifest = "store_manifest:main"
 remanentia-store-sources = "store_sources:main"
@@ -91,6 +92,7 @@ py-modules = [
     "recall_ledger",
     "recall_outcome_tracker",
     "retrieved_context",
+    "full_s_diagnostics",
     "bus_recall",
     "finding_ingest",
     "feed_ingest",
