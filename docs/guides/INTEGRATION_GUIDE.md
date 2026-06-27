@@ -150,4 +150,8 @@ ks.save()
 | `REMANENTIA_BASE` | Script directory | Base path for all data |
 | `REMANENTIA_USE_RUST_BM25` | `0` | Force Rust BM25 (`1` to enable) |
 | `REMANENTIA_LLM_ANSWERS` | unset | Enable LLM answer synthesis |
+| `REMANENTIA_MCP_RATE_LIMIT` | enabled | Set to `off`, `0`, `false`, or `no` to disable MCP tool-call throttling |
+| `REMANENTIA_MCP_RATE` | `600.0` | Sustained MCP `tools/call` requests per minute |
+| `REMANENTIA_MCP_BURST` | `120` | MCP `tools/call` burst size before throttling |
+| `REMANENTIA_MCP_CLIENT_ID` | `stdio` | Token-bucket key for this MCP client/session |
 | `ANTHROPIC_API_KEY` | unset | Required for LLM features |

@@ -69,7 +69,8 @@ if not limiter.allow(request.client.host):
 ```
 
 `retry_after_seconds()` returns a conservative whole-second wait for one
-token to refill and is used by both HTTP API surfaces for `429` responses.
+token to refill and is used by HTTP API surfaces for `429` responses and by
+the MCP stdio bridge for JSON-RPC throttling metadata.
 
 ### `enforce_body_size(declared_length: int, limit_bytes: int)`
 
@@ -149,6 +150,9 @@ numbered backups are retained. A zero byte cap disables rotation.
 - **Bounded audit growth when configured**: audit writers rotate before
   appending a record that would exceed `*_AUDIT_MAX_BYTES`; numbered backups
   are capped by `*_AUDIT_BACKUPS`.
+- **MCP throttling before handlers**: the stdio bridge spends a token before
+  tool handlers run, then audits blocked calls as metadata-only
+  `rate_limited` events.
 
 ## When to use what
 
@@ -166,7 +170,7 @@ numbered backups are retained. A zero byte cap disables rotation.
 - [`api`](api.md) — FastAPI surface that applies bearer auth to private
   endpoints while keeping health and public vector search open.
 - [`api_server`](api_server.md) — HTTP surface that wires these in.
-- [`mcp_server`](mcp_server.md) — stdio bridge; uses `BearerAuth` when
-  transported over a socket.
+- [`mcp_server`](mcp_server.md) — stdio bridge that wires
+  `TokenBucketLimiter` and metadata-only tool-call audit logging.
 - `THREAT_MODEL.md` (repo root) — which attacks these primitives
   mitigate.

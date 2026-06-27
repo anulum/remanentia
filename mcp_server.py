@@ -43,6 +43,8 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any
 
+from api_security import TokenBucketLimiter
+
 sys.path.insert(0, str(Path(__file__).parent))
 
 BASE = Path(os.environ.get("REMANENTIA_BASE", Path(__file__).parent))
@@ -60,6 +62,9 @@ _KNOWLEDGE_STORE = None
 _consolidation_pending = False
 _consolidation_last = 0.0
 _CONSOLIDATION_DEBOUNCE_S = 10
+DEFAULT_MCP_RATE_PER_MINUTE = 600.0
+DEFAULT_MCP_BURST = 120
+MCP_RATE_LIMIT_ERROR_CODE = -32029
 
 
 def _runtime_attr(module_name: str, attr_name: str) -> Any:
@@ -67,12 +72,15 @@ def _runtime_attr(module_name: str, attr_name: str) -> Any:
     return getattr(import_module(module_name), attr_name)
 
 
-def _default_mcp_audit_logger():
+def _default_mcp_audit_logger() -> Any:
+    """Build the default metadata-only MCP tool audit logger."""
     ToolAuditLogger = _runtime_attr("api_security", "ToolAuditLogger")
     return ToolAuditLogger.from_env(BASE / ".coordination" / "runtime" / "mcp_tool_audit.jsonl")
 
 
 MCP_AUDIT_LOGGER = _default_mcp_audit_logger()
+_MCP_RATE_LIMITER: TokenBucketLimiter | None = None
+_MCP_RATE_LIMIT_CONFIG: tuple[float, int, str] | None = None
 
 
 _RECALL_LEDGER = None
@@ -83,7 +91,69 @@ _BUS_EMITTER_INIT = False
 _OUTCOME_TRACKER = None
 
 
-def _get_recall_ledger():
+def _env_flag_disabled(value: str | None) -> bool:
+    """Return True when an environment switch explicitly disables a feature."""
+    return value is not None and value.strip().lower() in {"", "0", "false", "off", "no"}
+
+
+def _read_positive_float_env(var: str, default: float) -> float:
+    """Read a positive float environment value or return *default* when unset."""
+    value = os.environ.get(var)
+    if value is None or value.strip() == "":
+        return default
+    parsed = float(value)
+    if parsed <= 0:
+        raise ValueError(f"{var} must be positive")
+    return parsed
+
+
+def _read_positive_int_env(var: str, default: int) -> int:
+    """Read a positive integer environment value or return *default* when unset."""
+    value = os.environ.get(var)
+    if value is None or value.strip() == "":
+        return default
+    parsed = int(value)
+    if parsed <= 0:
+        raise ValueError(f"{var} must be positive")
+    return parsed
+
+
+def _mcp_rate_limiter() -> TokenBucketLimiter | None:
+    """Return the process-wide MCP tool-call limiter for current env settings."""
+    if _env_flag_disabled(os.environ.get("REMANENTIA_MCP_RATE_LIMIT")):
+        return None
+
+    rate = _read_positive_float_env("REMANENTIA_MCP_RATE", DEFAULT_MCP_RATE_PER_MINUTE)
+    burst = _read_positive_int_env("REMANENTIA_MCP_BURST", DEFAULT_MCP_BURST)
+    client_id = os.environ.get("REMANENTIA_MCP_CLIENT_ID", "stdio")
+    config = (rate, burst, client_id)
+
+    global _MCP_RATE_LIMITER, _MCP_RATE_LIMIT_CONFIG
+    if _MCP_RATE_LIMITER is None or config != _MCP_RATE_LIMIT_CONFIG:
+        _MCP_RATE_LIMITER = TokenBucketLimiter(rate_per_minute=rate, burst=burst)
+        _MCP_RATE_LIMIT_CONFIG = config
+    return _MCP_RATE_LIMITER
+
+
+def _mcp_rate_limit_key() -> str:
+    """Return the token-bucket key for the current MCP client/session."""
+    return os.environ.get("REMANENTIA_MCP_CLIENT_ID", "stdio")
+
+
+def _mcp_rate_limit_response(rid: object, retry_after: str) -> dict[str, Any]:
+    """Build the JSON-RPC error response for a throttled MCP tool call."""
+    return {
+        "jsonrpc": "2.0",
+        "id": rid,
+        "error": {
+            "code": MCP_RATE_LIMIT_ERROR_CODE,
+            "message": "MCP tool rate limit exceeded",
+            "data": {"retry_after_seconds": retry_after},
+        },
+    }
+
+
+def _get_recall_ledger() -> Any:
     """Return the process-wide recall query-stream ledger (lazy singleton)."""
     global _RECALL_LEDGER
     if _RECALL_LEDGER is None:
@@ -92,7 +162,7 @@ def _get_recall_ledger():
     return _RECALL_LEDGER
 
 
-def _get_bus_emitter():
+def _get_bus_emitter() -> Any | None:
     """Return the process-wide recall bus emitter, or ``None`` if disabled.
 
     Lazy singleton like the ledger, but ``None`` is a valid resolved value
@@ -127,7 +197,7 @@ def _emit_recall_bus(query: str, returned_ids: list[str]) -> None:
         log.debug("Recall bus emit failed", exc_info=True)
 
 
-def _get_outcome_tracker():
+def _get_outcome_tracker() -> Any:
     """Return the process-wide recall outcome tracker (lazy singleton).
 
     Watches recall→remember loop closure to auto-derive the ``was_used``
@@ -143,7 +213,7 @@ def _get_outcome_tracker():
 
 def _recall_identity() -> str:
     """The querying-agent identity, shared by the ledger and the tracker."""
-    return _runtime_attr("recall_ledger", "_identity")()
+    return str(_runtime_attr("recall_ledger", "_identity")())
 
 
 def _log_recall(
@@ -208,7 +278,8 @@ def _close_recall_loops(content: str) -> None:
         log.debug("Recall loop-closure failed", exc_info=True)
 
 
-def _get_knowledge_store():
+def _get_knowledge_store() -> Any:
+    """Return the process-wide knowledge-store singleton."""
     global _KNOWLEDGE_STORE
     if _KNOWLEDGE_STORE is not None:
         return _KNOWLEDGE_STORE
@@ -402,7 +473,7 @@ def handle_remember(
     return f"Remembered: {filename} ({len(content)} chars)"
 
 
-def _schedule_consolidation():
+def _schedule_consolidation() -> None:
     """Run consolidation in a background thread, debounced."""
     global _consolidation_pending, _consolidation_last, _RECALL_INDEX
     now = _time.monotonic()
@@ -412,7 +483,7 @@ def _schedule_consolidation():
     _consolidation_last = now
     _consolidation_pending = False
 
-    def _run():
+    def _run() -> None:
         global _RECALL_INDEX, _consolidation_last
         try:
             consolidate = _runtime_attr("consolidation_engine", "consolidate")
@@ -426,9 +497,9 @@ def _schedule_consolidation():
     threading.Thread(target=_run, daemon=True).start()
 
 
-_RECALL_INDEX: dict[str, tuple[set, str]] | None = None
+_RECALL_INDEX: dict[str, tuple[set[str], str]] | None = None
 
-_rust_mcp_tok = None
+_rust_mcp_tok: Any | None = None
 try:
     _rust_mcp_tok = _runtime_attr("remanentia_search", "tokenize")  # pragma: no cover
 except ImportError:
@@ -444,7 +515,7 @@ def _mcp_tok(text: str) -> set[str]:
     return set(re.findall(r"\w{3,}", text.lower()))
 
 
-def _build_recall_index() -> dict[str, tuple[set, str]]:
+def _build_recall_index() -> dict[str, tuple[set[str], str]]:
     """Build in-memory token index of all traces and semantic memories.
 
     Called once, cached for the process lifetime.
@@ -454,7 +525,7 @@ def _build_recall_index() -> dict[str, tuple[set, str]]:
     if _RECALL_INDEX is not None:
         return _RECALL_INDEX
 
-    index = {}
+    index: dict[str, tuple[set[str], str]] = {}
     traces_dir = BASE / "reasoning_traces"
     semantic_dir = BASE / "memory" / "semantic"
 
@@ -713,7 +784,8 @@ TOOLS = [
 ]
 
 
-def handle_request(request: dict) -> dict | None:
+def handle_request(request: dict[str, Any]) -> dict[str, Any] | None:
+    """Dispatch one stdio JSON-RPC request."""
     method = request.get("method", "")
     rid = request.get("id")
 
@@ -734,6 +806,8 @@ def handle_request(request: dict) -> dict | None:
     if method == "tools/call":
         started = _time.monotonic()
         params = request.get("params", {})
+        if not isinstance(params, dict):
+            params = {}
         tool_name = params.get("name", "")
         args = params.get("arguments", {})
         if not isinstance(args, dict):
@@ -742,6 +816,11 @@ def handle_request(request: dict) -> dict | None:
         error_type = ""
 
         try:
+            limiter = _mcp_rate_limiter()
+            if limiter is not None and not limiter.allow(_mcp_rate_limit_key()):
+                outcome = "rate_limited"
+                return _mcp_rate_limit_response(rid, limiter.retry_after_seconds())
+
             if tool_name == "remanentia_recall":
                 text = handle_recall(
                     args.get("query", ""),
@@ -863,7 +942,7 @@ def _parse_cli(argv: list[str] | None = None) -> None:
         os.environ.setdefault("REMANENTIA_GUARDED", "1")
 
 
-def main():  # pragma: no cover
+def main() -> None:  # pragma: no cover
     """Run MCP server on stdio."""
     _parse_cli()
     for line in sys.stdin:

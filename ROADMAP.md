@@ -35,7 +35,7 @@ The primary target: temporal-reasoning accuracy from 45.9% toward 70%+.
 - [ ] Cloud-hosted demo at remanentia.com/demo
 - [ ] Docker deployment with health checks
 - [ ] REST API authentication
-- [ ] Rate limiting on MCP server
+- [x] Rate limiting on MCP server
 
 ## v1.0.0 — General Availability
 
