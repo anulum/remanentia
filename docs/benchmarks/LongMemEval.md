@@ -77,6 +77,12 @@ at R11, a 19.5-point / 26-question gain. This does not mean the full-S temporal
 problem is solved; full-S now shows the remaining work is synthesis over retrieved
 large-haystack context.
 
+For multi-session synthesis, the reader can consume deterministic aggregation
+hints generated before the LLM call: `COMPUTED TOTAL:` for unambiguous same-unit
+sums and `COMPUTED COUNT:` for explicit distinct-item count questions. No score
+in this document has been updated for that change until a new 3-run full-S
+variance round is recorded.
+
 ## Competitive Context
 
 | System | Setting | LongMemEval | Notes |

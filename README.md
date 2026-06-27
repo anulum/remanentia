@@ -263,6 +263,12 @@ compare it to Remanentia's full-S **56.6 %**, not the oracle number above. Closi
 gap on full-S is the active work (retrieval recall on single-session, cross-session
 synthesis on multi-session/temporal).
 
+The cross-session reader now receives deterministic aggregation hints before LLM
+synthesis when the retrieved context is unambiguous: `COMPUTED TOTAL:` for
+same-unit sums and `COMPUTED COUNT:` for explicit distinct-item count questions
+such as "How many different doctors...". Ambiguous generic "how many" questions
+remain on the normal reader path.
+
 ### LOCOMO
 
 **1,651 / 1,986 = 83.1 %** on the LOCOMO multi-session QA dataset

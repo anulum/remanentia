@@ -43,6 +43,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `REMANENTIA_ARCANE_CE_DISABLE=1` for latency-sensitive live/MCP use.
 
 ### Changed
+- `aggregate_precompute.py` now emits conservative `COMPUTED COUNT:` lines for
+  explicit distinct-count questions and the LongMemEval reader prompt trusts
+  them alongside deterministic totals.
 - `tools/install_user_services.py` now accepts `--base` and `--stimuli-dir`,
   exports the selected store into generated API, vector-worker, and
   freshness-watchdog units, and writes vector-worker and freshness artifacts
