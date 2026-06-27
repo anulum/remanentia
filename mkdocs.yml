@@ -71,6 +71,7 @@ nav:
     - store_manifest: api/store_manifest.md
     - store_sources: api/store_sources.md
     - claim_axes: api/claim_axes.md
+    - claim_schema: api/claim_schema.md
     - memory_recall: api/memory_recall.md
     - recall_calibration: api/recall_calibration.md
     - retrieved_context: api/retrieved_context.md

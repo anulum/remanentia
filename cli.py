@@ -20,6 +20,7 @@ Usage::
     remanentia daemon stop
     remanentia daemon status
     remanentia openapi --output docs/openapi/remanentia_openapi.json
+    remanentia claim-schema --output docs/schema/remanentia_claim_axes.schema.json
     remanentia serve --host 127.0.0.1 --port 8001 --require-auth
 """
 
@@ -294,6 +295,18 @@ def cmd_openapi(args: argparse.Namespace) -> None:
     output = Path(str(args.output))
     write_openapi_schema(output)
     print(f"Wrote OpenAPI schema: {output}")
+
+
+def cmd_claim_schema(args: argparse.Namespace) -> None:
+    """Export the shared claim-axis JSON Schema."""
+    from claim_schema import main as claim_schema_main
+
+    argv = ["--output", str(args.output)]
+    if bool(args.check):
+        argv.append("--check")
+    raise_code = claim_schema_main(argv)
+    if raise_code:
+        raise SystemExit(raise_code)
 
 
 def cmd_graph(args: argparse.Namespace) -> None:
@@ -613,6 +626,20 @@ def main() -> None:
         help="Destination JSON path",
     )
 
+    # claim schema
+    p_claim_schema = sub.add_parser("claim-schema", help="Export the claim-axis schema")
+    p_claim_schema.add_argument(
+        "--output",
+        type=Path,
+        default=Path("docs/schema/remanentia_claim_axes.schema.json"),
+        help="Destination JSON path",
+    )
+    p_claim_schema.add_argument(
+        "--check",
+        action="store_true",
+        help="Exit non-zero when the schema file is missing or stale",
+    )
+
     # graph
     p_graph = sub.add_parser("graph", help="Show entity relationships")
     p_graph.add_argument("--top", type=int, default=15, help="Number of relationships")
@@ -690,6 +717,7 @@ def main() -> None:
         "store-manifest": cmd_store_manifest,
         "store-sources": cmd_store_sources,
         "openapi": cmd_openapi,
+        "claim-schema": cmd_claim_schema,
         "graph": cmd_graph,
         "entities": cmd_entities,
         "daemon": cmd_daemon,

@@ -65,6 +65,7 @@ dev = [
 
 [project.scripts]
 remanentia = "cli:main"
+remanentia-claim-schema = "claim_schema:main"
 remanentia-benchmark-manifest = "benchmark_manifest:main"
 remanentia-benchmark-report = "benchmark_report:main"
 remanentia-efficiency-frontier = "efficiency_frontier:main"
@@ -96,6 +97,7 @@ py-modules = [
     "benchmark_report",
     "efficiency_frontier",
     "claim_axes",
+    "claim_schema",
     "recall_calibration",
     "recall_ledger",
     "recall_outcome_tracker",

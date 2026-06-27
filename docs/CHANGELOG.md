@@ -6,6 +6,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Claim-axis JSON Schema export via `remanentia claim-schema` and
+  `remanentia-claim-schema`, with a committed schema artefact for shared
+  evidence/status/admission/freshness consumers.
 - Benchmark reproducibility manifests via `remanentia-benchmark-manifest`, with
   report/source SHA-256 hashes, reproduction commands, score summaries, and
   environment metadata for committed evidence artefacts.
