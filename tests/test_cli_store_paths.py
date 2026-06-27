@@ -87,3 +87,51 @@ def test_status_uses_patched_base_when_no_operator_base_is_selected(
     out = capsys.readouterr().out
     assert "Episodic traces: 1" in out
     assert "Semantic memories: 1" in out
+
+
+def test_store_manifest_command_writes_selected_store_record(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The top-level CLI exposes the store-selection manifest."""
+    output = tmp_path / "selection.json"
+    firehose = tmp_path / "firehose"
+    monkeypatch.delenv("REMANENTIA_BASE", raising=False)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "remanentia",
+            "store-manifest",
+            "--base",
+            str(tmp_path),
+            "--stimuli-dir",
+            str(firehose),
+            "--write",
+            "--output",
+            str(output),
+            "--json",
+        ],
+    )
+
+    cli.main()
+
+    printed = json.loads(capsys.readouterr().out)
+    written = json.loads(output.read_text(encoding="utf-8"))
+    assert printed["selected_base"] == str(tmp_path)
+    assert printed["stimuli_dir"] == str(firehose)
+    assert written["selected_base"] == str(tmp_path)
+
+
+def test_store_manifest_command_prints_text(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The top-level CLI has a human-readable store manifest view."""
+    monkeypatch.setenv("REMANENTIA_BASE", str(tmp_path))
+    monkeypatch.setattr("sys.argv", ["remanentia", "store-manifest"])
+
+    cli.main()
+
+    assert f"Selected store: {tmp_path}" in capsys.readouterr().out

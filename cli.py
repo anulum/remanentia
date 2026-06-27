@@ -256,6 +256,19 @@ def cmd_status(args: argparse.Namespace) -> None:
     print(f"  Disk: {total / 1024 / 1024:.1f} MB")
 
 
+def cmd_store_manifest(args: argparse.Namespace) -> None:
+    """Show or persist the resolved memory-store selection manifest."""
+    from store_manifest import build_store_manifest, render_store_manifest, write_store_manifest
+
+    manifest = build_store_manifest(base=args.base, stimuli_dir=args.stimuli_dir)
+    if args.write:
+        write_store_manifest(manifest, args.output)
+    if args.json:
+        print(json.dumps(manifest.as_dict(), indent=2, sort_keys=True))
+    else:
+        print(render_store_manifest(manifest))
+
+
 def cmd_graph(args: argparse.Namespace) -> None:
     """Show top entity relationships."""
     relations_path = GRAPH_DIR / "relations.jsonl"
@@ -518,6 +531,18 @@ def main() -> None:
     # status
     sub.add_parser("status", help="System status")
 
+    # store manifest
+    p_store = sub.add_parser("store-manifest", help="Show the selected memory store")
+    p_store.add_argument("--base", default=None, help="Override REMANENTIA_BASE for this run")
+    p_store.add_argument(
+        "--stimuli-dir",
+        default=None,
+        help="Override REMANENTIA_STIMULI_DIR for this run",
+    )
+    p_store.add_argument("--write", action="store_true", help="Write the manifest JSON")
+    p_store.add_argument("--output", default=None, help="Manifest output path when writing")
+    p_store.add_argument("--json", action="store_true", help="Print JSON instead of text")
+
     # graph
     p_graph = sub.add_parser("graph", help="Show entity relationships")
     p_graph.add_argument("--top", type=int, default=15, help="Number of relationships")
@@ -582,6 +607,7 @@ def main() -> None:
         "search": cmd_recall,
         "consolidate": cmd_consolidate,
         "status": cmd_status,
+        "store-manifest": cmd_store_manifest,
         "graph": cmd_graph,
         "entities": cmd_entities,
         "daemon": cmd_daemon,

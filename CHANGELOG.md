@@ -6,6 +6,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- `store_manifest.py`, `remanentia-store-manifest`, and
+  `remanentia store-manifest` record the selected memory-store paths and current
+  artifact counts before backlog reconsolidation mutates corpus state.
 - `store_paths.py` centralises the canonical memory-store layout so hub ingest,
   feed ingest, and index freshness monitoring derive findings, cursor, digest,
   stimuli, and vector-index paths from the same `REMANENTIA_BASE` /
