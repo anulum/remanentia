@@ -11,28 +11,32 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import numpy as np
 import pytest
 
 import api
-from api_security import BearerAuth, RequestAuditLogger, TokenBucketLimiter
 from api import app
+from api_security import BearerAuth, RequestAuditLogger, TokenBucketLimiter
 from vector_index import VectorSearchResult
 
 try:
+    from fastapi import Request
     from fastapi.testclient import TestClient
 
     HAS_TEST_CLIENT = True
 except ImportError:
+    Request = Any
     HAS_TEST_CLIENT = False
 
 pytestmark = pytest.mark.skipif(not HAS_TEST_CLIENT, reason="fastapi/httpx not installed")
 
 
-@pytest.fixture
-def client(monkeypatch):
+@pytest.fixture  # type: ignore[untyped-decorator]
+def client(monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.setattr(
         api,
         "LIMITER",
@@ -47,7 +51,7 @@ def client(monkeypatch):
 
 
 class TestHealth:
-    def test_health_no_daemon(self, client, tmp_path):
+    def test_health_no_daemon(self, client: Any, tmp_path: Path) -> None:
         state_dir = tmp_path / "snn_state"
         state_dir.mkdir()
         with patch("api.STATE_DIR", state_dir):
@@ -59,7 +63,7 @@ class TestHealth:
         assert data["vector_worker"] == "missing"
         assert data["version"] == "0.2.0"
 
-    def test_health_daemon_alive(self, client, tmp_path):
+    def test_health_daemon_alive(self, client: Any, tmp_path: Path) -> None:
         state_dir = tmp_path / "snn_state"
         state_dir.mkdir()
         state = {"timestamp": time.time(), "cycle": 10}
@@ -69,7 +73,7 @@ class TestHealth:
             resp = client.get("/health")
         assert resp.json()["daemon"] == "alive"
 
-    def test_health_vector_worker_alive(self, client, tmp_path):
+    def test_health_vector_worker_alive(self, client: Any, tmp_path: Path) -> None:
         state_dir = tmp_path / "snn_state"
         state_dir.mkdir()
         worker_state = {
@@ -98,8 +102,8 @@ class TestHealth:
 
 class TestAPISecurityBoundary:
     def test_private_endpoint_requires_bearer_token_when_configured(
-        self, client, monkeypatch, tmp_path
-    ):
+        self, client: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         monkeypatch.setattr(
             api, "AUTH", BearerAuth("secret", warn_on_disabled=False), raising=False
         )
@@ -120,7 +124,7 @@ class TestAPISecurityBoundary:
         assert resp.status_code == 401
         assert resp.json()["detail"] == "authentication required"
 
-    def test_private_endpoint_accepts_matching_bearer_token(self, client, monkeypatch, tmp_path):
+    def test_private_endpoint_accepts_matching_bearer_token(self, client: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.setattr(
             api, "AUTH", BearerAuth("secret", warn_on_disabled=False), raising=False
         )
@@ -141,14 +145,14 @@ class TestAPISecurityBoundary:
         assert resp.status_code == 200
         assert resp.json()["episodic_traces"] == 0
 
-    def test_post_body_limit_rejects_before_handler(self, client, monkeypatch):
+    def test_post_body_limit_rejects_before_handler(self, client: Any, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(api, "BODY_LIMIT", 8, raising=False)
         resp = client.post("/recall", json={"query": "body is too large"})
 
         assert resp.status_code == 413
         assert resp.json()["detail"] == "request body too large"
 
-    def test_private_endpoint_rate_limit_is_enforced(self, client, monkeypatch, tmp_path):
+    def test_private_endpoint_rate_limit_is_enforced(self, client: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.setattr(
             api,
             "LIMITER",
@@ -175,12 +179,12 @@ class TestAPISecurityBoundary:
         assert second.json()["detail"] == "rate limit exceeded"
         assert second.headers["retry-after"] == "1"
 
-    def test_default_cors_origin_allows_local_development(self, monkeypatch):
+    def test_default_cors_origin_allows_local_development(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("REMANENTIA_CORS_ORIGINS", raising=False)
 
         assert api._cors_origins_from_env() == ["*"]
 
-    def test_cors_origins_can_be_scoped_by_environment(self, monkeypatch):
+    def test_cors_origins_can_be_scoped_by_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv(
             "REMANENTIA_CORS_ORIGINS",
             "https://remanentia.com, https://www.remanentia.com",
@@ -191,12 +195,12 @@ class TestAPISecurityBoundary:
             "https://www.remanentia.com",
         ]
 
-    def test_retry_after_ceilings_match_rate_limit(self):
+    def test_retry_after_ceilings_match_rate_limit(self) -> None:
         assert TokenBucketLimiter(rate_per_minute=60).retry_after_seconds() == "1"
         assert TokenBucketLimiter(rate_per_minute=30).retry_after_seconds() == "2"
         assert TokenBucketLimiter(rate_per_minute=7).retry_after_seconds() == "9"
 
-    def test_private_endpoint_writes_audit_record(self, client, monkeypatch, tmp_path):
+    def test_private_endpoint_writes_audit_record(self, client: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         audit_path = tmp_path / "audit.jsonl"
         monkeypatch.setattr(api, "AUDIT_LOGGER", RequestAuditLogger(audit_path), raising=False)
         state_dir = tmp_path / "snn_state"
@@ -223,7 +227,7 @@ class TestAPISecurityBoundary:
         assert "authorization" not in payload
         assert "body" not in payload
 
-    def test_public_health_does_not_write_audit_record(self, client, monkeypatch, tmp_path):
+    def test_public_health_does_not_write_audit_record(self, client: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         audit_path = tmp_path / "audit.jsonl"
         monkeypatch.setattr(api, "AUDIT_LOGGER", RequestAuditLogger(audit_path), raising=False)
 
@@ -237,7 +241,7 @@ class TestAPISecurityBoundary:
 
 
 class TestStatus:
-    def test_status_empty(self, client, tmp_path):
+    def test_status_empty(self, client: Any, tmp_path: Path) -> None:
         traces_dir = tmp_path / "reasoning_traces"
         traces_dir.mkdir()
         semantic_dir = tmp_path / "memory" / "semantic"
@@ -259,7 +263,7 @@ class TestStatus:
         assert data["episodic_traces"] == 0
         assert data["semantic_memories"] == 0
 
-    def test_status_with_data(self, client, tmp_path):
+    def test_status_with_data(self, client: Any, tmp_path: Path) -> None:
         traces_dir = tmp_path / "reasoning_traces"
         traces_dir.mkdir()
         (traces_dir / "t1.md").write_text("x", encoding="utf-8")
@@ -294,7 +298,7 @@ class TestStatus:
 
 
 class TestEntities:
-    def test_no_entities(self, client, tmp_path):
+    def test_no_entities(self, client: Any, tmp_path: Path) -> None:
         graph_dir = tmp_path / "graph"
         graph_dir.mkdir()
         with patch("api.GRAPH_DIR", graph_dir):
@@ -302,7 +306,7 @@ class TestEntities:
         assert resp.status_code == 200
         assert resp.json() == []
 
-    def test_with_entities(self, client, tmp_graph):
+    def test_with_entities(self, client: Any, tmp_graph: Path) -> None:
         with patch("api.GRAPH_DIR", tmp_graph):
             resp = client.get("/entities")
         data = resp.json()
@@ -315,7 +319,7 @@ class TestEntities:
 
 
 class TestGraph:
-    def test_no_relations(self, client, tmp_path):
+    def test_no_relations(self, client: Any, tmp_path: Path) -> None:
         graph_dir = tmp_path / "graph"
         graph_dir.mkdir()
         with patch("api.GRAPH_DIR", graph_dir):
@@ -323,7 +327,7 @@ class TestGraph:
         assert resp.status_code == 200
         assert resp.json() == []
 
-    def test_top_relations(self, client, tmp_graph):
+    def test_top_relations(self, client: Any, tmp_graph: Path) -> None:
         with patch("api.GRAPH_DIR", tmp_graph):
             resp = client.get("/graph?top=2")
         data = resp.json()
@@ -331,14 +335,14 @@ class TestGraph:
         # Sorted by weight descending
         assert data[0]["weight"] >= data[1]["weight"]
 
-    def test_entity_detail(self, client, tmp_graph):
+    def test_entity_detail(self, client: Any, tmp_graph: Path) -> None:
         with patch("api.GRAPH_DIR", tmp_graph):
             resp = client.get("/graph/entity/stdp")
         data = resp.json()
         assert data["entity"]["id"] == "stdp"
         assert len(data["connections"]) > 0
 
-    def test_entity_not_found(self, client, tmp_graph):
+    def test_entity_not_found(self, client: Any, tmp_graph: Path) -> None:
         with patch("api.GRAPH_DIR", tmp_graph):
             resp = client.get("/graph/entity/nonexistent")
         data = resp.json()
@@ -349,7 +353,7 @@ class TestGraph:
 
 
 class TestRecall:
-    def test_recall_basic(self, client):
+    def test_recall_basic(self, client: Any) -> None:
         mock_ctx = type(
             "Ctx",
             (),
@@ -391,7 +395,7 @@ class TestRecall:
         assert data["entities"] == ["stdp"]
         assert data["elapsed_ms"] == 15.0
 
-    def test_recall_summary_format(self, client, tmp_traces, tmp_path):
+    def test_recall_summary_format(self, client: Any, tmp_traces: Path, tmp_path: Path) -> None:
         from unittest.mock import MagicMock
 
         mock_ctx = MagicMock()
@@ -414,7 +418,7 @@ class TestRecall:
         assert data["query"] == "test"
         assert data["trace"] == "trace.md"
 
-    def test_recall_context_format(self, client):
+    def test_recall_context_format(self, client: Any) -> None:
         from unittest.mock import MagicMock
 
         mock_ctx = MagicMock()
@@ -427,7 +431,7 @@ class TestRecall:
         assert "context" in data
         assert data["context"] == "LLM context here"
 
-    def test_recall_serializes_numpy_scalars(self, client):
+    def test_recall_serializes_numpy_scalars(self, client: Any) -> None:
         from unittest.mock import MagicMock
 
         mock_ctx = MagicMock()
@@ -454,18 +458,18 @@ class TestRecall:
 
 
 class TestPublicVectorSearch:
-    def test_public_vector_search_requires_query(self, client):
+    def test_public_vector_search_requires_query(self, client: Any) -> None:
         resp = client.post("/vector/search/public", json={"query": ""})
 
         assert resp.status_code == 400
 
-    def test_public_vector_search_top_k_zero_short_circuits(self, client):
+    def test_public_vector_search_top_k_zero_short_circuits(self, client: Any) -> None:
         resp = client.post("/vector/search/public", json={"query": "beta", "top_k": 0})
 
         assert resp.status_code == 200
         assert resp.json() == {"query": "beta", "results": []}
 
-    def test_public_vector_search_no_allowlist_returns_no_results(self, client):
+    def test_public_vector_search_no_allowlist_returns_no_results(self, client: Any) -> None:
         raw_result = VectorSearchResult(
             chunk_id="one",
             text="beta public paragraph",
@@ -484,7 +488,7 @@ class TestPublicVectorSearch:
         assert resp.status_code == 200
         assert resp.json()["results"] == []
 
-    def test_public_vector_search_uses_server_policy_and_redaction(self, client, tmp_path):
+    def test_public_vector_search_uses_server_policy_and_redaction(self, client: Any, tmp_path: Path) -> None:
         redaction_file = tmp_path / "terms.txt"
         redaction_file.write_text("private-token\n", encoding="utf-8")
         raw_result = VectorSearchResult(
@@ -521,7 +525,7 @@ class TestPublicVectorSearch:
         assert payload["results"][0]["metadata"]["document"] == "[redacted]-paper.md"
         assert payload["results"][0]["redactions"] == 3
 
-    def test_public_vector_search_backend_error_returns_503(self, client):
+    def test_public_vector_search_backend_error_returns_503(self, client: Any) -> None:
         with (
             patch.dict("os.environ", {}, clear=True),
             patch(
@@ -533,21 +537,25 @@ class TestPublicVectorSearch:
         assert resp.status_code == 503
         assert resp.json()["detail"] == "no endpoint"
 
-    def test_missing_redaction_file_is_rejected(self, tmp_path, monkeypatch):
+    def test_missing_redaction_file_is_rejected(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         missing = tmp_path / "missing_terms.txt"
         monkeypatch.setenv("REMANENTIA_PUBLIC_VECTOR_REDACTION_FILE", str(missing))
 
         with pytest.raises(ValueError, match="REMANENTIA_PUBLIC_VECTOR_REDACTION_FILE"):
             api._read_terms_from_env("REMANENTIA_PUBLIC_VECTOR_REDACTION_FILE")
 
-    def test_consolidate_endpoint(self, client):
+    def test_json_number_falls_back_for_invalid_values(self) -> None:
+        assert api._json_number("not-a-number", default=12.0) == 12.0
+        assert api._json_number(["not", "scalar"], default=7.0) == 7.0
+
+    def test_consolidate_endpoint(self, client: Any) -> None:
         mock_result = {"status": "ok", "traces_processed": 5}
         with patch("consolidation_engine.consolidate", return_value=mock_result):
             resp = client.post("/consolidate", json={"force": False})
         assert resp.status_code == 200
         assert resp.json()["status"] == "ok"
 
-    def test_status_with_daemon_state(self, client, tmp_path):
+    def test_status_with_daemon_state(self, client: Any, tmp_path: Path) -> None:
         import time
 
         state_dir = tmp_path / "snn_state"
@@ -574,7 +582,7 @@ class TestPublicVectorSearch:
         assert "daemon" in data
         assert data["daemon"]["cycle"] == 5
 
-    def test_health_reports_unreadable_legacy_daemon_state(self, client, tmp_path):
+    def test_health_reports_unreadable_legacy_daemon_state(self, client: Any, tmp_path: Path) -> None:
         state_dir = tmp_path / "snn_state"
         state_dir.mkdir()
         (state_dir / "current_state.json").write_text("{", encoding="utf-8")
@@ -585,7 +593,7 @@ class TestPublicVectorSearch:
         assert resp.status_code == 200
         assert resp.json()["legacy_daemon"] == "unreadable"
 
-    def test_status_with_vector_worker_state(self, client, tmp_path):
+    def test_status_with_vector_worker_state(self, client: Any, tmp_path: Path) -> None:
         state_dir = tmp_path / "snn_state"
         state_dir.mkdir()
         worker_state = {
@@ -614,7 +622,7 @@ class TestPublicVectorSearch:
         assert data["vector_worker"]["state"] == "alive"
         assert data["vector_worker"]["last_action"] == "skipped"
 
-    def test_status_reports_unreadable_vector_worker_state(self, client, tmp_path):
+    def test_status_reports_unreadable_vector_worker_state(self, client: Any, tmp_path: Path) -> None:
         state_dir = tmp_path / "snn_state"
         state_dir.mkdir()
         (state_dir / "vector_refresh_worker.json").write_text("{", encoding="utf-8")
@@ -635,16 +643,16 @@ class TestPublicVectorSearch:
 
 
 class TestAPIHelpers:
-    def test_json_safe_keeps_value_when_item_conversion_rejects(self):
+    def test_json_safe_keeps_value_when_item_conversion_rejects(self) -> None:
         class RejectingScalar:
-            def item(self):
+            def item(self) -> object:
                 raise ValueError("not scalar")
 
         value = RejectingScalar()
 
         assert api._json_safe(value) is value
 
-    def test_middleware_audits_handler_exception(self, monkeypatch, tmp_path):
+    def test_middleware_audits_handler_exception(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         audit_path = tmp_path / "audit.jsonl"
         monkeypatch.setattr(api, "AUTH", BearerAuth(None, warn_on_disabled=False), raising=False)
         monkeypatch.setattr(api, "AUDIT_LOGGER", RequestAuditLogger(audit_path), raising=False)
@@ -654,7 +662,7 @@ class TestAPIHelpers:
             TokenBucketLimiter(rate_per_minute=60000, burst=1000),
             raising=False,
         )
-        request = api.Request(
+        request = Request(
             {
                 "type": "http",
                 "method": "GET",
@@ -667,7 +675,7 @@ class TestAPIHelpers:
             }
         )
 
-        async def failing_handler(_request):
+        async def failing_handler(_request: Request) -> None:
             raise RuntimeError("handler boom")
 
         with pytest.raises(RuntimeError, match="handler boom"):
@@ -683,7 +691,7 @@ class TestAPIHelpers:
 
 
 class TestAPIPipeline:
-    def test_status_endpoint_pipeline(self, tmp_path):
+    def test_status_endpoint_pipeline(self, tmp_path: Path) -> None:
         """Status endpoint exercises the full pipeline."""
         from unittest.mock import patch
         from fastapi.testclient import TestClient
@@ -707,7 +715,7 @@ class TestAPIPipeline:
 class TestRecallCorrectnessEndpoint:
     """The HTTP write seam a verifier posts its correctness verdict to."""
 
-    def test_records_verdict(self, client, tmp_path, monkeypatch):
+    def test_records_verdict(self, client: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         from recall_ledger import RecallLedger
 
         led_path = tmp_path / "rl.jsonl"
@@ -727,7 +735,7 @@ class TestRecallCorrectnessEndpoint:
         assert rq.was_correct is False
         assert rq.was_used is None  # correctness must not touch usage
 
-    def test_unknown_query_returns_404(self, client, tmp_path, monkeypatch):
+    def test_unknown_query_returns_404(self, client: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("REMANENTIA_RECALL_LEDGER", str(tmp_path / "empty.jsonl"))
         resp = client.post(
             "/recall/correctness", json={"query": "never asked", "was_correct": True}
@@ -735,7 +743,7 @@ class TestRecallCorrectnessEndpoint:
         assert resp.status_code == 404
         assert "no prior recall" in resp.json()["detail"]
 
-    def test_missing_was_correct_is_422(self, client, tmp_path, monkeypatch):
+    def test_missing_was_correct_is_422(self, client: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("REMANENTIA_RECALL_LEDGER", str(tmp_path / "rl.jsonl"))
         resp = client.post("/recall/correctness", json={"query": "q"})
         assert resp.status_code == 422  # pydantic validation: was_correct required

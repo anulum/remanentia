@@ -87,6 +87,11 @@ Set `REMANENTIA_CORS_ORIGINS` for browser-exposed deployments, for example
 `https://remanentia.com,https://www.remanentia.com`. Leaving it unset preserves
 the local-development wildcard.
 
+The FastAPI route signatures intentionally expose runtime-safe JSON boundary
+types rather than recursive internal aliases. This keeps the live OpenAPI
+schema and Pydantic response validation aligned with the middleware, request
+models, and handler tests.
+
 ## Public Vector Search
 
 `POST /vector/search/public` exposes the public-safe vector result view.

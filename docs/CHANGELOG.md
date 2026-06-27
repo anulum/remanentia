@@ -45,6 +45,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - README badges, header image, branding footer
 
 ### Fixed
+- `api.py` now exposes FastAPI route annotations that stay runtime-safe for
+  Pydantic response schema generation, while its request models, middleware,
+  health/status/graph/vector/correctness handlers, and helper functions are
+  strict-mypy/docstring clean with 100% focused API coverage.
 - `api_server.py` now has typed stdlib-server security dependencies,
   JSON-object request validation, complete audited handler docstrings, and a
   strict-mypy clean dedicated HTTP handler test surface at 100% focused

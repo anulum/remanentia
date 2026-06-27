@@ -19,7 +19,7 @@ pipeline, and MCP server. No LLM required for core operations.
 | `arcane_retriever.py` | 138 | 4-channel parallel retrieval with RRF fusion |
 | `api_server.py` | 190 | Stdlib HTTP API for cross-service integration |
 | `reflector.py` | 108 | Periodic cluster summarisation + gap detection |
-| `api.py` | 95 | FastAPI REST server |
+| `api.py` | 224 | FastAPI REST server |
 | `observer.py` | 86 | Filesystem watcher → incremental index updates |
 | `entity_extractor.py` | 73 | GLiNER2 NER + regex fallback, 11 typed relations |
 | `answer_normalizer.py` | 72 | Hedging strip, polarity match, semantic similarity |
