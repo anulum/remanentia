@@ -107,6 +107,14 @@ class TestPresentUnknownAxes:
     def test_refuted_status_with_unknown_kind_floors_to_boundary(self):
         assert present(None, "refuted", "admitted", None) == BOUNDARY
 
+    def test_non_string_normalized_axis_floors_to_boundary(self, monkeypatch):
+        """Defensive normalization keeps unexpected helper values non-validated."""
+        monkeypatch.setattr("recall_gate.normalize_axis", lambda _value: object())
+
+        assert present("measured", "reference-validated", "admitted", "verified-at-source") == (
+            BOUNDARY
+        )
+
 
 class TestStatusTable:
     """§3 — every claim_status alone (measured kind, admitted, verified) → mode."""

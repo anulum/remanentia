@@ -105,6 +105,14 @@ class TestObserverState:
         state = ObserverState()
         assert state.load(tmp_path / "nope.json") is False
 
+    def test_load_rejects_non_mapping_state(self, tmp_path):
+        state_path = tmp_path / "state.json"
+        state_path.write_text('["not", "a", "mapping"]', encoding="utf-8")
+
+        state = ObserverState()
+
+        assert state.load(state_path) is False
+
 
 class TestObserveOnce:
     def test_creates_notes(self, tmp_path):
