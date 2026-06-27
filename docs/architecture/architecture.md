@@ -13,7 +13,7 @@ pipeline, and MCP server. No LLM required for core operations.
 | `answer_extractor.py` | 306 | Regex answer extraction (dates, numbers, names), LLM fallback |
 | `fact_decomposer.py` | 216 | Atomic fact decomposition with temporal validity windows |
 | `memory_recall.py` | 207 | Deep recall: retrieval + graph + temporal context |
-| `temporal_graph.py` | 197 | Temporal event graph, date resolution, code execution |
+| `temporal_graph.py` | 341 | Temporal event graph, date resolution, code execution |
 | `mcp_server.py` | 185 | Thread-safe MCP server (stdio JSON-RPC), async consolidation |
 | `cli.py` | 173 | Command-line interface |
 | `arcane_retriever.py` | 138 | 4-channel parallel retrieval with RRF fusion |

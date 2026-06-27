@@ -19,13 +19,25 @@ import json
 import math
 import re
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, date, timedelta
-from importlib import import_module
+from datetime import date, datetime, timedelta
+from importlib import import_module as _import_module
 from pathlib import Path
+from typing import cast
 
 BASE = Path(__file__).parent
 TEMPORAL_PATH = BASE / "memory" / "graph" / "temporal_edges.jsonl"
+StatsMap = dict[str, int | str]
+TemporalEdgeRows = list[tuple[str, str, str, str, str]]
+DateToPhase = Callable[[str], float]
+ResonanceSearch = Callable[[list[str], str, float], list[tuple[int, float]]]
+BuildTemporalEdges = Callable[
+    [dict[str, list[int]], list[tuple[str, str]], int, dict[int, str]],
+    TemporalEdgeRows,
+]
+ScoreTemporalQuery = Callable[[list[tuple[str, str, str, int]], str, list[str], int], list[int]]
+ParseDates = Callable[[str, str], list[str]]
 
 _MONTHS = {
     "january": 1,
@@ -66,12 +78,15 @@ _DATE_RELATIVE = re.compile(
 )
 
 
-_rust_date_to_phase = None
-_rust_resonance_search = None
+_rust_date_to_phase: DateToPhase | None = None
+_rust_resonance_search: ResonanceSearch | None = None
 try:
-    _rust_temporal = import_module("remanentia_temporal")
-    _rust_date_to_phase = _rust_temporal.date_to_phase  # pragma: no cover
-    _rust_resonance_search = _rust_temporal.resonance_search  # pragma: no cover
+    _rust_temporal = _import_module("remanentia_temporal")
+    _rust_date_to_phase = cast(DateToPhase, _rust_temporal.date_to_phase)  # pragma: no cover
+    _rust_resonance_search = cast(  # pragma: no cover
+        ResonanceSearch,
+        _rust_temporal.resonance_search,
+    )
 except ImportError:
     pass
 
@@ -97,6 +112,8 @@ def date_to_phase(date_str: str) -> float:
 
 @dataclass
 class TemporalEvent:
+    """Dated event extracted from a trace or benchmark session."""
+
     date: str  # ISO format YYYY-MM-DD
     text: str  # event description (sentence containing the date)
     source: str  # document name
@@ -111,6 +128,8 @@ class TemporalEvent:
 
 @dataclass
 class TemporalEdge:
+    """Directed temporal relation between two extracted events."""
+
     source_event: str
     target_event: str
     relation: str  # "before", "after", "same_day"
@@ -119,10 +138,14 @@ class TemporalEdge:
 
 
 class TemporalGraph:
-    def __init__(self):
+    """In-memory temporal event graph with Python and native acceleration paths."""
+
+    def __init__(self) -> None:
+        """Initialise an empty temporal graph."""
+
         self.events: list[TemporalEvent] = []
         self.edges: list[TemporalEdge] = []
-        self._by_date: dict[str, list[int]] = defaultdict(list)
+        self._by_date: defaultdict[str, list[int]] = defaultdict(list)
 
     def resonance_search(
         self, query_date: str, tolerance: float = 0.01
@@ -183,7 +206,7 @@ class TemporalGraph:
             except ImportError:  # pragma: no cover
                 pass
 
-        events = []
+        events: list[TemporalEvent] = []
         sentences = re.split(r"(?<=[.!?\n])\s+", text)
 
         ref_date_obj = None
@@ -213,7 +236,7 @@ class TemporalGraph:
                 )
         return events
 
-    def add_events(self, events: list[TemporalEvent]):
+    def add_events(self, events: list[TemporalEvent]) -> None:
         """Add events and build temporal edges.
 
         Uses date-bucketed approach instead of O(N²) pairwise comparison:
@@ -229,7 +252,10 @@ class TemporalGraph:
             new_dates.add(ev.date)
 
         try:
-            _rust_bte = import_module("remanentia_temporal").build_temporal_edges
+            _rust_bte = cast(
+                BuildTemporalEdges,
+                _import_module("remanentia_temporal").build_temporal_edges,
+            )
 
             by_date_snap = {d: list(idxs) for d, idxs in self._by_date.items()}  # pragma: no cover
             # Remove new events from snapshot (Rust re-adds them)
@@ -303,7 +329,7 @@ class TemporalGraph:
                             )
                         )
 
-    def build_from_documents(self, documents: list[tuple[str, str]]):
+    def build_from_documents(self, documents: list[tuple[str, str]]) -> None:
         """Build graph from list of (doc_name, text) pairs."""
         for doc_name, text in documents:
             events = self.extract_events(text, doc_name)
@@ -318,7 +344,10 @@ class TemporalGraph:
         dates_in_query = parse_dates(query)
 
         try:
-            _rust_stq = import_module("remanentia_temporal").score_temporal_query
+            _rust_stq = cast(
+                ScoreTemporalQuery,
+                _import_module("remanentia_temporal").score_temporal_query,
+            )
 
             ev_tuples = [
                 (e.date, e.text, e.source, e.paragraph_idx) for e in self.events
@@ -342,7 +371,7 @@ class TemporalGraph:
 
         # Sort by relevance to query terms
         q_tokens = set(re.findall(r"[a-z0-9]{3,}", q))
-        scored = []
+        scored: list[tuple[TemporalEvent, int]] = []
         for ev in events:
             ev_tokens = set(re.findall(r"[a-z0-9]{3,}", ev.text.lower()))
             overlap = len(q_tokens & ev_tokens)
@@ -372,10 +401,12 @@ class TemporalGraph:
             key=lambda e: e.date,
         )
 
-    def save(self, path: Path | None = None):
+    def save(self, path: Path | None = None) -> None:
+        """Persist temporal events as JSONL rows."""
+
         path = path or TEMPORAL_PATH
         path.parent.mkdir(parents=True, exist_ok=True)
-        lines = []
+        lines: list[str] = []
         for ev in self.events:
             lines.append(
                 json.dumps(
@@ -390,6 +421,8 @@ class TemporalGraph:
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     def load(self, path: Path | None = None) -> bool:
+        """Load temporal events from a JSONL graph file."""
+
         path = path or TEMPORAL_PATH
         if not path.exists():
             return False
@@ -398,20 +431,22 @@ class TemporalGraph:
         for line in path.read_text(encoding="utf-8").strip().split("\n"):
             if not line.strip():  # pragma: no cover
                 continue
-            d = json.loads(line)
+            d = cast(dict[str, str | int], json.loads(line))
             idx = len(self.events)
             ev = TemporalEvent(
-                date=d["date"],
-                text=d["text"],
-                source=d["source"],
-                paragraph_idx=d.get("paragraph_idx", 0),
+                date=str(d["date"]),
+                text=str(d["text"]),
+                source=str(d["source"]),
+                paragraph_idx=int(d.get("paragraph_idx", 0)),
             )
             self.events.append(ev)
             self._by_date[ev.date].append(idx)
         return True
 
     @property
-    def stats(self) -> dict:
+    def stats(self) -> StatsMap:
+        """Summarise graph size, date range, and source count."""
+
         dates = sorted(set(e.date for e in self.events))
         return {
             "events": len(self.events),
@@ -495,7 +530,7 @@ def _score_event_vs_query(
     unigram_overlap = len(q_tokens & e_tokens)
     bigram_overlap = len(q_bigrams & e_bigrams)
     density = unigram_overlap / max(1, len(e_tokens_list)) ** 0.5
-    return unigram_overlap + 2.0 * bigram_overlap + 0.3 * density
+    return float(unigram_overlap + 2.0 * bigram_overlap + 0.3 * density)
 
 
 def _pick_duration_pair(
@@ -698,14 +733,14 @@ def parse_dates(text: str, reference_date: date | None = None) -> list[str]:
 
     # Try Rust engine first
     try:
-        _rust_parse = import_module("remanentia_temporal").parse_dates
+        _rust_parse = cast(ParseDates, _import_module("remanentia_temporal").parse_dates)
 
         return _rust_parse(text, ref.isoformat())  # pragma: no cover
     except ImportError:
         pass
 
     # Python fallback
-    dates = []
+    dates: list[str] = []
 
     for m in _DATE_ISO.finditer(text):
         dates.append(m.group(0))

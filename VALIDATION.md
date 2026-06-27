@@ -24,7 +24,7 @@
 | knowledge_store.py | 395 | 100% |
 | fact_decomposer.py | 266 | 100% |
 | answer_extractor.py | 245 | 100% |
-| temporal_graph.py | 222 | 100% |
+| temporal_graph.py | 341 | 100% |
 | memory_recall.py | 207 | 100% |
 | cli.py | 196 | 100% |
 | mcp_server.py | 192 | 100% |
@@ -40,7 +40,7 @@
 | entity_extractor.py | 77 | 100% |
 | fact_validity_model.py | 69 | 100% |
 | llm_setup.py | 33 | 100% |
-| **Total** | **~4,229** | **100%** |
+| **Total** | **~4,348** | **100%** |
 
 ## Excluded from Coverage
 

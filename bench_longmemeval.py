@@ -400,7 +400,7 @@ def _tremu_precompute(
     if not tg.events:
         return None
 
-    return cast(str | None, temporal_code_execute(question, tg.events, question_date=question_date))
+    return temporal_code_execute(question, tg.events, question_date=question_date)
 
 
 def _type_prompt(question: str, qtype: str, context: str) -> str:

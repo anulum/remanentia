@@ -37,6 +37,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   category, no LLM calls).
 
 ### Fixed
+- `temporal_graph.py` now has typed optional Rust-extension boundaries,
+  complete audited graph/dataclass docstrings, strict-mypy clean fallback and
+  LongMemEval integration tests, and 100% focused coverage.
 - `answer_extractor.py` now has typed optional native-extension and LLM backend
   boundaries, complete audited helper docstrings, and a strict-mypy clean
   dedicated answer-extraction test surface at 100% focused coverage.
