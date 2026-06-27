@@ -49,6 +49,8 @@ VERDICT_ACCEPT = "accept"
 VERDICT_FLOOR = "floor"
 VERDICT_REJECT = "reject"
 DEFAULT_ADMITTING_VERDICTS = (VERDICT_ACCEPT, VERDICT_FLOOR)
+FALSIFIED_EVIDENCE = "falsified"
+REFERENCE_VALIDATED_STATUS = "reference-validated"
 
 
 @dataclass(frozen=True)
@@ -166,6 +168,9 @@ def ingest_findings(
         except Exception as exc:  # noqa: BLE001 — a bad payload is a rejection, not a crash
             rejections.append((event.seq, f"unparsable payload: {exc}"))
             continue
+        if rejection := _claim_axis_rejection(finding):
+            rejections.append((event.seq, rejection))
+            continue
         decision = admit(finding)
         if decision.verdict in admitting:
             sink.write(finding, event.seq, decision.verdict)
@@ -197,6 +202,32 @@ def _statement_hash(statement: str) -> str:
     return sha256(statement.encode("utf-8")).hexdigest()[:16]
 
 
+def _finding_record(finding: Any) -> dict[str, Any]:
+    if hasattr(finding, "as_dict"):
+        return dict(finding.as_dict())
+    return dict(finding)
+
+
+def _claim_axis_rejection(finding: Any) -> str | None:
+    record = _finding_record(finding)
+    evidence_kind = _normalise_axis(record.get("evidence_kind"))
+    claim_status = _normalise_axis(record.get("claim_status"))
+    if evidence_kind == FALSIFIED_EVIDENCE and claim_status == REFERENCE_VALIDATED_STATUS:
+        return (
+            "falsified evidence cannot enter memory as reference-validated; "
+            "mark the claim refuted before ingest"
+        )
+    return None
+
+
+def _normalise_axis(value: object) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value.replace("_", "-").lower()
+    return ""
+
+
 @dataclass
 class MarkdownFindingSink:
     """Persist admitted findings as Markdown with an honesty-axis frontmatter.
@@ -213,7 +244,7 @@ class MarkdownFindingSink:
 
     def write(self, finding: Any, seq: int, verdict: str) -> None:
         self.directory.mkdir(parents=True, exist_ok=True)
-        record = finding.as_dict() if hasattr(finding, "as_dict") else dict(finding)
+        record = _finding_record(finding)
         statement = str(record.get("statement", ""))
         name = f"{_slug(str(record.get('subkind', 'finding')))}-{self.content_hash(statement)}.md"
         front = {

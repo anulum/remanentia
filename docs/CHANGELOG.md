@@ -10,6 +10,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   calibration-error reporting from correctness-labelled recall ledger outcomes.
 - Finding envelope verification now accepts audited supersession closures and
   downgrades superseded signed findings to ungraded after signature verification.
+- Finding ingest now rejects falsified findings that still claim
+  reference-validated status before they enter persistent memory.
 - SYNAPSE feed ingest now normalises project, actor, sequence, and timestamp
   provenance before admitted findings enter memory.
 - Rust STDP/LIF acceleration (arcane_stdp) — 2–3x speedup, bit-exact with numpy

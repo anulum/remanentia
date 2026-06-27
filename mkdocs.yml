@@ -90,6 +90,7 @@ nav:
     - active_retrieval: api/active_retrieval.md
     - aggregate_precompute: api/aggregate_precompute.md
     - device_utils: api/device_utils.md
+    - finding_ingest: api/finding_ingest.md
     - feed_ingest: api/feed_ingest.md
     - feed_normalization: api/feed_normalization.md
     - file_utils: api/file_utils.md

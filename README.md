@@ -139,6 +139,7 @@ Knowledge store (multi-hop graph search) ...... Zettelkasten + prospective queri
 | `reflector.py` | Periodic cluster summarisation + gap detection |
 | `arcane_retriever.py` | 4-channel parallel retrieval with RRF fusion |
 | `fact_decomposer.py` | Atomic fact decomposition with temporal validity windows |
+| `finding_ingest.py` | Hub-backed finding admission, cursoring, and Markdown persistence |
 | `feed_ingest.py` | SYNAPSE feed.ndjson ingest for explicit findings and decisions |
 | `feed_normalization.py` | Controlled project, actor, sequence, and timestamp vocabulary for feed ingest |
 | `finding_envelope.py` | Signed finding envelopes with recall-gate, validity, void, and lineage closure checks |

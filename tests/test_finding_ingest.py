@@ -17,6 +17,9 @@ and extractable on its own. A final integration test drives the real
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable, Sequence
+from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -30,7 +33,9 @@ from finding_ingest import (
 
 
 class FakeEvent:
-    def __init__(self, seq, payload, kind="finding"):
+    """In-memory hub event used by the injected ingest core tests."""
+
+    def __init__(self, seq: int, payload: dict[str, Any], kind: str = "finding") -> None:
         self.seq = seq
         self.kind = kind
         self.payload = payload
@@ -39,10 +44,16 @@ class FakeEvent:
 class FakeStore:
     """Returns events strictly above ``after_seq``, filtered by kind."""
 
-    def __init__(self, events):
+    def __init__(self, events: Sequence[FakeEvent]) -> None:
         self._events = events
 
-    def read_since(self, after_seq, *, kinds=None, limit=None):
+    def read_since(
+        self,
+        after_seq: int,
+        *,
+        kinds: Iterable[str] | None = None,
+        limit: int | None = None,
+    ) -> Sequence[FakeEvent]:
         rows = [e for e in self._events if e.seq > after_seq]
         if kinds is not None:
             allowed = set(kinds)
@@ -52,34 +63,43 @@ class FakeStore:
 
 
 class FakeDecision:
-    def __init__(self, verdict, reasons=()):
+    """Admission decision returned by the injected fake gate."""
+
+    def __init__(self, verdict: str, reasons: Sequence[str] = ()) -> None:
         self.verdict = verdict
         self.reasons = reasons
 
 
 class RecordingSink:
-    def __init__(self):
+    """Finding sink that records writes for assertions."""
+
+    def __init__(self) -> None:
         self.written: list[tuple[str, int, str]] = []
 
-    def write(self, finding, seq, verdict):
+    def write(self, finding: Any, seq: int, verdict: str) -> None:
         self.written.append((finding["statement"], seq, verdict))
 
 
-def _payload(statement, verdict="accept"):
+def _payload(statement: str, verdict: str = "accept") -> dict[str, Any]:
     """A payload that carries its desired verdict so the fake gate is trivial."""
     return {"statement": statement, "_verdict": verdict}
 
 
-def _fake_admit(finding):
+def _fake_admit(finding: dict[str, Any]) -> FakeDecision:
     return FakeDecision(finding.get("_verdict", "accept"), reasons=("forced",))
 
 
-def _identity_parse(payload):
+def _identity_parse(payload: dict[str, Any]) -> dict[str, Any]:
     return dict(payload)
 
 
 class TestIngestCore:
-    def _run(self, tmp_path, events, **kw):
+    def _run(
+        self,
+        tmp_path: Path,
+        events: Sequence[FakeEvent],
+        **kw: Any,
+    ) -> tuple[RecordingSink, SeqCursor, IngestReport]:
         sink = RecordingSink()
         cursor = SeqCursor(tmp_path / "cur.json")
         report = ingest_findings(
@@ -92,7 +112,7 @@ class TestIngestCore:
         )
         return sink, cursor, report
 
-    def test_admits_accept_and_floor_drops_reject(self, tmp_path):
+    def test_admits_accept_and_floor_drops_reject(self, tmp_path: Path) -> None:
         events = [
             FakeEvent(1, _payload("a", "accept")),
             FakeEvent(2, _payload("b", "floor")),
@@ -107,11 +127,11 @@ class TestIngestCore:
         assert report.rejections == ((3, "forced"),)
         assert cursor.load() == 3  # cursor persisted at the highest scanned seq
 
-    def test_floored_finding_records_its_verdict_to_sink(self, tmp_path):
+    def test_floored_finding_records_its_verdict_to_sink(self, tmp_path: Path) -> None:
         sink, _, _ = self._run(tmp_path, [FakeEvent(5, _payload("x", "floor"))])
         assert sink.written == [("x", 5, "floor")]
 
-    def test_resume_from_cursor_skips_processed(self, tmp_path):
+    def test_resume_from_cursor_skips_processed(self, tmp_path: Path) -> None:
         cursor = SeqCursor(tmp_path / "cur.json")
         cursor.save(10)
         sink = RecordingSink()
@@ -123,8 +143,8 @@ class TestIngestCore:
         assert report.scanned == 1
         assert cursor.load() == 12
 
-    def test_unparsable_payload_is_a_rejection_not_a_crash(self, tmp_path):
-        def boom_parse(payload):
+    def test_unparsable_payload_is_a_rejection_not_a_crash(self, tmp_path: Path) -> None:
+        def boom_parse(payload: dict[str, Any]) -> dict[str, Any]:
             if payload.get("statement") == "bad":
                 raise ValueError("corrupt")
             return dict(payload)
@@ -140,7 +160,7 @@ class TestIngestCore:
         assert "corrupt" in report.rejections[0][1]
         assert report.last_seq == 2  # still advanced past the bad event
 
-    def test_no_events_does_not_move_cursor(self, tmp_path):
+    def test_no_events_does_not_move_cursor(self, tmp_path: Path) -> None:
         cursor = SeqCursor(tmp_path / "cur.json")
         cursor.save(7)
         sink = RecordingSink()
@@ -151,13 +171,13 @@ class TestIngestCore:
         assert report.advanced is False
         assert cursor.load() == 7  # untouched
 
-    def test_custom_admitting_verdicts(self, tmp_path):
+    def test_custom_admitting_verdicts(self, tmp_path: Path) -> None:
         events = [FakeEvent(1, _payload("a", "accept")), FakeEvent(2, _payload("b", "floor"))]
         sink, _, report = self._run(tmp_path, events, admitting_verdicts=("accept",))
         assert [s for s, _, _ in sink.written] == ["a"]  # floor now excluded
         assert report.rejected == 1
 
-    def test_kinds_filter_is_passed_through(self, tmp_path):
+    def test_kinds_filter_is_passed_through(self, tmp_path: Path) -> None:
         events = [
             FakeEvent(1, _payload("f"), kind="finding"),
             FakeEvent(2, _payload("c"), kind="chat"),
@@ -166,36 +186,50 @@ class TestIngestCore:
         assert [s for s, _, _ in sink.written] == ["f"]
         assert report.scanned == 1
 
+    def test_non_string_axes_are_left_to_the_injected_gate(self, tmp_path: Path) -> None:
+        payload = _payload("legacy payload with numeric axis")
+        payload["evidence_kind"] = 42
+        payload["claim_status"] = "reference_validated"
+
+        sink, _, report = self._run(tmp_path, [FakeEvent(1, payload)])
+
+        assert sink.written == [("legacy payload with numeric axis", 1, "accept")]
+        assert report.rejected == 0
+
 
 class TestSeqCursor:
-    def test_missing_file_reads_zero(self, tmp_path):
+    def test_missing_file_reads_zero(self, tmp_path: Path) -> None:
         assert SeqCursor(tmp_path / "absent.json").load() == 0
 
-    def test_roundtrip(self, tmp_path):
+    def test_roundtrip(self, tmp_path: Path) -> None:
         c = SeqCursor(tmp_path / "nested" / "cur.json")
         c.save(42)
         assert SeqCursor(tmp_path / "nested" / "cur.json").load() == 42
 
-    def test_corrupt_file_reads_zero(self, tmp_path):
+    def test_corrupt_file_reads_zero(self, tmp_path: Path) -> None:
         p = tmp_path / "cur.json"
         p.write_text("{not json", encoding="utf-8")
         assert SeqCursor(p).load() == 0
 
-    def test_save_is_atomic_no_tmp_left(self, tmp_path):
+    def test_save_is_atomic_no_tmp_left(self, tmp_path: Path) -> None:
         c = SeqCursor(tmp_path / "cur.json")
         c.save(3)
         assert not (tmp_path / "cur.json.tmp").exists()
 
 
-class _DictFinding(dict):
+class _DictFinding(dict[str, Any]):
     """A finding whose as_dict() returns itself, mimicking the real Finding."""
 
-    def as_dict(self):
+    def as_dict(self) -> dict[str, Any]:
         return dict(self)
 
 
 class TestMarkdownFindingSink:
-    def _finding(self, statement="reuse cut re-embeds", subkind="outcome"):
+    def _finding(
+        self,
+        statement: str = "reuse cut re-embeds",
+        subkind: str = "outcome",
+    ) -> _DictFinding:
         return _DictFinding(
             statement=statement,
             subkind=subkind,
@@ -208,7 +242,7 @@ class TestMarkdownFindingSink:
             tags=["perf"],
         )
 
-    def test_writes_markdown_with_honesty_frontmatter(self, tmp_path):
+    def test_writes_markdown_with_honesty_frontmatter(self, tmp_path: Path) -> None:
         sink = MarkdownFindingSink(tmp_path / "findings")
         sink.write(self._finding(), seq=11, verdict="floor")
         files = list((tmp_path / "findings").glob("*.md"))
@@ -221,37 +255,37 @@ class TestMarkdownFindingSink:
         assert front["hub_seq"] == 11
         assert "reuse cut re-embeds" in text
 
-    def test_idempotent_same_statement_one_file(self, tmp_path):
+    def test_idempotent_same_statement_one_file(self, tmp_path: Path) -> None:
         sink = MarkdownFindingSink(tmp_path / "findings")
         sink.write(self._finding(), seq=1, verdict="accept")
         sink.write(self._finding(), seq=2, verdict="accept")  # re-ingest
         assert len(list((tmp_path / "findings").glob("*.md"))) == 1
 
-    def test_distinct_statements_distinct_files(self, tmp_path):
+    def test_distinct_statements_distinct_files(self, tmp_path: Path) -> None:
         sink = MarkdownFindingSink(tmp_path / "findings")
         sink.write(self._finding("first thing"), seq=1, verdict="accept")
         sink.write(self._finding("second thing"), seq=2, verdict="accept")
         assert len(list((tmp_path / "findings").glob("*.md"))) == 2
 
-    def test_accepts_plain_dict_finding(self, tmp_path):
+    def test_accepts_plain_dict_finding(self, tmp_path: Path) -> None:
         sink = MarkdownFindingSink(tmp_path / "findings")
         sink.write({"statement": "plain", "subkind": "lesson"}, seq=3, verdict="accept")
         assert len(list((tmp_path / "findings").glob("*.md"))) == 1
 
 
 class TestDefaultFindingsDir:
-    def test_explicit_base(self, tmp_path):
+    def test_explicit_base(self, tmp_path: Path) -> None:
         from finding_ingest import default_findings_dir
 
         assert default_findings_dir(tmp_path) == tmp_path / "memory" / "semantic" / "findings"
 
-    def test_env_base(self, tmp_path, monkeypatch):
+    def test_env_base(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         from finding_ingest import default_findings_dir
 
         monkeypatch.setenv("REMANENTIA_BASE", str(tmp_path))
         assert default_findings_dir() == tmp_path / "memory" / "semantic" / "findings"
 
-    def test_falls_back_to_module_dir(self, monkeypatch):
+    def test_falls_back_to_module_dir(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from finding_ingest import default_findings_dir
 
         monkeypatch.delenv("REMANENTIA_BASE", raising=False)
@@ -259,12 +293,12 @@ class TestDefaultFindingsDir:
         assert result.parts[-3:] == ("memory", "semantic", "findings")
 
 
-def test_ingest_report_advanced_property():
+def test_ingest_report_advanced_property() -> None:
     assert IngestReport(scanned=2, admitted=1, rejected=1, last_seq=5).advanced is True
     assert IngestReport(scanned=0, admitted=0, rejected=0, last_seq=5).advanced is False
 
 
-def test_default_admitting_verdicts():
+def test_default_admitting_verdicts() -> None:
     assert set(DEFAULT_ADMITTING_VERDICTS) == {"accept", "floor"}
 
 
@@ -273,7 +307,7 @@ def test_default_admitting_verdicts():
 synapse_channel = pytest.importorskip("synapse_channel")
 
 
-def _valid_finding_record(statement: str) -> dict:
+def _valid_finding_record(statement: str) -> dict[str, Any]:
     """A well-formed finding the real gate accepts (carries a validity window)."""
     return {
         "statement": statement,
@@ -306,7 +340,7 @@ def _valid_finding_record(statement: str) -> dict:
 
 
 class TestHubIntegration:
-    def test_end_to_end_ingest_from_real_hub(self, tmp_path):
+    def test_end_to_end_ingest_from_real_hub(self, tmp_path: Path) -> None:
         from finding_ingest import ingest_from_hub
         from synapse_channel.core.journal import record_finding
 
@@ -331,7 +365,7 @@ class TestHubIntegration:
         again = ingest_from_hub(hub, sink, cursor)
         assert again.scanned == 0
 
-    def test_invalid_finding_is_gated_out(self, tmp_path):
+    def test_invalid_finding_is_gated_out(self, tmp_path: Path) -> None:
         from finding_ingest import ingest_from_hub
         from synapse_channel.core.journal import record_finding
 
@@ -345,4 +379,23 @@ class TestHubIntegration:
         report = ingest_from_hub(hub, MarkdownFindingSink(tmp_path / "f"), tmp_path / "cur.json")
         assert report.admitted == 0
         assert report.rejected == 1
+        assert not list((tmp_path / "f").glob("*.md"))
+
+    def test_falsified_reference_validated_finding_is_rejected(self, tmp_path: Path) -> None:
+        from finding_ingest import ingest_from_hub
+        from synapse_channel.core.journal import record_finding
+
+        hub = tmp_path / "hub.db"
+        store = synapse_channel.EventStore(str(hub))
+        invalid = _valid_finding_record("falsified reference claim cannot enter memory")
+        invalid["evidence_kind"] = "falsified"
+        invalid["claim_status"] = "reference_validated"
+        record_finding(store, invalid)
+        store.close()
+
+        report = ingest_from_hub(hub, MarkdownFindingSink(tmp_path / "f"), tmp_path / "cur.json")
+
+        assert report.admitted == 0
+        assert report.rejected == 1
+        assert "falsified evidence" in report.rejections[0][1]
         assert not list((tmp_path / "f").glob("*.md"))
