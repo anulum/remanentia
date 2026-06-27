@@ -123,6 +123,30 @@ def test_top_level_cli_routes_claim_schema(
     assert "Wrote claim-axis schema" in capsys.readouterr().out
 
 
+def test_top_level_cli_claim_schema_check_raises_on_stale_schema(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The top-level CLI propagates claim-schema check failures."""
+    output = tmp_path / "claim_axes.schema.json"
+    output.write_text("{}\n", encoding="utf-8")
+
+    from cli import main as remanentia_main
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["remanentia", "claim-schema", "--output", str(output), "--check"],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        remanentia_main()
+
+    assert exc_info.value.code == 1
+    assert "not up to date" in capsys.readouterr().err
+
+
 def test_committed_claim_schema_is_current() -> None:
     """The committed schema artefact stays synchronised with the code contract."""
     assert SCHEMA_PATH.is_file()
