@@ -171,6 +171,7 @@ pip install -e ".[dev]"     # test dependencies
 remanentia-feed-ingest  # consume explicit Finding:/Decision: rows from ~/synapse/feed.ndjson
 remanentia-recall-calibration --json  # report calibrated recall abstention evidence
 remanentia-store-manifest --write --json  # record the selected memory-store manifest
+python tools/install_user_services.py --base /path/to/store --stimuli-dir /path/to/snn_stimuli
 ```
 
 ## Search Pipeline
@@ -326,6 +327,10 @@ Set `REMANENTIA_BASE` to point ingest, freshness checks, `remanentia init`, and
 store layout, while `remanentia status` reads its traces, semantic memory, graph
 files, state files, and freshness report from the same resolved root. Set
 `REMANENTIA_STIMULI_DIR` when the stimuli firehose lives outside that store.
+The user-service installer accepts the same selection as `--base` and
+`--stimuli-dir`; generated API, vector-worker, and freshness-watchdog units all
+export those paths, and the watchdog writes the freshness report under the
+selected store.
 
 ## CLI
 

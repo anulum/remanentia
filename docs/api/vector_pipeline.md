@@ -50,7 +50,8 @@ python -m vector_pipeline watch --interval-s 900
 python -m vector_pipeline search "hybrid retrieval decision" --top 5
 python -m vector_pipeline search "hybrid retrieval decision" --public \
   --public-source paper --public-path-prefix paper --redaction-file local_terms.txt
-python tools/install_user_services.py --start
+python tools/install_user_services.py --base /path/to/store \
+  --stimuli-dir /path/to/snn_stimuli --start
 ```
 
 `build`, `refresh`, `watch`, and `search` read endpoint configuration
@@ -87,11 +88,20 @@ last refresh decision so operators can distinguish a live worker from a
 stale legacy daemon.
 
 `tools/install_user_services.py` is the official supervised-service
-installer for local user deployments. It writes two units into
+installer for local user deployments. It writes four units into
 `~/.config/systemd/user/`:
 
 - `remanentia-api.service`
 - `remanentia-vector-worker.service`
+- `remanentia-index-freshness.service`
+- `remanentia-index-freshness.timer`
+
+Use `--base` to select the memory-store root and `--stimuli-dir` when the
+stimuli firehose lives outside that root. The generated API, vector-worker, and
+freshness-watchdog units export `REMANENTIA_BASE` and
+`REMANENTIA_STIMULI_DIR`; the vector worker writes its vector index and
+heartbeat under the selected store, and the watchdog writes
+`snn_state/index_freshness.json` under the same selected store.
 
 The generated API unit includes the embedding endpoint variables required
 by `/vector/search/public`. It also sets narrow public-vector defaults:

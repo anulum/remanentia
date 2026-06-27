@@ -39,6 +39,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `REMANENTIA_ARCANE_CE_DISABLE=1` for latency-sensitive live/MCP use.
 
 ### Changed
+- `tools/install_user_services.py` now accepts `--base` and `--stimuli-dir`,
+  exports the selected store into generated API, vector-worker, and
+  freshness-watchdog units, and writes vector-worker and freshness artifacts
+  under that selected store.
 - `remanentia status` and `remanentia init` now use the same canonical
   `store_paths.py` resolver as ingest and freshness monitoring, so
   `REMANENTIA_BASE` selects one operator-visible store instead of leaving CLI

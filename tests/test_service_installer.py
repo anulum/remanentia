@@ -8,16 +8,23 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
+
+from pytest import MonkeyPatch
 
 import tools.install_user_services as installer
 from tools.install_user_services import main
 
 
-def _record_systemctl(monkeypatch) -> list[tuple[str, ...]]:
+def _record_systemctl(monkeypatch: MonkeyPatch) -> list[tuple[str, ...]]:
     """Capture systemctl calls so the activation policy can be asserted offline."""
     calls: list[tuple[str, ...]] = []
-    monkeypatch.setattr(installer, "_systemctl", lambda *a: calls.append(a))
+
+    def record(*args: str) -> None:
+        calls.append(args)
+
+    monkeypatch.setattr(installer, "_systemctl", record)
     return calls
 
 
@@ -58,7 +65,9 @@ def test_installer_writes_api_and_vector_worker_units(tmp_path: Path) -> None:
     assert "REMANENTIA_PUBLIC_VECTOR_SOURCES=paper" in api_unit
     assert "REMANENTIA_PUBLIC_VECTOR_PATH_PREFIXES=paper" in api_unit
     assert f"WorkingDirectory={repo}" in worker_unit
-    assert "-m vector_pipeline watch --interval-s 60.0" in worker_unit
+    assert f"--index-dir {repo / 'snn_state' / 'vector_index'}" in worker_unit
+    assert f"--heartbeat-path {repo / 'snn_state' / 'vector_refresh_worker.json'}" in worker_unit
+    assert "--interval-s 60.0" in worker_unit
     assert "REMANENTIA_EMBEDDING_BASE_URL=http://127.0.0.1:8082/v1" in worker_unit
 
 
@@ -89,6 +98,48 @@ def test_installer_writes_freshness_watchdog_units(tmp_path: Path) -> None:
     assert "WantedBy=timers.target" in timer
 
 
+def test_installer_wires_selected_store_into_units(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    selected = tmp_path / "selected-store"
+    stimuli = tmp_path / "fleet-firehose"
+    repo.mkdir()
+    user_dir = tmp_path / "systemd"
+
+    code = main(
+        [
+            "--repo",
+            str(repo),
+            "--user-dir",
+            str(user_dir),
+            "--base",
+            str(selected),
+            "--stimuli-dir",
+            str(stimuli),
+            "--no-systemctl",
+        ]
+    )
+
+    assert code == 0
+    api_unit = (user_dir / "remanentia-api.service").read_text(encoding="utf-8")
+    worker_unit = (user_dir / "remanentia-vector-worker.service").read_text(encoding="utf-8")
+    freshness_unit = (user_dir / "remanentia-index-freshness.service").read_text(encoding="utf-8")
+    expected_report = selected / "snn_state" / "index_freshness.json"
+
+    for unit in (api_unit, worker_unit, freshness_unit):
+        assert f"WorkingDirectory={repo}" in unit
+        assert f"REMANENTIA_BASE={selected}" in unit
+        assert f"REMANENTIA_STIMULI_DIR={stimuli}" in unit
+
+    assert (
+        f"-m vector_pipeline watch --index-dir {selected / 'snn_state' / 'vector_index'}"
+        in worker_unit
+    )
+    assert (
+        f"--heartbeat-path {selected / 'snn_state' / 'vector_refresh_worker.json'}" in worker_unit
+    )
+    assert f"-m index_freshness --report {expected_report}" in freshness_unit
+
+
 class TestActivationPolicy:
     """Worker activation (a possible heavy rebuild) is opt-in; the watchdog is not."""
 
@@ -97,7 +148,9 @@ class TestActivationPolicy:
         repo.mkdir()
         return ["--repo", str(repo), "--user-dir", str(tmp_path / "systemd")]
 
-    def test_default_enables_watchdog_not_worker(self, tmp_path: Path, monkeypatch) -> None:
+    def test_default_enables_watchdog_not_worker(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
         calls = _record_systemctl(monkeypatch)
 
         assert main(self._args(tmp_path)) == 0
@@ -108,7 +161,9 @@ class TestActivationPolicy:
         # The refresh worker is never enabled or restarted without an explicit flag.
         assert not any("remanentia-vector-worker.service" in c for c in calls)
 
-    def test_enable_worker_enables_but_does_not_start(self, tmp_path: Path, monkeypatch) -> None:
+    def test_enable_worker_enables_but_does_not_start(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
         calls = _record_systemctl(monkeypatch)
 
         assert main([*self._args(tmp_path), "--enable-worker"]) == 0
@@ -116,7 +171,7 @@ class TestActivationPolicy:
         assert ("enable", "remanentia-vector-worker.service") in calls
         assert not any(c[0] == "restart" for c in calls)
 
-    def test_start_restarts_api_and_worker(self, tmp_path: Path, monkeypatch) -> None:
+    def test_start_restarts_api_and_worker(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         calls = _record_systemctl(monkeypatch)
 
         assert main([*self._args(tmp_path), "--start"]) == 0
@@ -124,7 +179,9 @@ class TestActivationPolicy:
         assert ("enable", "remanentia-vector-worker.service") in calls
         assert ("restart", "remanentia-api.service", "remanentia-vector-worker.service") in calls
 
-    def test_no_systemctl_skips_all_activation(self, tmp_path: Path, monkeypatch) -> None:
+    def test_no_systemctl_skips_all_activation(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
         calls = _record_systemctl(monkeypatch)
 
         assert main([*self._args(tmp_path), "--no-systemctl"]) == 0
@@ -144,13 +201,13 @@ def test_units_use_checkout_venv_python_when_present(tmp_path: Path) -> None:
     assert f"ExecStart={repo / '.venv' / 'bin' / 'python'} -m index_freshness" in service
 
 
-def test_systemctl_invokes_user_scope(monkeypatch) -> None:
+def test_systemctl_invokes_user_scope(monkeypatch: MonkeyPatch) -> None:
     captured: list[list[str]] = []
 
-    def fake_run(cmd, check):
+    def fake_run(cmd: list[str], check: bool) -> None:
         captured.append(cmd)
         assert check is True
 
-    monkeypatch.setattr(installer.subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", fake_run)
     installer._systemctl("daemon-reload")
     assert captured == [["systemctl", "--user", "daemon-reload"]]
