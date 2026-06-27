@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import Any
 from unittest.mock import patch
 
 
@@ -31,7 +33,7 @@ from answer_extractor import (
 )
 
 
-def _without_native():
+def _without_native() -> Any:
     return patch("answer_extractor.import_module", side_effect=ImportError)
 
 
@@ -39,26 +41,26 @@ def _without_native():
 
 
 class TestQuestionTypes:
-    def test_when(self):
+    def test_when(self) -> None:
         assert _is_when_question("when did we fix the bug")
         assert _is_when_question("what date was the release")
         assert not _is_when_question("where is the file")
 
-    def test_how_many(self):
+    def test_how_many(self) -> None:
         assert _is_how_many_question("how many tests passed")
         assert _is_how_many_question("how much did it cost")
         assert not _is_how_many_question("how does it work")
 
-    def test_version(self):
+    def test_version(self) -> None:
         assert _is_version_question("what version is deployed")
         assert _is_version_question("latest release number")
         assert not _is_version_question("what is the status")
 
-    def test_who(self):
+    def test_who(self) -> None:
         assert _is_who_question("who wrote this code")
         assert not _is_who_question("what is this code")
 
-    def test_yes_no(self):
+    def test_yes_no(self) -> None:
         assert _is_yes_no_question("is the daemon running")
         assert _is_yes_no_question("did we fix the bug")
         assert _is_yes_no_question("can we deploy now")
@@ -69,21 +71,21 @@ class TestQuestionTypes:
 
 
 class TestExtractDate:
-    def test_iso_date(self):
+    def test_iso_date(self) -> None:
         assert _extract_date_answer("Fixed on 2026-03-15 during the sprint.") == "2026-03-15"
 
-    def test_english_date(self):
+    def test_english_date(self) -> None:
         result = _extract_date_answer("Released on March 15, 2026.")
         assert result is not None
         assert "March" in result
 
-    def test_no_date(self):
+    def test_no_date(self) -> None:
         assert _extract_date_answer("No dates in this text.") is None
 
-    def test_multiple_dates_returns_first(self):
+    def test_multiple_dates_returns_first(self) -> None:
         assert _extract_date_answer("Started 2026-03-10, finished 2026-03-15.") == "2026-03-10"
 
-    def test_query_terms_choose_nearest_date(self):
+    def test_query_terms_choose_nearest_date(self) -> None:
         text = (
             "The design review happened on 2026-01-01. "
             + "x " * 100
@@ -94,7 +96,7 @@ class TestExtractDate:
 
 
 class TestPythonFallbackDispatch:
-    def test_extract_answer_dispatches_question_types_without_native_extension(self):
+    def test_extract_answer_dispatches_question_types_without_native_extension(self) -> None:
         with _without_native():
             assert extract_answer("when did it ship", "It shipped on 2026-02-03.") == "2026-02-03"
             assert extract_answer("how many tests passed", "Exactly 42 tests passed.") == "42"
@@ -105,7 +107,7 @@ class TestPythonFallbackDispatch:
             assert extract_answer("how long did it take", "The run took 14 days.") == "14"
             assert extract_answer("what percentage passed", "Coverage reached 98%.") == "98%"
 
-    def test_extract_answer_generic_fallback_order_without_native_extension(self):
+    def test_extract_answer_generic_fallback_order_without_native_extension(self) -> None:
         with _without_native():
             assert extract_answer("tell me the metric", "Coverage reached 88%.") == "88%"
             assert extract_answer("tell me the version", "Release v2.0 is live.") == "v2.0"
@@ -113,7 +115,7 @@ class TestPythonFallbackDispatch:
             assert extract_answer("tell me the number", "There were 123 failures.") == "123"
             assert extract_answer("tell me something", "No extractable answer here.") is None
 
-    def test_number_extraction_empty_and_queryless_paths(self):
+    def test_number_extraction_empty_and_queryless_paths(self) -> None:
         assert _extract_number_answer("No digits here.", "how many") is None
         assert _extract_number_answer("There were 2 and then 5.", "") == "2"
         assert (
@@ -124,7 +126,7 @@ class TestPythonFallbackDispatch:
             == "5"
         )
 
-    def test_fuzzy_match_python_fallback_paths(self):
+    def test_fuzzy_match_python_fallback_paths(self) -> None:
         with _without_native():
             assert fuzzy_match("", "gold") is False
             assert fuzzy_match("March 15", "march 15") is True
@@ -132,14 +134,14 @@ class TestPythonFallbackDispatch:
             assert fuzzy_match("kitten", "sitting", threshold=0.5) is True
             assert fuzzy_match("alpha", "omega", threshold=0.9) is False
 
-    def test_normalize_number_python_fallback_paths(self):
+    def test_normalize_number_python_fallback_paths(self) -> None:
         with _without_native():
             assert normalize_number("1,234%") == "1234"
             assert normalize_number("one hundred and five") == "105"
             assert normalize_number("forty-two") == "42"
             assert normalize_number("no number") is None
 
-    def test_extract_best_sentence_python_fallback(self):
+    def test_extract_best_sentence_python_fallback(self) -> None:
         paragraph = "Alpha is unrelated. Beta retrieval passed all checks."
         with _without_native():
             assert extract_best_sentence("retrieval checks", paragraph) == (
@@ -152,17 +154,17 @@ class TestPythonFallbackDispatch:
 
 
 class TestExtractNumber:
-    def test_simple_number(self):
+    def test_simple_number(self) -> None:
         result = _extract_number_answer("We processed 1986 questions.", "how many questions")
         assert result is not None
         assert "1986" in result
 
-    def test_decimal_number(self):
+    def test_decimal_number(self) -> None:
         result = _extract_number_answer("Score was 66.4 on the benchmark.", "what score")
         assert result is not None
         assert "66.4" in result
 
-    def test_filters_years(self):
+    def test_filters_years(self) -> None:
         result = _extract_number_answer("In 2026 we processed 500 items.", "how many items")
         assert result is not None
         assert result != "2026"
@@ -172,13 +174,13 @@ class TestExtractNumber:
 
 
 class TestExtractVersion:
-    def test_semver(self):
+    def test_semver(self) -> None:
         assert _extract_version_answer("Released v3.9.0 to PyPI.") == "v3.9.0"
 
-    def test_two_part(self):
+    def test_two_part(self) -> None:
         assert _extract_version_answer("Updated to v0.2.") == "v0.2"
 
-    def test_no_version(self):
+    def test_no_version(self) -> None:
         assert _extract_version_answer("No version here.") is None
 
 
@@ -186,13 +188,13 @@ class TestExtractVersion:
 
 
 class TestExtractPercentage:
-    def test_integer_percent(self):
+    def test_integer_percent(self) -> None:
         assert _extract_percentage_answer("Accuracy was 100% on benchmark.") == "100%"
 
-    def test_decimal_percent(self):
+    def test_decimal_percent(self) -> None:
         assert _extract_percentage_answer("LOCOMO score: 66.4%.") == "66.4%"
 
-    def test_no_percent(self):
+    def test_no_percent(self) -> None:
         assert _extract_percentage_answer("No percentages here.") is None
 
 
@@ -200,12 +202,12 @@ class TestExtractPercentage:
 
 
 class TestExtractName:
-    def test_multi_word_name(self):
+    def test_multi_word_name(self) -> None:
         result = _extract_name_answer("Written by Miroslav Sotek in 2026.", "who wrote")
         assert result is not None
         assert "Miroslav" in result
 
-    def test_no_name(self):
+    def test_no_name(self) -> None:
         assert _extract_name_answer("no names here at all.", "who did") is None
 
 
@@ -213,11 +215,11 @@ class TestExtractName:
 
 
 class TestExtractYesNo:
-    def test_negation(self):
+    def test_negation(self) -> None:
         result = _extract_yes_no("The daemon is not running.", "is daemon running")
         assert result == "No"
 
-    def test_affirmation(self):
+    def test_affirmation(self) -> None:
         result = _extract_yes_no("The daemon is running.", "is daemon running")
         assert result == "Yes"
 
@@ -226,35 +228,35 @@ class TestExtractYesNo:
 
 
 class TestExtractAnswer:
-    def test_when_question(self):
+    def test_when_question(self) -> None:
         result = extract_answer(
             "When did we fix the STDP bug?",
             "The STDP bug was fixed on 2026-03-15 by correcting the mask.",
         )
         assert result == "2026-03-15"
 
-    def test_version_question(self):
+    def test_version_question(self) -> None:
         result = extract_answer(
             "What version was released?",
             "We released v3.9.0 to PyPI on March 15.",
         )
         assert result == "v3.9.0"
 
-    def test_percentage_question(self):
+    def test_percentage_question(self) -> None:
         result = extract_answer(
             "What is the LOCOMO accuracy?",
             "The LOCOMO benchmark scored 66.4% on 1,986 questions.",
         )
         assert result == "66.4%"
 
-    def test_yes_no_question(self):
+    def test_yes_no_question(self) -> None:
         result = extract_answer(
             "Is the SNN used for retrieval?",
             "SNN retrieval is not used. Weight set to 0.00.",
         )
         assert result == "No"
 
-    def test_generic_fallback(self):
+    def test_generic_fallback(self) -> None:
         result = extract_answer(
             "What happened to the daemon?",
             "Daemon killed. GPU freed. v0.2.0 released. 66.4% accuracy.",
@@ -266,7 +268,7 @@ class TestExtractAnswer:
 
 
 class TestExtractAllCandidates:
-    def test_mixed_types(self):
+    def test_mixed_types(self) -> None:
         candidates = extract_all_candidates(
             "STDP results",
             "On 2026-03-15, accuracy reached 66.4% with v3.9.0. Processed 1,986 items.",
@@ -276,7 +278,7 @@ class TestExtractAllCandidates:
         assert "percentage" in types
         assert "version" in types
 
-    def test_proximity_boost(self):
+    def test_proximity_boost(self) -> None:
         candidates = extract_all_candidates(
             "STDP accuracy",
             "STDP scored 66.4%. BM25 scored 48.9%.",
@@ -286,10 +288,10 @@ class TestExtractAllCandidates:
         if len(pcts) >= 2:
             assert pcts[0]["answer"] == "66.4%"
 
-    def test_empty(self):
+    def test_empty(self) -> None:
         assert extract_all_candidates("query", "no extractable answers") == []
 
-    def test_name_candidates(self):
+    def test_name_candidates(self) -> None:
         candidates = extract_all_candidates(
             "author",
             "Written by Miroslav Sotek at Anulum on 2026-03-15.",
@@ -302,24 +304,24 @@ class TestExtractAllCandidates:
 
 
 class TestFuzzyMatch:
-    def test_exact_match(self):
+    def test_exact_match(self) -> None:
         assert fuzzy_match("hello", "hello") is True
 
-    def test_substring_match(self):
+    def test_substring_match(self) -> None:
         assert fuzzy_match("hello", "hello world") is True
         assert fuzzy_match("hello world", "hello") is True
 
-    def test_fuzzy_close(self):
+    def test_fuzzy_close(self) -> None:
         assert fuzzy_match("Miroslav Sotek", "Miroslav Šotek") is True
 
-    def test_fuzzy_distant(self):
+    def test_fuzzy_distant(self) -> None:
         assert fuzzy_match("apple", "zebra") is False
 
-    def test_empty(self):
+    def test_empty(self) -> None:
         assert fuzzy_match("", "hello") is False
         assert fuzzy_match("hello", "") is False
 
-    def test_case_insensitive(self):
+    def test_case_insensitive(self) -> None:
         assert fuzzy_match("HELLO", "hello") is True
 
 
@@ -327,25 +329,25 @@ class TestFuzzyMatch:
 
 
 class TestNormalizeNumber:
-    def test_plain_number(self):
+    def test_plain_number(self) -> None:
         assert normalize_number("42") == "42"
 
-    def test_comma_number(self):
+    def test_comma_number(self) -> None:
         assert normalize_number("1,986") == "1986"
 
-    def test_percentage(self):
+    def test_percentage(self) -> None:
         assert normalize_number("66.4%") == "66.4"
 
-    def test_word_number(self):
+    def test_word_number(self) -> None:
         assert normalize_number("forty-two") == "42"
 
-    def test_word_teen(self):
+    def test_word_teen(self) -> None:
         assert normalize_number("thirteen") == "13"
 
-    def test_word_compound(self):
+    def test_word_compound(self) -> None:
         assert normalize_number("twenty one") == "21"
 
-    def test_not_a_number(self):
+    def test_not_a_number(self) -> None:
         assert normalize_number("hello") is None
 
 
@@ -353,16 +355,16 @@ class TestNormalizeNumber:
 
 
 class TestExtractBestSentence:
-    def test_finds_relevant(self):
+    def test_finds_relevant(self) -> None:
         para = "The weather is nice. The STDP bug was fixed on March 15. It was a good day."
         result = extract_best_sentence("STDP bug fix", para)
         assert result is not None
         assert "STDP" in result
 
-    def test_empty_paragraph(self):
+    def test_empty_paragraph(self) -> None:
         assert extract_best_sentence("query", "") is None
 
-    def test_single_sentence(self):
+    def test_single_sentence(self) -> None:
         result = extract_best_sentence("test", "This is a test sentence.")
         assert result == "This is a test sentence."
 
@@ -371,20 +373,20 @@ class TestExtractBestSentence:
 
 
 class TestExtractAnswerDispatch:
-    def test_who_question(self):
+    def test_who_question(self) -> None:
         result = extract_answer("who wrote the code", "Written by Miroslav Sotek in 2026.")
         assert result is not None
         assert "Miroslav" in result
 
-    def test_how_many_question(self):
+    def test_how_many_question(self) -> None:
         result = extract_answer("how many tests passed", "We ran 250 tests successfully.")
         assert result is not None
 
-    def test_what_percent_question(self):
+    def test_what_percent_question(self) -> None:
         result = extract_answer("what percent accuracy", "Accuracy was 81.2% on LOCOMO.")
         assert result == "81.2%"
 
-    def test_generic_no_typed_match(self):
+    def test_generic_no_typed_match(self) -> None:
         result = extract_answer("tell me about the project", "No special types here at all.")
         assert result is None
 
@@ -393,7 +395,7 @@ class TestExtractAnswerDispatch:
 
 
 class TestExtractNameSingleWord:
-    def test_single_capitalized_near_query(self):
+    def test_single_capitalized_near_query(self) -> None:
         result = _extract_name_answer("The project lead is Miroslav.", "who is leading the project")
         assert result is not None
 
@@ -402,7 +404,7 @@ class TestExtractNameSingleWord:
 
 
 class TestIsWhatPercentQuestion:
-    def test_percent_word(self):
+    def test_percent_word(self) -> None:
         from answer_extractor import _is_what_percent_question
 
         assert _is_what_percent_question("what percent did we get")
@@ -414,10 +416,10 @@ class TestIsWhatPercentQuestion:
 
 
 class TestNormalizeNumberEdge:
-    def test_hundred(self):
+    def test_hundred(self) -> None:
         assert normalize_number("one hundred") == "100"
 
-    def test_and_word(self):
+    def test_and_word(self) -> None:
         assert normalize_number("twenty and one") == "21"
 
 
@@ -427,12 +429,12 @@ class TestNormalizeNumberEdge:
 class _FakeBackend:
     """Simple LLM backend stub for testing."""
 
-    def __init__(self, response):
+    def __init__(self, response: str | None | Callable[[str], str | None]) -> None:
         self._response = response
-        self.last_prompt = None
-        self.last_kwargs = {}
+        self.last_prompt = ""
+        self.last_kwargs: dict[str, int | str] = {}
 
-    def complete(self, prompt, *, max_tokens=200, system=""):
+    def complete(self, prompt: str, *, max_tokens: int = 200, system: str = "") -> str | None:
         self.last_prompt = prompt
         self.last_kwargs = {"max_tokens": max_tokens, "system": system}
         if callable(self._response):
@@ -443,7 +445,7 @@ class _FakeBackend:
 class _ErrorBackend:
     """Backend that always raises."""
 
-    def complete(self, prompt, **kwargs):
+    def complete(self, prompt: str, *, max_tokens: int = 200, system: str = "") -> str | None:
         raise RuntimeError("backend error")
 
 
@@ -451,23 +453,23 @@ class _ErrorBackend:
 
 
 class TestLLMExtractAnswer:
-    def setup_method(self):
+    def setup_method(self) -> None:
         import answer_extractor
 
         self._orig = answer_extractor._BACKEND
         answer_extractor._BACKEND = None
 
-    def teardown_method(self):
+    def teardown_method(self) -> None:
         import answer_extractor
 
         answer_extractor._BACKEND = self._orig
 
-    def test_no_backend_returns_none(self):
+    def test_no_backend_returns_none(self) -> None:
         from answer_extractor import llm_extract_answer
 
         assert llm_extract_answer("when", "context about dates") is None
 
-    def test_successful_extraction(self):
+    def test_successful_extraction(self) -> None:
         import answer_extractor
         from answer_extractor import llm_extract_answer
 
@@ -478,35 +480,35 @@ class TestLLMExtractAnswer:
         assert "context" in backend.last_prompt
         assert backend.last_kwargs["max_tokens"] == 100
 
-    def test_unknown_answer_returns_none(self):
+    def test_unknown_answer_returns_none(self) -> None:
         import answer_extractor
         from answer_extractor import llm_extract_answer
 
         answer_extractor._BACKEND = _FakeBackend("unknown")
         assert llm_extract_answer("when did X happen", "some context") is None
 
-    def test_i_dont_know_returns_none(self):
+    def test_i_dont_know_returns_none(self) -> None:
         import answer_extractor
         from answer_extractor import llm_extract_answer
 
         answer_extractor._BACKEND = _FakeBackend("I don't know")
         assert llm_extract_answer("question", "paragraph") is None
 
-    def test_none_response_returns_none(self):
+    def test_none_response_returns_none(self) -> None:
         import answer_extractor
         from answer_extractor import llm_extract_answer
 
         answer_extractor._BACKEND = _FakeBackend(None)
         assert llm_extract_answer("question", "paragraph") is None
 
-    def test_backend_error_returns_none(self):
+    def test_backend_error_returns_none(self) -> None:
         import answer_extractor
         from answer_extractor import llm_extract_answer
 
         answer_extractor._BACKEND = _ErrorBackend()
         assert llm_extract_answer("question", "paragraph") is None
 
-    def test_paragraph_truncated_to_1000(self):
+    def test_paragraph_truncated_to_1000(self) -> None:
         import answer_extractor
         from answer_extractor import llm_extract_answer
 
@@ -521,24 +523,24 @@ class TestLLMExtractAnswer:
 
 
 class TestLLMBackendAccessors:
-    def setup_method(self):
+    def setup_method(self) -> None:
         import answer_extractor
 
         self._orig = answer_extractor._BACKEND
 
-    def teardown_method(self):
+    def teardown_method(self) -> None:
         import answer_extractor
 
         answer_extractor._BACKEND = self._orig
 
-    def test_set_and_get(self):
+    def test_set_and_get(self) -> None:
         from answer_extractor import set_llm_backend, get_llm_backend
 
         backend = _FakeBackend("test")
         set_llm_backend(backend)
         assert get_llm_backend() is backend
 
-    def test_set_none(self):
+    def test_set_none(self) -> None:
         from answer_extractor import set_llm_backend, get_llm_backend
 
         set_llm_backend(None)
@@ -549,23 +551,23 @@ class TestLLMBackendAccessors:
 
 
 class TestLLMProspectiveQueries:
-    def setup_method(self):
+    def setup_method(self) -> None:
         import answer_extractor
 
         self._orig = answer_extractor._BACKEND
         answer_extractor._BACKEND = None
 
-    def teardown_method(self):
+    def teardown_method(self) -> None:
         import answer_extractor
 
         answer_extractor._BACKEND = self._orig
 
-    def test_no_backend_returns_empty(self):
+    def test_no_backend_returns_empty(self) -> None:
         from answer_extractor import llm_generate_prospective_queries
 
         assert llm_generate_prospective_queries("paragraph text", "doc.md") == []
 
-    def test_generates_queries(self):
+    def test_generates_queries(self) -> None:
         import answer_extractor
         from answer_extractor import llm_generate_prospective_queries
 
@@ -575,21 +577,21 @@ class TestLLMProspectiveQueries:
         result = llm_generate_prospective_queries("paragraph", "doc.md")
         assert len(result) == 2  # "Tiny" is <= 5 chars, filtered out
 
-    def test_none_response_returns_empty(self):
+    def test_none_response_returns_empty(self) -> None:
         import answer_extractor
         from answer_extractor import llm_generate_prospective_queries
 
         answer_extractor._BACKEND = _FakeBackend(None)
         assert llm_generate_prospective_queries("paragraph", "doc.md") == []
 
-    def test_backend_error_returns_empty(self):
+    def test_backend_error_returns_empty(self) -> None:
         import answer_extractor
         from answer_extractor import llm_generate_prospective_queries
 
         answer_extractor._BACKEND = _ErrorBackend()
         assert llm_generate_prospective_queries("paragraph", "doc.md") == []
 
-    def test_max_8_queries(self):
+    def test_max_8_queries(self) -> None:
         import answer_extractor
         from answer_extractor import llm_generate_prospective_queries
 
@@ -604,23 +606,23 @@ class TestLLMProspectiveQueries:
 
 
 class TestLLMSynthesizeAnswer:
-    def setup_method(self):
+    def setup_method(self) -> None:
         import answer_extractor
 
         self._orig = answer_extractor._BACKEND
         answer_extractor._BACKEND = None
 
-    def teardown_method(self):
+    def teardown_method(self) -> None:
         import answer_extractor
 
         answer_extractor._BACKEND = self._orig
 
-    def test_no_backend_returns_none(self):
+    def test_no_backend_returns_none(self) -> None:
         from answer_extractor import llm_synthesize_answer
 
         assert llm_synthesize_answer("query", ["para1", "para2"]) is None
 
-    def test_synthesizes_answer(self):
+    def test_synthesizes_answer(self) -> None:
         import answer_extractor
         from answer_extractor import llm_synthesize_answer
 
@@ -629,28 +631,28 @@ class TestLLMSynthesizeAnswer:
         result = llm_synthesize_answer("what was the score?", ["para about scores"])
         assert result == "The score was 69.0%"
 
-    def test_unknown_returns_none(self):
+    def test_unknown_returns_none(self) -> None:
         import answer_extractor
         from answer_extractor import llm_synthesize_answer
 
         answer_extractor._BACKEND = _FakeBackend("unknown")
         assert llm_synthesize_answer("query", ["para"]) is None
 
-    def test_none_response_returns_none(self):
+    def test_none_response_returns_none(self) -> None:
         import answer_extractor
         from answer_extractor import llm_synthesize_answer
 
         answer_extractor._BACKEND = _FakeBackend(None)
         assert llm_synthesize_answer("query", ["para"]) is None
 
-    def test_backend_error_returns_none(self):
+    def test_backend_error_returns_none(self) -> None:
         import answer_extractor
         from answer_extractor import llm_synthesize_answer
 
         answer_extractor._BACKEND = _ErrorBackend()
         assert llm_synthesize_answer("query", ["para"]) is None
 
-    def test_hypothetical_prompt(self):
+    def test_hypothetical_prompt(self) -> None:
         import answer_extractor
         from answer_extractor import llm_synthesize_answer
 
@@ -660,7 +662,7 @@ class TestLLMSynthesizeAnswer:
         assert result == "Yes, they would enjoy it"
         assert "hypothetical" in backend.last_prompt.lower()
 
-    def test_list_prompt(self):
+    def test_list_prompt(self) -> None:
         import answer_extractor
         from answer_extractor import llm_synthesize_answer
 
@@ -670,7 +672,7 @@ class TestLLMSynthesizeAnswer:
         assert result == "hiking, reading, cooking"
         assert "list all" in backend.last_prompt.lower()
 
-    def test_default_prompt(self):
+    def test_default_prompt(self) -> None:
         import answer_extractor
         from answer_extractor import llm_synthesize_answer
 
@@ -680,7 +682,7 @@ class TestLLMSynthesizeAnswer:
         assert result == "The answer is 42"
         assert "concise" in backend.last_prompt.lower()
 
-    def test_max_10_paragraphs(self):
+    def test_max_10_paragraphs(self) -> None:
         import answer_extractor
         from answer_extractor import llm_synthesize_answer
 
@@ -699,7 +701,7 @@ class TestLLMSynthesizeAnswer:
 class TestAnswerExtractorPipeline:
     """Full pipeline: query → extract → normalise → match."""
 
-    def test_extract_feeds_normalizer(self):
+    def test_extract_feeds_normalizer(self) -> None:
         from answer_extractor import extract_answer
         from answer_normalizer import normalize_answer
 
@@ -708,14 +710,14 @@ class TestAnswerExtractorPipeline:
         normed = normalize_answer(answer)
         assert "88.5" in normed
 
-    def test_extract_feeds_fuzzy_match(self):
+    def test_extract_feeds_fuzzy_match(self) -> None:
         from answer_extractor import extract_answer, fuzzy_match
 
         answer = extract_answer("When was it?", "The review was on March 15, 2026.")
         assert answer is not None
         assert fuzzy_match(answer, "March 15, 2026")
 
-    def test_rust_and_python_agree(self):
+    def test_rust_and_python_agree(self) -> None:
         """Rust extract_answer matches Python on same input."""
         from answer_extractor import extract_answer
 
@@ -728,7 +730,7 @@ class TestAnswerExtractorPipeline:
 
 
 class TestExtractDuration:
-    def test_days_between_two_dates(self):
+    def test_days_between_two_dates(self) -> None:
         from answer_extractor import extract_duration
 
         text = "The trip started on 2023-01-01 and ended on 2023-02-01."
@@ -736,7 +738,7 @@ class TestExtractDuration:
         assert result is not None
         assert "31 days" in result
 
-    def test_weeks_between_dates(self):
+    def test_weeks_between_dates(self) -> None:
         from answer_extractor import extract_duration
 
         text = "Project began 2023-03-01 and shipped 2023-03-22."
@@ -744,7 +746,7 @@ class TestExtractDuration:
         assert result is not None
         assert "3 weeks" in result
 
-    def test_months_between_dates(self):
+    def test_months_between_dates(self) -> None:
         from answer_extractor import extract_duration
 
         text = "Joined on 2023-01-15, left on 2023-04-15."
@@ -752,19 +754,19 @@ class TestExtractDuration:
         assert result is not None
         assert "3 months" in result
 
-    def test_single_date_returns_none(self):
+    def test_single_date_returns_none(self) -> None:
         from answer_extractor import extract_duration
 
         text = "Event on 2023-01-01 was great."
         assert extract_duration(text, "how many days") is None
 
-    def test_no_dates_returns_none(self):
+    def test_no_dates_returns_none(self) -> None:
         from answer_extractor import extract_duration
 
         text = "No dates here at all."
         assert extract_duration(text, "how many days") is None
 
-    def test_keyword_proximity_scoring(self):
+    def test_keyword_proximity_scoring(self) -> None:
         """Picks dates nearest to query keywords, not arbitrary first/last."""
         from answer_extractor import extract_duration
 
@@ -780,7 +782,7 @@ class TestExtractDuration:
         assert result is not None
         assert "59 days" in result  # Jan 1 → Mar 1
 
-    def test_duration_dispatched_from_extract_answer(self):
+    def test_duration_dispatched_from_extract_answer(self) -> None:
         """extract_answer dispatches to extract_duration for duration questions."""
         from answer_extractor import extract_answer
 
@@ -789,7 +791,7 @@ class TestExtractDuration:
         assert result is not None
         assert "31 days" in result
 
-    def test_is_duration_question(self):
+    def test_is_duration_question(self) -> None:
         from answer_extractor import _is_duration_question
 
         assert _is_duration_question("how many days between x and y")
@@ -797,7 +799,7 @@ class TestExtractDuration:
         assert _is_duration_question("how long between the events")
         assert not _is_duration_question("what is the weather")
 
-    def test_days_dual_format(self):
+    def test_days_dual_format(self) -> None:
         """Task #33: days duration returns both exclusive and inclusive."""
         from answer_extractor import extract_duration
 
@@ -808,7 +810,7 @@ class TestExtractDuration:
         assert "32 days" in result
         assert "both endpoints" in result
 
-    def test_weeks_dual_format(self):
+    def test_weeks_dual_format(self) -> None:
         from answer_extractor import extract_duration
 
         text = "Project began 2023-03-01 and shipped 2023-03-22."
@@ -818,7 +820,7 @@ class TestExtractDuration:
         assert "21 days exclusive" in result
         assert "22 inclusive" in result
 
-    def test_months_dual_format(self):
+    def test_months_dual_format(self) -> None:
         from answer_extractor import extract_duration
 
         text = "Joined on 2023-01-15, left on 2023-04-15."
@@ -833,7 +835,7 @@ class TestExtractDuration:
 
 
 class TestProximityScoring:
-    def test_closer_token_scores_higher(self):
+    def test_closer_token_scores_higher(self) -> None:
         from answer_extractor import _proximity_score
 
         # Date at position ~50; 'gym' right next to it vs 'gym' 100 chars away
@@ -850,13 +852,13 @@ class TestProximityScoring:
         s_far = _proximity_score(far, date_pos_far, 10, q_tokens)
         assert s_close > s_far
 
-    def test_no_tokens_scores_zero(self):
+    def test_no_tokens_scores_zero(self) -> None:
         from answer_extractor import _proximity_score
 
         s = _proximity_score("unrelated 2023-05-22 content", 10, 10, {"gym", "session"})
         assert s == 0.0
 
-    def test_proximity_picks_right_pair(self):
+    def test_proximity_picks_right_pair(self) -> None:
         """When multiple dates exist, distance-weighted scoring picks the ones
         closest to query keywords."""
         from answer_extractor import extract_duration
@@ -878,7 +880,7 @@ class TestProximityScoring:
         assert "59 days" in result
         assert "60 days" in result
 
-    def test_tighter_window_ignores_distant_matches(self):
+    def test_tighter_window_ignores_distant_matches(self) -> None:
         """Query tokens >60 chars from date should contribute less."""
         from answer_extractor import _proximity_score
 
@@ -911,25 +913,25 @@ class TestMultibyteSafety:
         "buy individual tickets each time you board a vehicle in Tokyo."
     )
 
-    def test_yen_paragraph_does_not_panic(self):
+    def test_yen_paragraph_does_not_panic(self) -> None:
         for q in ("how much", "when", "who", "what line"):
             extract_answer(q, self.TOKYO_YEN)  # must not raise
 
-    def test_cjk_paragraph_does_not_panic(self):
+    def test_cjk_paragraph_does_not_panic(self) -> None:
         text = "東京の地下鉄は便利です。The Tokyo subway costs around ¥170 per ride."
         for q in ("how much does the subway cost", "when", "who uses"):
             extract_answer(q, text)
 
-    def test_emoji_paragraph_does_not_panic(self):
+    def test_emoji_paragraph_does_not_panic(self) -> None:
         text = "The 🎯 target was hit on 2026-04-14 when Alice ran a 26.2 mile marathon."
         assert extract_answer("when was the target hit", text) is not None
 
-    def test_euro_accents_paragraph_does_not_panic(self):
+    def test_euro_accents_paragraph_does_not_panic(self) -> None:
         text = "Zürich tickets cost €4.40 for short trips and Fräulein Müller confirmed."
         extract_answer("how much", text)
         extract_answer("who confirmed", text)
 
-    def test_rust_path_direct(self):
+    def test_rust_path_direct(self) -> None:
         """Call Rust extractor directly — bypass Python fallbacks."""
         try:
             from remanentia_answer_extractor import extract_answer as r_extract
@@ -942,7 +944,7 @@ class TestMultibyteSafety:
 class TestExtractDurationDefensive:
     """Guard the date-parse fallback inside extract_duration."""
 
-    def test_invalid_iso_date_is_skipped(self):
+    def test_invalid_iso_date_is_skipped(self) -> None:
         """``2020-02-31`` matches ``\\b\\d{4}-\\d{2}-\\d{2}\\b`` but fails
         ``date(...)`` — the except-branch must drop it silently and not
         poison the duration. We just need to prove the branch runs.

@@ -45,6 +45,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - README badges, header image, branding footer
 
 ### Fixed
+- `answer_extractor.py` now has typed optional native-extension and LLM backend
+  boundaries, complete audited helper docstrings, and a strict-mypy clean
+  dedicated answer-extraction test surface at 100% focused coverage.
 - `memory_recall.py` now has explicit JSON row typing, complete audited helper
   docstrings, and a strict-mypy clean dedicated recall test surface while
   preserving 100% focused coverage and Rust-extension fallback coverage.

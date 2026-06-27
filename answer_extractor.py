@@ -22,9 +22,24 @@ Handles:
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from difflib import SequenceMatcher
 from importlib import import_module
-from typing import Any
+from typing import Any, Protocol, cast
+
+
+AnswerCandidate = tuple[str, int]
+AnswerExtractor = Callable[[str, str], str | None]
+FuzzyMatcher = Callable[[str, str, float], bool]
+NumberNormalizer = Callable[[str], str | None]
+SentenceExtractor = Callable[[str, str], str | None]
+
+
+class LLMBackend(Protocol):
+    """Backend interface used by optional LLM answer synthesis helpers."""
+
+    def complete(self, prompt: str, *, max_tokens: int, system: str = "") -> str | None:
+        """Return a generated completion for a prompt."""
 
 
 def extract_answer(query: str, paragraph: str) -> str | None:
@@ -44,7 +59,10 @@ def extract_answer(query: str, paragraph: str) -> str | None:
             return dur
 
     try:
-        _rust_extract = import_module("remanentia_answer_extractor").extract_answer
+        _rust_extract = cast(
+            AnswerExtractor,
+            import_module("remanentia_answer_extractor").extract_answer,
+        )
 
         return _rust_extract(query, paragraph)  # pragma: no cover
     except ImportError:
@@ -120,10 +138,14 @@ def extract_all_candidates(query: str, paragraph: str) -> list[dict[str, Any]]:
 
 
 def _is_when_question(q: str) -> bool:
+    """Return whether a query asks for a date or time."""
+
     return bool(re.search(r"\bwhen\b|\bwhat date\b|\bwhat time\b", q))
 
 
 def _is_duration_question(q: str) -> bool:
+    """Return whether a query asks for elapsed duration."""
+
     return bool(
         re.search(
             r"\bhow many days\b|\bhow many weeks\b|\bhow many months\b"
@@ -134,22 +156,32 @@ def _is_duration_question(q: str) -> bool:
 
 
 def _is_how_many_question(q: str) -> bool:
+    """Return whether a query asks for a numeric count or amount."""
+
     return bool(re.search(r"\bhow many\b|\bhow much\b|\bcount\b|\bnumber of\b", q))
 
 
 def _is_version_question(q: str) -> bool:
+    """Return whether a query asks for a version or release label."""
+
     return bool(re.search(r"\bversion\b|\brelease\b|\bv\d", q))
 
 
 def _is_who_question(q: str) -> bool:
+    """Return whether a query asks for a person or owner."""
+
     return bool(re.search(r"\bwho\b|\bwhose\b|\bwhom\b", q))
 
 
 def _is_yes_no_question(q: str) -> bool:
+    """Return whether a query can be answered as yes or no."""
+
     return bool(re.search(r"^(is|are|was|were|did|does|do|has|have|can|will|should)\b", q))
 
 
 def _is_what_percent_question(q: str) -> bool:
+    """Return whether a query asks for a percentage-like metric."""
+
     return bool(re.search(r"\bpercent\b|\baccuracy\b|\bscore\b|\brate\b|\b%", q))
 
 
@@ -162,7 +194,7 @@ def _extract_date_answer(text: str, query: str = "") -> str | None:
     When multiple dates exist, scores each by proximity to query terms
     rather than returning the first match.
     """
-    candidates = []
+    candidates: list[AnswerCandidate] = []
     for m in re.finditer(r"\d{4}-\d{2}-\d{2}", text):
         candidates.append((m.group(), m.start()))
     for m in re.finditer(
@@ -187,7 +219,9 @@ def _extract_date_answer(text: str, query: str = "") -> str | None:
 
 
 def _extract_number_answer(text: str, query: str) -> str | None:
-    candidates = []
+    """Extract the query-nearest non-year number from text."""
+
+    candidates: list[AnswerCandidate] = []
     for m in re.finditer(r"\b(\d[\d,]*(?:\.\d+)?)\b", text):
         val = m.group(1)
         if re.match(r"20\d{2}$", val) or len(val) == 0:
@@ -201,25 +235,33 @@ def _extract_number_answer(text: str, query: str) -> str | None:
 
 
 def _extract_number_answer_generic(text: str) -> str | None:
+    """Extract the first generic number without query proximity."""
+
     return _extract_number_answer(text, "")
 
 
 def _extract_version_answer(text: str) -> str | None:
-    versions = re.findall(r"v\d+\.\d+(?:\.\d+)?", text)
+    """Extract the first semantic-version-like label from text."""
+
+    versions: list[str] = re.findall(r"v\d+\.\d+(?:\.\d+)?", text)
     if versions:
         return versions[0]
     return None
 
 
 def _extract_percentage_answer(text: str) -> str | None:
-    pcts = re.findall(r"\d+\.?\d*%", text)
+    """Extract the first percentage literal from text."""
+
+    pcts: list[str] = re.findall(r"\d+\.?\d*%", text)
     if pcts:
         return pcts[0]
     return None
 
 
 def _extract_name_answer(text: str, query: str) -> str | None:
-    candidates = []
+    """Extract the query-nearest capitalized name candidate from text."""
+
+    candidates: list[AnswerCandidate] = []
     for m in re.finditer(r"[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+", text):
         candidates.append((m.group(), m.start()))
     if not candidates:
@@ -237,6 +279,8 @@ def _extract_name_answer(text: str, query: str) -> str | None:
 
 
 def _extract_yes_no(text: str, query: str) -> str | None:
+    """Infer a yes/no answer from local negation near query terms."""
+
     t = text.lower()
     _negation_markers = [
         "not ",
@@ -383,7 +427,10 @@ def _best_by_proximity(
 def fuzzy_match(candidate: str, gold: str, threshold: float = 0.7) -> bool:
     """Check if candidate fuzzy-matches gold answer. Rust-accelerated."""
     try:
-        _rust_fuzzy = import_module("remanentia_answer_extractor").fuzzy_match
+        _rust_fuzzy = cast(
+            FuzzyMatcher,
+            import_module("remanentia_answer_extractor").fuzzy_match,
+        )
 
         return _rust_fuzzy(candidate, gold, threshold)  # pragma: no cover
     except ImportError:
@@ -436,7 +483,10 @@ _WORD_TO_NUM = {
 def normalize_number(text: str) -> str | None:
     """Normalize number words and formats to digits. Rust-accelerated."""
     try:
-        _rust_num = import_module("remanentia_answer_extractor").normalize_number
+        _rust_num = cast(
+            NumberNormalizer,
+            import_module("remanentia_answer_extractor").normalize_number,
+        )
 
         return _rust_num(text)  # pragma: no cover
     except ImportError:
@@ -479,7 +529,10 @@ def normalize_number(text: str) -> str | None:
 def extract_best_sentence(query: str, paragraph: str) -> str | None:
     """Return the sentence most relevant to the query. Rust-accelerated."""
     try:
-        _rust_best = import_module("remanentia_answer_extractor").extract_best_sentence
+        _rust_best = cast(
+            SentenceExtractor,
+            import_module("remanentia_answer_extractor").extract_best_sentence,
+        )
 
         return _rust_best(query, paragraph)  # pragma: no cover
     except ImportError:
@@ -504,16 +557,16 @@ def extract_best_sentence(query: str, paragraph: str) -> str | None:
 
 # ── LLM backend ───────────────────────────────────────────────────
 
-_BACKEND = None
+_BACKEND: LLMBackend | None = None
 
 
-def set_llm_backend(backend) -> None:
+def set_llm_backend(backend: LLMBackend | None) -> None:
     """Set the module-level LLM backend instance."""
     global _BACKEND
     _BACKEND = backend
 
 
-def get_llm_backend():
+def get_llm_backend() -> LLMBackend | None:
     """Return the current LLM backend (or ``None``)."""
     return _BACKEND
 
