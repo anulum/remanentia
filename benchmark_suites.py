@@ -12,15 +12,51 @@ from __future__ import annotations
 
 import gzip
 import json
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 BASE = Path(__file__).parent
 INDEX_PATH = BASE / "snn_state" / "memory_index.json.gz"
 BENCHMARK_DIR = BASE / ".coordination" / "benchmarks" / "REMANENTIA"
 
 
-def current_operational_queries(repo: Path = BASE) -> list[dict[str, Any]]:
+JsonObject = dict[str, Any]
+
+
+class BenchmarkQuery(TypedDict):
+    """Retrieval benchmark query row consumed by local evaluation tools."""
+
+    q: str
+    gold: list[str]
+    cat: str
+    suite: str
+
+
+class IndexStats(TypedDict):
+    """Normalized unified-index counters used by benchmark queries."""
+
+    documents: int
+    paragraphs: int
+    date: str
+
+
+def current_operational_queries(repo: Path = BASE) -> list[BenchmarkQuery]:
+    """Build the live operational retrieval benchmark query suite.
+
+    Parameters
+    ----------
+    repo:
+        Repository root containing ``snn_state/memory_index.json.gz`` and the
+        benchmark report directory. The default points at this module's checkout.
+
+    Returns
+    -------
+    list[BenchmarkQuery]
+        Query rows whose expected answers are available from the current local
+        artefacts. Rows with missing dynamic gold values are omitted.
+    """
+
     repo = repo.resolve()
     index_stats = _index_stats(repo / "snn_state" / "memory_index.json.gz")
     performance = _latest_json(
@@ -28,8 +64,9 @@ def current_operational_queries(repo: Path = BASE) -> list[dict[str, Any]]:
     )
     recall_api = _named_row(performance.get("api"), "api_recall")
     public_vector = _named_row(performance.get("api"), "api_public_vector_search")
-    vector_index = (performance.get("vector") or {}).get("index") or {}
-    queries = [
+    vector_report = performance.get("vector")
+    vector_index = _json_object(vector_report.get("index")) if isinstance(vector_report, dict) else {}
+    queries: list[BenchmarkQuery] = [
         {
             "q": "how many documents are in the current unified index",
             "gold": [_fmt(index_stats["documents"]), str(index_stats["documents"])],
@@ -94,7 +131,16 @@ def current_operational_queries(repo: Path = BASE) -> list[dict[str, Any]]:
     return [q for q in queries if all(str(item) for item in q["gold"])]
 
 
-def historical_regression_queries() -> list[dict[str, Any]]:
+def historical_regression_queries() -> list[BenchmarkQuery]:
+    """Return fixed regression queries for historical retrieval incidents.
+
+    Returns
+    -------
+    list[BenchmarkQuery]
+        Stable query rows that preserve known benchmark expectations from older
+        Remanentia index and identity-coherence incidents.
+    """
+
     return [
         {
             "q": "how many documents were expected by the historical March unified index benchmark",
@@ -123,45 +169,114 @@ def historical_regression_queries() -> list[dict[str, Any]]:
     ]
 
 
-def _index_stats(path: Path) -> dict[str, Any]:
+def _index_stats(path: Path) -> IndexStats:
+    """Read normalized document, paragraph, and build-date stats from an index.
+
+    Parameters
+    ----------
+    path:
+        Gzip-compressed JSON index path.
+
+    Returns
+    -------
+    IndexStats
+        Zero-valued counters and an empty date when the index is missing,
+        unreadable, malformed, or not a JSON object.
+    """
+
     if not path.exists():
         return {"documents": 0, "paragraphs": 0, "date": ""}
     try:
         with gzip.open(path, "rb") as handle:
-            data = json.loads(handle.read())
+            payload = json.loads(handle.read())
     except (OSError, json.JSONDecodeError):
         return {"documents": 0, "paragraphs": 0, "date": ""}
+    data = _json_object(payload)
     timestamp = data.get("timestamp")
     date = ""
     if isinstance(timestamp, int | float):
-        from datetime import datetime, timezone
-
         date = datetime.fromtimestamp(float(timestamp), timezone.utc).date().isoformat()
+    documents = data.get("documents")
+    paragraphs = data.get("paragraph_index")
     return {
-        "documents": len(data.get("documents") or []),
-        "paragraphs": len(data.get("paragraph_index") or []),
+        "documents": len(documents) if isinstance(documents, list) else 0,
+        "paragraphs": len(paragraphs) if isinstance(paragraphs, list) else 0,
         "date": date,
     }
 
 
-def _latest_json(directory: Path, pattern: str) -> dict[str, Any]:
+def _latest_json(directory: Path, pattern: str) -> JsonObject:
+    """Load the newest JSON object report matching a glob pattern.
+
+    Parameters
+    ----------
+    directory:
+        Directory containing benchmark report artefacts.
+    pattern:
+        Glob pattern used to select candidate reports.
+
+    Returns
+    -------
+    JsonObject
+        Parsed report object, or an empty object for missing, unreadable,
+        invalid, or non-object JSON content.
+    """
+
     reports = sorted(directory.glob(pattern)) if directory.exists() else []
     if not reports:
         return {}
     try:
-        return json.loads(reports[-1].read_text(encoding="utf-8"))
+        payload = json.loads(reports[-1].read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
+    return _json_object(payload)
 
 
-def _named_row(rows: Any, name: str) -> dict[str, Any]:
+def _named_row(rows: object, name: str) -> JsonObject:
+    """Find a named dictionary row inside a report table.
+
+    Parameters
+    ----------
+    rows:
+        Candidate list of benchmark result rows.
+    name:
+        Expected value of the row's ``name`` field.
+
+    Returns
+    -------
+    JsonObject
+        Matching row copied as a string-keyed object, or an empty object when
+        no matching row is present.
+    """
+
     if not isinstance(rows, list):
         return {}
     for row in rows:
         if isinstance(row, dict) and row.get("name") == name:
-            return row
+            return {str(key): value for key, value in row.items()}
     return {}
 
 
-def _fmt(value: Any) -> str:
+def _fmt(value: object) -> str:
+    """Format numeric benchmark gold values with thousands separators.
+
+    Parameters
+    ----------
+    value:
+        Dynamic benchmark value to render.
+
+    Returns
+    -------
+    str
+        Comma-formatted integer text for numeric input, otherwise ``str(value)``.
+    """
+
     return f"{int(value):,}" if isinstance(value, int | float) else str(value)
+
+
+def _json_object(payload: object) -> JsonObject:
+    """Return ``payload`` when it is a JSON object, otherwise an empty object."""
+
+    if not isinstance(payload, dict):
+        return {}
+    return {str(key): value for key, value in payload.items()}

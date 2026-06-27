@@ -37,6 +37,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   category, no LLM calls).
 
 ### Fixed
+- `benchmark_suites.py` now ignores non-object benchmark JSON reports, exposes
+  explicit typed query rows, and is strict-mypy/docstring clean with 100%
+  focused coverage.
 - API reference wiring now has a local gate that checks packaged Python
   modules, `docs/api` pages, and MkDocs navigation stay in parity.
 - Knowledge-store note and trigger IDs now use SHA-256 digest prefixes, and

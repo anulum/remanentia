@@ -27,7 +27,7 @@ def _write_index(path: Path, *, timestamp: object = 1_774_654_400.0) -> None:
         handle.write(json.dumps(payload).encode("utf-8"))
 
 
-def test_current_operational_queries_filter_missing_live_metrics(tmp_path):
+def test_current_operational_queries_filter_missing_live_metrics(tmp_path: Path) -> None:
     queries = current_operational_queries(tmp_path)
 
     assert queries
@@ -38,7 +38,7 @@ def test_current_operational_queries_filter_missing_live_metrics(tmp_path):
     }
 
 
-def test_current_operational_queries_read_index_and_latest_performance(tmp_path):
+def test_current_operational_queries_read_index_and_latest_performance(tmp_path: Path) -> None:
     _write_index(tmp_path / "snn_state" / "memory_index.json.gz")
     report_dir = tmp_path / ".coordination" / "benchmarks" / "REMANENTIA"
     report_dir.mkdir(parents=True)
@@ -70,7 +70,7 @@ def test_current_operational_queries_read_index_and_latest_performance(tmp_path)
     assert "1,103" in gold
 
 
-def test_index_stats_returns_empty_values_for_bad_or_missing_index(tmp_path):
+def test_index_stats_returns_empty_values_for_bad_or_missing_index(tmp_path: Path) -> None:
     missing = benchmark_suites._index_stats(tmp_path / "missing.json.gz")
     assert missing == {"documents": 0, "paragraphs": 0, "date": ""}
 
@@ -84,7 +84,7 @@ def test_index_stats_returns_empty_values_for_bad_or_missing_index(tmp_path):
     }
 
 
-def test_index_stats_ignores_non_numeric_timestamp(tmp_path):
+def test_index_stats_ignores_non_numeric_timestamp(tmp_path: Path) -> None:
     path = tmp_path / "snn_state" / "memory_index.json.gz"
     _write_index(path, timestamp="not numeric")
 
@@ -95,7 +95,7 @@ def test_index_stats_ignores_non_numeric_timestamp(tmp_path):
     assert stats["date"] == ""
 
 
-def test_latest_json_returns_empty_for_missing_or_invalid_report(tmp_path):
+def test_latest_json_returns_empty_for_missing_or_invalid_report(tmp_path: Path) -> None:
     assert benchmark_suites._latest_json(tmp_path / "missing", "*.json") == {}
 
     report_dir = tmp_path / "reports"
@@ -105,7 +105,15 @@ def test_latest_json_returns_empty_for_missing_or_invalid_report(tmp_path):
     assert benchmark_suites._latest_json(report_dir, "*.json") == {}
 
 
-def test_named_row_and_format_helpers_handle_non_matching_inputs():
+def test_latest_json_ignores_non_object_payload(tmp_path: Path) -> None:
+    report_dir = tmp_path / "reports"
+    report_dir.mkdir()
+    (report_dir / "report.json").write_text("[]", encoding="utf-8")
+
+    assert benchmark_suites._latest_json(report_dir, "*.json") == {}
+
+
+def test_named_row_and_format_helpers_handle_non_matching_inputs() -> None:
     assert benchmark_suites._named_row(None, "api_recall") == {}
     assert benchmark_suites._named_row([{"name": "other"}], "api_recall") == {}
     row = benchmark_suites._named_row(["bad", {"name": "api_recall", "p50_ms": 1}], "api_recall")
@@ -114,7 +122,7 @@ def test_named_row_and_format_helpers_handle_non_matching_inputs():
     assert benchmark_suites._fmt(1103) == "1,103"
 
 
-def test_historical_regression_queries_are_stable():
+def test_historical_regression_queries_are_stable() -> None:
     queries = historical_regression_queries()
 
     assert len(queries) == 4
