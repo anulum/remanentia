@@ -489,13 +489,19 @@ def _arcane_answer(
     qtype: str,
     haystack_dates: list[str] | None = None,
     question_date: str = "",
+    haystack_session_ids: list[str] | None = None,
+    answer_session_ids: list[str] | None = None,
+    retrieval_diagnostics: dict[str, object] | None = None,
 ) -> str:
     """Answer using ArcaneRetriever pipeline (v0.4.0 architecture).
 
     When *haystack_dates* are provided, the C4 date normaliser resolves
     vague expressions ("3 weeks ago") against each session's timestamp.
     When *question_date* is provided, it is anchored as "today" in the
-    LLM prompt for temporal-reasoning questions (Task #34).
+    LLM prompt for temporal-reasoning questions (Task #34). When full-S
+    retrieved-context mode is active, *retrieval_diagnostics* is populated with
+    the selected/missing answer-session evidence written to the hypothesis
+    artefact.
     """
     from arcane_retriever import ArcaneRetriever
 
@@ -531,15 +537,23 @@ def _arcane_answer(
             # Full-S: feed only the top retrieved sessions (the whole haystack
             # is ~123K tokens and cannot be dumped) — this is where retrieval
             # actually matters. select_sessions renders them chronologically.
-            from retrieved_context import select_sessions
+            from retrieved_context import build_selection_diagnostics, select_sessions
 
-            full_context = select_sessions(
+            retrieved = select_sessions(
                 results,
                 sessions,
                 session_dates=haystack_dates,
                 max_sessions=_FULL_MAX_SESSIONS,
                 char_budget=_FULL_CHAR_BUDGET,
-            ).session_text
+            )
+            if retrieval_diagnostics is not None:
+                diagnostics = build_selection_diagnostics(
+                    retrieved,
+                    haystack_session_ids=haystack_session_ids,
+                    answer_session_ids=answer_session_ids,
+                )
+                retrieval_diagnostics.update(diagnostics.as_json_dict())
+            full_context = retrieved.session_text
         else:
             # Oracle: dump every haystack session (gold-only, tiny) oldest-first.
             indexed_sessions = list(enumerate(sessions))
@@ -645,7 +659,7 @@ def run_benchmark() -> None:
     type_correct: defaultdict[str, int] = defaultdict(int)
     type_total: defaultdict[str, int] = defaultdict(int)
 
-    hypotheses: list[dict[str, str]] = []
+    hypotheses: list[dict[str, object]] = []
     t0 = time.monotonic()
 
     for i, item in enumerate(data):
@@ -656,9 +670,12 @@ def run_benchmark() -> None:
 
         item_dates = cast(list[str] | None, item.get("haystack_dates"))
         item_question_date = str(item.get("question_date", ""))
+        item_session_ids = cast(list[str] | None, item.get("haystack_session_ids"))
+        item_answer_session_ids = cast(list[str] | None, item.get("answer_session_ids"))
         haystack_sessions = cast(list[list[dict[str, Any]]], item["haystack_sessions"])
 
         q_start = time.monotonic()
+        retrieval_diagnostics: dict[str, object] = {}
         if _USE_ARCANE:
             # Hybrid: ArcaneRetriever for hard categories, legacy for single-session
             if qtype in (
@@ -673,6 +690,9 @@ def run_benchmark() -> None:
                     qtype,
                     haystack_dates=item_dates,
                     question_date=item_question_date,
+                    haystack_session_ids=item_session_ids,
+                    answer_session_ids=item_answer_session_ids,
+                    retrieval_diagnostics=retrieval_diagnostics,
                 )
             else:
                 # Single-session factoid: legacy BM25 pipeline (full paragraphs) + GPT-4o-mini
@@ -699,12 +719,13 @@ def run_benchmark() -> None:
                 question_date=item_question_date,
             )
 
-        hypotheses.append(
-            {
-                "question_id": qid,
-                "hypothesis": hypothesis,
-            }
-        )
+        hypothesis_record: dict[str, object] = {
+            "question_id": qid,
+            "hypothesis": hypothesis,
+        }
+        if retrieval_diagnostics:
+            hypothesis_record["retrieval_diagnostics"] = retrieval_diagnostics
+        hypotheses.append(hypothesis_record)
 
         # Loud per-question heartbeat so a slow item is visible before the
         # next progress milestone.  (2026-04-17T0711: a single stalled call

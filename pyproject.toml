@@ -90,6 +90,7 @@ py-modules = [
     "recall_calibration",
     "recall_ledger",
     "recall_outcome_tracker",
+    "retrieved_context",
     "bus_recall",
     "finding_ingest",
     "feed_ingest",

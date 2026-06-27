@@ -16,8 +16,8 @@ multi-run means, not single runs.
 ## Current Comparable Score: Full-S
 
 Full-S uses the retrieved-context reader over the realistic large haystack:
-`bench_longmemeval.py --full`, top-10 retrieved sessions, cross-encoder rerank on,
-current 2026-06 `gpt-4o-mini`.
+`bench_longmemeval.py --full --arcane`, top-10 retrieved sessions,
+cross-encoder rerank on, current 2026-06 `gpt-4o-mini`.
 
 | Category | Full-S 3-run mean |
 |----------|------------------:|
@@ -98,7 +98,7 @@ numbers.
 
 ```bash
 # Realistic full-S benchmark; requires OPENAI_API_KEY for GPT-4o-mini.
-python bench_longmemeval.py --full --llm --evaluate
+python bench_longmemeval.py --full --arcane --llm --evaluate
 
 # Historical oracle benchmark.
 python bench_longmemeval.py --llm --evaluate
@@ -108,3 +108,16 @@ Datasets:
 
 - `data/longmemeval_s.json` for full-S.
 - `data/longmemeval_oracle.json` for oracle.
+
+Full-S Arcane hypothesis rows include `retrieval_diagnostics`:
+
+- `selected_session_idxs`: haystack indices rendered into the reader prompt.
+- `candidate_session_count`: distinct retrieved sessions before reader limits.
+- `dropped_to_session_limit`: valid candidate indices outside `REMANENTIA_FULL_MAX_SESSIONS`.
+- `dropped_to_budget`: candidate indices removed by `REMANENTIA_FULL_CHAR_BUDGET`.
+- `answer_session_recall`: fraction of gold answer-session IDs selected into the reader context.
+- `selected_answer_session_ids`, `missing_answer_session_ids`,
+  `session_limited_answer_session_ids`, and `budget_dropped_answer_session_ids`.
+
+These fields are diagnostic evidence only. They do not change the published score until a
+new three-run full-S variance round is recorded.

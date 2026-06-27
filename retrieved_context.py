@@ -29,6 +29,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
 
+JsonDiagnosticValue = int | float | list[int] | list[str] | None
+
 
 class _RankedFact(Protocol):
     """Structural type for the part of a retrieval result this module reads."""
@@ -56,12 +58,68 @@ class RetrievedContext:
             recall is measured.
         n_candidate_sessions: how many distinct sessions the ranked results
             spanned before the budget was applied (selection headroom).
+        dropped_to_session_limit: candidate session indices that were valid but
+            outside the configured ``max_sessions`` reader limit.
+        dropped_to_budget: candidate session indices inside ``max_sessions``
+            that were removed because the rendered context would exceed the
+            character budget.
     """
 
     session_text: str
     selected_session_idxs: list[int]
     n_candidate_sessions: int = 0
+    dropped_to_session_limit: list[int] = field(default_factory=list)
     dropped_to_budget: list[int] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class RetrievalSelectionDiagnostics:
+    """Structured evidence for a full-S reader session-selection decision.
+
+    Attributes:
+        selected_session_idxs: Session indices rendered into the reader prompt.
+        candidate_session_count: Number of distinct retrieved sessions before
+            reader limits were applied.
+        dropped_to_session_limit: Valid candidate session indices excluded by
+            the ``max_sessions`` cap.
+        dropped_to_budget: Candidate session indices excluded by the character
+            budget after the session cap.
+        answer_session_recall: Fraction of answer-session IDs selected into the
+            reader context, or ``None`` when the dataset row has no answer
+            sessions.
+        selected_answer_session_ids: Gold answer-session IDs included in the
+            reader prompt.
+        missing_answer_session_ids: Gold answer-session IDs absent from the
+            reader prompt, including IDs missing from the haystack mapping.
+        session_limited_answer_session_ids: Gold answer-session IDs excluded by
+            the ``max_sessions`` cap.
+        budget_dropped_answer_session_ids: Gold answer-session IDs excluded by
+            the character budget.
+    """
+
+    selected_session_idxs: list[int]
+    candidate_session_count: int
+    dropped_to_session_limit: list[int]
+    dropped_to_budget: list[int]
+    answer_session_recall: float | None
+    selected_answer_session_ids: list[str]
+    missing_answer_session_ids: list[str]
+    session_limited_answer_session_ids: list[str]
+    budget_dropped_answer_session_ids: list[str]
+
+    def as_json_dict(self) -> dict[str, JsonDiagnosticValue]:
+        """Return a JSON-serialisable representation for benchmark artefacts."""
+        return {
+            "selected_session_idxs": self.selected_session_idxs,
+            "candidate_session_count": self.candidate_session_count,
+            "dropped_to_session_limit": self.dropped_to_session_limit,
+            "dropped_to_budget": self.dropped_to_budget,
+            "answer_session_recall": self.answer_session_recall,
+            "selected_answer_session_ids": self.selected_answer_session_ids,
+            "missing_answer_session_ids": self.missing_answer_session_ids,
+            "session_limited_answer_session_ids": self.session_limited_answer_session_ids,
+            "budget_dropped_answer_session_ids": self.budget_dropped_answer_session_ids,
+        }
 
 
 def rank_ordered_sessions(results: Sequence[_Result]) -> list[int]:
@@ -118,6 +176,7 @@ def select_sessions(
     # Take top-N by rank, guarding against stale indices.
     valid = [i for i in candidates if 0 <= i < len(sessions)]
     chosen = valid[:max_sessions]
+    dropped_to_session_limit = valid[max_sessions:]
 
     # Enforce the character budget, dropping the lowest-ranked chosen sessions
     # first. Rendered length is recomputed per session (header + turns).
@@ -149,6 +208,7 @@ def select_sessions(
         session_text="\n\n".join(parts),
         selected_session_idxs=display,
         n_candidate_sessions=n_candidates,
+        dropped_to_session_limit=dropped_to_session_limit,
         dropped_to_budget=dropped,
     )
 
@@ -165,3 +225,68 @@ def gold_session_recall(selected_idxs: Sequence[int], gold_idxs: Sequence[int | 
         return 1.0
     selected = set(selected_idxs)
     return len(gold & selected) / len(gold)
+
+
+def build_selection_diagnostics(
+    context: RetrievedContext,
+    *,
+    haystack_session_ids: Sequence[str] | None = None,
+    answer_session_ids: Sequence[str] | None = None,
+) -> RetrievalSelectionDiagnostics:
+    """Map selected session indices back to LongMemEval answer-session IDs.
+
+    Parameters
+    ----------
+    context:
+        The selected reader context returned by :func:`select_sessions`.
+    haystack_session_ids:
+        Dataset session IDs in haystack order. When omitted, answer-session
+        recall cannot be tied back to external IDs.
+    answer_session_ids:
+        Gold answer-session IDs for the question.
+
+    Returns
+    -------
+    RetrievalSelectionDiagnostics
+        The selected/dropped session evidence suitable for JSONL benchmark
+        artefacts.
+    """
+    haystack_ids = [str(sid) for sid in haystack_session_ids or ()]
+    answer_ids = [str(sid) for sid in answer_session_ids or ()]
+    id_to_idx = {sid: idx for idx, sid in enumerate(haystack_ids)}
+
+    selected_idxs = set(context.selected_session_idxs)
+    session_limited_idxs = set(context.dropped_to_session_limit)
+    budget_dropped_idxs = set(context.dropped_to_budget)
+
+    selected_answer_ids: list[str] = []
+    missing_answer_ids: list[str] = []
+    session_limited_answer_ids: list[str] = []
+    budget_dropped_answer_ids: list[str] = []
+
+    for answer_id in answer_ids:
+        idx = id_to_idx.get(answer_id)
+        if idx is None:
+            missing_answer_ids.append(answer_id)
+            continue
+        if idx in selected_idxs:
+            selected_answer_ids.append(answer_id)
+            continue
+        missing_answer_ids.append(answer_id)
+        if idx in session_limited_idxs:
+            session_limited_answer_ids.append(answer_id)
+        if idx in budget_dropped_idxs:
+            budget_dropped_answer_ids.append(answer_id)
+
+    answer_session_recall = len(selected_answer_ids) / len(answer_ids) if answer_ids else None
+    return RetrievalSelectionDiagnostics(
+        selected_session_idxs=list(context.selected_session_idxs),
+        candidate_session_count=context.n_candidate_sessions,
+        dropped_to_session_limit=list(context.dropped_to_session_limit),
+        dropped_to_budget=list(context.dropped_to_budget),
+        answer_session_recall=answer_session_recall,
+        selected_answer_session_ids=selected_answer_ids,
+        missing_answer_session_ids=missing_answer_ids,
+        session_limited_answer_session_ids=session_limited_answer_ids,
+        budget_dropped_answer_session_ids=budget_dropped_answer_ids,
+    )

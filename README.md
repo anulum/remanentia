@@ -207,8 +207,9 @@ realistic, comparable number for Remanentia is the **full-S** figure below.
 
 #### Full-S (realistic retrieval setting) — headline
 
-~50 sessions/question, retrieved-context reader (top-10 retrieved sessions). 3-run mean
-on the 2026-06 `gpt-4o-mini`, cross-encoder rerank on (ledger round `full-S`):
+~50 sessions/question, Arcane retrieved-context reader (top-10 retrieved sessions).
+3-run mean on the 2026-06 `gpt-4o-mini`, cross-encoder rerank on (ledger round
+`full-S`):
 
 | Category | Full-S 3-run mean |
 |----------|-------------------|
@@ -224,6 +225,10 @@ This is the number to compare against full-S leaderboards. The hard categories
 (multi-session, temporal) carry most of the gap: retrieval recall@10 is high (~88 % /
 ~79 %), so the remaining loss there is synthesis over the retrieved context, not a
 retrieval miss; single-session losses are retrieval misses on the legacy BM25 path.
+Full-S Arcane benchmark hypotheses now include a `retrieval_diagnostics` object with
+selected session indices, answer-session recall, session-cap misses, and character-budget
+misses. Use that metadata to separate retrieval misses from reader synthesis failures
+before updating public scores.
 
 #### Oracle setting (gold sessions only — retrieval NOT exercised)
 

@@ -73,6 +73,7 @@ nav:
     - claim_axes: api/claim_axes.md
     - memory_recall: api/memory_recall.md
     - recall_calibration: api/recall_calibration.md
+    - retrieved_context: api/retrieved_context.md
     - compiled_memory: api/compiled_memory.md
     - mcp_server: api/mcp_server.md
     - knowledge_store: api/knowledge_store.md
