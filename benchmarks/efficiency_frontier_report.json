@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-06-27T13:47:21+02:00",
+  "inputs": {
+    "reports": [
+      "benchmarks/longmemeval_oracle_snapshot_report.json",
+      "benchmarks/locomo_snapshot_report.json"
+    ],
+    "baselines": "benchmarks/efficiency_baselines.json"
+  },
+  "metric_notes": {
+    "accuracy_points_per_1k_tokens": "accuracy percentage points divided by measured total tokens and scaled to 1,000",
+    "missing_values": "null means the committed artefact does not contain that measurement",
+    "frontier": "true only for same-benchmark points with accuracy, tokens, and p95 latency present"
+  },
+  "candidates": [
+    {
+      "benchmark": "longmemeval",
+      "label": "Remanentia",
+      "implementation": "remanentia",
+      "source": "data/longmemeval_hypotheses.results.jsonl",
+      "accuracy": 72.2,
+      "correct": 361,
+      "total": 500,
+      "tokens_total": null,
+      "accuracy_points_per_1k_tokens": null,
+      "p95_latency_ms": null,
+      "frontier": false
+    },
+    {
+      "benchmark": "locomo",
+      "label": "Remanentia",
+      "implementation": "remanentia",
+      "source": "paper/locomo_results.json",
+      "accuracy": 83.1,
+      "correct": 1651,
+      "total": 1986,
+      "tokens_total": null,
+      "accuracy_points_per_1k_tokens": null,
+      "p95_latency_ms": null,
+      "frontier": false
+    },
+    {
+      "benchmark": "locomo",
+      "label": "Remanentia historic no-LLM baseline",
+      "implementation": "python-baseline",
+      "source": "docs/benchmarks/LOCOMO.md historic score table; same 1,986-question LOCOMO run shape, no embedding rerank, no LLM synthesis",
+      "accuracy": 74.7,
+      "correct": null,
+      "total": 1986,
+      "tokens_total": null,
+      "accuracy_points_per_1k_tokens": null,
+      "p95_latency_ms": null,
+      "frontier": false
+    }
+  ]
+}

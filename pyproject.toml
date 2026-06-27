@@ -66,6 +66,7 @@ dev = [
 [project.scripts]
 remanentia = "cli:main"
 remanentia-benchmark-report = "benchmark_report:main"
+remanentia-efficiency-frontier = "efficiency_frontier:main"
 remanentia-feed-ingest = "feed_ingest:main"
 remanentia-full-s-diagnostics = "full_s_diagnostics:main"
 remanentia-recall-calibration = "recall_calibration:main"
@@ -91,6 +92,7 @@ py-modules = [
     "openapi_export",
     "benchmark_evidence",
     "benchmark_report",
+    "efficiency_frontier",
     "claim_axes",
     "recall_calibration",
     "recall_ledger",

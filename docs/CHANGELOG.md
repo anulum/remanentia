@@ -9,6 +9,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Deterministic REST OpenAPI schema export via `remanentia openapi`, including
   runtime-aligned bearer-auth annotations and a committed schema artifact for
   client generation and release audits.
+- Benchmark efficiency-frontier reporting via `remanentia-efficiency-frontier`,
+  with explicit baseline metadata and null-preserving accuracy/token/p95-latency
+  comparisons from committed evidence reports.
 - Benchmark evidence reports via `remanentia-benchmark-report`, with
   LongMemEval judge prompt hashes, token accounting, and latency metadata on
   newly judged result rows.

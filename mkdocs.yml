@@ -77,6 +77,7 @@ nav:
     - full_s_diagnostics: api/full_s_diagnostics.md
     - benchmark_evidence: api/benchmark_evidence.md
     - benchmark_report: api/benchmark_report.md
+    - efficiency_frontier: api/efficiency_frontier.md
     - compiled_memory: api/compiled_memory.md
     - mcp_server: api/mcp_server.md
     - knowledge_store: api/knowledge_store.md

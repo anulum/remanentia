@@ -83,4 +83,15 @@ python bench_longmemeval.py --llm --evaluate
 remanentia-benchmark-report paper/locomo_results.json \
   --benchmark locomo \
   --output benchmarks/locomo_snapshot_report.json
+
+# Efficiency-frontier report from committed benchmark evidence
+remanentia-efficiency-frontier \
+  --report benchmarks/longmemeval_oracle_snapshot_report.json \
+  --report benchmarks/locomo_snapshot_report.json \
+  --baseline benchmarks/efficiency_baselines.json \
+  --output benchmarks/efficiency_frontier_report.json
 ```
+
+`benchmarks/efficiency_baselines.json` records the 74.7 % historic no-LLM
+LOCOMO baseline from this page. Its runtime and token fields are `null` because
+the historical baseline did not record those measurements.

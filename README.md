@@ -249,6 +249,19 @@ New `--evaluate` rows include judge prompt hashes, prompt-token estimates, exact
 when returned by the provider, and judge-call latency. Older committed rows still produce
 score reports, with unavailable runtime/token fields left empty.
 
+Generate the accuracy/token/latency frontier report from committed evidence:
+
+```bash
+remanentia-efficiency-frontier \
+  --report benchmarks/longmemeval_oracle_snapshot_report.json \
+  --report benchmarks/locomo_snapshot_report.json \
+  --baseline benchmarks/efficiency_baselines.json \
+  --output benchmarks/efficiency_frontier_report.json
+```
+
+The frontier report never infers missing runtime or token measurements; unknown
+fields stay `null` until a benchmark artefact records them.
+
 #### Oracle setting (gold sessions only — retrieval NOT exercised)
 
 The figures below are the oracle setting: the haystack is exactly the gold sessions, fed

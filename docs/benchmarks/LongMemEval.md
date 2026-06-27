@@ -149,3 +149,17 @@ remanentia-benchmark-report data/longmemeval_hypotheses.results.jsonl \
 
 Older result files that predate judge evidence still produce score reports, but their
 prompt-hash, token, and latency sections are empty rather than inferred.
+
+The committed efficiency-frontier report consumes this snapshot as one input:
+
+```bash
+remanentia-efficiency-frontier \
+  --report benchmarks/longmemeval_oracle_snapshot_report.json \
+  --report benchmarks/locomo_snapshot_report.json \
+  --baseline benchmarks/efficiency_baselines.json \
+  --output benchmarks/efficiency_frontier_report.json
+```
+
+LongMemEval rows in the historical oracle snapshot do not include measured
+p95 latency or judge-token totals, so the frontier report records those fields
+as `null` and does not mark the row as a comparable efficiency-frontier point.

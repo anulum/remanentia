@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "baselines": [
+    {
+      "benchmark": "locomo",
+      "label": "Remanentia historic no-LLM baseline",
+      "implementation": "python-baseline",
+      "source": "docs/benchmarks/LOCOMO.md historic score table; same 1,986-question LOCOMO run shape, no embedding rerank, no LLM synthesis",
+      "accuracy": 74.7,
+      "correct": null,
+      "total": 1986,
+      "tokens_total": null,
+      "p95_latency_ms": null
+    }
+  ]
+}
