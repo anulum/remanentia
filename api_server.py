@@ -31,8 +31,10 @@ import json
 import os
 import sys
 import time
+from collections.abc import Mapping
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from typing import Any, TypeAlias, cast
 
 BASE = Path(__file__).parent
 sys.path.insert(0, str(BASE))
@@ -49,9 +51,20 @@ from api_security import (  # noqa: E402 — path inserted above
 
 PORT = 8001
 _PUBLIC_PATHS = frozenset({"/health"})  # never require auth or rate-limit
+JsonValue: TypeAlias = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
+JsonObject: TypeAlias = dict[str, JsonValue]
 
 
-def _json_default(obj):
+class RemanentiaHTTPServer(HTTPServer):
+    """HTTP server carrying Remanentia security dependencies for handlers."""
+
+    auth: BearerAuth
+    limiter: TokenBucketLimiter
+    body_limit: int
+    audit_logger: RequestAuditLogger
+
+
+def _json_default(obj: object) -> JsonValue:
     """Handle NumPy types in JSON serialisation."""
     import numpy as np
 
@@ -60,7 +73,7 @@ def _json_default(obj):
     if isinstance(obj, (np.integer, np.int32, np.int64)):
         return int(obj)
     if isinstance(obj, np.ndarray):
-        return obj.tolist()
+        return cast(JsonValue, obj.tolist())
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
 
@@ -82,21 +95,30 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
     # ---- security gates -------------------------------------------------
 
     def _client_ip(self) -> str:
+        """Return the remote client IP used for rate-limit buckets."""
+
         # http.server uses (host, port); first element is safe for buckets.
         return self.client_address[0] if self.client_address else "unknown"
+
+    @property
+    def _remanentia_server(self) -> RemanentiaHTTPServer:
+        """Expose the typed server attributes installed by :func:`build_server`."""
+
+        return cast(RemanentiaHTTPServer, self.server)
 
     def _security_gates(self, method: str) -> bool:
         """Run body/rate/auth checks. Return False if response already sent."""
         if self.path in _PUBLIC_PATHS:
             return True
 
-        limiter: TokenBucketLimiter = self.server.limiter  # type: ignore[attr-defined]
-        auth: BearerAuth = self.server.auth  # type: ignore[attr-defined]
+        server = self._remanentia_server
+        limiter = server.limiter
+        auth = server.auth
 
         if method == "POST":
             try:
                 declared = int(self.headers.get("Content-Length", 0))
-                enforce_body_size(declared, self.server.body_limit)  # type: ignore[attr-defined]
+                enforce_body_size(declared, server.body_limit)
             except ValueError as e:
                 self._json_response({"error": str(e)}, 413)
                 return False
@@ -117,7 +139,9 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
 
     # ---- request dispatch ----------------------------------------------
 
-    def do_GET(self):
+    def do_GET(self) -> None:
+        """Dispatch supported GET endpoints to their handlers."""
+
         if not self._security_gates("GET"):
             return
         if self.path == "/health":
@@ -127,7 +151,9 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
         else:
             self._json_response({"error": f"Unknown path: {self.path}"}, 404)
 
-    def do_POST(self):
+    def do_POST(self) -> None:
+        """Read and dispatch supported JSON POST endpoints."""
+
         if not self._security_gates("POST"):
             return
         body = self._read_body()
@@ -141,7 +167,9 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
         else:
             self._json_response({"error": f"Unknown path: {self.path}"}, 404)
 
-    def _handle_status(self):
+    def _handle_status(self) -> None:
+        """Return counts for graph entities, relations, memories, and traces."""
+
         entities = 0
         memories = 0
         traces = 0
@@ -176,12 +204,18 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
             }
         )
 
-    def _handle_recall(self, body: dict):
+    def _handle_recall(self, body: Mapping[str, JsonValue]) -> None:
+        """Run memory recall for a parsed JSON request body."""
+
         query = body.get("query", "")
         top_k = body.get("top_k", 5)
 
-        if not query:
+        if not isinstance(query, str) or not query:
             self._json_response({"error": "query required"}, 400)
+            return
+
+        if not isinstance(top_k, int):
+            self._json_response({"error": "top_k must be an integer"}, 400)
             return
 
         if top_k == 0:
@@ -193,25 +227,23 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
 
             ctx = recall(query, top_k=top_k)
 
-            results = []
+            results: list[JsonValue] = []
             if ctx.trace:
-                results.append(
-                    {
-                        "name": ctx.trace,
-                        "score": float(ctx.trace_score),
-                        "snippet": ctx.trace_snippet[:300],
-                        "type": "trace",
-                    }
-                )
+                trace_result: JsonObject = {
+                    "name": str(ctx.trace),
+                    "score": float(ctx.trace_score),
+                    "snippet": str(ctx.trace_snippet)[:300],
+                    "type": "trace",
+                }
+                results.append(trace_result)
             for sm in ctx.semantic_memories[:top_k]:
-                results.append(
-                    {
-                        "name": sm.get("file", ""),
-                        "score": float(sm.get("score", 0.0)),
-                        "snippet": str(sm.get("content", ""))[:300],
-                        "type": "semantic",
-                    }
-                )
+                semantic_result: JsonObject = {
+                    "name": str(sm.get("file", "")),
+                    "score": float(sm.get("score", 0.0)),
+                    "snippet": str(sm.get("content", ""))[:300],
+                    "type": "semantic",
+                }
+                results.append(semantic_result)
 
             self._json_response(
                 {
@@ -224,8 +256,14 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self._json_response({"error": str(e), "results": []}, 500)
 
-    def _handle_consolidate(self, body: dict):
+    def _handle_consolidate(self, body: Mapping[str, JsonValue]) -> None:
+        """Run consolidation for a parsed JSON request body."""
+
         force = body.get("force", False)
+        if not isinstance(force, bool):
+            self._json_response({"error": "force must be a boolean"}, 400)
+            return
+
         try:
             from consolidation_engine import consolidate
 
@@ -241,12 +279,17 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self._json_response({"error": str(e)}, 500)
 
-    def _handle_remember(self, body: dict):
+    def _handle_remember(self, body: Mapping[str, JsonValue]) -> None:
+        """Store a knowledge note from a parsed JSON request body."""
+
         content = body.get("content", "")
         trigger = body.get("trigger", "")
 
-        if not content:
+        if not isinstance(content, str) or not content:
             self._json_response({"error": "content required"}, 400)
+            return
+        if trigger is not None and not isinstance(trigger, str):
+            self._json_response({"error": "trigger must be a string"}, 400)
             return
 
         try:
@@ -258,19 +301,26 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self._json_response({"error": str(e)}, 500)
 
-    def _read_body(self) -> dict:
+    def _read_body(self) -> JsonObject:
+        """Read a JSON request body and return an object mapping."""
+
         length = int(self.headers.get("Content-Length", 0))
         if length == 0:
             return {}
         raw = self.rfile.read(length)
         try:
-            return json.loads(raw)
+            payload = json.loads(raw)
         except json.JSONDecodeError:
             return {}
+        if not isinstance(payload, dict):
+            return {}
+        return cast(JsonObject, payload)
 
     def _json_response(
-        self, data: dict, status: int = 200, *, headers: dict[str, str] | None = None
-    ):
+        self, data: Mapping[str, JsonValue], status: int = 200, *, headers: dict[str, str] | None = None
+    ) -> None:
+        """Write a JSON response with audit metadata and CORS headers."""
+
         body = json.dumps(data, ensure_ascii=False, default=_json_default).encode("utf-8")
         self._audit_response(status)
         self.send_response(status)
@@ -283,10 +333,13 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _audit_response(self, status: int) -> None:
+        """Record metadata-only audit rows for private endpoints."""
+
         if self.path in _PUBLIC_PATHS:
             return
-        logger: RequestAuditLogger = self.server.audit_logger  # type: ignore[attr-defined]
-        auth: BearerAuth = self.server.auth  # type: ignore[attr-defined]
+        server = self._remanentia_server
+        logger = server.audit_logger
+        auth = server.auth
         logger.record(
             server="stdlib",
             method=self.command,
@@ -297,7 +350,9 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
             auth_enabled=auth.enabled,
         )
 
-    def log_message(self, fmt, *args):
+    def log_message(self, fmt: str, *args: Any) -> None:
+        """Suppress non-404 access logs from the stdlib request handler."""
+
         # Quiet logging — only errors
         if args and "404" in str(args[0]):
             super().log_message(fmt, *args)
@@ -310,16 +365,16 @@ def build_server(
     auth: BearerAuth | None = None,
     limiter: TokenBucketLimiter | None = None,
     body_limit: int = DEFAULT_BODY_LIMIT,
-) -> HTTPServer:
+) -> RemanentiaHTTPServer:
     """Construct an HTTPServer with security attributes attached.
 
     Factored out of :func:`main` so tests can drive the handler without
     starting a blocking process.
     """
-    server = HTTPServer((host, port), RemanentiaHandler)
-    server.auth = auth if auth is not None else BearerAuth.from_env()  # type: ignore[attr-defined]
+    server = RemanentiaHTTPServer((host, port), RemanentiaHandler)
+    server.auth = auth if auth is not None else BearerAuth.from_env()
     rate_per_minute = float(os.environ.get("REMANENTIA_API_RATE", DEFAULT_RATE_PER_MINUTE))
-    server.limiter = (  # type: ignore[attr-defined]
+    server.limiter = (
         limiter
         if limiter is not None
         else TokenBucketLimiter(
@@ -327,14 +382,16 @@ def build_server(
             burst=int(os.environ.get("REMANENTIA_API_BURST", DEFAULT_BURST)),
         )
     )
-    server.body_limit = body_limit  # type: ignore[attr-defined]
-    server.audit_logger = RequestAuditLogger.from_env(  # type: ignore[attr-defined]
+    server.body_limit = body_limit
+    server.audit_logger = RequestAuditLogger.from_env(
         BASE / ".coordination" / "runtime" / "api_server_audit.jsonl"
     )
     return server
 
 
-def main():  # pragma: no cover — blocking server entry point
+def main() -> None:  # pragma: no cover — blocking server entry point
+    """Parse CLI arguments and start the blocking stdlib HTTP server."""
+
     p = argparse.ArgumentParser(description="Remanentia HTTP API server")
     p.add_argument("--port", type=int, default=PORT)
     p.add_argument("--host", default="127.0.0.1")

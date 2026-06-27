@@ -3,6 +3,9 @@
 Lightweight stdlib HTTP API server for cross-service integration (SYNAPSE bridge, SPO, etc). No FastAPI dependency.
 
 Endpoints: GET `/health`, `/status`; POST `/recall`, `/consolidate`, `/remember`.
+POST bodies must be JSON objects. Malformed JSON and non-object JSON decode to
+an empty request object so handlers return normal `400` validation errors
+instead of raising on invalid shapes.
 
 Private endpoint responses are written as JSONL request metadata to
 `.coordination/runtime/api_server_audit.jsonl` by default. Set
@@ -18,5 +21,9 @@ append would exceed the configured byte cap, and
     options:
       show_source: true
       members_order: source
+
+::: api_server.RemanentiaHTTPServer
+
+::: api_server.build_server
 
 ::: api_server._json_default

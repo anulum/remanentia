@@ -45,6 +45,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - README badges, header image, branding footer
 
 ### Fixed
+- `api_server.py` now has typed stdlib-server security dependencies,
+  JSON-object request validation, complete audited handler docstrings, and a
+  strict-mypy clean dedicated HTTP handler test surface at 100% focused
+  coverage.
 - `temporal_graph.py` now has typed optional Rust-extension boundaries,
   complete audited graph/dataclass docstrings, strict-mypy clean fallback and
   LongMemEval integration tests, and 100% focused coverage.

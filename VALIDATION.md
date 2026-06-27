@@ -32,7 +32,7 @@
 | date_normalizer.py | 141 | 100% |
 | llm_backend.py | 141 | 100% |
 | reflector.py | 127 | 100% |
-| api_server.py | 117 | 100% |
+| api_server.py | 190 | 100% |
 | observer.py | 104 | 100% |
 | api.py | 95 | 100% |
 | temporal_relation.py | 88 | 100% |
@@ -40,7 +40,7 @@
 | entity_extractor.py | 77 | 100% |
 | fact_validity_model.py | 69 | 100% |
 | llm_setup.py | 33 | 100% |
-| **Total** | **~4,348** | **100%** |
+| **Total** | **~4,421** | **100%** |
 
 ## Excluded from Coverage
 
