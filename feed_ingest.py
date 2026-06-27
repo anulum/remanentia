@@ -40,8 +40,10 @@ from finding_ingest import (
     FindingSink,
     MarkdownFindingSink,
     SeqCursor,
-    default_findings_dir,
 )
+from store_paths import DEFAULT_FEED_CURSOR_NAME as STORE_DEFAULT_FEED_CURSOR_NAME
+from store_paths import default_feed_cursor as store_default_feed_cursor
+from store_paths import default_findings_dir
 from feed_normalization import (
     normalise_entities,
     normalise_provenance,
@@ -52,8 +54,7 @@ from feed_normalization import (
 
 DEFAULT_PROJECT = "REMANENTIA"
 DEFAULT_FEED_PATH = Path.home() / "synapse" / "feed.ndjson"
-DEFAULT_FEED_CURSOR_NAME = "synapse_feed_cursor.json"
-
+DEFAULT_FEED_CURSOR_NAME = STORE_DEFAULT_FEED_CURSOR_NAME
 _MARKER_RE = re.compile(
     r"^\s*(?:\[(?P<bracket>finding|key finding|decision|decision point)\]"
     r"|(?P<label>finding|key finding|decision|decision point))\s*:\s*(?P<statement>.+?)\s*$",
@@ -249,7 +250,7 @@ def ingest_from_feed(
 
 def default_feed_cursor(base: str | Path | None = None) -> Path:
     """Return the default file cursor for ``feed.ndjson`` ingestion."""
-    return cast(Path, default_findings_dir(base).parent / DEFAULT_FEED_CURSOR_NAME)
+    return store_default_feed_cursor(base)
 
 
 def main() -> int:  # pragma: no cover - CLI/cron entry point

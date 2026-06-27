@@ -34,10 +34,11 @@ gate degrades to a clear signal instead of a crash on a fresh checkout.
 
 from __future__ import annotations
 
-import os
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+
+from store_paths import resolve_store_paths
 
 SECONDS_PER_DAY = 86400.0
 
@@ -151,7 +152,7 @@ class PipelineFreshness:
         )
         return "\n".join(lines)
 
-    def as_dict(self) -> dict:
+    def as_dict(self) -> dict[str, object]:
         """A JSON-serialisable view for cron/CI consumers."""
         return {
             "stages": [
@@ -233,16 +234,8 @@ def default_stages(base: str | Path | None = None) -> list[StageFreshness]:
     env-pointed; an unset or absent directory simply reads as empty). The
     ordered chain is stimuli → findings → digests → vector-index.
     """
-    if base is None:
-        base = os.environ.get("REMANENTIA_BASE")
-    root = Path(base) if base is not None else Path(__file__).parent
-    stimuli_dir = os.environ.get("REMANENTIA_STIMULI_DIR", str(root / "snn_stimuli"))
-    return [
-        probe_stage("stimuli", stimuli_dir, ["*.json"]),
-        probe_stage("findings", root / "memory" / "semantic", ["**/*.md"]),
-        probe_stage("digests", root / "memory" / "digests", ["*.md"]),
-        probe_stage("vector-index", root / "snn_state" / "vector_index", ["*.npz", "*.sqlite"]),
-    ]
+    paths = resolve_store_paths(base=base)
+    return [probe_stage(stage.name, stage.root, stage.patterns) for stage in paths.freshness_stage_roots()]
 
 
 def assess_default(

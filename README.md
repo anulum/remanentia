@@ -124,6 +124,7 @@ Knowledge store (multi-hop graph search) ...... Zettelkasten + prospective queri
 |------|------|
 | `memory_index.py` | Unified BM25 + embedding index, all scoring and ranking |
 | `memory_sources.py` | Neutral default source roots plus JSON/env source configuration |
+| `store_paths.py` | Canonical memory-store paths shared by ingest and freshness monitoring |
 | `memory_recall.py` | Deep recall: retrieval + graph + temporal context |
 | `recall_calibration.py` | Recall abstention calibration from correctness-labelled ledger outcomes |
 | `compiled_memory.py` | Typed fact-card compiler for durable seed and operational facts |

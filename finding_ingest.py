@@ -43,6 +43,8 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from claim_axes import is_falsified_reference_validated
+from store_paths import default_finding_cursor as store_default_finding_cursor
+from store_paths import default_findings_dir as store_default_findings_dir
 
 # The hub's memory event kinds and the gate verdicts are stable wire values; we
 # name them here so the core never imports a synapse_channel internal module.
@@ -300,10 +302,7 @@ def ingest_from_hub(
 
 def default_findings_dir(base: str | Path | None = None) -> Path:
     """Where Remanentia keeps ingested findings."""
-    if base is None:
-        base = os.environ.get("REMANENTIA_BASE")
-    root = Path(base) if base is not None else Path(__file__).resolve().parent
-    return root / "memory" / "semantic" / "findings"
+    return store_default_findings_dir(base)
 
 
 def main() -> int:  # pragma: no cover — CLI/cron entry point
@@ -313,7 +312,7 @@ def main() -> int:  # pragma: no cover — CLI/cron entry point
     hub = os.environ.get("SYNAPSE_HUB_DB", str(Path.home() / "synapse" / "hub.db"))
     cursor = os.environ.get(
         "REMANENTIA_FINDING_CURSOR",
-        str(default_findings_dir().parent / "finding_ingest_cursor.json"),
+        str(store_default_finding_cursor()),
     )
     report = ingest_from_hub(hub, MarkdownFindingSink(default_findings_dir()), cursor)
     print(

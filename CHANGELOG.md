@@ -6,6 +6,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- `store_paths.py` centralises the canonical memory-store layout so hub ingest,
+  feed ingest, and index freshness monitoring derive findings, cursor, digest,
+  stimuli, and vector-index paths from the same `REMANENTIA_BASE` /
+  `REMANENTIA_STIMULI_DIR` contract.
 - `memory_sources.py` provides neutral repository-local MemoryIndex source
   defaults plus JSON/env configuration through
   `REMANENTIA_MEMORY_SOURCES_CONFIG` and `REMANENTIA_MEMORY_SOURCES_JSON`.

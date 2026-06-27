@@ -81,6 +81,7 @@ Author = "https://www.anulum.li"
 py-modules = [
     "memory_index",
     "memory_sources",
+    "store_paths",
     "claim_axes",
     "recall_calibration",
     "recall_ledger",

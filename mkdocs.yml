@@ -66,6 +66,7 @@ nav:
   - API Reference:
     - memory_index: api/memory_index.md
     - memory_sources: api/memory_sources.md
+    - store_paths: api/store_paths.md
     - claim_axes: api/claim_axes.md
     - memory_recall: api/memory_recall.md
     - recall_calibration: api/recall_calibration.md
