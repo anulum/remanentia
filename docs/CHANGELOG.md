@@ -6,6 +6,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Benchmark evidence reports via `remanentia-benchmark-report`, with
+  LongMemEval judge prompt hashes, token accounting, and latency metadata on
+  newly judged result rows.
 - Full-S LongMemEval Arcane hypothesis rows now include retrieval-selection
   diagnostics: selected sessions, answer-session recall, session-limit misses,
   and character-budget misses.

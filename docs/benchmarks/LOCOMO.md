@@ -5,6 +5,8 @@
 **83.1% overall** on 1,986 questions from the LOCOMO multi-session QA dataset.
 Source: [`paper/locomo_results.json`](https://github.com/anulum/remanentia/blob/main/paper/locomo_results.json)
 (committed 2026-04-17; 927 s wall-clock end-to-end).
+Machine-readable evidence is also committed at
+`benchmarks/locomo_snapshot_report.json`, generated from the same JSON summary.
 
 | Category    | Correct / Total | Accuracy |
 |-------------|----------------:|---------:|
@@ -76,4 +78,9 @@ python bench_locomo.py --llm     # with LLM synthesis (requires ANTHROPIC_API_KE
 
 # LongMemEval (committed dataset, reproducible)
 python bench_longmemeval.py --llm --evaluate
+
+# Evidence report from the committed LOCOMO summary
+remanentia-benchmark-report paper/locomo_results.json \
+  --benchmark locomo \
+  --output benchmarks/locomo_snapshot_report.json
 ```

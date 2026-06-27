@@ -65,6 +65,7 @@ dev = [
 
 [project.scripts]
 remanentia = "cli:main"
+remanentia-benchmark-report = "benchmark_report:main"
 remanentia-feed-ingest = "feed_ingest:main"
 remanentia-full-s-diagnostics = "full_s_diagnostics:main"
 remanentia-recall-calibration = "recall_calibration:main"
@@ -87,6 +88,8 @@ py-modules = [
     "store_paths",
     "store_manifest",
     "store_sources",
+    "benchmark_evidence",
+    "benchmark_report",
     "claim_axes",
     "recall_calibration",
     "recall_ledger",

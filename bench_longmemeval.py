@@ -818,7 +818,9 @@ def run_evaluation() -> None:
     with open(OUTPUT_PATH, encoding="utf-8") as f:
         hypotheses = cast(list[dict[str, Any]], [json.loads(line) for line in f if line.strip()])
 
-    print(f"Evaluating {len(hypotheses)} hypotheses with GPT-4o-mini as judge...")
+    judge_model = "gpt-4o-mini"
+    judge_max_tokens = 10
+    print(f"Evaluating {len(hypotheses)} hypotheses with {judge_model} as judge...")
 
     type_scores: defaultdict[str, list[int]] = defaultdict(list)
     results: list[dict[str, Any]] = []
@@ -836,21 +838,40 @@ def run_evaluation() -> None:
 
         prompt = _judge_prompt(qtype, question, gold, response)
 
+        usage: object | None = None
+        started = time.perf_counter()
         try:
             msg = client.chat.completions.create(
-                model="gpt-4o-mini",
-                max_tokens=10,
+                model=judge_model,
+                max_tokens=judge_max_tokens,
                 messages=[{"role": "user", "content": prompt}],
             )
             content = msg.choices[0].message.content
             judge_answer = content.strip().lower() if isinstance(content, str) else ""
             correct = "yes" in judge_answer
+            usage = getattr(msg, "usage", None)
         except Exception as e:
             print(f"  Judge error on {qid}: {e}")
             correct = False
+        judge_latency_ms = (time.perf_counter() - started) * 1000.0
+
+        from benchmark_evidence import build_judge_evidence
 
         type_scores[qtype].append(1 if correct else 0)
-        results.append({**hyp, "judge_label": correct, "question_type": qtype})
+        results.append(
+            {
+                **hyp,
+                "judge_label": correct,
+                "question_type": qtype,
+                **build_judge_evidence(
+                    prompt,
+                    model=judge_model,
+                    max_tokens=judge_max_tokens,
+                    latency_ms=judge_latency_ms,
+                    usage=usage,
+                ),
+            }
+        )
 
         if (i + 1) % max(_PROGRESS_EVERY, 25) == 0:
             total = sum(sum(v) for v in type_scores.values())

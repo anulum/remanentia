@@ -13,6 +13,12 @@ load-bearing:
 Per-run history is recorded in `benchmarks/longmemeval_history.jsonl`. Quote
 multi-run means, not single runs.
 
+Machine-readable benchmark evidence reports are generated with
+`remanentia-benchmark-report`. The current committed oracle snapshot report is
+`benchmarks/longmemeval_oracle_snapshot_report.json`; new judged rows written by
+`--evaluate` include judge prompt hashes, prompt-token estimates, exact API usage
+when the provider returns it, and judge-call latency.
+
 ## Current Comparable Score: Full-S
 
 Full-S uses the retrieved-context reader over the realistic large haystack:
@@ -132,3 +138,14 @@ remanentia-full-s-diagnostics data/longmemeval_hypotheses.results.jsonl
 The taxonomy separates judged failures into synthesis failures, retrieval-ranking misses,
 session-cap misses, character-budget misses, missing answer-session metadata, and missing
 diagnostics.
+
+Generate an auditable score/runtime/token report for any judged LongMemEval JSONL:
+
+```bash
+remanentia-benchmark-report data/longmemeval_hypotheses.results.jsonl \
+  --benchmark longmemeval \
+  --output benchmarks/longmemeval_oracle_snapshot_report.json
+```
+
+Older result files that predate judge evidence still produce score reports, but their
+prompt-hash, token, and latency sections are empty rather than inferred.

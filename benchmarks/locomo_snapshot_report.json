@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "benchmark": "locomo",
+  "source_path": "paper/locomo_results.json",
+  "source_format": "json",
+  "generated_at": "2026-06-27T13:02:20+02:00",
+  "n_records": 1986,
+  "score": {
+    "correct": 1651,
+    "total": 1986,
+    "accuracy": 83.1
+  },
+  "by_category": {
+    "multi-hop": {
+      "correct": 285,
+      "total": 321,
+      "accuracy": 88.8
+    },
+    "temporal": {
+      "correct": 60,
+      "total": 96,
+      "accuracy": 62.5
+    },
+    "single-hop": {
+      "correct": 207,
+      "total": 282,
+      "accuracy": 73.4
+    },
+    "adversarial": {
+      "correct": 731,
+      "total": 841,
+      "accuracy": 86.9
+    },
+    "open-domain": {
+      "correct": 368,
+      "total": 446,
+      "accuracy": 82.5
+    }
+  },
+  "runtime": {
+    "elapsed_s": 927.3,
+    "mean_per_record_ms": 466.918
+  },
+  "tokens": {
+    "judge_prompt_estimate": 0,
+    "judge_completion": 0
+  },
+  "judge": {
+    "models": [],
+    "prompt_sha256": []
+  },
+  "method": "BM25 + CE rerank + answer extraction + LLM synthesis",
+  "llm_enabled": true
+}

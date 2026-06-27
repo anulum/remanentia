@@ -237,6 +237,18 @@ remanentia-full-s-diagnostics data/longmemeval_hypotheses.results.jsonl
 The report groups failures as synthesis failures, ranking misses, session-cap misses,
 character-budget misses, or missing diagnostic data.
 
+Generate the auditable score/runtime/token evidence report from any judged result file:
+
+```bash
+remanentia-benchmark-report data/longmemeval_hypotheses.results.jsonl \
+  --benchmark longmemeval \
+  --output benchmarks/longmemeval_oracle_snapshot_report.json
+```
+
+New `--evaluate` rows include judge prompt hashes, prompt-token estimates, exact API usage
+when returned by the provider, and judge-call latency. Older committed rows still produce
+score reports, with unavailable runtime/token fields left empty.
+
 #### Oracle setting (gold sessions only — retrieval NOT exercised)
 
 The figures below are the oracle setting: the haystack is exactly the gold sessions, fed
@@ -286,7 +298,8 @@ remain on the normal reader path.
 **1,651 / 1,986 = 83.1 %** on the LOCOMO multi-session QA dataset
 (BM25 + cross-encoder rerank + 4-stage answer extraction + LLM
 synthesis). Results committed at
-[`paper/locomo_results.json`](paper/locomo_results.json).
+[`paper/locomo_results.json`](paper/locomo_results.json), with the derived evidence
+report at [`benchmarks/locomo_snapshot_report.json`](benchmarks/locomo_snapshot_report.json).
 
 | Category    | Correct / Total | Accuracy |
 |-------------|----------------:|---------:|
