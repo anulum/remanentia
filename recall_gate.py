@@ -37,6 +37,20 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 
+from claim_axes import (
+    ADMISSIONS,
+    ADMITTED,
+    CLAIM_STATUSES,
+    EVIDENCE_KINDS,
+    FALSIFIED,
+    FRESHNESSES,
+    PRODUCER_ASSERTED,
+    REFERENCE_VALIDATED,
+    REFUTED_STATUS,
+    VERIFIED_AT_SOURCE,
+    normalize_axis,
+)
+
 # ── The render lattice ───────────────────────────────────────────────────────
 
 VALIDATED = "validated"
@@ -48,49 +62,9 @@ _RANK = {VALIDATED: 2, BOUNDARY: 1, REFUTED: 0}
 
 # ── Gating-axis members (wire strings; anything else is "unknown") ────────────
 
-REFERENCE_VALIDATED = "reference-validated"
-REFUTED_STATUS = "refuted"
-CLAIM_STATUSES = frozenset(
-    {
-        REFERENCE_VALIDATED,
-        "bounded-model",
-        "bounded-support",
-        "validation-gap",
-        "external-dependency-blocked",
-        "roadmap",
-        "toolchain-gated",
-        REFUTED_STATUS,
-    }
-)
-
-FALSIFIED = "falsified"
-PRODUCER_ASSERTED = "producer-asserted"
-EVIDENCE_KINDS = frozenset(
-    {
-        "measured",
-        "curated",
-        "formally-proven",
-        "hardware-validated",
-        "noise-limited",
-        PRODUCER_ASSERTED,
-        FALSIFIED,
-    }
-)
-
-ADMITTED = "admitted"
-ADMISSIONS = frozenset({ADMITTED, "floored", "rejected"})
-
-VERIFIED_AT_SOURCE = "verified-at-source"
-FRESHNESSES = frozenset({VERIFIED_AT_SOURCE, "traceable-unchecked", "untraceable"})
-
-
 def _norm(value: object) -> str | None:
     """Canonicalise a wire value: lower-case, ``_``→``-``; ``None`` stays ``None``."""
-    if value is None:
-        return None
-    if isinstance(value, str):
-        return value.replace("_", "-").lower()
-    return ""
+    return normalize_axis(value)
 
 
 def freshness_permits(freshness: str | None) -> bool:
@@ -103,7 +77,11 @@ def freshness_permits(freshness: str | None) -> bool:
     *withhold* validation; it never turns a non-validated verdict into validated.
     """
     fresh = _norm(freshness)
-    return fresh is None or fresh == VERIFIED_AT_SOURCE
+    if fresh is None:
+        return True
+    if fresh not in FRESHNESSES:
+        return False
+    return fresh == VERIFIED_AT_SOURCE
 
 
 def present(

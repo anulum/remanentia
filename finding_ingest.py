@@ -42,6 +42,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+from claim_axes import is_falsified_reference_validated
+
 # The hub's memory event kinds and the gate verdicts are stable wire values; we
 # name them here so the core never imports a synapse_channel internal module.
 MEMORY_KINDS = ("recall", "checkpoint", "handoff", "finding")
@@ -49,8 +51,6 @@ VERDICT_ACCEPT = "accept"
 VERDICT_FLOOR = "floor"
 VERDICT_REJECT = "reject"
 DEFAULT_ADMITTING_VERDICTS = (VERDICT_ACCEPT, VERDICT_FLOOR)
-FALSIFIED_EVIDENCE = "falsified"
-REFERENCE_VALIDATED_STATUS = "reference-validated"
 
 
 @dataclass(frozen=True)
@@ -210,22 +210,12 @@ def _finding_record(finding: Any) -> dict[str, Any]:
 
 def _claim_axis_rejection(finding: Any) -> str | None:
     record = _finding_record(finding)
-    evidence_kind = _normalise_axis(record.get("evidence_kind"))
-    claim_status = _normalise_axis(record.get("claim_status"))
-    if evidence_kind == FALSIFIED_EVIDENCE and claim_status == REFERENCE_VALIDATED_STATUS:
+    if is_falsified_reference_validated(record.get("evidence_kind"), record.get("claim_status")):
         return (
             "falsified evidence cannot enter memory as reference-validated; "
             "mark the claim refuted before ingest"
         )
     return None
-
-
-def _normalise_axis(value: object) -> str | None:
-    if value is None:
-        return None
-    if isinstance(value, str):
-        return value.replace("_", "-").lower()
-    return ""
 
 
 @dataclass

@@ -6,6 +6,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Shared claim-axis vocabulary now keeps finding ingest admission and recall
+  rendering on the same evidence/status/admission/freshness wire values.
 - Recall abstention calibration CLI/API with held-out coverage, accuracy, and
   calibration-error reporting from correctness-labelled recall ledger outcomes.
 - Finding envelope verification now accepts audited supersession closures and
