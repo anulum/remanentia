@@ -24,6 +24,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, cast
 
 BASE = Path(__file__).parent
 STORE_PATH = BASE / "memory" / "knowledge_notes.jsonl"
@@ -59,25 +60,25 @@ def _tokenize(text: str) -> set[str]:
     try:
         from remanentia_knowledge_store import tokenize as _rust_tok
 
-        return _rust_tok(text)  # pragma: no cover
+        return cast(set[str], _rust_tok(text))  # pragma: no cover
     except ImportError:
         pass
     return set(re.findall(r"[a-z0-9][a-z0-9_]{2,}", text.lower()))
 
 
 def _note_id(content: str, source: str) -> str:
-    return hashlib.md5(f"{content[:200]}:{source}".encode()).hexdigest()[:12]
+    return hashlib.sha256(f"{content[:200]}:{source}".encode()).hexdigest()[:12]
 
 
 def _extract_keywords(text: str) -> list[str]:
     try:
         from remanentia_knowledge_store import extract_keywords as _rust_kw
 
-        return _rust_kw(text)  # pragma: no cover
+        return cast(list[str], _rust_kw(text))  # pragma: no cover
     except ImportError:
         pass
     tokens = re.findall(r"[a-z0-9_]{4,}", text.lower())
-    freq = defaultdict(int)
+    freq: defaultdict[str, int] = defaultdict(int)
     for t in tokens:
         freq[t] += 1
     keywords = [t for t, c in freq.items() if c >= 2]
@@ -91,7 +92,7 @@ def _extract_entities(text: str) -> set[str]:
     try:
         from remanentia_knowledge_store import extract_entities as _rust_ents
 
-        return _rust_ents(text)  # pragma: no cover
+        return cast(set[str], _rust_ents(text))  # pragma: no cover
     except ImportError:
         pass
     entities = set()
@@ -133,7 +134,7 @@ def extract_person_names(text: str) -> set[str]:
     try:
         from remanentia_knowledge_store import extract_person_names as _rust_names
 
-        return _rust_names(text)  # pragma: no cover
+        return cast(set[str], _rust_names(text))  # pragma: no cover
     except ImportError:
         pass
     names = set()
@@ -276,7 +277,7 @@ class KnowledgeNote:
     source: str
     created: str
     updated: str
-    links: list[dict] = field(default_factory=list)
+    links: list[dict[str, Any]] = field(default_factory=list)
     supersedes: str = ""
     superseded_by: str = ""
     entities: list[str] = field(default_factory=list)
@@ -314,7 +315,7 @@ class KnowledgeNote:
             # Time decay: 0.01 per 30 days of no access
             self.confidence = max(0.1, self.confidence - 0.01)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "title": self.title,
@@ -336,7 +337,7 @@ class KnowledgeNote:
         }
 
     @staticmethod
-    def from_dict(d: dict) -> KnowledgeNote:
+    def from_dict(d: dict[str, Any]) -> KnowledgeNote:
         return KnowledgeNote(
             id=d["id"],
             title=d["title"],
@@ -377,7 +378,7 @@ class Trigger:
     fired: list[str] = field(default_factory=list)
     active: bool = True
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "condition": self.condition,
@@ -388,7 +389,7 @@ class Trigger:
         }
 
     @staticmethod
-    def from_dict(d: dict) -> Trigger:
+    def from_dict(d: dict[str, Any]) -> Trigger:
         return Trigger(
             id=d["id"],
             condition=d["condition"],
@@ -400,7 +401,7 @@ class Trigger:
 
 
 class KnowledgeStore:
-    def age_memories(self) -> dict:
+    def age_memories(self) -> dict[str, int]:
         """Age knowledge notes based on last access. Decay confidence of inactive notes."""
         stats = {"scanned": 0, "stale": 0}
         for note in self.notes.values():
@@ -410,7 +411,7 @@ class KnowledgeStore:
             stats["scanned"] += 1
         return stats
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.notes: dict[str, KnowledgeNote] = {}
         self.triggers: list[Trigger] = []
         self._token_index: dict[str, set[str]] = {}  # note_id -> tokens
@@ -820,7 +821,7 @@ class KnowledgeStore:
 
     def add_trigger(self, condition: str, action: str) -> Trigger:
         """Add a prospective memory trigger."""
-        tid = hashlib.md5(f"{condition}:{action}".encode()).hexdigest()[:12]
+        tid = hashlib.sha256(f"{condition}:{action}".encode()).hexdigest()[:12]
         trigger = Trigger(
             id=tid,
             condition=condition,
@@ -830,7 +831,7 @@ class KnowledgeStore:
         self.triggers.append(trigger)
         return trigger
 
-    def save(self, notes_path: Path | None = None, triggers_path: Path | None = None):
+    def save(self, notes_path: Path | None = None, triggers_path: Path | None = None) -> None:
         from file_utils import FileLock, atomic_write_text
 
         notes_path = notes_path or STORE_PATH
@@ -870,7 +871,7 @@ class KnowledgeStore:
         return len(self.notes) > 0 or len(self.triggers) > 0
 
     @property
-    def stats(self) -> dict:
+    def stats(self) -> dict[str, int]:
         n_links = sum(len(n.links) for n in self.notes.values())
         n_contradictions = sum(1 for n in self.notes.values() if n.supersedes)
         n_active_triggers = sum(1 for t in self.triggers if t.active)

@@ -53,7 +53,7 @@ import logging
 import os
 import threading
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import Any, cast
 
 log = logging.getLogger(__name__)
 
@@ -80,7 +80,7 @@ def _load_agent_factory() -> AgentFactory | None:
         from synapse_channel import SynapseAgent
     except Exception:  # pragma: no cover — exercised via injected factory in tests
         return None
-    return SynapseAgent
+    return cast(AgentFactory, SynapseAgent)
 
 
 class BusRecallEmitter:
@@ -286,7 +286,7 @@ class BusRecallEmitter:
             try:
                 await task
             except Exception:
-                pass
+                log.debug("Recall bus connect task shutdown failed", exc_info=True)
         if self._loop is not None:
             self._loop.stop()
 

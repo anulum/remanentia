@@ -15,8 +15,30 @@ and answer-core extraction to improve fuzzy match accuracy.
 from __future__ import annotations
 
 from difflib import SequenceMatcher
+import logging
 import re
+from collections.abc import Callable
+from typing import Any, Literal, Protocol, cast
 
+log = logging.getLogger(__name__)
+
+
+class _EmbeddingModel(Protocol):
+    """Subset of the sentence-transformer API used for similarity scoring."""
+
+    def to(self, device: str) -> "_EmbeddingModel":
+        """Move the model to a device and return the model instance."""
+        ...  # pragma: no cover
+
+    def encode(
+        self,
+        texts: list[str],
+        *,
+        normalize_embeddings: bool,
+        convert_to_numpy: bool,
+    ) -> Any:
+        """Encode texts as a NumPy-compatible embedding array."""
+        ...  # pragma: no cover
 
 _YES_PATTERNS = re.compile(
     r"^(yes|likely\s+yes|probably\s+yes|most\s+likely\s+yes|yeah|yep|correct|true)",
@@ -47,7 +69,8 @@ def normalize_answer(text: str) -> str:
     try:
         from remanentia_answer_normalizer import normalize_answer as _rust_norm
 
-        return _rust_norm(text)  # pragma: no cover
+        rust_norm = cast(Callable[[str], str], _rust_norm)
+        return rust_norm(text)  # pragma: no cover
     except ImportError:
         pass
     text = text.strip()
@@ -60,7 +83,8 @@ def normalize_answer(text: str) -> str:
     no_m = _NO_PATTERNS.match(text)
 
     if yes_m or no_m:
-        m = yes_m or no_m
+        m = yes_m if yes_m is not None else no_m
+        assert m is not None
         core = m.group(0).strip().lower()
         # "likely no" stays as "likely no", not just "no"
         return core
@@ -115,7 +139,8 @@ def answers_match(predicted: str, ground_truth: str, threshold: float = 0.25) ->
     try:
         from remanentia_answer_normalizer import answers_match as _rust_match
 
-        return _rust_match(predicted, ground_truth, threshold)  # pragma: no cover
+        rust_match = cast(Callable[[str, str, float], bool], _rust_match)
+        return rust_match(predicted, ground_truth, threshold)  # pragma: no cover
     except ImportError:
         pass
     p_norm = normalize_answer(predicted)
@@ -154,36 +179,44 @@ def answers_match(predicted: str, ground_truth: str, threshold: float = 0.25) ->
     return False
 
 
-_embed_model = None
+_embed_model: _EmbeddingModel | Literal[False] | None = None
 
 
-def _get_embed_model():
+def _get_embed_model() -> _EmbeddingModel | None:
     global _embed_model
     if _embed_model is None:
         try:
             from sentence_transformers import SentenceTransformer
 
             try:
-                _embed_model = SentenceTransformer(
-                    "all-MiniLM-L6-v2",
-                    device="cpu",
-                    local_files_only=True,
+                _embed_model = cast(
+                    _EmbeddingModel,
+                    SentenceTransformer(
+                        "all-MiniLM-L6-v2",
+                        device="cpu",
+                        local_files_only=True,
+                    ),
                 )
             except TypeError:  # pragma: no cover — older sentence-transformers API
                 try:
-                    _embed_model = SentenceTransformer(
-                        "all-MiniLM-L6-v2",
-                        local_files_only=True,
+                    _embed_model = cast(
+                        _EmbeddingModel,
+                        SentenceTransformer(
+                            "all-MiniLM-L6-v2",
+                            local_files_only=True,
+                        ),
                     )
                 except TypeError:
-                    _embed_model = SentenceTransformer("all-MiniLM-L6-v2")
+                    _embed_model = cast(_EmbeddingModel, SentenceTransformer("all-MiniLM-L6-v2"))
                 try:
                     _embed_model = _embed_model.to("cpu")
                 except Exception:
-                    pass
+                    log.debug("Embedding model CPU placement failed", exc_info=True)
         except Exception:  # pragma: no cover — sentence-transformers not installed
             _embed_model = False
-    return _embed_model if _embed_model else None
+    if _embed_model is False or _embed_model is None:
+        return None
+    return _embed_model
 
 
 def _lexical_similarity(text_a: str, text_b: str) -> float:

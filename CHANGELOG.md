@@ -37,6 +37,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   category, no LLM calls).
 
 ### Fixed
+- Knowledge-store note and trigger IDs now use SHA-256 digest prefixes, and
+  optional embedding, GLiNER, and recall-bus shutdown failure paths log
+  recoverable exceptions instead of silently swallowing them.
 - Cross-encoder reranking is on by default again in `ArcaneRetriever`. It had been
   gated behind an opt-in environment flag, which silently cost ~8–9 LongMemEval
   questions (knowledge-update and multi-session). Opt out with

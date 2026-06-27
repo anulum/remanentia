@@ -18,11 +18,35 @@ Typed relations: pattern matching on connecting text between entities.
 
 from __future__ import annotations
 
+import logging
 import re
 import time
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import Protocol, cast
 
-_GLINER_MODEL = None
+log = logging.getLogger(__name__)
+
+
+class _GlinerModel(Protocol):
+    """Subset of the GLiNER API used by the entity extractor."""
+
+    def to(self, device: str) -> "_GlinerModel":
+        """Move the model to a device and return the model instance."""
+        ...  # pragma: no cover
+
+    def predict_entities(
+        self,
+        text: str,
+        labels: list[str],
+        *,
+        threshold: float,
+    ) -> Sequence[Mapping[str, object]]:
+        """Return entity predictions for one text chunk."""
+        ...  # pragma: no cover
+
+
+_GLINER_MODEL: _GlinerModel | None = None
 
 ENTITY_LABELS = [
     "person",
@@ -71,7 +95,7 @@ class Relation:
     evidence: str
 
 
-def _load_gliner():  # pragma: no cover
+def _load_gliner() -> _GlinerModel | None:  # pragma: no cover
     global _GLINER_MODEL
     if _GLINER_MODEL is not None:
         return _GLINER_MODEL
@@ -81,7 +105,7 @@ def _load_gliner():  # pragma: no cover
         from device_utils import safe_device
 
         device = safe_device()
-        _GLINER_MODEL = GLiNER.from_pretrained("urchade/gliner_multi-v2.1")
+        _GLINER_MODEL = cast(_GlinerModel, GLiNER.from_pretrained("urchade/gliner_multi-v2.1"))
         if device.startswith("cuda"):
             _GLINER_MODEL = _GLINER_MODEL.to(device)
         return _GLINER_MODEL
@@ -102,16 +126,26 @@ def extract_entities(text: str, labels: list[str] | None = None) -> list[Entity]
             try:
                 preds = model.predict_entities(chunk, labels, threshold=0.4)
                 for p in preds:
+                    score_value = p["score"]
+                    start_value = p.get("start", 0)
+                    end_value = p.get("end", 0)
                     entities.append(
                         Entity(
-                            text=p["text"],
-                            label=p["label"],
-                            score=p["score"],
-                            start=p.get("start", 0),
-                            end=p.get("end", 0),
+                            text=str(p["text"]),
+                            label=str(p["label"]),
+                            score=(
+                                float(score_value)
+                                if isinstance(score_value, str | int | float)
+                                else 0.0
+                            ),
+                            start=(
+                                int(start_value) if isinstance(start_value, str | int | float) else 0
+                            ),
+                            end=int(end_value) if isinstance(end_value, str | int | float) else 0,
                         )
                     )
             except Exception:  # pragma: no cover
+                log.debug("GLiNER entity extraction failed for chunk", exc_info=True)
                 continue
         # Deduplicate by text
         seen = set()

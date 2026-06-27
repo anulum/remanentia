@@ -105,7 +105,7 @@ ks2.load()
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | str | MD5 hash of content + source |
+| `id` | str | SHA-256 digest prefix of content + source |
 | `title` | str | Auto-extracted from first line or keywords |
 | `content` | str | Full note text |
 | `keywords` | list[str] | Extracted keywords |

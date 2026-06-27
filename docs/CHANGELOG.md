@@ -45,6 +45,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - README badges, header image, branding footer
 
 ### Fixed
+- Knowledge-store note and trigger IDs now use SHA-256 digest prefixes, and
+  optional embedding, GLiNER, and recall-bus shutdown failure paths log
+  recoverable exceptions instead of silently swallowing them.
 - CI: PEP 639 license classifier conflict
 - CI: mock anthropic import in _get_client tests
 - SPDX headers: Sotek → Šotek across all source files

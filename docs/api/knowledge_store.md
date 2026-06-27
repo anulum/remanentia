@@ -157,7 +157,7 @@ contradicting the existing one, and a "contradicts" typed link is added.
 ```python
 @dataclass
 class KnowledgeNote:
-    id: str              # MD5 hash of content[:200] + source
+    id: str              # SHA-256 digest prefix of content[:200] + source
     content: str         # The atomic fact text
     source: str          # Origin file name
     keywords: list[str]  # Extracted keywords (max 20)
