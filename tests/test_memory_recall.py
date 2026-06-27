@@ -8,11 +8,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
 
 from memory_recall import (
+    JsonMap,
     MemoryContext,
     _assess_novelty,
     _cross_project_insights,
@@ -30,7 +33,7 @@ from memory_recall import (
 
 
 class TestMemoryContext:
-    def test_summary_basic(self):
+    def test_summary_basic(self) -> None:
         ctx = MemoryContext(
             query="test query",
             trace="trace.md",
@@ -45,7 +48,7 @@ class TestMemoryContext:
         assert "0.850" in s
         assert "42ms" in s
 
-    def test_summary_with_entities(self):
+    def test_summary_with_entities(self) -> None:
         ctx = MemoryContext(
             query="test",
             entities=["stdp", "bm25"],
@@ -58,7 +61,7 @@ class TestMemoryContext:
         assert "bm25" in s
         assert "embedding" in s
 
-    def test_summary_with_timeline(self):
+    def test_summary_with_timeline(self) -> None:
         ctx = MemoryContext(
             query="test",
             before=["trace1.md", "trace2.md"],
@@ -68,7 +71,7 @@ class TestMemoryContext:
         assert "2 before" in s
         assert "1 after" in s
 
-    def test_to_llm_context_trace(self):
+    def test_to_llm_context_trace(self) -> None:
         ctx = MemoryContext(
             query="test",
             trace="trace.md",
@@ -78,7 +81,7 @@ class TestMemoryContext:
         assert "trace.md" in llm
         assert "Important finding" in llm
 
-    def test_to_llm_context_semantic(self):
+    def test_to_llm_context_semantic(self) -> None:
         ctx = MemoryContext(
             query="test",
             semantic_memories=[
@@ -89,7 +92,7 @@ class TestMemoryContext:
         assert "Consolidated" in llm
         assert "Decision content" in llm
 
-    def test_to_llm_context_related(self):
+    def test_to_llm_context_related(self) -> None:
         ctx = MemoryContext(
             query="test",
             related_entities=[
@@ -100,7 +103,7 @@ class TestMemoryContext:
         llm = ctx.to_llm_context()
         assert "bm25" in llm
 
-    def test_to_llm_context_empty(self):
+    def test_to_llm_context_empty(self) -> None:
         ctx = MemoryContext(query="test")
         assert ctx.to_llm_context() == ""
 
@@ -109,7 +112,7 @@ class TestMemoryContext:
 
 
 class TestFindRelated:
-    def test_finds_connected(self):
+    def test_finds_connected(self) -> None:
         relations = [
             {
                 "source": "stdp",
@@ -131,7 +134,7 @@ class TestFindRelated:
         assert result[0]["entity"] == "stdp"  # higher weight
         assert result[1]["entity"] == "bm25"
 
-    def test_bidirectional(self):
+    def test_bidirectional(self) -> None:
         relations = [
             {"source": "a", "target": "b", "type": "co_occurs", "weight": 3, "evidence": []},
         ]
@@ -140,7 +143,7 @@ class TestFindRelated:
         assert len(result_a) == 1 and result_a[0]["entity"] == "b"
         assert len(result_b) == 1 and result_b[0]["entity"] == "a"
 
-    def test_top_k_limit(self):
+    def test_top_k_limit(self) -> None:
         relations = [
             {"source": "a", "target": f"b{i}", "type": "co_occurs", "weight": i, "evidence": []}
             for i in range(20)
@@ -148,12 +151,12 @@ class TestFindRelated:
         result = _find_related("a", relations, top_k=5)
         assert len(result) == 5
 
-    def test_empty_relations(self):
+    def test_empty_relations(self) -> None:
         assert _find_related("a", [], top_k=5) == []
 
 
 class TestEntitiesForQuery:
-    def test_finds_by_id(self):
+    def test_finds_by_id(self) -> None:
         entities = {
             "stdp": {"id": "stdp", "label": "STDP"},
             "bm25": {"id": "bm25", "label": "BM25"},
@@ -161,14 +164,14 @@ class TestEntitiesForQuery:
         found = _entities_for_query("how does stdp work", entities)
         assert "stdp" in found
 
-    def test_finds_by_label(self):
+    def test_finds_by_label(self) -> None:
         entities = {
             "pytorch": {"id": "pytorch", "label": "PyTorch"},
         }
         found = _entities_for_query("using pytorch for training", entities)
         assert "pytorch" in found
 
-    def test_no_match(self):
+    def test_no_match(self) -> None:
         entities = {"stdp": {"id": "stdp", "label": "STDP"}}
         found = _entities_for_query("unrelated query", entities)
         assert found == []
@@ -178,7 +181,7 @@ class TestEntitiesForQuery:
 
 
 class TestSearchSemantic:
-    def test_finds_matching(self, tmp_semantic):
+    def test_finds_matching(self, tmp_semantic: Path) -> None:
         with (
             patch("memory_recall.SEMANTIC_DIR", tmp_semantic),
             patch("memory_recall.BASE", tmp_semantic.parent),
@@ -187,7 +190,7 @@ class TestSearchSemantic:
         assert len(results) > 0
         assert any("decision" in r["path"].lower() for r in results)
 
-    def test_no_match(self, tmp_semantic):
+    def test_no_match(self, tmp_semantic: Path) -> None:
         with (
             patch("memory_recall.SEMANTIC_DIR", tmp_semantic),
             patch("memory_recall.BASE", tmp_semantic.parent),
@@ -195,12 +198,12 @@ class TestSearchSemantic:
             results = _search_semantic("xyznonexistent_zzz", top_k=5)
         assert results == []
 
-    def test_no_semantic_dir(self, tmp_path):
+    def test_no_semantic_dir(self, tmp_path: Path) -> None:
         with patch("memory_recall.SEMANTIC_DIR", tmp_path / "nonexistent"):
             results = _search_semantic("anything", top_k=5)
         assert results == []
 
-    def test_parses_frontmatter(self, tmp_semantic):
+    def test_parses_frontmatter(self, tmp_semantic: Path) -> None:
         with (
             patch("memory_recall.SEMANTIC_DIR", tmp_semantic),
             patch("memory_recall.BASE", tmp_semantic.parent),
@@ -210,7 +213,7 @@ class TestSearchSemantic:
             assert results[0]["project"] == "remanentia"
             assert results[0]["type"] == "decision"
 
-    def test_python_overlap_fallback_scores_matching_memory(self, tmp_semantic):
+    def test_python_overlap_fallback_scores_matching_memory(self, tmp_semantic: Path) -> None:
         with (
             patch("memory_recall.SEMANTIC_DIR", tmp_semantic),
             patch("memory_recall.BASE", tmp_semantic.parent),
@@ -228,25 +231,25 @@ class TestSearchSemantic:
 
 
 class TestTemporalContext:
-    def test_finds_neighbors(self, tmp_traces):
+    def test_finds_neighbors(self, tmp_traces: Path) -> None:
         with patch("memory_recall.TRACES_DIR", tmp_traces):
             before, after = _temporal_context("2026-03-15_decision_stdp_removal.md")
         assert "2026-03-10_technical_rust_bm25.md" in before
         assert "2026-03-17_finding_locomo_benchmark.md" in after
 
-    def test_first_trace_no_before(self, tmp_traces):
+    def test_first_trace_no_before(self, tmp_traces: Path) -> None:
         with patch("memory_recall.TRACES_DIR", tmp_traces):
             before, after = _temporal_context("2026-03-10_technical_rust_bm25.md")
         assert before == []
         assert len(after) > 0
 
-    def test_last_trace_no_after(self, tmp_traces):
+    def test_last_trace_no_after(self, tmp_traces: Path) -> None:
         with patch("memory_recall.TRACES_DIR", tmp_traces):
             before, after = _temporal_context("2026-03-17_finding_locomo_benchmark.md")
         assert len(before) > 0
         assert after == []
 
-    def test_nonexistent_trace(self, tmp_traces):
+    def test_nonexistent_trace(self, tmp_traces: Path) -> None:
         with patch("memory_recall.TRACES_DIR", tmp_traces):
             before, after = _temporal_context("nonexistent.md")
         assert before == []
@@ -257,7 +260,7 @@ class TestTemporalContext:
 
 
 class TestAssessNovelty:
-    def test_known_entities_low_novelty(self):
+    def test_known_entities_low_novelty(self) -> None:
         entities = {
             "stdp": {"id": "stdp", "label": "STDP"},
             "bm25": {"id": "bm25", "label": "BM25"},
@@ -265,24 +268,24 @@ class TestAssessNovelty:
         novelty = _assess_novelty("stdp bm25 scoring", entities)
         assert novelty < 0.5
 
-    def test_unknown_terms_high_novelty(self):
+    def test_unknown_terms_high_novelty(self) -> None:
         entities = {
             "stdp": {"id": "stdp", "label": "STDP"},
         }
         novelty = _assess_novelty("quantum teleportation decoherence fidelity", entities)
         assert novelty > 0.5
 
-    def test_empty_query(self):
+    def test_empty_query(self) -> None:
         assert _assess_novelty("", {}) == 0.0
 
-    def test_mixed_known_unknown(self):
+    def test_mixed_known_unknown(self) -> None:
         entities = {
             "stdp": {"id": "stdp", "label": "STDP"},
         }
         novelty = _assess_novelty("stdp quantum fidelity", entities)
         assert 0.0 < novelty < 1.0
 
-    def test_python_fallback_without_native_extension(self):
+    def test_python_fallback_without_native_extension(self) -> None:
         entities = {
             "stdp": {"id": "stdp", "label": "STDP"},
         }
@@ -291,10 +294,10 @@ class TestAssessNovelty:
 
         assert novelty == 2 / 3
 
-    def test_native_extension_assesses_novelty_with_known_tokens(self):
-        calls = []
+    def test_native_extension_assesses_novelty_with_known_tokens(self) -> None:
+        calls: list[tuple[str, set[str]]] = []
 
-        def assess_novelty(query, known_tokens):
+        def assess_novelty(query: str, known_tokens: set[str]) -> float:
             calls.append((query, known_tokens))
             return 0.25
 
@@ -314,7 +317,7 @@ class TestAssessNovelty:
             ),
         ]
 
-    def test_python_fallback_empty_token_query_has_zero_novelty(self):
+    def test_python_fallback_empty_token_query_has_zero_novelty(self) -> None:
         with patch("memory_recall.import_module", side_effect=ImportError):
             novelty = _assess_novelty("!!!", {})
 
@@ -325,7 +328,7 @@ class TestAssessNovelty:
 
 
 class TestCrossProjectInsights:
-    def test_finds_cross_project(self):
+    def test_finds_cross_project(self) -> None:
         entities = {
             "remanentia": {"id": "remanentia", "type": "project", "label": "Remanentia"},
             "director-ai": {"id": "director-ai", "type": "project", "label": "Director-AI"},
@@ -351,9 +354,9 @@ class TestCrossProjectInsights:
         projects = [i["project"] for i in insights]
         assert "director-ai" in projects
 
-    def test_no_cross_project(self):
+    def test_no_cross_project(self) -> None:
         entities = {"stdp": {"id": "stdp", "type": "concept"}}
-        relations = []
+        relations: list[JsonMap] = []
         insights = _cross_project_insights(["stdp"], "remanentia", entities, relations)
         assert insights == []
 
@@ -362,22 +365,22 @@ class TestCrossProjectInsights:
 
 
 class TestLoadEntities:
-    def test_load_entities(self, tmp_graph):
+    def test_load_entities(self, tmp_graph: Path) -> None:
         with patch("memory_recall.GRAPH_DIR", tmp_graph):
             entities = _load_entities()
         assert "stdp" in entities
         assert "bm25" in entities
 
-    def test_load_entities_no_file(self, tmp_path):
+    def test_load_entities_no_file(self, tmp_path: Path) -> None:
         with patch("memory_recall.GRAPH_DIR", tmp_path):
             assert _load_entities() == {}
 
-    def test_load_relations(self, tmp_graph):
+    def test_load_relations(self, tmp_graph: Path) -> None:
         with patch("memory_recall.GRAPH_DIR", tmp_graph):
             relations = _load_relations()
         assert len(relations) == 4
 
-    def test_load_relations_no_file(self, tmp_path):
+    def test_load_relations_no_file(self, tmp_path: Path) -> None:
         with patch("memory_recall.GRAPH_DIR", tmp_path):
             assert _load_relations() == []
 
@@ -386,7 +389,7 @@ class TestLoadEntities:
 
 
 class TestRecall:
-    def test_recall_basic(self, tmp_traces, tmp_graph, tmp_semantic):
+    def test_recall_basic(self, tmp_traces: Path, tmp_graph: Path, tmp_semantic: Path) -> None:
         with (
             patch("memory_recall.TRACES_DIR", tmp_traces),
             patch("memory_recall.SEMANTIC_DIR", tmp_semantic),
@@ -398,7 +401,9 @@ class TestRecall:
         assert isinstance(ctx.elapsed_ms, float)
         assert isinstance(ctx.entities, list)
 
-    def test_recall_with_semantic(self, tmp_traces, tmp_graph, tmp_semantic):
+    def test_recall_with_semantic(
+        self, tmp_traces: Path, tmp_graph: Path, tmp_semantic: Path
+    ) -> None:
         with (
             patch("memory_recall.TRACES_DIR", tmp_traces),
             patch("memory_recall.SEMANTIC_DIR", tmp_semantic),
@@ -408,7 +413,9 @@ class TestRecall:
             ctx = recall("remanentia decision SNN", top_k=3)
         assert len(ctx.semantic_memories) > 0
 
-    def test_recall_novelty(self, tmp_traces, tmp_graph, tmp_semantic):
+    def test_recall_novelty(
+        self, tmp_traces: Path, tmp_graph: Path, tmp_semantic: Path
+    ) -> None:
         with (
             patch("memory_recall.TRACES_DIR", tmp_traces),
             patch("memory_recall.SEMANTIC_DIR", tmp_semantic),
@@ -419,19 +426,23 @@ class TestRecall:
         assert ctx.novelty_score > 0
 
     def test_recall_builds_unloaded_memory_index_and_extracts_trace_entities(
-        self, tmp_traces, tmp_graph, tmp_semantic, monkeypatch
-    ):
+        self,
+        tmp_traces: Path,
+        tmp_graph: Path,
+        tmp_semantic: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         class FakeMemoryIndex:
             def __init__(self) -> None:
-                self.build_kwargs = None
+                self.build_kwargs: dict[str, bool] | None = None
 
             def load(self) -> bool:
                 return False
 
-            def build(self, **kwargs) -> None:
+            def build(self, **kwargs: bool) -> None:
                 self.build_kwargs = kwargs
 
-            def search(self, query, top_k):
+            def search(self, query: str, top_k: int) -> list[SimpleNamespace]:
                 return [
                     SimpleNamespace(
                         name="2026-03-15_decision_stdp_removal.md",
@@ -460,7 +471,7 @@ class TestRecall:
 
 
 class TestMemoryContextExtended:
-    def test_summary_with_semantic_memories(self):
+    def test_summary_with_semantic_memories(self) -> None:
         ctx = MemoryContext(
             query="test",
             semantic_memories=[
@@ -470,7 +481,7 @@ class TestMemoryContextExtended:
         s = ctx.summary
         assert "1 memories" in s or "Consolidated" in s
 
-    def test_summary_with_cross_project(self):
+    def test_summary_with_cross_project(self) -> None:
         ctx = MemoryContext(
             query="test",
             cross_project=[{"project": "director-ai", "insight": "shared concept"}],
@@ -478,7 +489,7 @@ class TestMemoryContextExtended:
         s = ctx.summary
         assert "Cross-project" in s
 
-    def test_to_llm_context_with_timeline(self):
+    def test_to_llm_context_with_timeline(self) -> None:
         ctx = MemoryContext(
             query="test",
             trace="t.md",
@@ -490,7 +501,7 @@ class TestMemoryContextExtended:
         assert "Before:" in llm
         assert "After:" in llm
 
-    def test_to_llm_context_cross_project(self):
+    def test_to_llm_context_cross_project(self) -> None:
         ctx = MemoryContext(
             query="test",
             trace="t.md",
@@ -505,13 +516,13 @@ class TestMemoryContextExtended:
 
 
 class TestRecallEdgeCases:
-    def test_empty_query(self, tmp_traces):
+    def test_empty_query(self, tmp_traces: Path) -> None:
         from memory_recall import recall, MemoryContext
 
         ctx = recall("", top_k=3)
         assert isinstance(ctx, MemoryContext)
 
-    def test_recall_returns_memory_context(self, tmp_traces):
+    def test_recall_returns_memory_context(self, tmp_traces: Path) -> None:
         from memory_recall import recall, MemoryContext
 
         ctx = recall("STDP", top_k=3)
@@ -519,7 +530,7 @@ class TestRecallEdgeCases:
         assert hasattr(ctx, "query")
         assert hasattr(ctx, "trace")
 
-    def test_recall_to_llm_context(self, tmp_traces):
+    def test_recall_to_llm_context(self, tmp_traces: Path) -> None:
         from memory_recall import recall
 
         ctx = recall("STDP", top_k=3)
@@ -528,14 +539,14 @@ class TestRecallEdgeCases:
 
 
 class TestRecallErrorHandling:
-    def test_recall_error_on_broken_trace(self, tmp_traces):
+    def test_recall_error_on_broken_trace(self, tmp_traces: Path) -> None:
         """Recall handles missing/broken traces gracefully."""
         from memory_recall import recall, MemoryContext
 
         ctx = recall("nonexistent topic with no matching traces", top_k=1)
         assert isinstance(ctx, MemoryContext)
 
-    def test_recall_error_returns_context(self, tmp_traces):
+    def test_recall_error_returns_context(self, tmp_traces: Path) -> None:
         from memory_recall import recall, MemoryContext
 
         ctx = recall("STDP error handling", top_k=3)

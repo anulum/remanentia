@@ -37,6 +37,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   category, no LLM calls).
 
 ### Fixed
+- `memory_recall.py` now has explicit JSON row typing, complete audited helper
+  docstrings, and a strict-mypy clean dedicated recall test surface while
+  preserving 100% focused coverage and Rust-extension fallback coverage.
 - `answer_normalizer.py` now has complete audited helper docstrings and its
   dedicated normalisation tests are strict-mypy clean at 100% focused coverage,
   with Rust-extension wiring and fallback behavior verified.

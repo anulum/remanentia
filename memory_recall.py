@@ -34,6 +34,8 @@ GRAPH_DIR = BASE / "memory" / "graph"
 HISTORY_PATH = BASE / "snn_state" / "retrieval_history.jsonl"
 log = logging.getLogger(__name__)
 
+JsonMap = dict[str, Any]
+
 
 @dataclass
 class MemoryContext:
@@ -45,15 +47,15 @@ class MemoryContext:
     trace_score: float = 0.0
     trace_snippet: str = ""
     # Consolidated knowledge
-    semantic_memories: list[dict] = field(default_factory=list)
+    semantic_memories: list[JsonMap] = field(default_factory=list)
     # Entity graph
     entities: list[str] = field(default_factory=list)
-    related_entities: list[dict] = field(default_factory=list)
+    related_entities: list[JsonMap] = field(default_factory=list)
     # Temporal context
     before: list[str] = field(default_factory=list)
     after: list[str] = field(default_factory=list)
     # Cross-project
-    cross_project: list[dict] = field(default_factory=list)
+    cross_project: list[JsonMap] = field(default_factory=list)
     # Novelty
     novelty_score: float = 0.0
     # Retrieval metadata
@@ -62,6 +64,8 @@ class MemoryContext:
 
     @property
     def summary(self) -> str:
+        """Render a concise human-readable recall summary."""
+
         lines = [f"Query: {self.query}"]
         if self.trace:
             lines.append(f"Match: {self.trace} (score={self.trace_score:.3f})")
@@ -110,11 +114,13 @@ class MemoryContext:
 # ── Entity graph queries ─────────────────────────────────────────
 
 
-def _load_entities() -> dict[str, dict]:
+def _load_entities() -> dict[str, JsonMap]:
+    """Load entity graph nodes keyed by entity identifier."""
+
     path = GRAPH_DIR / "entities.jsonl"
     if not path.exists():
         return {}
-    entities = {}
+    entities: dict[str, JsonMap] = {}
     for line in path.read_text(encoding="utf-8").strip().split("\n"):
         if line.strip():
             e = json.loads(line)
@@ -122,7 +128,9 @@ def _load_entities() -> dict[str, dict]:
     return entities
 
 
-def _load_relations() -> list[dict]:
+def _load_relations() -> list[JsonMap]:
+    """Load entity graph relation rows from the JSONL graph store."""
+
     path = GRAPH_DIR / "relations.jsonl"
     if not path.exists():
         return []
@@ -131,9 +139,9 @@ def _load_relations() -> list[dict]:
     ]
 
 
-def _find_related(entity_id: str, relations: list[dict], top_k: int = 10) -> list[dict]:
+def _find_related(entity_id: str, relations: list[JsonMap], top_k: int = 10) -> list[JsonMap]:
     """Find entities most strongly connected to the given entity."""
-    connected = []
+    connected: list[JsonMap] = []
     for r in relations:
         if r["source"] == entity_id:
             connected.append(
@@ -157,10 +165,10 @@ def _find_related(entity_id: str, relations: list[dict], top_k: int = 10) -> lis
     return connected[:top_k]
 
 
-def _entities_for_query(query: str, entities: dict) -> list[str]:
+def _entities_for_query(query: str, entities: dict[str, JsonMap]) -> list[str]:
     """Find entities mentioned in the query."""
     q_lower = query.lower()
-    found = []
+    found: list[str] = []
     for eid, edata in entities.items():
         if eid in q_lower or edata.get("label", "").lower() in q_lower:
             found.append(eid)
@@ -170,7 +178,7 @@ def _entities_for_query(query: str, entities: dict) -> list[str]:
 # ── Semantic memory search ───────────────────────────────────────
 
 
-def _search_semantic(query: str, top_k: int = 5) -> list[dict]:
+def _search_semantic(query: str, top_k: int = 5) -> list[JsonMap]:
     """Search consolidated semantic memories."""
     if not SEMANTIC_DIR.exists():
         return []
@@ -187,7 +195,7 @@ def _search_semantic(query: str, top_k: int = 5) -> list[dict]:
         _score = None
 
     q_tokens = _tok(query)
-    results: list[dict[str, Any]] = []
+    results: list[JsonMap] = []
 
     for md_file in SEMANTIC_DIR.rglob("*.md"):
         text = md_file.read_text(encoding="utf-8")
@@ -258,10 +266,13 @@ def _temporal_context(trace_name: str) -> tuple[list[str], list[str]]:
 
 
 def _cross_project_insights(
-    entities: list[str], primary_project: str, all_entities: dict, relations: list[dict]
-) -> list[dict]:
+    entities: list[str],
+    primary_project: str,
+    all_entities: dict[str, JsonMap],
+    relations: list[JsonMap],
+) -> list[JsonMap]:
     """Find insights from other projects that share entities."""
-    insights = []
+    insights: list[JsonMap] = []
     seen_projects = {primary_project}
 
     for eid in entities:
@@ -272,7 +283,7 @@ def _cross_project_insights(
             if r_project == "project" and r["entity"] not in seen_projects:
                 seen_projects.add(r["entity"])
                 # Find what connects them
-                shared = []
+                shared: list[str] = []
                 for rel in relations:
                     if rel["source"] == r["entity"] or rel["target"] == r["entity"]:
                         other = rel["target"] if rel["source"] == r["entity"] else rel["source"]
@@ -295,7 +306,7 @@ def _cross_project_insights(
 # ── Novelty assessment ───────────────────────────────────────────
 
 
-def _assess_novelty(query: str, entities: dict) -> float:
+def _assess_novelty(query: str, entities: dict[str, JsonMap]) -> float:
     """How novel is this query relative to known entities?
     High novelty = query mentions things we haven't seen before.
     """
