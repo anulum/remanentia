@@ -105,6 +105,7 @@ py-modules = [
     "mcp_server",
     "cli",
     "api",
+    "api_security",
     "answer_extractor",
     "answer_normalizer",
     "temporal_graph",
@@ -121,6 +122,11 @@ py-modules = [
     "llm_setup",
     "vector_index",
     "vector_pipeline",
+    "context_builder",
+    "device_utils",
+    "file_utils",
+    "pii_redactor",
+    "signal_detector",
 ]
 
 [tool.setuptools.package-data]

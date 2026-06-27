@@ -84,7 +84,7 @@ remanentia init                         # Create directory structure
 
 ```bash
 pip install -e ".[api]"
-python api.py  # starts on http://localhost:8001
+remanentia serve --host 127.0.0.1 --port 8001
 ```
 
 Endpoints:
@@ -106,6 +106,18 @@ python api_server.py --port 8001
 ```
 
 Lighter alternative with no FastAPI dependency. Same core endpoints (recall, status, consolidate, remember).
+
+## Container Deployment
+
+```bash
+mkdir -p secrets
+printf '%s\n' '<replace-with-a-random-token>' > secrets/remanentia_api_token
+docker compose up --build
+```
+
+The Compose deployment binds `127.0.0.1:8001`, stores memory under the
+`remanentia-data` volume, loads the bearer token from a Docker secret, and uses
+`GET /health` as the container healthcheck.
 
 ## Next Steps
 

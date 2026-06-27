@@ -81,6 +81,18 @@ closed and load the token from a local secret file:
 remanentia serve --require-auth --token-file /run/secrets/remanentia_api_token
 ```
 
+For container deployment with a healthcheck:
+
+```bash
+mkdir -p secrets
+printf '%s\n' '<replace-with-a-random-token>' > secrets/remanentia_api_token
+docker compose up --build
+```
+
+The Compose service binds `127.0.0.1:8001`, mounts persistent memory at `/data`,
+loads the API token from `/run/secrets/remanentia_api_token`, and uses
+`GET /health` as its health probe.
+
 ### Endpoints
 
 ```python

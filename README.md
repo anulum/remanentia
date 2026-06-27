@@ -359,7 +359,24 @@ remanentia init                              # create directory structure
 ## REST API
 
 ```bash
-python api.py  # http://localhost:8001/docs
+remanentia serve --host 127.0.0.1 --port 8001
+
+curl http://localhost:8001/health
+```
+
+For a fail-closed authenticated server:
+
+```bash
+remanentia serve --require-auth --token-file /run/secrets/remanentia_api_token
+```
+
+Container deployment:
+
+```bash
+mkdir -p secrets
+printf '%s\n' '<replace-with-a-random-token>' > secrets/remanentia_api_token
+docker compose up --build
+```
 
 curl -X POST http://localhost:8001/recall \
   -H "Content-Type: application/json" \

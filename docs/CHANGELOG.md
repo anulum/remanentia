@@ -6,6 +6,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Dockerfile and Compose deployment for the REST API, with a non-root runtime,
+  persistent `/data` store, secret-mounted API token, and `/health` healthcheck.
 - Shared claim-axis vocabulary now keeps finding ingest admission and recall
   rendering on the same evidence/status/admission/freshness wire values.
 - Recall abstention calibration CLI/API with held-out coverage, accuracy, and

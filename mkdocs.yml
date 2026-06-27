@@ -54,6 +54,7 @@ nav:
     - Getting Started: guides/getting-started.md
     - User Manual: guides/USER_MANUAL.md
     - Integration Guide: guides/INTEGRATION_GUIDE.md
+    - Container Deployment: guides/container_deployment.md
     - Performance Tuning: guides/PERFORMANCE_TUNING.md
     - Local LLM Setup: guides/local_llm_setup.md
   - Model Cards:

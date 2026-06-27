@@ -39,9 +39,11 @@ Creates the directory structure for a new Remanentia installation.
 ### serve
 
 ```bash
-remanentia serve [--port PORT] [--host HOST]
+remanentia serve [--port PORT] [--host HOST] [--token-file PATH] [--require-auth]
 ```
 
-Starts the FastAPI REST server.
+Starts the FastAPI REST server. Use `--require-auth` in deployments that must
+refuse open private endpoints, and use `--token-file` to load
+`REMANENTIA_API_TOKEN` before `api:app` imports.
 
 ::: cli.main

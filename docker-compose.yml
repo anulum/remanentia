@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Remanentia — production REST API container composition
+
+services:
+  remanentia-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: remanentia:local
+    command:
+      - serve
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8001"
+      - --require-auth
+      - --token-file
+      - /run/secrets/remanentia_api_token
+    environment:
+      REMANENTIA_BASE: /data
+      REMANENTIA_API_BODY_LIMIT_BYTES: "1048576"
+      REMANENTIA_API_RATE_PER_MINUTE: "60"
+      REMANENTIA_API_RATE_BURST: "10"
+      REMANENTIA_CORS_ORIGINS: ""
+    ports:
+      - "127.0.0.1:8001:8001"
+    volumes:
+      - remanentia-data:/data
+    secrets:
+      - source: remanentia_api_token
+        target: remanentia_api_token
+        uid: "10001"
+        gid: "10001"
+        mode: 0400
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import sys, urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3).read(); sys.exit(0)"
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  remanentia-data:
+
+secrets:
+  remanentia_api_token:
+    file: ./secrets/remanentia_api_token
