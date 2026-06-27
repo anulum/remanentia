@@ -9,10 +9,14 @@
 from __future__ import annotations
 
 import json
+from contextlib import ExitStack
+from pathlib import Path
+from typing import Any, cast
 from unittest.mock import patch
 
 import consolidation_engine
 import numpy as np
+import pytest
 
 from consolidation_engine import (
     _cluster_traces,
@@ -40,47 +44,47 @@ from consolidation_engine import (
 
 
 class TestExtractMetadata:
-    def test_date_from_filename(self):
+    def test_date_from_filename(self) -> None:
         meta = _extract_metadata("2026-03-15_decision_stdp.md", "")
         assert meta["date"] == "2026-03-15"
 
-    def test_date_with_time(self):
+    def test_date_with_time(self) -> None:
         meta = _extract_metadata("2026-03-15T0415_trace.md", "")
         assert meta["date"] == "2026-03-15T0415"
 
-    def test_project_detection(self):
+    def test_project_detection(self) -> None:
         meta = _extract_metadata("director-ai_audit.md", "")
         assert meta["project"] == "director-ai"
 
-    def test_project_neurocore(self):
+    def test_project_neurocore(self) -> None:
         meta = _extract_metadata("neurocore_migration.md", "")
         assert meta["project"] == "sc-neurocore"
 
-    def test_project_remanentia(self):
+    def test_project_remanentia(self) -> None:
         meta = _extract_metadata("remanentia_index.md", "")
         assert meta["project"] == "remanentia"
 
-    def test_project_general_fallback(self):
+    def test_project_general_fallback(self) -> None:
         meta = _extract_metadata("random_notes.md", "")
         assert meta["project"] == "general"
 
-    def test_type_decision(self):
+    def test_type_decision(self) -> None:
         meta = _extract_metadata("decision_stdp.md", "")
         assert meta["type"] == "decision"
 
-    def test_type_finding(self):
+    def test_type_finding(self) -> None:
         meta = _extract_metadata("breakthrough_results.md", "")
         assert meta["type"] == "finding"
 
-    def test_type_strategy(self):
+    def test_type_strategy(self) -> None:
         meta = _extract_metadata("revenue_plan.md", "")
         assert meta["type"] == "strategy"
 
-    def test_type_technical(self):
+    def test_type_technical(self) -> None:
         meta = _extract_metadata("daemon_fix.md", "")
         assert meta["type"] == "technical"
 
-    def test_type_general_fallback(self):
+    def test_type_general_fallback(self) -> None:
         meta = _extract_metadata("random_notes.md", "")
         assert meta["type"] == "general"
 
@@ -89,37 +93,37 @@ class TestExtractMetadata:
 
 
 class TestExtractEntities:
-    def test_project_detection(self):
+    def test_project_detection(self) -> None:
         entities = _extract_entities("The director-ai pipeline scored 78%.")
         assert "director-ai" in entities
 
-    def test_concept_detection(self):
+    def test_concept_detection(self) -> None:
         entities = _extract_entities("We used STDP learning rule with PyTorch.")
         assert "stdp" in entities
         assert "pytorch" in entities
 
-    def test_version_numbers(self):
+    def test_version_numbers(self) -> None:
         entities = _extract_entities("Released v3.9.0 and v0.2.0.")
         assert "v3.9.0" in entities
         assert "v0.2.0" in entities
 
-    def test_percentages(self):
+    def test_percentages(self) -> None:
         entities = _extract_entities("Accuracy reached 66.4% on LOCOMO.")
         assert "66.4%" in entities
 
-    def test_file_paths(self):
+    def test_file_paths(self) -> None:
         entities = _extract_entities("Fixed the bug in snn_backend.py.")
         assert "snn_backend.py" in entities
 
-    def test_camelcase_names(self):
+    def test_camelcase_names(self) -> None:
         entities = _extract_entities("The ArcaneNeuron class handles encoding.")
         assert "ArcaneNeuron" in entities
 
-    def test_snake_case_names(self):
+    def test_snake_case_names(self) -> None:
         entities = _extract_entities("The compute_order_parameter function is key.")
         assert "compute_order_parameter" in entities
 
-    def test_empty_text(self):
+    def test_empty_text(self) -> None:
         assert _extract_entities("") == []
 
 
@@ -127,33 +131,33 @@ class TestExtractEntities:
 
 
 class TestExtractKeyLines:
-    def test_decision_trigger(self):
+    def test_decision_trigger(self) -> None:
         text = "# Notes\n\n- We decided to remove SNN scoring\n- Other stuff"
         lines = _extract_key_lines(text)
         assert any("decided" in l.lower() for l in lines)
 
-    def test_finding_trigger(self):
+    def test_finding_trigger(self) -> None:
         text = "## Results\n\nWe found that BM25 outperforms TF-IDF by 20%."
         lines = _extract_key_lines(text)
         assert any("found" in l.lower() for l in lines)
 
-    def test_metric_trigger(self):
+    def test_metric_trigger(self) -> None:
         text = "P@1 accuracy improved from 85.7% to 100% on internal benchmark."
         lines = _extract_key_lines(text)
         assert len(lines) > 0
 
-    def test_context_capture(self):
+    def test_context_capture(self) -> None:
         text = "We decided to remove SNN.\nThe reason was zero signal.\nAcross 70 experiments."
         lines = _extract_key_lines(text)
         # Should capture the trigger line + context
         assert any("zero signal" in l or "70 experiments" in l for l in lines)
 
-    def test_skip_headers(self):
+    def test_skip_headers(self) -> None:
         text = "# Decision\n\nActual content here with a decision made."
         lines = _extract_key_lines(text)
         assert not any(l.startswith("#") for l in lines)
 
-    def test_cap_at_30(self):
+    def test_cap_at_30(self) -> None:
         text = "\n".join(f"We decided thing {i} is important." for i in range(50))
         lines = _extract_key_lines(text)
         assert len(lines) <= 30
@@ -163,17 +167,17 @@ class TestExtractKeyLines:
 
 
 class TestExtractParagraphs:
-    def test_splits_on_blank_lines(self):
+    def test_splits_on_blank_lines(self) -> None:
         text = "First block with enough content here for splitting.\n\nSecond block also has enough content for splitting."
         paras = _extract_paragraphs(text)
         assert len(paras) == 2
 
-    def test_filters_short(self):
+    def test_filters_short(self) -> None:
         text = "Short\n\nThis paragraph has more than enough content to be indexed properly by the engine."
         paras = _extract_paragraphs(text)
         assert len(paras) == 1
 
-    def test_strips_pure_headers(self):
+    def test_strips_pure_headers(self) -> None:
         text = "# Just a header\n\n# Header\nWith content following the header line."
         paras = _extract_paragraphs(text)
         assert len(paras) == 1
@@ -184,17 +188,17 @@ class TestExtractParagraphs:
 
 
 class TestTraceHash:
-    def test_deterministic(self):
+    def test_deterministic(self) -> None:
         h1 = _trace_hash("2026-03-15_decision.md")
         h2 = _trace_hash("2026-03-15_decision.md")
         assert h1 == h2
 
-    def test_different_inputs(self):
+    def test_different_inputs(self) -> None:
         h1 = _trace_hash("trace_a.md")
         h2 = _trace_hash("trace_b.md")
         assert h1 != h2
 
-    def test_length(self):
+    def test_length(self) -> None:
         h = _trace_hash("test.md")
         assert len(h) == 12
 
@@ -203,7 +207,7 @@ class TestTraceHash:
 
 
 class TestClusterTraces:
-    def test_same_project_same_date(self):
+    def test_same_project_same_date(self) -> None:
         traces = {
             "a.md": {"project": "remanentia", "date": "2026-03-15"},
             "b.md": {"project": "remanentia", "date": "2026-03-15"},
@@ -212,7 +216,7 @@ class TestClusterTraces:
         assert len(clusters) == 1
         assert set(clusters[0]) == {"a.md", "b.md"}
 
-    def test_different_projects(self):
+    def test_different_projects(self) -> None:
         traces = {
             "a.md": {"project": "remanentia", "date": "2026-03-15"},
             "b.md": {"project": "director-ai", "date": "2026-03-15"},
@@ -220,7 +224,7 @@ class TestClusterTraces:
         clusters = _cluster_traces(traces)
         assert len(clusters) == 2
 
-    def test_date_gap_splits(self):
+    def test_date_gap_splits(self) -> None:
         traces = {
             "a.md": {"project": "remanentia", "date": "2026-03-10"},
             "b.md": {"project": "remanentia", "date": "2026-03-15"},
@@ -228,7 +232,7 @@ class TestClusterTraces:
         clusters = _cluster_traces(traces)
         assert len(clusters) == 2
 
-    def test_within_2_day_window(self):
+    def test_within_2_day_window(self) -> None:
         traces = {
             "a.md": {"project": "remanentia", "date": "2026-03-14"},
             "b.md": {"project": "remanentia", "date": "2026-03-15"},
@@ -241,7 +245,7 @@ class TestClusterTraces:
 
 
 class TestComputeNovelty:
-    def test_first_pattern_max_novelty(self):
+    def test_first_pattern_max_novelty(self) -> None:
         # Reset global state
         import consolidation_engine
 
@@ -252,7 +256,7 @@ class TestComputeNovelty:
         novelty = compute_novelty(pattern)
         assert novelty == 1.0
 
-    def test_identical_pattern_low_novelty(self):
+    def test_identical_pattern_low_novelty(self) -> None:
         import consolidation_engine
 
         consolidation_engine._running_mean = None
@@ -263,7 +267,7 @@ class TestComputeNovelty:
         novelty = compute_novelty(pattern)  # same pattern
         assert novelty < 0.1
 
-    def test_orthogonal_pattern_high_novelty(self):
+    def test_orthogonal_pattern_high_novelty(self) -> None:
         import consolidation_engine
 
         consolidation_engine._running_mean = None
@@ -280,7 +284,7 @@ class TestComputeNovelty:
 
 
 class TestWriteSemanticMemory:
-    def test_writes_file(self, tmp_path):
+    def test_writes_file(self, tmp_path: Path) -> None:
         with patch("consolidation_engine.SEMANTIC_DIR", tmp_path / "semantic"):
             path = _write_semantic_memory(
                 category="decision",
@@ -303,7 +307,7 @@ class TestWriteSemanticMemory:
 
 
 class TestUpdateGraph:
-    def test_creates_entities(self, tmp_path):
+    def test_creates_entities(self, tmp_path: Path) -> None:
         graph_dir = tmp_path / "graph"
         graph_dir.mkdir()
         with (
@@ -317,7 +321,7 @@ class TestUpdateGraph:
         assert "stdp" in entities_text
         assert "bm25" in entities_text
 
-    def test_creates_relations(self, tmp_path):
+    def test_creates_relations(self, tmp_path: Path) -> None:
         graph_dir = tmp_path / "graph"
         graph_dir.mkdir()
         with (
@@ -332,7 +336,7 @@ class TestUpdateGraph:
         # 3 entities → 3 pairs
         assert len(rels) == 3
 
-    def test_increments_weight(self, tmp_path):
+    def test_increments_weight(self, tmp_path: Path) -> None:
         graph_dir = tmp_path / "graph"
         graph_dir.mkdir()
         with (
@@ -348,7 +352,7 @@ class TestUpdateGraph:
         assert rel["weight"] == 2
         assert len(rel["evidence"]) == 2
 
-    def test_upgrades_co_occurs_to_typed(self, tmp_path):
+    def test_upgrades_co_occurs_to_typed(self, tmp_path: Path) -> None:
         graph_dir = tmp_path / "graph"
         graph_dir.mkdir()
         with (
@@ -374,7 +378,7 @@ class TestUpdateGraph:
 
 
 class TestConsolidate:
-    def test_full_pipeline(self, tmp_traces, tmp_path):
+    def test_full_pipeline(self, tmp_traces: Path, tmp_path: Path) -> None:
         console_dir = tmp_path / "consolidation"
         console_dir.mkdir()
         semantic_dir = tmp_path / "memory" / "semantic"
@@ -399,7 +403,7 @@ class TestConsolidate:
         assert result["entities_found"] > 0
         assert semantic_dir.exists()
 
-    def test_nothing_to_consolidate(self, tmp_path):
+    def test_nothing_to_consolidate(self, tmp_path: Path) -> None:
         traces_dir = tmp_path / "reasoning_traces"
         traces_dir.mkdir()
         console_dir = tmp_path / "consolidation"
@@ -413,7 +417,7 @@ class TestConsolidate:
 
         assert result["status"] == "nothing_to_consolidate"
 
-    def test_pending_tracks_processed(self, tmp_traces, tmp_path):
+    def test_pending_tracks_processed(self, tmp_traces: Path, tmp_path: Path) -> None:
         console_dir = tmp_path / "consolidation"
         console_dir.mkdir()
         semantic_dir = tmp_path / "memory" / "semantic"
@@ -441,7 +445,7 @@ class TestConsolidate:
 
 
 class TestConsolidationEdge:
-    def test_zero_norm_novelty(self):
+    def test_zero_norm_novelty(self) -> None:
         import consolidation_engine
 
         consolidation_engine._running_mean = None
@@ -452,7 +456,7 @@ class TestConsolidationEdge:
         novelty = compute_novelty(zero)
         assert novelty == 1.0
 
-    def test_get_pending_traces_empty(self, tmp_path):
+    def test_get_pending_traces_empty(self, tmp_path: Path) -> None:
         traces_dir = tmp_path / "reasoning_traces"
         traces_dir.mkdir()
         console_dir = tmp_path / "consolidation"
@@ -464,7 +468,7 @@ class TestConsolidationEdge:
             pending = get_pending_traces()
         assert pending == []
 
-    def test_cluster_missing_date(self):
+    def test_cluster_missing_date(self) -> None:
         traces = {
             "a.md": {"project": "test", "date": ""},
             "b.md": {"project": "test", "date": ""},
@@ -472,10 +476,10 @@ class TestConsolidationEdge:
         clusters = _cluster_traces(traces)
         assert len(clusters) == 1
 
-    def test_extract_paragraphs_empty(self):
+    def test_extract_paragraphs_empty(self) -> None:
         assert _extract_paragraphs("") == []
 
-    def test_extract_entities_short_file(self):
+    def test_extract_entities_short_file(self) -> None:
         entities = _extract_entities("The a.py file is short.")
         file_names = [e for e in entities if e.endswith(".py")]
         assert not any(len(e) <= 3 for e in file_names)
@@ -485,87 +489,86 @@ class TestConsolidationEdge:
 
 
 class TestExtractTypedRelations:
-    def test_caused_by(self):
+    def test_caused_by(self) -> None:
         rels = _extract_typed_relations(
             "BM25 error was caused by the wrong tokeniser in memory_index.py.",
             ["bm25", "memory_index.py"],
         )
         assert ("bm25", "memory_index.py") in rels or ("memory_index.py", "bm25") in rels
 
-    def test_fixed_by(self):
+    def test_fixed_by(self) -> None:
         rels = _extract_typed_relations(
             "The mask bug was fixed in snn_backend.py by correcting the sign.",
             ["mask", "snn_backend.py"],
         )
-        found = any("fixed" in v for v in rels.values())
-        assert found or len(rels) >= 0  # at least no crash
+        assert rels[("mask", "snn_backend.py")] == "fixed_by"
 
-    def test_replaced(self):
+    def test_replaced(self) -> None:
         rels = _extract_typed_relations(
             "BM25 replaced TF-IDF for all queries.",
             ["bm25", "tf-idf"],
         )
-        assert len(rels) >= 0  # no crash
+        assert rels[("bm25", "tf-idf")] == "replaced"
 
-    def test_empty_entities(self):
+    def test_empty_entities(self) -> None:
         rels = _extract_typed_relations("Some text.", [])
-        assert rels == {} or isinstance(rels, dict)
+        assert rels == {}
 
-    def test_single_entity(self):
+    def test_single_entity(self) -> None:
         rels = _extract_typed_relations("BM25 is fast.", ["bm25"])
-        assert isinstance(rels, dict)
+        assert rels == {}
 
-    def test_no_relation_signal(self):
+    def test_no_relation_signal(self) -> None:
         rels = _extract_typed_relations(
             "BM25 and TF-IDF are both retrieval methods.",
             ["bm25", "tf-idf"],
         )
-        assert isinstance(rels, dict)
+        assert rels[("bm25", "tf-idf")] == "co_occurs"
 
 
 # ── Additional edge cases ────────────────────────────────────
 
 
 class TestConsolidationEdgeCases:
-    def test_extract_metadata_no_date(self):
+    def test_extract_metadata_no_date(self) -> None:
         meta = _extract_metadata("notes.md", "Just some text without dates.")
         assert meta["date"] == ""
 
-    def test_extract_metadata_multiple_projects(self):
+    def test_extract_metadata_multiple_projects(self) -> None:
         meta = _extract_metadata(
             "2026-03-15_cross.md",
             "Project: remanentia\nAlso mentions director-ai.",
         )
         assert meta["project"] in ("remanentia", "director-ai", "general")
 
-    def test_extract_key_lines_empty(self):
+    def test_extract_key_lines_empty(self) -> None:
         assert _extract_key_lines("") == []
 
-    def test_extract_key_lines_no_triggers(self):
+    def test_extract_key_lines_no_triggers(self) -> None:
         lines = _extract_key_lines("Nothing interesting here at all.")
         assert lines == []
 
-    def test_trace_hash_deterministic(self):
+    def test_trace_hash_deterministic(self) -> None:
         h1 = _trace_hash("test.md")
         h2 = _trace_hash("test.md")
         assert h1 == h2
 
-    def test_trace_hash_different_inputs(self):
+    def test_trace_hash_different_inputs(self) -> None:
         h1 = _trace_hash("a.md")
         h2 = _trace_hash("b.md")
         assert h1 != h2
 
-    def test_cluster_single_trace(self):
+    def test_cluster_single_trace(self) -> None:
         traces = {"a.md": {"project": "test", "date": "2026-03-15"}}
         clusters = _cluster_traces(traces)
         assert len(clusters) == 1
         assert clusters[0] == ["a.md"]
 
-    def test_cluster_empty(self):
+    def test_cluster_empty(self) -> None:
         clusters = _cluster_traces({})
         assert clusters == []
 
-    def test_compute_novelty_first_call(self):
+    def test_compute_novelty_first_call(self) -> None:
         """First call always returns 1.0 (maximum novelty)."""
         import numpy as np
         import consolidation_engine
@@ -575,7 +578,7 @@ class TestConsolidationEdgeCases:
         result = compute_novelty(np.ones(3))
         assert result == 1.0
 
-    def test_compute_novelty_second_call_identical(self):
+    def test_compute_novelty_second_call_identical(self) -> None:
         """Second call with same pattern returns low novelty."""
         import numpy as np
         import consolidation_engine
@@ -587,7 +590,7 @@ class TestConsolidationEdgeCases:
         result = compute_novelty(v.copy())  # second, identical
         assert result < 0.5
 
-    def test_extract_entities_all_types(self):
+    def test_extract_entities_all_types(self) -> None:
         text = (
             "Project remanentia v3.14.0 uses BM25 and STDP with PyTorch on GPU. "
             "The snn_backend.py handles LIF neurons at 85.7% accuracy."
@@ -597,14 +600,14 @@ class TestConsolidationEdgeCases:
         assert "remanentia" in ents
         assert "v3.14.0" in ents or any("3.14" in e for e in ents)
 
-    def test_extract_paragraphs_strips_headers(self):
+    def test_extract_paragraphs_strips_headers(self) -> None:
         text = "# Header\n\nReal content with enough text to pass the length filter."
         paras = _extract_paragraphs(text)
         for p in paras:
             assert not p.startswith("#")
 
-    def test_write_semantic_memory_unicode(self, tmp_path):
-        from unittest.mock import patch as p
+    def test_write_semantic_memory_unicode(self, tmp_path: Path) -> None:
+        p = patch
 
         semantic_dir = tmp_path / "semantic"
         with p("consolidation_engine.SEMANTIC_DIR", semantic_dir):
@@ -630,10 +633,9 @@ class TestConsolidationPipeline:
     """Consolidation engine integrated with knowledge store and observer."""
 
     @staticmethod
-    def _patch_all_paths(tmp_path):
+    def _patch_all_paths(tmp_path: Path) -> ExitStack:
         """Return ExitStack context manager patching ALL consolidation paths."""
-        from contextlib import ExitStack
-        from unittest.mock import patch as p
+        p = patch
 
         graph_dir = tmp_path / "graph"
         console_dir = tmp_path / "consolidation"
@@ -653,7 +655,7 @@ class TestConsolidationPipeline:
             stack.enter_context(p(f"consolidation_engine.{attr}", val))
         return stack
 
-    def test_full_consolidation_creates_semantic_memories(self, tmp_path):
+    def test_full_consolidation_creates_semantic_memories(self, tmp_path: Path) -> None:
         """Write traces → consolidate → verify semantic memories created."""
 
         traces_dir = tmp_path / "traces"
@@ -677,7 +679,7 @@ class TestConsolidationPipeline:
             files = list(semantic_dir.rglob("*.md"))
             assert len(files) >= 1
 
-    def test_consolidation_updates_entity_graph(self, tmp_path):
+    def test_consolidation_updates_entity_graph(self, tmp_path: Path) -> None:
         """Consolidation creates entity graph files."""
 
         traces_dir = tmp_path / "traces"
@@ -691,11 +693,10 @@ class TestConsolidationPipeline:
             consolidate(force=True)
 
         graph_dir = tmp_path / "graph"
-        if graph_dir.exists():
-            files = list(graph_dir.glob("*"))
-            assert len(files) >= 0
+        assert (graph_dir / "entities.jsonl").exists()
+        assert (graph_dir / "relations.jsonl").exists()
 
-    def test_consolidation_idempotent(self, tmp_path):
+    def test_consolidation_idempotent(self, tmp_path: Path) -> None:
         """Running consolidate twice doesn't duplicate results."""
 
         traces_dir = tmp_path / "traces"
@@ -716,7 +717,7 @@ class TestConsolidationPipeline:
 
 
 class TestConsolidationErrors:
-    def test_corrupt_trace_file(self, tmp_path):
+    def test_corrupt_trace_file(self, tmp_path: Path) -> None:
         """Consolidation handles binary/corrupt trace files."""
 
         traces_dir = tmp_path / "traces"
@@ -725,15 +726,17 @@ class TestConsolidationErrors:
 
         with TestConsolidationPipeline._patch_all_paths(tmp_path):
             result = consolidate(force=True)
-        assert isinstance(result, dict)
+        assert result["traces_processed"] == 1
+        assert (tmp_path / "consolidation" / "last_consolidation.json").exists()
 
-    def test_empty_trace_dir(self, tmp_path):
+    def test_empty_trace_dir(self, tmp_path: Path) -> None:
         traces_dir = tmp_path / "traces"
         traces_dir.mkdir()
 
         with TestConsolidationPipeline._patch_all_paths(tmp_path):
             result = consolidate(force=True)
-        assert isinstance(result, dict)
+        assert result["traces_processed"] == 0
+        assert result["memories_written"] == 0
 
 
 # ── Memory lifecycle / aging ────────────────────────────────────
@@ -742,7 +745,7 @@ class TestConsolidationErrors:
 class TestMemoryLifecycle:
     """Tests for validity_state transitions (active→validated→stale→archived)."""
 
-    def test_write_semantic_memory_has_validity_state(self, tmp_path):
+    def test_write_semantic_memory_has_validity_state(self, tmp_path: Path) -> None:
         """New memories should have validity_state=active in frontmatter."""
         import consolidation_engine as ce
 
@@ -764,7 +767,7 @@ class TestMemoryLifecycle:
         finally:
             ce.SEMANTIC_DIR = orig
 
-    def test_age_memories_active_to_stale(self, tmp_path):
+    def test_age_memories_active_to_stale(self, tmp_path: Path) -> None:
         """Memories older than STALE_AFTER_DAYS without access → stale."""
         import consolidation_engine as ce
 
@@ -784,7 +787,7 @@ class TestMemoryLifecycle:
         finally:
             ce.SEMANTIC_DIR = orig
 
-    def test_age_memories_stale_to_archived(self, tmp_path):
+    def test_age_memories_stale_to_archived(self, tmp_path: Path) -> None:
         """Memories stale for longer than ARCHIVE_AFTER_DAYS → archived."""
         import consolidation_engine as ce
 
@@ -804,7 +807,7 @@ class TestMemoryLifecycle:
         finally:
             ce.SEMANTIC_DIR = orig
 
-    def test_age_memories_recent_stays_active(self, tmp_path):
+    def test_age_memories_recent_stays_active(self, tmp_path: Path) -> None:
         """Recently accessed memories should remain active."""
         import consolidation_engine as ce
 
@@ -824,7 +827,7 @@ class TestMemoryLifecycle:
         finally:
             ce.SEMANTIC_DIR = orig
 
-    def test_age_memories_empty_dir(self, tmp_path):
+    def test_age_memories_empty_dir(self, tmp_path: Path) -> None:
         """age_memories reports zero scanned files when semantic memory is absent."""
         import consolidation_engine as ce
 
@@ -836,19 +839,19 @@ class TestMemoryLifecycle:
         finally:
             ce.SEMANTIC_DIR = orig
 
-    def test_parse_frontmatter_valid(self):
+    def test_parse_frontmatter_valid(self) -> None:
         text = "---\ntype: decision\ndate: 2024-01-01\n---\nContent."
         fm = _parse_frontmatter(text)
         assert fm is not None
         assert fm["type"] == "decision"
 
-    def test_parse_frontmatter_no_delimiters(self):
+    def test_parse_frontmatter_no_delimiters(self) -> None:
         assert _parse_frontmatter("Just plain text") is None
 
-    def test_parse_frontmatter_no_closing_delimiter(self):
+    def test_parse_frontmatter_no_closing_delimiter(self) -> None:
         assert _parse_frontmatter("---\ntype: decision\nno closing") is None
 
-    def test_age_memories_no_frontmatter(self, tmp_path):
+    def test_age_memories_no_frontmatter(self, tmp_path: Path) -> None:
         """Files without frontmatter should be skipped, not crash."""
         import consolidation_engine as ce
 
@@ -864,7 +867,7 @@ class TestMemoryLifecycle:
         finally:
             ce.SEMANTIC_DIR = orig
 
-    def test_age_memories_no_last_accessed(self, tmp_path):
+    def test_age_memories_no_last_accessed(self, tmp_path: Path) -> None:
         """Files with frontmatter but no last_accessed should be skipped."""
         import consolidation_engine as ce
 
@@ -881,7 +884,7 @@ class TestMemoryLifecycle:
         finally:
             ce.SEMANTIC_DIR = orig
 
-    def test_age_memories_corrupt_date(self, tmp_path):
+    def test_age_memories_corrupt_date(self, tmp_path: Path) -> None:
         """Files with unparsable dates should be skipped."""
         import consolidation_engine as ce
 
@@ -899,13 +902,13 @@ class TestMemoryLifecycle:
         finally:
             ce.SEMANTIC_DIR = orig
 
-    def test_update_frontmatter_field_existing(self, tmp_path):
+    def test_update_frontmatter_field_existing(self, tmp_path: Path) -> None:
         f = tmp_path / "test.md"
         f.write_text("---\nvalidity_state: active\n---\nContent.", encoding="utf-8")
         _update_frontmatter_field(f, f.read_text(), "validity_state", "stale")
         assert "validity_state: stale" in f.read_text()
 
-    def test_update_frontmatter_field_new(self, tmp_path):
+    def test_update_frontmatter_field_new(self, tmp_path: Path) -> None:
         f = tmp_path / "test.md"
         f.write_text("---\ntype: decision\n---\nContent.", encoding="utf-8")
         _update_frontmatter_field(f, f.read_text(), "validity_state", "active")
@@ -918,7 +921,7 @@ class TestMemoryLifecycle:
 class TestCapacityReport:
     """Tests for bounded memory capacity monitoring."""
 
-    def test_capacity_report_basic(self, tmp_path):
+    def test_capacity_report_basic(self, tmp_path: Path) -> None:
         """Capacity report should return per-category stats."""
         import consolidation_engine as ce
 
@@ -939,7 +942,7 @@ class TestCapacityReport:
         finally:
             ce.SEMANTIC_DIR = orig
 
-    def test_capacity_report_over_threshold(self, tmp_path):
+    def test_capacity_report_over_threshold(self, tmp_path: Path) -> None:
         """Categories exceeding CAPACITY_WARN_PERCENT should be flagged."""
         import consolidation_engine as ce
 
@@ -959,7 +962,7 @@ class TestCapacityReport:
         finally:
             ce.SEMANTIC_DIR = orig
 
-    def test_capacity_report_empty(self, tmp_path):
+    def test_capacity_report_empty(self, tmp_path: Path) -> None:
         """Empty or nonexistent dir returns empty report."""
         import consolidation_engine as ce
 
@@ -971,7 +974,7 @@ class TestCapacityReport:
         finally:
             ce.SEMANTIC_DIR = orig
 
-    def test_capacity_report_skips_non_dirs(self, tmp_path):
+    def test_capacity_report_skips_non_dirs(self, tmp_path: Path) -> None:
         """Non-directory items in SEMANTIC_DIR should be skipped."""
         import consolidation_engine as ce
 
@@ -986,7 +989,7 @@ class TestCapacityReport:
         finally:
             ce.SEMANTIC_DIR = orig
 
-    def test_capacity_tracks_state_counts(self, tmp_path):
+    def test_capacity_tracks_state_counts(self, tmp_path: Path) -> None:
         """Report should include per-state breakdown."""
         import consolidation_engine as ce
 
@@ -1011,7 +1014,7 @@ class TestCapacityReport:
 class TestSummaryDAG:
     """Tests for multi-level summary DAG construction and search."""
 
-    def _make_trace_data(self, count=8):
+    def _make_trace_data(self, count: int = 8) -> dict[str, dict[str, Any]]:
         return {
             f"2024-0{(i % 9) + 1}-{(i % 28) + 1:02d}_trace_{i}.md": {
                 "date": f"2024-0{(i % 9) + 1}-{(i % 28) + 1:02d}",
@@ -1023,7 +1026,7 @@ class TestSummaryDAG:
             for i in range(count)
         }
 
-    def test_build_dag_creates_leaf_nodes(self):
+    def test_build_dag_creates_leaf_nodes(self) -> None:
         data = self._make_trace_data(4)
         dag = build_summary_dag(data)
         leaves = [n for n in dag if n["level"] == 0]
@@ -1032,14 +1035,14 @@ class TestSummaryDAG:
             assert leaf["node_id"].startswith("L0_")
             assert len(leaf["children"]) == 1
 
-    def test_build_dag_creates_hierarchy(self):
+    def test_build_dag_creates_hierarchy(self) -> None:
         """With 8+ traces, DAG should have multiple levels."""
         data = self._make_trace_data(8)
         dag = build_summary_dag(data)
         levels = {n["level"] for n in dag}
         assert len(levels) >= 2  # at least L0 and L1
 
-    def test_build_dag_preserves_all_traces(self):
+    def test_build_dag_preserves_all_traces(self) -> None:
         """Every trace must appear as a leaf node."""
         data = self._make_trace_data(12)
         dag = build_summary_dag(data)
@@ -1049,16 +1052,16 @@ class TestSummaryDAG:
             leaf_traces.update(leaf["children"])
         assert leaf_traces == set(data.keys())
 
-    def test_build_dag_empty(self):
+    def test_build_dag_empty(self) -> None:
         assert build_summary_dag({}) == []
 
-    def test_build_dag_single_trace(self):
+    def test_build_dag_single_trace(self) -> None:
         data = self._make_trace_data(1)
         dag = build_summary_dag(data)
         assert len(dag) == 1
         assert dag[0]["level"] == 0
 
-    def test_search_dag_finds_relevant_leaves(self):
+    def test_search_dag_finds_relevant_leaves(self) -> None:
         data = self._make_trace_data(8)
         dag = build_summary_dag(data)
         results = search_summary_dag(dag, "accuracy BM25 retrieval")
@@ -1066,23 +1069,23 @@ class TestSummaryDAG:
         for r in results:
             assert r["level"] == 0  # should drill down to leaves
 
-    def test_search_dag_empty_query(self):
+    def test_search_dag_empty_query(self) -> None:
         data = self._make_trace_data(4)
         dag = build_summary_dag(data)
         results = search_summary_dag(dag, "")
         assert results == []
 
-    def test_search_dag_empty_dag(self):
+    def test_search_dag_empty_dag(self) -> None:
         results = search_summary_dag([], "query")
         assert results == []
 
-    def test_search_dag_no_match(self):
+    def test_search_dag_no_match(self) -> None:
         data = self._make_trace_data(4)
         dag = build_summary_dag(data)
         results = search_summary_dag(dag, "quantum chromodynamics plasma")
         assert results == []
 
-    def test_search_dag_deduplicates_seen_nodes(self):
+    def test_search_dag_deduplicates_seen_nodes(self) -> None:
         """Search should not revisit already-seen nodes."""
         data = self._make_trace_data(8)
         dag = build_summary_dag(data)
@@ -1092,7 +1095,7 @@ class TestSummaryDAG:
         assert len(r1) == len(r2)
         assert [n["node_id"] for n in r1] == [n["node_id"] for n in r2]
 
-    def test_dag_date_ranges_correct(self):
+    def test_dag_date_ranges_correct(self) -> None:
         data = self._make_trace_data(8)
         dag = build_summary_dag(data)
         # L1+ nodes should have date ranges spanning their children
@@ -1101,7 +1104,7 @@ class TestSummaryDAG:
                 earliest, latest = node["date_range"]
                 assert earliest <= latest or earliest == "" or latest == ""
 
-    def test_dag_performance(self):
+    def test_dag_performance(self) -> None:
         """Building and searching a 100-trace DAG should be fast."""
         import time
 
@@ -1118,7 +1121,7 @@ class TestSummaryDAG:
         assert build_ms < 100, f"DAG build too slow: {build_ms:.1f}ms for 100 traces"
         assert search_ms < 10, f"DAG search too slow: {search_ms:.1f}ms"
 
-    def test_dag_roundtrip_serialisation(self, tmp_path):
+    def test_dag_roundtrip_serialisation(self, tmp_path: Path) -> None:
         """DAG should survive JSON serialisation and remain searchable."""
         data = self._make_trace_data(8)
         dag = build_summary_dag(data)
@@ -1130,10 +1133,10 @@ class TestSummaryDAG:
 
 
 class TestConsolidationPythonFallbackContracts:
-    def test_native_free_extraction_helpers_cover_dynamic_trace_features(self, monkeypatch):
-        real_import = consolidation_engine.import_module
+    def test_native_free_extraction_helpers_cover_dynamic_trace_features(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        real_import = cast(Any, consolidation_engine).import_module
 
-        def reject_native(name: str):
+        def reject_native(name: str) -> Any:
             if name == "remanentia_consolidation":
                 raise ImportError(name)
             return real_import(name)
@@ -1170,10 +1173,10 @@ class TestConsolidationPythonFallbackContracts:
         assert depends_relations[("ArcaneNeuron", "FastAPI")] == "depends_on"
         assert co_occurs_relations[("ArcaneNeuron", "FastAPI")] == "co_occurs"
 
-    def test_native_free_clustering_splits_by_project_and_date_gap(self, monkeypatch):
-        real_import = consolidation_engine.import_module
+    def test_native_free_clustering_splits_by_project_and_date_gap(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        real_import = cast(Any, consolidation_engine).import_module
 
-        def reject_native(name: str):
+        def reject_native(name: str) -> Any:
             if name == "remanentia_consolidation":
                 raise ImportError(name)
             return real_import(name)
@@ -1193,10 +1196,10 @@ class TestConsolidationPythonFallbackContracts:
         assert ["c.md"] in clusters
         assert {"d.md", "e.md"} in [set(cluster) for cluster in clusters]
 
-    def test_native_free_summary_dag_builds_hierarchy_and_frontmatter_parses(self, monkeypatch):
-        real_import = consolidation_engine.import_module
+    def test_native_free_summary_dag_builds_hierarchy_and_frontmatter_parses(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        real_import = cast(Any, consolidation_engine).import_module
 
-        def reject_native(name: str):
+        def reject_native(name: str) -> Any:
             if name == "remanentia_consolidation":
                 raise ImportError(name)
             return real_import(name)
@@ -1225,7 +1228,7 @@ class TestConsolidationPythonFallbackContracts:
             "validity_state": "active"
         }
 
-    def test_forced_consolidation_processes_temp_traces_and_updates_outputs(self, tmp_path):
+    def test_forced_consolidation_processes_temp_traces_and_updates_outputs(self, tmp_path: Path) -> None:
         traces = tmp_path / "traces"
         semantic = tmp_path / "semantic"
         graph = tmp_path / "graph"

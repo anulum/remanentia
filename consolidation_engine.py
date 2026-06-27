@@ -31,8 +31,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from importlib import import_module
 from pathlib import Path
+from typing import Any, TypeAlias, cast
 
 import numpy as np
+
+JsonObject: TypeAlias = dict[str, Any]
+TraceData: TypeAlias = dict[str, JsonObject]
+DAGNodeDict: TypeAlias = dict[str, Any]
 
 BASE = Path(__file__).parent
 TRACES_DIR = BASE / "reasoning_traces"
@@ -70,7 +75,9 @@ _TYPE_PATTERNS = [
 ]
 
 
-def _extract_metadata(filename: str, text: str) -> dict:
+def _extract_metadata(filename: str, text: str) -> dict[str, str]:
+    """Infer trace date, project, and type metadata from a trace filename."""
+
     ts_match = re.match(r"(\d{4}-\d{2}-\d{2})(T(\d{4}))?_", filename)
     timestamp = ""
     if ts_match:
@@ -106,7 +113,7 @@ def _extract_entities(text: str) -> list[str]:
     try:
         _rust_ents = import_module("remanentia_consolidation").extract_entities
 
-        return _rust_ents(text)  # pragma: no cover
+        return cast(list[str], _rust_ents(text))  # pragma: no cover
     except ImportError:
         pass
     entities = set()
@@ -246,7 +253,7 @@ def _extract_key_lines(text: str) -> list[str]:
     try:
         _rust_kl = import_module("remanentia_consolidation").extract_key_lines
 
-        return _rust_kl(text)  # pragma: no cover
+        return cast(list[str], _rust_kl(text))  # pragma: no cover
     except ImportError:
         pass
     lines = text.split("\n")
@@ -307,13 +314,15 @@ def _extract_key_lines(text: str) -> list[str]:
 
 
 def _trace_hash(filename: str) -> str:
+    """Return the stable short content-address key for a trace filename."""
+
     return hashlib.sha256(filename.encode()).hexdigest()[:12]
 
 
 # ── Clustering ───────────────────────────────────────────────────
 
 
-def _cluster_traces(traces: dict[str, dict]) -> list[list[str]]:
+def _cluster_traces(traces: TraceData) -> list[list[str]]:
     """Cluster traces by project + date proximity.
 
     Traces from the same project within 2 days of each other are grouped.
@@ -325,7 +334,7 @@ def _cluster_traces(traces: dict[str, dict]) -> list[list[str]]:
         tuples = [  # pragma: no cover
             (name, meta["project"], meta.get("date", "")[:10]) for name, meta in traces.items()
         ]
-        return _rust_ct(tuples)  # pragma: no cover
+        return cast(list[list[str]], _rust_ct(tuples))  # pragma: no cover
     except ImportError:
         pass
     by_project = defaultdict(list)
@@ -461,40 +470,50 @@ def _write_semantic_memory(
 # ── Entity graph ─────────────────────────────────────────────────
 
 
-def _load_entities() -> dict[str, dict]:
+def _load_entities() -> dict[str, JsonObject]:
+    """Load persisted entity graph nodes keyed by entity id."""
+
     if not ENTITIES_PATH.exists():
         return {}
-    entities = {}
+    entities: dict[str, JsonObject] = {}
     for line in ENTITIES_PATH.read_text(encoding="utf-8").strip().split("\n"):
         if line.strip():
-            e = json.loads(line)
+            e = cast(JsonObject, json.loads(line))
             entities[e["id"]] = e
     return entities
 
 
-def _save_entities(entities: dict[str, dict]):
+def _save_entities(entities: dict[str, JsonObject]) -> None:
+    """Persist entity graph nodes as JSONL records."""
+
     GRAPH_DIR.mkdir(parents=True, exist_ok=True)
     lines = [json.dumps(e) for e in entities.values()]
     ENTITIES_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _load_relations() -> list[dict]:
+def _load_relations() -> list[JsonObject]:
+    """Load persisted weighted entity graph relations."""
+
     if not RELATIONS_PATH.exists():
         return []
-    relations = []
+    relations: list[JsonObject] = []
     for line in RELATIONS_PATH.read_text(encoding="utf-8").strip().split("\n"):
         if line.strip():
-            relations.append(json.loads(line))
+            relations.append(cast(JsonObject, json.loads(line)))
     return relations
 
 
-def _save_relations(relations: list[dict]):
+def _save_relations(relations: list[JsonObject]) -> None:
+    """Persist weighted entity graph relations as JSONL records."""
+
     GRAPH_DIR.mkdir(parents=True, exist_ok=True)
     lines = [json.dumps(r) for r in relations]
     RELATIONS_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _update_graph(trace_name: str, entities: list[str], project: str, date: str, text: str = ""):
+def _update_graph(
+    trace_name: str, entities: list[str], project: str, date: str, text: str = ""
+) -> None:
     """Add entities and relations from a trace.
 
     Extracts typed relations (caused_by, fixed_by, replaced, etc.) when text
@@ -655,7 +674,7 @@ def get_pending_traces() -> list[str]:
     return sorted(all_traces - processed)
 
 
-def consolidate(force: bool = False) -> dict:
+def consolidate(force: bool = False) -> JsonObject:
     """Run one consolidation cycle.
 
     Returns stats about what was consolidated.
@@ -671,7 +690,7 @@ def consolidate(force: bool = False) -> dict:
         new_traces = [f.name for f in sorted(TRACES_DIR.glob("*.md"))]
 
     # Load and analyze each trace
-    trace_data = {}
+    trace_data: TraceData = {}
     for name in new_traces:
         path = TRACES_DIR / name
         if not path.exists():  # pragma: no cover
@@ -791,7 +810,7 @@ def consolidate(force: bool = False) -> dict:
     return stats
 
 
-def capacity_report() -> dict[str, dict]:
+def capacity_report() -> dict[str, JsonObject]:
     """Report memory capacity usage per semantic category.
 
     Returns a dict mapping category name to:
@@ -802,7 +821,7 @@ def capacity_report() -> dict[str, dict]:
     - file_count: number of .md files
     - state_counts: breakdown by validity_state
     """
-    report: dict[str, dict] = {}
+    report: dict[str, JsonObject] = {}
     if not SEMANTIC_DIR.exists():
         return report
 
@@ -874,7 +893,7 @@ class DAGNode:
     project: str
 
 
-def build_summary_dag(trace_data: dict[str, dict]) -> list[dict]:
+def build_summary_dag(trace_data: TraceData) -> list[DAGNodeDict]:
     """Build a hierarchical summary DAG from trace data.
 
     Args:
@@ -901,7 +920,7 @@ def build_summary_dag(trace_data: dict[str, dict]) -> list[dict]:
             )
             for name, data in sorted(trace_data.items(), key=lambda x: x[1].get("date", ""))
         ]
-        return _rust_dag(tuples, DAG_FANOUT)  # pragma: no cover
+        return cast(list[DAGNodeDict], _rust_dag(tuples, DAG_FANOUT))  # pragma: no cover
     except ImportError:
         pass
 
@@ -981,7 +1000,9 @@ def build_summary_dag(trace_data: dict[str, dict]) -> list[dict]:
     return [_dag_node_to_dict(n) for n in all_nodes]
 
 
-def _dag_node_to_dict(node: DAGNode) -> dict:
+def _dag_node_to_dict(node: DAGNode) -> DAGNodeDict:
+    """Convert a summary DAG node to its JSON-serialisable representation."""
+
     return {
         "node_id": node.node_id,
         "level": node.level,
@@ -994,10 +1015,10 @@ def _dag_node_to_dict(node: DAGNode) -> dict:
 
 
 def search_summary_dag(
-    dag_nodes: list[dict],
+    dag_nodes: list[DAGNodeDict],
     query: str,
     top_k: int = 10,
-) -> list[dict]:
+) -> list[DAGNodeDict]:
     """Search the summary DAG top-down for relevant nodes.
 
     Starts at the highest level, finds matching nodes, then
@@ -1011,8 +1032,8 @@ def search_summary_dag(
         return []
 
     # Group nodes by level
-    by_level: dict[int, list[dict]] = {}
-    node_map: dict[str, dict] = {}
+    by_level: dict[int, list[DAGNodeDict]] = {}
+    node_map: dict[str, DAGNodeDict] = {}
     for n in dag_nodes:
         level = n["level"]
         by_level.setdefault(level, []).append(n)
@@ -1021,7 +1042,9 @@ def search_summary_dag(
     max_level = max(by_level.keys()) if by_level else 0
 
     # Score at highest level first
-    def _score(node: dict) -> float:
+    def _score(node: DAGNodeDict) -> float:
+        """Score a DAG node by lexical overlap with the query tokens."""
+
         text = (node["summary"] + " " + " ".join(node["entities"])).lower()
         text_tokens = set(re.findall(r"\w{3,}", text))
         overlap = len(query_tokens & text_tokens)
@@ -1032,7 +1055,7 @@ def search_summary_dag(
     scored = [(n, _score(n)) for n in candidates]
     scored.sort(key=lambda x: -x[1])
 
-    results: list[dict] = []
+    results: list[DAGNodeDict] = []
     seen: set[str] = set()
 
     # Expand top matches down to leaves
@@ -1060,7 +1083,7 @@ def search_summary_dag(
     return results[:top_k]
 
 
-def age_memories(reference_date: str | None = None) -> dict:
+def age_memories(reference_date: str | None = None) -> JsonObject:
     """Age semantic memories based on last_accessed and last_validated timestamps.
 
     Transitions:
@@ -1115,13 +1138,13 @@ def age_memories(reference_date: str | None = None) -> dict:
     return stats
 
 
-def _parse_frontmatter(text: str) -> dict | None:
+def _parse_frontmatter(text: str) -> JsonObject | None:
     """Parse YAML-ish frontmatter from a semantic memory file."""
     try:
         _rust_fm = import_module("remanentia_consolidation").parse_frontmatter
 
-        result = _rust_fm(text)  # pragma: no cover
-        return result if result else None  # pragma: no cover
+        rust_result = _rust_fm(text)  # pragma: no cover
+        return cast(JsonObject | None, rust_result if rust_result else None)  # pragma: no cover
     except ImportError:
         pass
     if not text.startswith("---"):
@@ -1130,16 +1153,16 @@ def _parse_frontmatter(text: str) -> dict | None:
     if end < 0:
         return None
     fm_text = text[3:end].strip()
-    result = {}
+    parsed: JsonObject = {}
     for line in fm_text.split("\n"):
         line = line.strip()
         if ":" in line and not line.startswith("-"):
             key, _, val = line.partition(":")
-            result[key.strip()] = val.strip()
-    return result
+            parsed[key.strip()] = val.strip()
+    return parsed
 
 
-def _update_frontmatter_field(path: Path, text: str, field_name: str, value: str):
+def _update_frontmatter_field(path: Path, text: str, field_name: str, value: str) -> None:
     """Update a single field in a frontmatter block and write back."""
     pattern = re.compile(rf"^{re.escape(field_name)}:\s*.*$", re.MULTILINE)
     if pattern.search(text):

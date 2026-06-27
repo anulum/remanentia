@@ -45,6 +45,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - README badges, header image, branding footer
 
 ### Fixed
+- `consolidation_engine.py` now has typed JSON/trace/DAG boundaries,
+  complete audited helper docstrings, strict-mypy clean dedicated tests, and
+  100% focused consolidation coverage with weak consolidation assertions
+  tightened to real graph/relation/status outcomes.
 - `api.py` now exposes FastAPI route annotations that stay runtime-safe for
   Pydantic response schema generation, while its request models, middleware,
   health/status/graph/vector/correctness handlers, and helper functions are

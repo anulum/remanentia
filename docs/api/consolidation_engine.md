@@ -326,7 +326,7 @@ if dag_path.exists():
 
 ## Test Coverage
 
-100 tests in `tests/test_consolidation_engine.py`:
+110 tests in `tests/test_consolidation_engine.py`:
 
 - **Metadata extraction**: filenames, dates, projects, types
 - **Entity extraction**: projects, concepts, dynamic (versions, paths)
@@ -339,6 +339,8 @@ if dag_path.exists():
 - **Performance**: DAG build <100ms, search <10ms
 - **Graph**: typed relations, entity DB CRUD
 - **Novelty**: cosine detection, degenerate inputs
+- **Quality ratchet**: strict-mypy-clean production/test surfaces and audited
+  helper docstrings for metadata, graph persistence, DAG, and scoring helpers
 
 All 6 STRONG dimensions: empty, error, negative, pipeline, roundtrip, performance.
 

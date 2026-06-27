@@ -20,7 +20,7 @@
 | Module | Stmts | Cover |
 |--------|------:|:-----:|
 | memory_index.py | 928 | 100% |
-| consolidation_engine.py | 486 | 100% |
+| consolidation_engine.py | 499 | 100% |
 | knowledge_store.py | 395 | 100% |
 | fact_decomposer.py | 266 | 100% |
 | answer_extractor.py | 245 | 100% |
@@ -40,7 +40,7 @@
 | entity_extractor.py | 77 | 100% |
 | fact_validity_model.py | 69 | 100% |
 | llm_setup.py | 33 | 100% |
-| **Total** | **~4,550** | **100%** |
+| **Total** | **~4,563** | **100%** |
 
 ## Excluded from Coverage
 
