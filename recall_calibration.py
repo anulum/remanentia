@@ -297,7 +297,11 @@ class CalibratedRecallGate:
         """Return a JSON-serialisable gate summary."""
 
         accepted = (
-            [example for example in self.examples if self.threshold is not None and example.score >= self.threshold]
+            [
+                example
+                for example in self.examples
+                if self.threshold is not None and example.score >= self.threshold
+            ]
             if self.threshold is not None
             else []
         )
@@ -416,7 +420,9 @@ def evaluate_holdout(
             error_rate=None,
         )
     accuracy = sum(1 for example, _decision in accepted if example.was_correct) / n_accepted
-    mean_estimate = sum(decision.estimated_correctness for _example, decision in accepted) / n_accepted
+    mean_estimate = (
+        sum(decision.estimated_correctness for _example, decision in accepted) / n_accepted
+    )
     return HoldoutCalibrationReport(
         n_total=n_total,
         n_accepted=n_accepted,

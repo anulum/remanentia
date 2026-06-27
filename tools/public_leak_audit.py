@@ -63,6 +63,14 @@ INTERNAL_PATH_PREFIXES = (
     "00_SAFETY_BACKUPS/",
 )
 ALLOW_DIRECTIVE = "public-leak-audit: allow"
+AGENT_IDENTITY_PATTERN = (
+    r"\b(?:"
+    r"Claude(?!\s+(?:Haiku|Sonnet))"  # public-leak-audit: allow
+    r"|Gemini"  # public-leak-audit: allow
+    r"|Codex"  # public-leak-audit: allow
+    r"|ChatGPT"  # public-leak-audit: allow
+    r")\b"
+)
 
 
 @dataclass(frozen=True)
@@ -89,8 +97,7 @@ class LeakFinding:
 
         relpath = _display_path(self.path, root)
         return (
-            f"{relpath}:{self.line}:{self.column}: {self.label}: "
-            f"{self.match!r} in {self.excerpt!r}"
+            f"{relpath}:{self.line}:{self.column}: {self.label}: {self.match!r} in {self.excerpt!r}"
         )
 
 
@@ -128,7 +135,7 @@ DEFAULT_RULES = (
     ),
     LeakRule(
         "agent identity label",
-        re.compile(r"\b(?:Claude(?!\s+(?:Haiku|Sonnet))|Gemini|Codex|ChatGPT)\b"),  # public-leak-audit: allow
+        re.compile(AGENT_IDENTITY_PATTERN),
     ),
 )
 
@@ -229,7 +236,10 @@ def _is_public_text_candidate(path: Path, root: Path) -> bool:
         relpath = path.resolve().relative_to(root.resolve()).as_posix()
     except ValueError:
         relpath = path.as_posix()
-    if any(relpath == prefix.rstrip("/") or relpath.startswith(prefix) for prefix in INTERNAL_PATH_PREFIXES):
+    if any(
+        relpath == prefix.rstrip("/") or relpath.startswith(prefix)
+        for prefix in INTERNAL_PATH_PREFIXES
+    ):
         return False
     if any(part in SKIP_PARTS for part in Path(relpath).parts):
         return False

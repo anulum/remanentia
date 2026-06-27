@@ -62,9 +62,15 @@ _RANK = {VALIDATED: 2, BOUNDARY: 1, REFUTED: 0}
 
 # ── Gating-axis members (wire strings; anything else is "unknown") ────────────
 
+
 def _norm(value: object) -> str | None:
     """Canonicalise a wire value: lower-case, ``_``→``-``; ``None`` stays ``None``."""
-    return normalize_axis(value)
+    normalized: object = normalize_axis(value)
+    if normalized is None:
+        return None
+    if isinstance(normalized, str):
+        return normalized
+    return ""
 
 
 def freshness_permits(freshness: str | None) -> bool:
@@ -81,7 +87,7 @@ def freshness_permits(freshness: str | None) -> bool:
         return True
     if fresh not in FRESHNESSES:
         return False
-    return fresh == VERIFIED_AT_SOURCE
+    return fresh == str(VERIFIED_AT_SOURCE)
 
 
 def present(
