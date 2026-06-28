@@ -45,6 +45,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - README badges, header image, branding footer
 
 ### Fixed
+- `temporal_relation.py` now has typed model/tokenizer/config boundaries,
+  complete docstrings, and a strict-mypy clean dedicated C3 wrapper test
+  surface at 100% focused coverage.
 - The top-level public export facade now has a strict-mypy clean test surface,
   stale fallback import ignores removed, and `__version__` aligned with package
   metadata.
