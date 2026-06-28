@@ -26,8 +26,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from importlib import import_module
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import Mapping, Protocol, Sequence, cast, runtime_checkable
 
 log = logging.getLogger(__name__)
 
@@ -95,36 +96,95 @@ def load_config(path: Path | None = None) -> LLMConfig:
     text = path.read_text(encoding="utf-8")
     data = _parse_toml(text)
 
-    llm_section = data.get("llm", {})
-    tokens = llm_section.pop("tokens", {})
+    llm_section = dict(_mapping(data.get("llm")))
+    tokens = _mapping(llm_section.pop("tokens", {}))
 
     cfg = LLMConfig()
     for key in ("backend", "local_url", "local_model", "local_api_key", "anthropic_model"):
-        if key in llm_section:
-            setattr(cfg, key, llm_section[key])
-    if "local_timeout" in llm_section:
-        cfg.local_timeout = float(llm_section["local_timeout"])
-    if "extract" in tokens:
-        cfg.max_tokens_extract = int(tokens["extract"])
-    if "generate" in tokens:
-        cfg.max_tokens_generate = int(tokens["generate"])
-    if "synthesise" in tokens:
-        cfg.max_tokens_synthesise = int(tokens["synthesise"])
+        value = llm_section.get(key)
+        if isinstance(value, str):
+            setattr(cfg, key, value)
+    timeout = llm_section.get("local_timeout")
+    if isinstance(timeout, (float, int, str)):
+        cfg.local_timeout = float(timeout)
+    extract = tokens.get("extract")
+    if isinstance(extract, (float, int, str)):
+        cfg.max_tokens_extract = int(extract)
+    generate = tokens.get("generate")
+    if isinstance(generate, (float, int, str)):
+        cfg.max_tokens_generate = int(generate)
+    synthesise = tokens.get("synthesise")
+    if isinstance(synthesise, (float, int, str)):
+        cfg.max_tokens_synthesise = int(synthesise)
 
     return cfg
 
 
-def _parse_toml(text: str) -> dict:
+class _TomlModule(Protocol):
+    """Typed view of TOML parser modules."""
+
+    def loads(self, text: str) -> object:
+        """Parse TOML text into Python objects."""
+
+
+def _parse_toml(text: str) -> dict[str, object]:
     """Parse TOML using stdlib tomllib (3.11+) or tomli fallback."""
     try:
-        import tomllib  # type: ignore[import-not-found]
+        toml_module = import_module("tomllib")
     except ModuleNotFoundError:
         try:
-            import tomli as tomllib  # type: ignore[no-redef,import-untyped]
+            toml_module = import_module("tomli")
         except ModuleNotFoundError:
             log.warning("No TOML parser available; using defaults")
             return {}
-    return tomllib.loads(text)
+    parser = cast(_TomlModule, toml_module)
+    return cast(dict[str, object], parser.loads(text))
+
+
+def _mapping(value: object) -> Mapping[str, object]:
+    """Return a string-keyed mapping view for nested configuration objects."""
+    if isinstance(value, Mapping):
+        return cast(Mapping[str, object], value)
+    return {}
+
+
+def _chat_completion_content(body: object) -> str | None:
+    """Extract the first OpenAI-compatible chat completion message string."""
+    response = _mapping(body)
+    choices = response.get("choices")
+    if not isinstance(choices, Sequence) or isinstance(choices, str) or not choices:
+        return None
+    first_choice = _mapping(choices[0])
+    message = _mapping(first_choice.get("message"))
+    content = message.get("content")
+    if not isinstance(content, str):
+        return None
+    return content.strip()
+
+
+class _AnthropicContentBlock(Protocol):
+    """Typed view of the text field used from Anthropic response blocks."""
+
+    text: str
+
+
+class _AnthropicResponse(Protocol):
+    """Typed view of the message response returned by the hosted SDK."""
+
+    content: Sequence[_AnthropicContentBlock]
+
+
+class _AnthropicMessages(Protocol):
+    """Typed view of the hosted SDK messages resource."""
+
+    def create(self, **kwargs: object) -> _AnthropicResponse:
+        """Create a hosted model message with keyword parameters."""
+
+
+class _AnthropicClient(Protocol):
+    """Typed view of the hosted SDK client used by this module."""
+
+    messages: _AnthropicMessages
 
 
 # ── Backends ──────────────────────────────────────────────────────
@@ -139,7 +199,8 @@ class NullBackend:
         *,
         max_tokens: int = 200,
         system: str = "",
-    ) -> None:
+    ) -> str | None:
+        """Return no completion for explicit no-LLM operation."""
         return None
 
 
@@ -154,20 +215,23 @@ class AnthropicBackend:
         model: str = "claude-haiku-4-5-20251001",
         api_key: str | None = None,
     ) -> None:
+        """Initialise hosted model metadata without opening a network client."""
         self._model = model
         self._api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
-        self._client: object | None = None
+        self._client: _AnthropicClient | None = None
 
-    def _get_client(self):
+    def _get_client(self) -> _AnthropicClient | None:
         """Lazy-initialise the hosted-LLM client."""
         if self._client is not None:
             return self._client
         if not self._api_key:
             return None
         try:
-            import anthropic  # type: ignore[import-untyped]
-
-            self._client = anthropic.Anthropic(api_key=self._api_key)
+            anthropic = import_module("anthropic")
+            factory = cast(object, getattr(anthropic, "Anthropic", None))
+            if not callable(factory):
+                return None
+            self._client = cast(_AnthropicClient, factory(api_key=self._api_key))
             return self._client
         except ImportError:  # pragma: no cover
             return None
@@ -179,12 +243,13 @@ class AnthropicBackend:
         max_tokens: int = 200,
         system: str = "",
     ) -> str | None:
+        """Return a hosted completion, or ``None`` when unavailable or failed."""
         client = self._get_client()
         if client is None:
             return None
         try:  # pragma: no cover
             messages = [{"role": "user", "content": prompt}]
-            kwargs: dict = {
+            kwargs: dict[str, object] = {
                 "model": self._model,
                 "max_tokens": max_tokens,
                 "messages": messages,
@@ -192,6 +257,8 @@ class AnthropicBackend:
             if system:
                 kwargs["system"] = system
             response = client.messages.create(**kwargs)
+            if not response.content:
+                return None
             return response.content[0].text.strip()
         except Exception:  # pragma: no cover
             return None
@@ -210,6 +277,7 @@ class LocalLLMBackend:
         timeout: float = 60.0,
         api_key: str | None = None,
     ) -> None:
+        """Initialise an OpenAI-compatible local chat completion endpoint."""
         self._base_url = base_url.rstrip("/")
         parsed = urllib.parse.urlparse(self._base_url)
         if parsed.scheme not in {"http", "https"}:
@@ -219,6 +287,7 @@ class LocalLLMBackend:
         self._api_key = api_key or os.environ.get("REMANENTIA_LOCAL_LLM_API_KEY", "")
 
     def _headers(self) -> dict[str, str]:
+        """Build JSON request headers with an optional bearer token."""
         headers = {"Content-Type": "application/json"}
         if self._api_key:
             headers["Authorization"] = f"Bearer {self._api_key}"
@@ -233,7 +302,8 @@ class LocalLLMBackend:
                 method="GET",
             )
             with urllib.request.urlopen(req, timeout=5) as resp:
-                return resp.status == 200
+                status = cast(object, getattr(resp, "status", None))
+                return status == 200
         except Exception:
             return False
 
@@ -244,6 +314,7 @@ class LocalLLMBackend:
         max_tokens: int = 200,
         system: str = "",
     ) -> str | None:
+        """Return a local chat completion, or ``None`` on transport failure."""
         messages: list[dict[str, str]] = []
         if system:
             messages.append({"role": "system", "content": system})
@@ -266,8 +337,8 @@ class LocalLLMBackend:
         )
         try:
             with urllib.request.urlopen(req, timeout=self._timeout) as resp:
-                body = json.loads(resp.read().decode("utf-8"))
-                return body["choices"][0]["message"]["content"].strip()
+                body = cast(object, json.loads(resp.read().decode("utf-8")))
+                return _chat_completion_content(body)
         except Exception:
             log.debug("Local LLM request failed", exc_info=True)
             return None
@@ -277,10 +348,12 @@ class AutoBackend:
     """Tries local → hosted → Null, caches the resolved backend."""
 
     def __init__(self, config: LLMConfig | None = None) -> None:
+        """Initialise auto-selection with an optional resolved configuration."""
         self._config = config or LLMConfig()
         self._resolved: LLMBackend | None = None
 
     def _resolve(self) -> LLMBackend:
+        """Resolve and cache the first available backend in preference order."""
         if self._resolved is not None:
             return self._resolved
 
@@ -319,6 +392,7 @@ class AutoBackend:
         max_tokens: int = 200,
         system: str = "",
     ) -> str | None:
+        """Delegate completion to the cached auto-selected backend."""
         backend = self._resolve()
         return backend.complete(prompt, max_tokens=max_tokens, system=system)
 

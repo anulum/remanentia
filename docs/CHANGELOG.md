@@ -45,6 +45,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - README badges, header image, branding footer
 
 ### Fixed
+- `llm_backend.py` now has typed TOML, hosted-SDK, and local HTTP JSON
+  boundaries, complete audited backend docstrings, and a strict-mypy clean
+  dedicated backend test surface at 100% focused coverage.
 - `consolidation_engine.py` now has typed JSON/trace/DAG boundaries,
   complete audited helper docstrings, strict-mypy clean dedicated tests, and
   100% focused consolidation coverage with weak consolidation assertions

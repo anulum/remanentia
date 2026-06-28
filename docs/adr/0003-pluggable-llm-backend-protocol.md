@@ -16,12 +16,12 @@ would have prevented the others from working.
 ## Decision
 
 Define a narrow `LLMBackend` Protocol in `llm_backend.py` with
-``complete(prompt, max_tokens) -> str | None`` and
-``is_available() -> bool``. Concrete backends (``OpenAIBackend``,
-``AnthropicBackend``, ``LocalLLMBackend``, ``NullBackend``) implement
-the Protocol; ``resolve_backend()`` picks one at runtime based on
-env vars and installed dependencies. Call sites hold only the
-Protocol type.
+``complete(prompt, *, max_tokens, system) -> str | None``. Concrete backends
+(``AnthropicBackend``, ``LocalLLMBackend``, ``AutoBackend``, ``NullBackend``)
+implement the Protocol; ``resolve_backend()`` picks one at runtime based on
+configuration, environment variables, and installed dependencies. Local
+availability probing is an implementation detail of ``LocalLLMBackend`` and
+``AutoBackend``. Call sites hold only the Protocol type.
 
 ## Options considered
 
@@ -33,9 +33,9 @@ Protocol type.
 
 ## Consequences
 
-- Positive: plug-in a new backend by subclassing the Protocol; tests
-  use ``NullBackend`` for offline runs; the bench can switch providers
-  with an env var.
+- Positive: plug in a new backend by satisfying the Protocol; tests use
+  ``NullBackend`` for offline runs; the bench can switch providers with an env
+  var.
 - Negative: the Protocol is the **only** extension seam today; there
   is no plugin framework for retrievers, rankers, or consolidation
   strategies. Third-party extensions of those areas require a fork.
