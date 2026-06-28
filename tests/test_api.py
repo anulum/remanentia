@@ -124,7 +124,9 @@ class TestAPISecurityBoundary:
         assert resp.status_code == 401
         assert resp.json()["detail"] == "authentication required"
 
-    def test_private_endpoint_accepts_matching_bearer_token(self, client: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def test_private_endpoint_accepts_matching_bearer_token(
+        self, client: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         monkeypatch.setattr(
             api, "AUTH", BearerAuth("secret", warn_on_disabled=False), raising=False
         )
@@ -145,14 +147,18 @@ class TestAPISecurityBoundary:
         assert resp.status_code == 200
         assert resp.json()["episodic_traces"] == 0
 
-    def test_post_body_limit_rejects_before_handler(self, client: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_post_body_limit_rejects_before_handler(
+        self, client: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(api, "BODY_LIMIT", 8, raising=False)
         resp = client.post("/recall", json={"query": "body is too large"})
 
         assert resp.status_code == 413
         assert resp.json()["detail"] == "request body too large"
 
-    def test_private_endpoint_rate_limit_is_enforced(self, client: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def test_private_endpoint_rate_limit_is_enforced(
+        self, client: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         monkeypatch.setattr(
             api,
             "LIMITER",
@@ -179,12 +185,16 @@ class TestAPISecurityBoundary:
         assert second.json()["detail"] == "rate limit exceeded"
         assert second.headers["retry-after"] == "1"
 
-    def test_default_cors_origin_allows_local_development(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_default_cors_origin_allows_local_development(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.delenv("REMANENTIA_CORS_ORIGINS", raising=False)
 
         assert api._cors_origins_from_env() == ["*"]
 
-    def test_cors_origins_can_be_scoped_by_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_cors_origins_can_be_scoped_by_environment(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv(
             "REMANENTIA_CORS_ORIGINS",
             "https://remanentia.com, https://www.remanentia.com",
@@ -200,7 +210,9 @@ class TestAPISecurityBoundary:
         assert TokenBucketLimiter(rate_per_minute=30).retry_after_seconds() == "2"
         assert TokenBucketLimiter(rate_per_minute=7).retry_after_seconds() == "9"
 
-    def test_private_endpoint_writes_audit_record(self, client: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def test_private_endpoint_writes_audit_record(
+        self, client: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         audit_path = tmp_path / "audit.jsonl"
         monkeypatch.setattr(api, "AUDIT_LOGGER", RequestAuditLogger(audit_path), raising=False)
         state_dir = tmp_path / "snn_state"
@@ -227,7 +239,9 @@ class TestAPISecurityBoundary:
         assert "authorization" not in payload
         assert "body" not in payload
 
-    def test_public_health_does_not_write_audit_record(self, client: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def test_public_health_does_not_write_audit_record(
+        self, client: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         audit_path = tmp_path / "audit.jsonl"
         monkeypatch.setattr(api, "AUDIT_LOGGER", RequestAuditLogger(audit_path), raising=False)
 
@@ -488,7 +502,9 @@ class TestPublicVectorSearch:
         assert resp.status_code == 200
         assert resp.json()["results"] == []
 
-    def test_public_vector_search_uses_server_policy_and_redaction(self, client: Any, tmp_path: Path) -> None:
+    def test_public_vector_search_uses_server_policy_and_redaction(
+        self, client: Any, tmp_path: Path
+    ) -> None:
         redaction_file = tmp_path / "terms.txt"
         redaction_file.write_text("private-token\n", encoding="utf-8")
         raw_result = VectorSearchResult(
@@ -537,7 +553,9 @@ class TestPublicVectorSearch:
         assert resp.status_code == 503
         assert resp.json()["detail"] == "no endpoint"
 
-    def test_missing_redaction_file_is_rejected(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_missing_redaction_file_is_rejected(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         missing = tmp_path / "missing_terms.txt"
         monkeypatch.setenv("REMANENTIA_PUBLIC_VECTOR_REDACTION_FILE", str(missing))
 
@@ -582,7 +600,9 @@ class TestPublicVectorSearch:
         assert "daemon" in data
         assert data["daemon"]["cycle"] == 5
 
-    def test_health_reports_unreadable_legacy_daemon_state(self, client: Any, tmp_path: Path) -> None:
+    def test_health_reports_unreadable_legacy_daemon_state(
+        self, client: Any, tmp_path: Path
+    ) -> None:
         state_dir = tmp_path / "snn_state"
         state_dir.mkdir()
         (state_dir / "current_state.json").write_text("{", encoding="utf-8")
@@ -622,7 +642,9 @@ class TestPublicVectorSearch:
         assert data["vector_worker"]["state"] == "alive"
         assert data["vector_worker"]["last_action"] == "skipped"
 
-    def test_status_reports_unreadable_vector_worker_state(self, client: Any, tmp_path: Path) -> None:
+    def test_status_reports_unreadable_vector_worker_state(
+        self, client: Any, tmp_path: Path
+    ) -> None:
         state_dir = tmp_path / "snn_state"
         state_dir.mkdir()
         (state_dir / "vector_refresh_worker.json").write_text("{", encoding="utf-8")
@@ -652,7 +674,9 @@ class TestAPIHelpers:
 
         assert api._json_safe(value) is value
 
-    def test_middleware_audits_handler_exception(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def test_middleware_audits_handler_exception(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         audit_path = tmp_path / "audit.jsonl"
         monkeypatch.setattr(api, "AUTH", BearerAuth(None, warn_on_disabled=False), raising=False)
         monkeypatch.setattr(api, "AUDIT_LOGGER", RequestAuditLogger(audit_path), raising=False)
@@ -715,7 +739,9 @@ class TestAPIPipeline:
 class TestRecallCorrectnessEndpoint:
     """The HTTP write seam a verifier posts its correctness verdict to."""
 
-    def test_records_verdict(self, client: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_records_verdict(
+        self, client: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from recall_ledger import RecallLedger
 
         led_path = tmp_path / "rl.jsonl"
@@ -735,7 +761,9 @@ class TestRecallCorrectnessEndpoint:
         assert rq.was_correct is False
         assert rq.was_used is None  # correctness must not touch usage
 
-    def test_unknown_query_returns_404(self, client: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_unknown_query_returns_404(
+        self, client: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("REMANENTIA_RECALL_LEDGER", str(tmp_path / "empty.jsonl"))
         resp = client.post(
             "/recall/correctness", json={"query": "never asked", "was_correct": True}
@@ -743,7 +771,9 @@ class TestRecallCorrectnessEndpoint:
         assert resp.status_code == 404
         assert "no prior recall" in resp.json()["detail"]
 
-    def test_missing_was_correct_is_422(self, client: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_missing_was_correct_is_422(
+        self, client: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("REMANENTIA_RECALL_LEDGER", str(tmp_path / "rl.jsonl"))
         resp = client.post("/recall/correctness", json={"query": "q"})
         assert resp.status_code == 422  # pydantic validation: was_correct required

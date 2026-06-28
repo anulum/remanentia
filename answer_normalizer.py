@@ -40,6 +40,7 @@ class _EmbeddingModel(Protocol):
         """Encode texts as a NumPy-compatible embedding array."""
         ...  # pragma: no cover
 
+
 _YES_PATTERNS = re.compile(
     r"^(yes|likely\s+yes|probably\s+yes|most\s+likely\s+yes|yeah|yep|correct|true)",
     re.IGNORECASE,
@@ -69,7 +70,7 @@ def normalize_answer(text: str) -> str:
     try:
         from remanentia_answer_normalizer import normalize_answer as _rust_norm
 
-        rust_norm = cast(Callable[[str], str], _rust_norm)
+        rust_norm = cast(Callable[[str], str], _rust_norm)  # pragma: no cover
         return rust_norm(text)  # pragma: no cover
     except ImportError:
         pass
@@ -139,7 +140,7 @@ def answers_match(predicted: str, ground_truth: str, threshold: float = 0.25) ->
     try:
         from remanentia_answer_normalizer import answers_match as _rust_match
 
-        rust_match = cast(Callable[[str, str, float], bool], _rust_match)
+        rust_match = cast(Callable[[str, str, float], bool], _rust_match)  # pragma: no cover
         return rust_match(predicted, ground_truth, threshold)  # pragma: no cover
     except ImportError:
         pass

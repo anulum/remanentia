@@ -1133,7 +1133,9 @@ class TestSummaryDAG:
 
 
 class TestConsolidationPythonFallbackContracts:
-    def test_native_free_extraction_helpers_cover_dynamic_trace_features(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_native_free_extraction_helpers_cover_dynamic_trace_features(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         real_import = cast(Any, consolidation_engine).import_module
 
         def reject_native(name: str) -> Any:
@@ -1173,7 +1175,9 @@ class TestConsolidationPythonFallbackContracts:
         assert depends_relations[("ArcaneNeuron", "FastAPI")] == "depends_on"
         assert co_occurs_relations[("ArcaneNeuron", "FastAPI")] == "co_occurs"
 
-    def test_native_free_clustering_splits_by_project_and_date_gap(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_native_free_clustering_splits_by_project_and_date_gap(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         real_import = cast(Any, consolidation_engine).import_module
 
         def reject_native(name: str) -> Any:
@@ -1196,7 +1200,9 @@ class TestConsolidationPythonFallbackContracts:
         assert ["c.md"] in clusters
         assert {"d.md", "e.md"} in [set(cluster) for cluster in clusters]
 
-    def test_native_free_summary_dag_builds_hierarchy_and_frontmatter_parses(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_native_free_summary_dag_builds_hierarchy_and_frontmatter_parses(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         real_import = cast(Any, consolidation_engine).import_module
 
         def reject_native(name: str) -> Any:
@@ -1228,7 +1234,9 @@ class TestConsolidationPythonFallbackContracts:
             "validity_state": "active"
         }
 
-    def test_forced_consolidation_processes_temp_traces_and_updates_outputs(self, tmp_path: Path) -> None:
+    def test_forced_consolidation_processes_temp_traces_and_updates_outputs(
+        self, tmp_path: Path
+    ) -> None:
         traces = tmp_path / "traces"
         semantic = tmp_path / "semantic"
         graph = tmp_path / "graph"

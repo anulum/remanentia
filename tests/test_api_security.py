@@ -186,9 +186,7 @@ class TestEnvParsing:
         monkeypatch.setenv("REMANENTIA_TEST_INT", " ")
         assert _read_int_env("REMANENTIA_TEST_INT", 7) == 7
 
-    def test_read_int_env_rejects_negative_values(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_read_int_env_rejects_negative_values(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("REMANENTIA_TEST_INT", "-1")
         with pytest.raises(ValueError, match="non-negative"):
             _read_int_env("REMANENTIA_TEST_INT", 7)

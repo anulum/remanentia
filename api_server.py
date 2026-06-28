@@ -317,7 +317,11 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
         return cast(JsonObject, payload)
 
     def _json_response(
-        self, data: Mapping[str, JsonValue], status: int = 200, *, headers: dict[str, str] | None = None
+        self,
+        data: Mapping[str, JsonValue],
+        status: int = 200,
+        *,
+        headers: dict[str, str] | None = None,
     ) -> None:
         """Write a JSON response with audit metadata and CORS headers."""
 

@@ -413,9 +413,7 @@ class TestRecall:
             ctx = recall("remanentia decision SNN", top_k=3)
         assert len(ctx.semantic_memories) > 0
 
-    def test_recall_novelty(
-        self, tmp_traces: Path, tmp_graph: Path, tmp_semantic: Path
-    ) -> None:
+    def test_recall_novelty(self, tmp_traces: Path, tmp_graph: Path, tmp_semantic: Path) -> None:
         with (
             patch("memory_recall.TRACES_DIR", tmp_traces),
             patch("memory_recall.SEMANTIC_DIR", tmp_semantic),

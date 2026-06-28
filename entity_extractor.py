@@ -139,7 +139,9 @@ def extract_entities(text: str, labels: list[str] | None = None) -> list[Entity]
                                 else 0.0
                             ),
                             start=(
-                                int(start_value) if isinstance(start_value, str | int | float) else 0
+                                int(start_value)
+                                if isinstance(start_value, str | int | float)
+                                else 0
                             ),
                             end=int(end_value) if isinstance(end_value, str | int | float) else 0,
                         )

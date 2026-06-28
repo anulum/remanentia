@@ -65,7 +65,9 @@ def current_operational_queries(repo: Path = BASE) -> list[BenchmarkQuery]:
     recall_api = _named_row(performance.get("api"), "api_recall")
     public_vector = _named_row(performance.get("api"), "api_public_vector_search")
     vector_report = performance.get("vector")
-    vector_index = _json_object(vector_report.get("index")) if isinstance(vector_report, dict) else {}
+    vector_index = (
+        _json_object(vector_report.get("index")) if isinstance(vector_report, dict) else {}
+    )
     queries: list[BenchmarkQuery] = [
         {
             "q": "how many documents are in the current unified index",
