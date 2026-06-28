@@ -19,7 +19,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from types import TracebackType
-from typing import Literal, Self, cast
+from typing import Literal, cast
 from unittest import mock
 
 import pytest
@@ -49,7 +49,7 @@ class _FakeHTTPResponse:
         """Return the encoded response body."""
         return self._body
 
-    def __enter__(self) -> Self:
+    def __enter__(self) -> "_FakeHTTPResponse":
         """Enter the urllib response context manager."""
         return self
 
