@@ -56,6 +56,9 @@ _RETRIEVED_CONTEXT = _USE_FULL
 _FULL_MAX_SESSIONS = int(os.environ.get("REMANENTIA_FULL_MAX_SESSIONS", "10"))
 _FULL_CHAR_BUDGET = int(os.environ.get("REMANENTIA_FULL_CHAR_BUDGET", "120000"))
 _FULL_RETRIEVE_K = int(os.environ.get("REMANENTIA_FULL_RETRIEVE_K", "50"))
+# Cross-session entity-summary synthesis (P1.3). On by default; opt out for
+# ablation runs that measure its benchmark contribution.
+_SYNTHESIS_DISABLE = os.environ.get("REMANENTIA_SYNTHESIS_DISABLE", "") == "1"
 
 _USE_LLM = "--llm" in sys.argv
 _EVALUATE = "--evaluate" in sys.argv
@@ -440,6 +443,10 @@ def _type_prompt(question: str, qtype: str, context: str) -> str:
             "If the context contains a 'COMPUTED TOTAL:' or 'COMPUTED COUNT:' "
             "line, trust it unless it clearly contradicts the question — the "
             "aggregation has been double-checked by deterministic code.\n"
+            "If the context contains an 'ENTITY SUMMARY' block, it is the "
+            "consolidated, deduplicated cross-session record for each named "
+            "entity (oldest→newest); prefer it when combining facts across "
+            "sessions.\n"
             "If the question asks 'how many' or 'total', give a single integer "
             "as the first sentence. Do not hedge with 'at least'.\n\n"
             f"Conversation sessions:\n{context}\n\n"
@@ -457,7 +464,10 @@ def _type_prompt(question: str, qtype: str, context: str) -> str:
             "appear in the conversation, reply with 'The information "
             "provided is not enough' instead of fabricating.\n\n"
             "If the context contains a 'COMPUTED TOTAL:' or 'COMPUTED COUNT:' "
-            "line, trust it unless it clearly contradicts the question.\n\n"
+            "line, trust it unless it clearly contradicts the question.\n"
+            "If the context contains an 'ENTITY SUMMARY' block, the statement "
+            "marked '(most recent)' is the latest value for that entity — use "
+            "it as the up-to-date answer.\n\n"
             f"Conversation history:\n{context}\n\n"
             f"Question: {question}\n\n"
             "Answer with the most up-to-date information. Be concise (1-2 sentences)."
@@ -614,8 +624,23 @@ def _arcane_answer(
             agg_context = f"{arcane_context}\n\n{full_context}"
             agg = precompute_aggregation(question, agg_context, qtype=qtype)
             precompute_header = f"{agg.message}\n\n" if agg else ""
+
+            # Reflection / entity-summary synthesis (P1.3): consolidate the
+            # retrieved facts about the question's named entities into one
+            # deduplicated, chronologically-ordered block so the reader does
+            # not have to re-aggregate them from ~10 raw sessions. Operates
+            # only over already-retrieved facts → no extra API call.
+            synthesis_header = ""
+            if not _SYNTHESIS_DISABLE:
+                from cross_session_synthesis import synthesise
+
+                synth = synthesise(question, [r.fact for r in results], qtype=qtype)
+                if synth:
+                    synthesis_header = f"{synth.message}\n\n"
+
             context = (
                 f"{precompute_header}"
+                f"{synthesis_header}"
                 f"RETRIEVED FACTS (ranked by relevance):\n{arcane_context}\n\n"
                 f"FULL CONVERSATION HISTORY:\n{full_context}"
             )

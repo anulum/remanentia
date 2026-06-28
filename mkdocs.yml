@@ -111,6 +111,7 @@ nav:
     - skill_extractor: api/skill_extractor.md
     - active_retrieval: api/active_retrieval.md
     - aggregate_precompute: api/aggregate_precompute.md
+    - cross_session_synthesis: api/cross_session_synthesis.md
     - device_utils: api/device_utils.md
     - finding_ingest: api/finding_ingest.md
     - feed_ingest: api/feed_ingest.md
