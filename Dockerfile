@@ -6,7 +6,9 @@
 # Contact: www.anulum.li | protoscience@anulum.li
 # Remanentia — production REST API container
 
-FROM python:3.12-slim-bookworm
+# Pinned by digest (verified at registry-1.docker.io) so the base layer is
+# reproducible and immune to tag mutation. Bump alongside the readable tag.
+FROM python:3.12-slim-bookworm@sha256:8a7e7cc04fd3e2bd787f7f24e22d5d119aa590d429b50c95dfe12b3abe52f48b
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -27,7 +29,9 @@ COPY pyproject.toml README.md ./
 COPY data/compiled_seed_facts.jsonl data/compiled_seed_facts.jsonl
 COPY *.py ./
 
-RUN python -m pip install --upgrade pip \
+# pip pinned (verified on PyPI) so the build does not silently float the
+# installer; project deps resolve from the pinned pyproject extras.
+RUN python -m pip install --no-cache-dir --upgrade "pip==26.1.2" \
     && python -m pip install --no-cache-dir ".[api]" \
     && python -m compileall -q /app
 
