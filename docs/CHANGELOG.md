@@ -45,6 +45,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - README badges, header image, branding footer
 
 ### Fixed
+- `fact_decomposer.py` now has typed session input and optional native-extension
+  boundaries, a documented `FactIndex.__post_init__`, and a strict-mypy clean
+  dedicated decomposition/index test surface at 100% focused coverage.
 - `llm_backend.py` now has typed TOML, hosted-SDK, and local HTTP JSON
   boundaries, complete audited backend docstrings, and a strict-mypy clean
   dedicated backend test surface at 100% focused coverage.

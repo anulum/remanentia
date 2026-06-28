@@ -264,7 +264,7 @@ results = idx.query("current job", reference_date="2024-06-15")
 
 ## Test Coverage
 
-91 tests in `tests/test_fact_decomposer.py`:
+100 tests in `tests/test_fact_decomposer.py`:
 
 - **Tokeniser**: basic, short filter, empty
 - **Sentence splitting**: multiple, short filter, single long
@@ -277,8 +277,12 @@ results = idx.query("current job", reference_date="2024-06-15")
 - **Supersession**: state facts update prior facts' valid_until
 - **FactIndex**: query, temporal_query, cross_session_query
 - **Build fact**: ML classifier fallback, date normaliser
+- **Native fallback contracts**: optional Rust classifier/index/splitter
+  boundaries and pure-Python fallback branches
 
-All 6 STRONG dimensions verified: empty, error, negative, pipeline, roundtrip, performance.
+The focused coverage gate exercises empty, error, negative, pipeline,
+roundtrip, fallback, and performance contracts through the dedicated module
+surface.
 
 ## API Reference
 

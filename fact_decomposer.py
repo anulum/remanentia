@@ -31,7 +31,48 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Optional
+from typing import Mapping, Protocol, Sequence, cast
+
+
+class _RustFactIndex(Protocol):
+    """Typed view of the optional native fact-index accelerator."""
+
+    def query(
+        self,
+        question: str,
+        reference_date: str,
+        filter_expired: bool,
+        top_k: int,
+    ) -> list[tuple[int, float]]:
+        """Return fact indices and scores from the native index."""
+
+
+class _NativeFactIndexFactory(Protocol):
+    """Callable view of the optional native FactIndex constructor."""
+
+    def __call__(
+        self,
+        texts: list[str],
+        entities: list[list[str]],
+        valid_until: list[str],
+        session_indices: list[float],
+        supersedes: list[bool],
+    ) -> _RustFactIndex:
+        """Construct a native fact index from Python fact fields."""
+
+
+class _FactClassifier(Protocol):
+    """Callable view of the optional native fact classifier."""
+
+    def __call__(self, sentence: str) -> str:
+        """Classify one sentence into a fact type."""
+
+
+class _SentenceSplitter(Protocol):
+    """Callable view of the optional native sentence splitter."""
+
+    def __call__(self, text: str) -> list[str]:
+        """Split text into production sentence chunks."""
 
 
 # Date parsing patterns
@@ -193,10 +234,11 @@ class FactIndex:
     _entity_to_facts: dict[str, list[int]] = field(default_factory=dict)
     _keyword_to_facts: dict[str, list[int]] = field(default_factory=dict)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
+        """Build lookup tables and attach the optional native index."""
         self._entity_to_facts = {}
         self._keyword_to_facts = {}
-        self._rust_index = None
+        self._rust_index: _RustFactIndex | None = None
         for i, fact in enumerate(self.facts):
             for ent in fact.entities:
                 key = ent.lower()
@@ -204,15 +246,16 @@ class FactIndex:
             for word in _tokenize(fact.text):
                 self._keyword_to_facts.setdefault(word, []).append(i)
         try:
-            from remanentia_fact_decomposer import RustFactIndex
+            from remanentia_fact_decomposer import RustFactIndex as _RustFactIndexImpl
 
-            self._rust_index = RustFactIndex(  # pragma: no cover
+            rust_factory = cast(_NativeFactIndexFactory, _RustFactIndexImpl)  # pragma: no cover
+            self._rust_index = rust_factory(  # pragma: no cover
                 [f.text for f in self.facts],
                 [f.entities for f in self.facts],
                 [f.valid_until or "" for f in self.facts],
                 [float(f.session_idx) for f in self.facts],
                 [bool(f.supersedes) for f in self.facts],
-            )
+            )  # pragma: no cover
         except ImportError:
             pass
 
@@ -385,7 +428,7 @@ class FactIndex:
 
 
 def decompose_sessions(
-    sessions: list[list[dict]],
+    sessions: Sequence[Sequence[Mapping[str, str]]],
     default_year: int = 2024,
     session_dates: list[str] | None = None,
 ) -> list[AtomicFact]:
@@ -541,8 +584,9 @@ def _classify_fact(sentence: str) -> str:
     - event: everything else (default)
     """
     try:
-        from remanentia_fact_decomposer import classify_fact_type as _rust_classify
+        from remanentia_fact_decomposer import classify_fact_type as _rust_classify_raw
 
+        _rust_classify = cast(_FactClassifier, _rust_classify_raw)  # pragma: no cover
         return _rust_classify(sentence)  # pragma: no cover
     except ImportError:
         pass
@@ -646,8 +690,9 @@ def _extract_entities_simple(text: str) -> list[str]:
 def _split_sentences(text: str) -> list[str]:
     """Split text into sentences."""
     try:
-        from remanentia_fact_decomposer import split_sentences as _rust_split
+        from remanentia_fact_decomposer import split_sentences as _rust_split_raw
 
+        _rust_split = cast(_SentenceSplitter, _rust_split_raw)  # pragma: no cover
         return _rust_split(text)  # pragma: no cover
     except ImportError:
         pass
@@ -667,7 +712,7 @@ def _tokenize(text: str) -> set[str]:
     return set(re.findall(r"\w{3,}", text.lower()))
 
 
-def _parse_date_str(s: str) -> Optional[date]:
+def _parse_date_str(s: str) -> date | None:
     """Parse ISO date string to date object."""
     m = re.match(r"(\d{4})-(\d{2})-(\d{2})", s)
     if m:

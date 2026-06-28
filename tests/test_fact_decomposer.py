@@ -9,7 +9,9 @@
 from __future__ import annotations
 
 import builtins
+from contextlib import AbstractContextManager
 from datetime import date
+from typing import Any, cast
 from unittest.mock import patch
 
 from fact_decomposer import (
@@ -27,13 +29,15 @@ from fact_decomposer import (
 )
 
 
-def _without_native_fact():
+def _without_native_fact() -> AbstractContextManager[object]:
+    """Return an import blocker for the optional native fact extension."""
     original_import = builtins.__import__
+    typed_import = cast(Any, original_import)
 
-    def import_without_native(name, *args, **kwargs):
+    def import_without_native(name: str, *args: object, **kwargs: object) -> object:
         if name == "remanentia_fact_decomposer":
             raise ImportError(name)
-        return original_import(name, *args, **kwargs)
+        return typed_import(name, *args, **kwargs)
 
     return patch("builtins.__import__", side_effect=import_without_native)
 
@@ -42,18 +46,18 @@ def _without_native_fact():
 
 
 class TestTokenize:
-    def test_basic(self):
+    def test_basic(self) -> None:
         tokens = _tokenize("Hello World BM25")
         assert "hello" in tokens
         assert "world" in tokens
         assert "bm25" in tokens
 
-    def test_filters_short(self):
+    def test_filters_short(self) -> None:
         tokens = _tokenize("I am ok no")
         assert "am" not in tokens
         assert "no" not in tokens
 
-    def test_empty(self):
+    def test_empty(self) -> None:
         assert _tokenize("") == set()
 
 
@@ -61,25 +65,25 @@ class TestTokenize:
 
 
 class TestSplitSentences:
-    def test_multiple(self):
+    def test_multiple(self) -> None:
         sents = _split_sentences("First sentence here. Second sentence there.")
         assert len(sents) == 2
 
-    def test_short_filtered(self):
+    def test_short_filtered(self) -> None:
         sents = _split_sentences("Hi. Ok then.")
         # "Hi" is < 10 chars, filtered
         assert len(sents) == 1
 
-    def test_single_long(self):
+    def test_single_long(self) -> None:
         text = "This is a single long sentence without any period at the end"
         sents = _split_sentences(text)
         assert len(sents) == 1
         assert sents[0] == text
 
-    def test_empty_returns_empty(self):
+    def test_empty_returns_empty(self) -> None:
         assert _split_sentences("") == []
 
-    def test_whitespace_only(self):
+    def test_whitespace_only(self) -> None:
         sents = _split_sentences("   ")
         # "   ".strip() is "", which is falsy → empty list from the fallback
         assert sents == []
@@ -89,42 +93,42 @@ class TestSplitSentences:
 
 
 class TestExtractDates:
-    def test_iso_date(self):
+    def test_iso_date(self) -> None:
         dates = _extract_dates("Fixed on 2026-03-15.")
         assert "2026-03-15" in dates
 
-    def test_written_date_full(self):
+    def test_written_date_full(self) -> None:
         dates = _extract_dates("Released on March 15, 2024.")
         assert "2024-03-15" in dates
 
-    def test_written_date_abbreviated(self):
+    def test_written_date_abbreviated(self) -> None:
         dates = _extract_dates("Due on Jan 5, 2026.")
         assert "2026-01-05" in dates
 
-    def test_written_date_no_year(self):
+    def test_written_date_no_year(self) -> None:
         dates = _extract_dates("Meeting on June 20.", default_year=2024)
         assert "2024-06-20" in dates
 
-    def test_mdy_4digit_year(self):
+    def test_mdy_4digit_year(self) -> None:
         dates = _extract_dates("Date: 3/15/2024.")
         assert "2024-03-15" in dates
 
-    def test_mdy_2digit_year(self):
+    def test_mdy_2digit_year(self) -> None:
         dates = _extract_dates("Date: 3/15/24.")
         assert "2024-03-15" in dates
 
-    def test_multiple_dates(self):
+    def test_multiple_dates(self) -> None:
         dates = _extract_dates("Started 2024-01-10, ended 2024-03-20.")
         assert len(dates) == 2
 
-    def test_no_dates(self):
+    def test_no_dates(self) -> None:
         assert _extract_dates("No dates here.") == []
 
-    def test_invalid_month_name(self):
+    def test_invalid_month_name(self) -> None:
         dates = _extract_dates("Zember 15, 2024")
         assert len(dates) == 0
 
-    def test_invalid_day_range(self):
+    def test_invalid_day_range(self) -> None:
         # Day 32 should be excluded
         dates = _extract_dates("0/32/2024")
         assert len(dates) == 0
@@ -134,25 +138,25 @@ class TestExtractDates:
 
 
 class TestExtractEntities:
-    def test_capitalised_name(self):
+    def test_capitalised_name(self) -> None:
         ents = _extract_entities_simple("I met Caroline Smith yesterday.")
         assert any("Caroline" in e for e in ents)
 
-    def test_filters_sentence_start(self):
+    def test_filters_sentence_start(self) -> None:
         ents = _extract_entities_simple("The weather is nice.")
         # "The" is at position 0 — should be filtered
         assert "The" not in ents
 
-    def test_filters_after_period(self):
+    def test_filters_after_period(self) -> None:
         ents = _extract_entities_simple("Done. Nice work today.")
         # "Nice" is after ". " — sentence start, filtered
         assert "Nice" not in ents
 
-    def test_quoted_strings(self):
+    def test_quoted_strings(self) -> None:
         ents = _extract_entities_simple('She read "War and Peace" last week.')
         assert any("War and Peace" in e for e in ents)
 
-    def test_empty(self):
+    def test_empty(self) -> None:
         assert _extract_entities_simple("lowercase only") == []
 
 
@@ -166,94 +170,94 @@ class TestClassifyFact:
     """
 
     # ── Original 4 types (regression guard) ─────────────────────
-    def test_plan(self):
+    def test_plan(self) -> None:
         assert _classify_fact("I plan to visit Tokyo next summer.") == "plan"
 
-    def test_preference(self):
+    def test_preference(self) -> None:
         assert _classify_fact("I like hiking in the mountains.") == "preference"
 
-    def test_state_change(self):
+    def test_state_change(self) -> None:
         assert _classify_fact("I started a new job at the hospital.") == "state"
 
-    def test_event_default(self):
+    def test_event_default(self) -> None:
         assert _classify_fact("The meeting lasted two hours.") == "event"
 
-    def test_going_to_is_plan(self):
+    def test_going_to_is_plan(self) -> None:
         assert _classify_fact("I am going to move to Berlin.") == "plan"
 
-    def test_favourite_is_preference(self):
+    def test_favourite_is_preference(self) -> None:
         assert _classify_fact("My favourite book is Dune.") == "preference"
 
     # ── 5 new types ─────────────────────────────────────────────
-    def test_decision_we_decided(self):
+    def test_decision_we_decided(self) -> None:
         assert _classify_fact("We decided to use BM25 for primary retrieval.") == "decision"
 
-    def test_decision_consensus(self):
+    def test_decision_consensus(self) -> None:
         assert _classify_fact("The consensus was to drop the SNN approach entirely.") == "decision"
 
-    def test_decision_chose(self):
+    def test_decision_chose(self) -> None:
         assert _classify_fact("We chose the AGPL licence for maximum openness.") == "decision"
 
-    def test_correction_actually(self):
+    def test_correction_actually(self) -> None:
         assert (
             _classify_fact("Actually, the STDP approach was wrong from the start.") == "correction"
         )
 
-    def test_correction_turned_out(self):
+    def test_correction_turned_out(self) -> None:
         assert _classify_fact("It turned out the measurements were off by 2x.") == "correction"
 
-    def test_correction_was_wrong(self):
+    def test_correction_was_wrong(self) -> None:
         assert _classify_fact("I was wrong about the GPU memory requirements.") == "correction"
 
-    def test_principle_always(self):
+    def test_principle_always(self) -> None:
         assert _classify_fact("Always verify coverage before pushing to main.") == "principle"
 
-    def test_principle_never(self):
+    def test_principle_never(self) -> None:
         assert _classify_fact("Never delete failed CI runs without asking.") == "principle"
 
-    def test_principle_best_practice(self):
+    def test_principle_best_practice(self) -> None:
         assert _classify_fact("The best practice is to test at 100% coverage.") == "principle"
 
-    def test_commitment_deadline(self):
+    def test_commitment_deadline(self) -> None:
         assert _classify_fact("The deadline for the paper submission is April 15.") == "commitment"
 
-    def test_commitment_promise(self):
+    def test_commitment_promise(self) -> None:
         assert (
             _classify_fact("I promise to deliver the benchmark results by Friday.") == "commitment"
         )
 
-    def test_commitment_committed_to(self):
+    def test_commitment_committed_to(self) -> None:
         assert (
             _classify_fact("We committed to shipping v0.4 before the conference.") == "commitment"
         )
 
-    def test_skill_how_to(self):
+    def test_skill_how_to(self) -> None:
         assert _classify_fact("To fix this, run the following pytest command.") == "skill"
 
-    def test_skill_step(self):
+    def test_skill_step(self) -> None:
         assert _classify_fact("Step 1: install the Rust toolchain via rustup.") == "skill"
 
-    def test_skill_procedure(self):
+    def test_skill_procedure(self) -> None:
         assert _classify_fact("The procedure is to rebuild with maturin develop.") == "skill"
 
     # ── Priority/edge cases ─────────────────────────────────────
-    def test_decision_beats_state_when_both_match(self):
+    def test_decision_beats_state_when_both_match(self) -> None:
         # "decided" is both a change verb and a decision pattern
         result = _classify_fact("We decided to switch from the hosted backend to a local LLM.")
         assert result == "decision"  # decision has higher priority
 
-    def test_correction_beats_state(self):
+    def test_correction_beats_state(self) -> None:
         # "was wrong" + "started" — correction should win
         result = _classify_fact("Actually I was wrong when I started with that approach.")
         assert result == "correction"
 
-    def test_empty_string_returns_event(self):
+    def test_empty_string_returns_event(self) -> None:
         assert _classify_fact("") == "event"
 
-    def test_gibberish_returns_event(self):
+    def test_gibberish_returns_event(self) -> None:
         assert _classify_fact("asdfghjkl qwerty 12345.") == "event"
 
-    def test_all_nine_types_reachable(self):
+    def test_all_nine_types_reachable(self) -> None:
         """Verify every type in the taxonomy is reachable."""
         all_types = set()
         sentences = [
@@ -283,7 +287,7 @@ class TestClassifyFact:
         assert all_types == expected
 
     # ── Pipeline integration: fact types flow through FactIndex ──
-    def test_new_types_flow_through_pipeline(self):
+    def test_new_types_flow_through_pipeline(self) -> None:
         """All 9 fact types must survive decompose → FactIndex → query."""
         sessions = [
             [
@@ -342,7 +346,7 @@ class TestClassifyFact:
         assert top_fact.fact_type == "decision"
 
     # ── Performance: classify_fact must be sub-microsecond ───────
-    def test_classify_fact_performance(self):
+    def test_classify_fact_performance(self) -> None:
         """Classification of a single sentence should be under 0.1ms."""
         import time
 
@@ -375,17 +379,17 @@ class TestClassifyFact:
 
 
 class TestParseDateStr:
-    def test_valid_iso(self):
+    def test_valid_iso(self) -> None:
         d = _parse_date_str("2024-03-15")
         assert d == date(2024, 3, 15)
 
-    def test_invalid_format(self):
+    def test_invalid_format(self) -> None:
         assert _parse_date_str("not-a-date") is None
 
-    def test_invalid_date_values(self):
+    def test_invalid_date_values(self) -> None:
         assert _parse_date_str("2024-13-01") is None
 
-    def test_empty(self):
+    def test_empty(self) -> None:
         assert _parse_date_str("") is None
 
 
@@ -393,7 +397,7 @@ class TestParseDateStr:
 
 
 class TestBuildFact:
-    def test_basic(self):
+    def test_basic(self) -> None:
         fact = _build_fact(
             "I started working at Google on 2024-03-15.",
             sess_idx=0,
@@ -406,7 +410,7 @@ class TestBuildFact:
         assert "2024-03-15" in fact.date_mentions
         assert fact.valid_from == "2024-03-15"
 
-    def test_no_dates(self):
+    def test_no_dates(self) -> None:
         fact = _build_fact(
             "The weather is really nice today.",
             sess_idx=1,
@@ -422,7 +426,7 @@ class TestBuildFact:
 
 
 class TestDecomposeSessions:
-    def _sessions(self):
+    def _sessions(self) -> list[list[dict[str, str]]]:
         return [
             [
                 {
@@ -440,18 +444,18 @@ class TestDecomposeSessions:
             ],
         ]
 
-    def test_produces_facts(self):
+    def test_produces_facts(self) -> None:
         facts = decompose_sessions(self._sessions())
         assert len(facts) > 0
         assert all(isinstance(f, AtomicFact) for f in facts)
 
-    def test_session_indices(self):
+    def test_session_indices(self) -> None:
         facts = decompose_sessions(self._sessions())
         sessions = set(f.session_idx for f in facts)
         assert 0 in sessions
         assert 1 in sessions
 
-    def test_session_date_propagated(self):
+    def test_session_date_propagated(self) -> None:
         """Task #32: session_date should be set on every fact when haystack_dates given."""
         dates = ["2023/05/22 (Mon) 09:38", "2023/05/22 (Mon) 18:30"]
         facts = decompose_sessions(self._sessions(), session_dates=dates)
@@ -463,24 +467,24 @@ class TestDecomposeSessions:
                 f"expected {expected!r}"
             )
 
-    def test_session_date_empty_without_haystack(self):
+    def test_session_date_empty_without_haystack(self) -> None:
         """Without session_dates argument, session_date stays empty."""
         facts = decompose_sessions(self._sessions())
         for f in facts:
             assert f.session_date == ""
 
-    def test_supersession_sets_valid_until(self):
+    def test_supersession_sets_valid_until(self) -> None:
         facts = decompose_sessions(self._sessions())
         # "started" is a change verb → supersedes=True
         state_facts = [f for f in facts if f.supersedes]
         assert len(state_facts) >= 1
 
-    def test_short_content_filtered(self):
+    def test_short_content_filtered(self) -> None:
         sessions = [[{"role": "user", "content": "Hi"}]]
         facts = decompose_sessions(sessions)
         assert len(facts) == 0
 
-    def test_short_sentence_filtered(self):
+    def test_short_sentence_filtered(self) -> None:
         """Covers line 278: short sentence (<10 chars) is skipped."""
         sessions = [
             [
@@ -496,7 +500,7 @@ class TestDecomposeSessions:
         assert not any(t == "Yes ok" for t in texts)
         assert len(facts) >= 1
 
-    def test_state_without_supersede(self):
+    def test_state_without_supersede(self) -> None:
         # A state fact with a change verb but no prior state → entity_last_state just records
         sessions = [
             [
@@ -510,7 +514,7 @@ class TestDecomposeSessions:
         state_facts = [f for f in facts if f.fact_type == "state"]
         assert len(state_facts) >= 1
 
-    def test_supersession_with_valid_from(self):
+    def test_supersession_with_valid_from(self) -> None:
         """Covers lines 288-292, 296-299: supersession with valid_from propagation."""
         # First fact must be "state" type → needs a change verb like "joined"
         # Second fact supersedes it with a date
@@ -533,7 +537,7 @@ class TestDecomposeSessions:
         expired = [f for f in facts if f.valid_until and f.valid_until.startswith("20")]
         assert len(expired) >= 1  # teacher fact gets valid_until = 2024-06-01
 
-    def test_supersession_without_valid_from(self):
+    def test_supersession_without_valid_from(self) -> None:
         """Covers lines 293-294: supersession without valid_from → 'before-session-N'."""
         # First fact is state (joined), second is state (switched) but no date
         sessions = [
@@ -559,7 +563,7 @@ class TestDecomposeSessions:
 
 
 class TestFactIndex:
-    def _make_facts(self):
+    def _make_facts(self) -> list[AtomicFact]:
         return [
             AtomicFact(
                 text="Caroline works as a teacher at Lincoln School.",
@@ -612,24 +616,24 @@ class TestFactIndex:
             ),
         ]
 
-    def test_post_init_builds_indices(self):
+    def test_post_init_builds_indices(self) -> None:
         idx = FactIndex(self._make_facts())
         assert "caroline" in idx._entity_to_facts
         assert len(idx._keyword_to_facts) > 0
 
-    def test_query_basic(self):
+    def test_query_basic(self) -> None:
         idx = FactIndex(self._make_facts())
         results = idx.query("Caroline work")
         assert len(results) > 0
         assert any("Caroline" in f.text for f, _ in results)
 
-    def test_query_entity_boost(self):
+    def test_query_entity_boost(self) -> None:
         idx = FactIndex(self._make_facts())
         results = idx.query("Caroline")
         # Caroline-related facts should score higher
         assert len(results) >= 2
 
-    def test_query_temporal_filter(self):
+    def test_query_temporal_filter(self) -> None:
         idx = FactIndex(self._make_facts())
         # Set valid_until on the teacher fact
         idx.facts[0].valid_until = "2024-03-14"
@@ -638,13 +642,13 @@ class TestFactIndex:
         texts = [f.text for f, _ in results]
         assert "teacher" not in " ".join(texts).lower() or len(results) >= 1
 
-    def test_query_recency_boost(self):
+    def test_query_recency_boost(self) -> None:
         idx = FactIndex(self._make_facts())
         results = idx.query("What is Caroline's current job")
         # "current" triggers recency boost → higher session_idx scores more
         assert len(results) > 0
 
-    def test_query_supersedes_boost(self):
+    def test_query_supersedes_boost(self) -> None:
         idx = FactIndex(self._make_facts())
         results = idx.query("What is Caroline doing now")
         # "now" triggers recency, supersedes gets +5 bonus
@@ -652,12 +656,12 @@ class TestFactIndex:
         nurse_score = scores.get("Caroline started working as a nurse on March 15, 2024.", 0)
         assert nurse_score > 0
 
-    def test_query_empty(self):
+    def test_query_empty(self) -> None:
         idx = FactIndex(self._make_facts())
         results = idx.query("xyznonexistent")
         assert results == []
 
-    def test_temporal_query_date_boost(self):
+    def test_temporal_query_date_boost(self) -> None:
         idx = FactIndex(self._make_facts())
         results = idx.temporal_query("When did the meeting happen")
         assert len(results) > 0
@@ -665,19 +669,19 @@ class TestFactIndex:
         dated = [(f, s) for f, s in results if f.date_mentions]
         assert len(dated) > 0
 
-    def test_temporal_query_ordering(self):
+    def test_temporal_query_ordering(self) -> None:
         idx = FactIndex(self._make_facts())
         results = idx.temporal_query("What happened first")
         # "first" triggers ordering → ALL dated facts included
         assert len(results) >= 2
 
-    def test_temporal_query_ordering_includes_unmatched(self):
+    def test_temporal_query_ordering_includes_unmatched(self) -> None:
         idx = FactIndex(self._make_facts())
         results = idx.temporal_query("timeline of events before anything")
         # "before" triggers ordering
         assert isinstance(results, list)
 
-    def test_cross_session_query(self):
+    def test_cross_session_query(self) -> None:
         idx = FactIndex(self._make_facts())
         results = idx.cross_session_query("Caroline Melanie")
         assert len(results) > 0
@@ -685,27 +689,27 @@ class TestFactIndex:
         sessions = set(f.session_idx for f, _ in results)
         assert len(sessions) >= 2
 
-    def test_cross_session_diversity_bonus(self):
+    def test_cross_session_diversity_bonus(self) -> None:
         idx = FactIndex(self._make_facts())
         results = idx.cross_session_query("work teacher nurse")
         # First appearance of each session gets +3 diversity bonus
         assert isinstance(results, list)
 
-    def test_query_no_filter_expired(self):
+    def test_query_no_filter_expired(self) -> None:
         idx = FactIndex(self._make_facts())
         idx.facts[0].valid_until = "2024-03-14"
         results = idx.query("Caroline", reference_date="2024-04-01", filter_expired=False)
         # Should NOT filter even though fact is expired
         assert len(results) >= 2
 
-    def test_query_filter_no_ref_date(self):
+    def test_query_filter_no_ref_date(self) -> None:
         idx = FactIndex(self._make_facts())
         idx.facts[0].valid_until = "2024-03-14"
         results = idx.query("Caroline", reference_date="", filter_expired=True)
         # No ref date → no filtering
         assert len(results) >= 2
 
-    def test_temporal_query_entity_match(self):
+    def test_temporal_query_entity_match(self) -> None:
         """Covers lines 191-193: entity matching in temporal_query."""
         idx = FactIndex(self._make_facts())
         # Use "about Caroline" — Caroline is capitalised mid-sentence
@@ -713,19 +717,19 @@ class TestFactIndex:
         caroline_facts = [f for f, _ in results if "Caroline" in f.text]
         assert len(caroline_facts) >= 1
 
-    def test_cross_session_entity_match(self):
+    def test_cross_session_entity_match(self) -> None:
         """Covers lines 237-239: entity matching in cross_session_query."""
         idx = FactIndex(self._make_facts())
         results = idx.cross_session_query("tell me about Caroline across sessions")
         assert len(results) > 0
 
-    def test_cross_session_top_k_limit(self):
+    def test_cross_session_top_k_limit(self) -> None:
         """Covers line 252: break when top_k reached."""
         idx = FactIndex(self._make_facts())
         results = idx.cross_session_query("Caroline Melanie work", top_k=2)
         assert len(results) <= 2
 
-    def test_mdy_invalid_month(self):
+    def test_mdy_invalid_month(self) -> None:
         """Covers line 355: invalid MDY month (>12)."""
         dates = _extract_dates("Date is 13/15/2024")
         assert len(dates) == 0
@@ -737,7 +741,7 @@ class TestFactIndex:
 class TestRustWiring:
     """Verify Rust fact_decomposer helpers work through pipeline."""
 
-    def test_classify_fact_type_wired(self):
+    def test_classify_fact_type_wired(self) -> None:
         """classify_fact_type is used in _build_fact internally."""
         facts = decompose_sessions(
             [[{"role": "user", "content": "I love hiking in the Alps every summer."}]]
@@ -746,7 +750,7 @@ class TestRustWiring:
         prefs = [f for f in facts if f.fact_type == "preference"]
         assert len(prefs) >= 1
 
-    def test_change_verb_detection(self):
+    def test_change_verb_detection(self) -> None:
         """State-change verbs are detected in facts."""
         facts = decompose_sessions(
             [
@@ -762,7 +766,7 @@ class TestRustWiring:
         has_change = any(f.supersedes or f.fact_type == "event" for f in facts)
         assert has_change or len(facts) >= 1  # at minimum decomposed
 
-    def test_plan_detection(self):
+    def test_plan_detection(self) -> None:
         facts = decompose_sessions(
             [[{"role": "user", "content": "I plan to visit Japan in December."}]]
         )
@@ -776,7 +780,7 @@ class TestRustWiring:
 class TestFactDecomposerPipeline:
     """End-to-end: decompose → index → query → retrieve."""
 
-    def test_decompose_to_index_to_query(self):
+    def test_decompose_to_index_to_query(self) -> None:
         sessions = [
             [
                 {"role": "user", "content": "I started working at Google on March 10, 2024."},
@@ -800,7 +804,7 @@ class TestFactDecomposerPipeline:
         # At minimum should not crash; results depend on entity overlap
         assert isinstance(cross, list)
 
-    def test_temporal_query_with_dates(self):
+    def test_temporal_query_with_dates(self) -> None:
         sessions = [
             [
                 {"role": "user", "content": "I moved to Berlin on January 15, 2024."},
@@ -812,12 +816,12 @@ class TestFactDecomposerPipeline:
         results = idx.temporal_query("when did the user move")
         assert len(results) >= 1
 
-    def test_entity_extraction_in_facts(self):
+    def test_entity_extraction_in_facts(self) -> None:
         sessions = [[{"role": "user", "content": "I bought a Tesla Model 3 last week."}]]
         facts = decompose_sessions(sessions)
         assert any("tesla" in " ".join(f.entities).lower() for f in facts)
 
-    def test_feeds_arcane_retriever(self):
+    def test_feeds_arcane_retriever(self) -> None:
         """Facts from decomposer can be consumed by ArcaneRetriever."""
         from arcane_retriever import ArcaneRetriever
 
@@ -836,7 +840,7 @@ class TestFactDecomposerPipeline:
 
 
 class TestFactDecomposerRoundtrip:
-    def test_decompose_index_query_roundtrip(self):
+    def test_decompose_index_query_roundtrip(self) -> None:
         """Full cycle: sessions → facts → index → query → results."""
         sessions = [
             [
@@ -857,7 +861,7 @@ class TestFactDecomposerRoundtrip:
 
 
 class TestFactPythonFallbackCoverage:
-    def test_python_split_without_native_extension(self):
+    def test_python_split_without_native_extension(self) -> None:
         with _without_native_fact():
             assert _split_sentences("First sentence here. Second sentence there.") == [
                 "First sentence here.",
@@ -868,7 +872,7 @@ class TestFactPythonFallbackCoverage:
             ]
             assert _split_sentences("short") == ["short"]
 
-    def test_classify_all_python_fallback_patterns(self):
+    def test_classify_all_python_fallback_patterns(self) -> None:
         cases = {
             "We decided to keep BM25.": "decision",
             "Correction: BM25 is active.": "correction",
@@ -884,7 +888,20 @@ class TestFactPythonFallbackCoverage:
             for sentence, expected in cases.items():
                 assert _classify_fact(sentence) == expected
 
-    def test_fact_confidence_update_events(self):
+    def test_python_fallback_correction_without_native_extension(self) -> None:
+        """Correction language is classified without the native extension."""
+        with _without_native_fact():
+            assert _classify_fact("Actually, the earlier answer was wrong.") == "correction"
+
+    def test_python_split_trims_sentence_parts_without_native_extension(self) -> None:
+        """Fallback splitter strips whitespace around sentence fragments."""
+        with _without_native_fact():
+            assert _split_sentences("First sentence here.   Second sentence there.") == [
+                "First sentence here.",
+                "Second sentence there.",
+            ]
+
+    def test_fact_confidence_update_events(self) -> None:
         fact = AtomicFact(text="test", session_idx=0, turn_idx=0, role="user", fact_type="event")
 
         fact.update_confidence("confirmed")
@@ -898,7 +915,7 @@ class TestFactPythonFallbackCoverage:
         fact.update_confidence("stale")
         assert fact.confidence >= 0.1
 
-    def test_fact_index_python_query_scoring_filtering_and_recency(self):
+    def test_fact_index_python_query_scoring_filtering_and_recency(self) -> None:
         facts = [
             AtomicFact(
                 text="Alice likes BM25 retrieval",
@@ -945,7 +962,7 @@ class TestFactPythonFallbackCoverage:
         assert facts[1] in [fact for fact, _score in unfiltered]
         assert filtered[0][0] is facts[2]
 
-    def test_extract_dates_with_normaliser_and_bad_session_date_are_tolerated(self):
+    def test_extract_dates_with_normaliser_and_bad_session_date_are_tolerated(self) -> None:
         assert _extract_dates_with_normaliser("yesterday", date(2023, 4, 10)) == ["2023-04-09"]
 
         facts = decompose_sessions(
