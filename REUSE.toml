@@ -68,6 +68,8 @@ path = [
   "Makefile",
   "requirements.txt",
   "requirements-dev.txt",
+  "requirements/docker.in",
+  "requirements/docker.txt",
   "_typos.toml",
 ]
 SPDX-FileCopyrightText = "2020-2026 Miroslav Šotek"

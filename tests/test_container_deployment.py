@@ -19,6 +19,28 @@ def _read_repo_file(name: str) -> str:
     return (ROOT / name).read_text(encoding="utf-8")
 
 
+def test_docker_lock_is_fully_hash_pinned() -> None:
+    """Every requirement in the container lock must carry a sha256 hash.
+
+    This is what lets the Dockerfile install with --require-hashes and satisfies
+    the OpenSSF pinned-dependencies check. A floated (hashless) requirement here
+    would silently re-open that alert.
+    """
+    lock = _read_repo_file("requirements/docker.txt")
+    pinned = [
+        line
+        for line in lock.splitlines()
+        if line and not line.startswith((" ", "\t", "#")) and "==" in line
+    ]
+    assert pinned, "lock has no pinned requirements"
+    # The build toolchain must be pinned too, not just runtime deps.
+    joined = "\n".join(pinned)
+    for required in ("pip==", "setuptools==", "wheel==", "fastapi==", "numpy=="):
+        assert required in joined, f"{required} missing from container lock"
+    # Each pinned requirement line must be backed by at least one hash.
+    assert lock.count("--hash=sha256:") >= len(pinned)
+
+
 def test_dockerfile_runs_rest_api_as_non_root_with_healthcheck() -> None:
     """Validate the production Dockerfile REST API runtime contract."""
     dockerfile = _read_repo_file("Dockerfile")
@@ -27,7 +49,15 @@ def test_dockerfile_runs_rest_api_as_non_root_with_healthcheck() -> None:
     assert "USER remanentia" in dockerfile
     assert "ENV PYTHONDONTWRITEBYTECODE=1 \\" in dockerfile
     assert "REMANENTIA_BASE=/data \\" in dockerfile
-    assert 'python -m pip install --no-cache-dir ".[api]"' in dockerfile
+    # Hash-pinned install: the runtime closure resolves only from the
+    # --require-hashes lock, and the local package builds without an unpinned
+    # build-time fetch (--no-build-isolation against the pinned toolchain).
+    assert "COPY requirements/docker.txt requirements/docker.txt" in dockerfile
+    assert (
+        "python -m pip install --no-cache-dir --require-hashes -r requirements/docker.txt"
+        in dockerfile
+    )
+    assert "python -m pip install --no-cache-dir --no-build-isolation --no-deps ." in dockerfile
     assert "HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \\" in dockerfile
     assert "http://127.0.0.1:8001/health" in dockerfile
     assert 'ENTRYPOINT ["remanentia"]' in dockerfile

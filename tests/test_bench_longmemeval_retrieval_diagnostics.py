@@ -29,6 +29,11 @@ class _Fact:
     session_idx: int
     text: str = "retrieved fact"
     date_mentions: list[str] = field(default_factory=list)
+    # Fields the cross-session synthesiser reads off each fact. Left empty so
+    # synthesis is a no-op here and the diagnostics assertions are unchanged.
+    entities: list[str] = field(default_factory=list)
+    valid_from: str = ""
+    session_date: str = ""
 
 
 @dataclass

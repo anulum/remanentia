@@ -1,0 +1,13 @@
+# Runtime closure for the production container image (Dockerfile), hash-pinned.
+# Compile with:
+#   python -m piptools compile --generate-hashes \
+#     --output-file requirements/docker.txt requirements/docker.in
+# Mirrors pyproject core deps + the [api] extra, plus the build toolchain so the
+# local package installs with --no-build-isolation (no unpinned build fetch).
+pip==26.1.2
+setuptools>=75.0
+wheel
+defusedxml>=0.7.1
+numpy>=1.24
+fastapi>=0.100
+uvicorn>=0.20
