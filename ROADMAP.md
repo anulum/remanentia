@@ -1,6 +1,6 @@
 # Roadmap
 
-## Completed (v0.3.1)
+## Completed (v0.4.0)
 
 - [x] LongMemEval benchmark: 72.2% (361/500) at R11, results committed
 - [x] LOCOMO benchmark: 83.1% (1,651/1,986) with LLM synthesis; 74.7% no-LLM baseline
@@ -23,10 +23,10 @@ The primary target: temporal-reasoning accuracy from 45.9% toward 70%+.
 
 - [x] Temporal pipeline (rule-based date normaliser + reference-date fix): temporal-reasoning 45.9% (R8) → 65.4% (R11, +19.5pp)
 - [x] Tier 1–3 + recall Rust rustification complete (PyO3 + maturin)
-- [ ] Date arithmetic in answer extraction (TReMu code execution for ordering/counting)
+- [x] Date arithmetic in answer extraction (TReMu code execution for ordering/counting)
 - [ ] Multi-session entity tracking (supersession chains across sessions)
 - [ ] LongMemEval R9+ targeting 75%+ overall
-- [ ] Commit LOCOMO results for reproducibility
+- [x] Commit LOCOMO results for reproducibility
 - [ ] Multi-user namespace support (user_id isolation)
 
 ## v0.5.0 — Production Hardening

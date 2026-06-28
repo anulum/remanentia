@@ -2,8 +2,8 @@ cff-version: 1.2.0
 title: Remanentia
 message: "If you use this software, please cite it as below."
 type: software
-version: 0.3.1
-date-released: "2026-03-27"
+version: 0.4.0
+date-released: "2026-06-28"
 license: AGPL-3.0-or-later
 repository-code: "https://github.com/anulum/remanentia"
 url: "https://remanentia.com"

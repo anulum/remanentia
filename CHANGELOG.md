@@ -5,6 +5,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-28
+
 ### Added
 - `store_sources.py`, `remanentia-store-sources`, and
   `remanentia store-sources` write the selected-store `MemoryIndex` source
@@ -35,8 +37,52 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   recall scoring for large-haystack evaluation.
 - `tools/retrieval_recall.py` — full-S retrieval-recall diagnostic (recall@N per
   category, no LLM calls).
+- Claim-axis JSON Schema export via `remanentia claim-schema` and
+  `remanentia-claim-schema`, with a committed schema artefact for shared
+  evidence/status/admission/freshness consumers.
+- Benchmark reproducibility manifests via `remanentia-benchmark-manifest`, with
+  report/source SHA-256 hashes, reproduction commands, score summaries, and
+  environment metadata for committed evidence artefacts.
+- Deterministic REST OpenAPI schema export via `remanentia openapi`, including
+  runtime-aligned bearer-auth annotations and a committed schema artifact for
+  client generation and release audits.
+- Benchmark efficiency-frontier reporting via `remanentia-efficiency-frontier`,
+  with explicit baseline metadata and null-preserving accuracy/token/p95-latency
+  comparisons from committed evidence reports.
+- Benchmark evidence reports via `remanentia-benchmark-report`, with
+  LongMemEval judge prompt hashes, token accounting, and latency metadata on
+  newly judged result rows.
+- Full-S LongMemEval Arcane hypothesis rows now include retrieval-selection
+  diagnostics: selected sessions, answer-session recall, session-limit misses,
+  and character-budget misses.
+- Full-S LongMemEval evaluation now prints the same retrieval-vs-synthesis
+  taxonomy exposed by `remanentia-full-s-diagnostics`.
+- Recall abstention calibration CLI/API with held-out coverage, accuracy, and
+  calibration-error reporting from correctness-labelled recall ledger outcomes.
+- Dockerfile and Compose deployment for the REST API, with a non-root runtime,
+  persistent `/data` store, secret-mounted API token, and `/health` healthcheck.
+- Shared claim-axis vocabulary now keeps finding ingest admission and recall
+  rendering on the same evidence/status/admission/freshness wire values.
+- SYNAPSE feed ingest now normalises project, actor, sequence, and timestamp
+  provenance before admitted findings enter memory.
+- Finding envelope verification now accepts audited supersession closures and
+  downgrades superseded signed findings to ungraded after signature verification.
+- Finding ingest now rejects falsified findings that still claim
+  reference-validated status before they enter persistent memory.
 
 ### Fixed
+- `temporal_relation.py` now has typed model/tokenizer/config boundaries,
+  complete docstrings, and a strict-mypy clean dedicated C3 wrapper test
+  surface at 100% focused coverage.
+- The top-level public export facade now has a strict-mypy clean test surface,
+  stale fallback import ignores removed, and `__version__` aligned with package
+  metadata.
+- `fact_decomposer.py` now has typed session input and optional native-extension
+  boundaries, a documented `FactIndex.__post_init__`, and a strict-mypy clean
+  dedicated decomposition/index test surface at 100% focused coverage.
+- `llm_backend.py` now has typed TOML, hosted-SDK, and local HTTP JSON
+  boundaries, complete audited backend docstrings, and a strict-mypy clean
+  dedicated backend test surface at 100% focused coverage.
 - `consolidation_engine.py` now has typed JSON/trace/DAG boundaries,
   complete audited helper docstrings, strict-mypy clean dedicated tests, and
   100% focused consolidation coverage with weak consolidation assertions
