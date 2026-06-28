@@ -10,9 +10,12 @@ from __future__ import annotations
 
 import builtins
 import time
+from pathlib import Path
+from typing import Any, cast
 from unittest.mock import patch
 
-
+import answer_extractor
+from answer_extractor import LLMBackend
 from reflector import (
     _cluster_notes,
     _generate_prospective_queries_llm,
@@ -26,8 +29,13 @@ from knowledge_store import KnowledgeNote, KnowledgeStore
 
 
 def _make_note(
-    content, keywords=None, entities=None, source="test.md", supersedes="", superseded_by=""
-):
+    content: str,
+    keywords: list[str] | None = None,
+    entities: list[str] | None = None,
+    source: str = "test.md",
+    supersedes: str = "",
+    superseded_by: str = "",
+) -> KnowledgeNote:
     now = time.strftime("%Y-%m-%dT%H%M", time.gmtime())
     return KnowledgeNote(
         id=f"n{hash(content) % 10000}",
@@ -44,7 +52,7 @@ def _make_note(
 
 
 class TestClusterNotes:
-    def test_clusters_by_shared_keywords(self):
+    def test_clusters_by_shared_keywords(self) -> None:
         notes = [
             _make_note("BM25 retrieval", keywords=["bm25", "retrieval", "scoring"]),
             _make_note("BM25 scoring", keywords=["bm25", "scoring", "retrieval"]),
@@ -53,7 +61,7 @@ class TestClusterNotes:
         clusters = _cluster_notes(notes)
         assert len(clusters) >= 1
 
-    def test_no_clusters_unrelated(self):
+    def test_no_clusters_unrelated(self) -> None:
         notes = [
             _make_note("alpha", keywords=["alpha"]),
             _make_note("beta", keywords=["beta"]),
@@ -61,16 +69,22 @@ class TestClusterNotes:
         clusters = _cluster_notes(notes)
         assert len(clusters) == 0
 
-    def test_empty(self):
+    def test_empty(self) -> None:
         assert _cluster_notes([]) == []
 
-    def test_python_cluster_fallback_without_native_extension(self):
+    def test_python_cluster_fallback_without_native_extension(self) -> None:
         original_import = builtins.__import__
 
-        def import_without_native(name, *args, **kwargs):
+        def import_without_native(
+            name: str,
+            globals: dict[str, object] | None = None,
+            locals: dict[str, object] | None = None,
+            fromlist: tuple[str, ...] = (),
+            level: int = 0,
+        ) -> Any:
             if name == "remanentia_consolidation":
                 raise ImportError(name)
-            return original_import(name, *args, **kwargs)
+            return original_import(name, globals, locals, fromlist, level)
 
         notes = [
             _make_note("first", keywords=["bm25", "retrieval"], entities=["remanentia"]),
@@ -83,7 +97,7 @@ class TestClusterNotes:
 
         assert clusters == [[0, 1]]
 
-    def test_clusters_by_entities(self):
+    def test_clusters_by_entities(self) -> None:
         notes = [
             _make_note("LOCOMO score", entities=["locomo", "81.2%", "bm25"]),
             _make_note("LOCOMO benchmark", entities=["locomo", "bm25", "retrieval"]),
@@ -93,7 +107,7 @@ class TestClusterNotes:
 
 
 class TestGenerateSummaryHeuristic:
-    def test_produces_summary(self):
+    def test_produces_summary(self) -> None:
         notes = [
             _make_note("BM25 retrieval accuracy", entities=["bm25"]),
             _make_note("Cross-encoder reranking", entities=["bm25"]),
@@ -102,56 +116,46 @@ class TestGenerateSummaryHeuristic:
         assert "2 related notes" in summary
         assert "bm25" in summary.lower()
 
-    def test_empty(self):
+    def test_empty(self) -> None:
         assert _generate_summary_heuristic([]) == ""
 
 
 class _FakeBackend:
-    def __init__(self, response):
+    def __init__(self, response: str | None) -> None:
         self._response = response
 
-    def complete(self, prompt, *, max_tokens=200, system=""):
+    def complete(self, prompt: str, *, max_tokens: int = 200, system: str = "") -> str | None:
         return self._response
 
 
 class TestGenerateSummaryLLM:
-    def setup_method(self):
-        import answer_extractor
-
-        self._orig = answer_extractor._BACKEND
+    def setup_method(self) -> None:
+        self._orig = cast(LLMBackend | None, answer_extractor._BACKEND)
         answer_extractor._BACKEND = None
 
-    def teardown_method(self):
-        import answer_extractor
-
+    def teardown_method(self) -> None:
         answer_extractor._BACKEND = self._orig
 
-    def test_no_backend_returns_none(self):
+    def test_no_backend_returns_none(self) -> None:
         notes = [_make_note("test content")]
         result = _generate_summary_llm(notes)
         assert result is None
 
-    def test_with_backend_returns_summary(self):
-        import answer_extractor
-
+    def test_with_backend_returns_summary(self) -> None:
         answer_extractor._BACKEND = _FakeBackend("Dense summary of 1 note.")
         notes = [_make_note("test content")]
         result = _generate_summary_llm(notes)
         assert result == "Dense summary of 1 note."
 
-    def test_backend_none_response(self):
-        import answer_extractor
-
+    def test_backend_none_response(self) -> None:
         answer_extractor._BACKEND = _FakeBackend(None)
         notes = [_make_note("test content")]
         result = _generate_summary_llm(notes)
         assert result is None
 
-    def test_backend_exception(self):
-        import answer_extractor
-
+    def test_backend_exception(self) -> None:
         class _ErrorBackend:
-            def complete(self, prompt, **kwargs):
+            def complete(self, prompt: str, **kwargs: object) -> str:
                 raise RuntimeError("fail")
 
         answer_extractor._BACKEND = _ErrorBackend()
@@ -161,25 +165,19 @@ class TestGenerateSummaryLLM:
 
 
 class TestGenerateProspectiveQueriesLLM:
-    def setup_method(self):
-        import answer_extractor
-
-        self._orig = answer_extractor._BACKEND
+    def setup_method(self) -> None:
+        self._orig = cast(LLMBackend | None, answer_extractor._BACKEND)
         answer_extractor._BACKEND = None
 
-    def teardown_method(self):
-        import answer_extractor
-
+    def teardown_method(self) -> None:
         answer_extractor._BACKEND = self._orig
 
-    def test_no_backend_returns_empty(self):
+    def test_no_backend_returns_empty(self) -> None:
         note = _make_note("test content about hiking")
         result = _generate_prospective_queries_llm(note)
         assert result == []
 
-    def test_with_backend_returns_queries(self):
-        import answer_extractor
-
+    def test_with_backend_returns_queries(self) -> None:
         answer_extractor._BACKEND = _FakeBackend(
             "What are the hiking trails?\nDoes the user like mountains?"
         )
@@ -187,27 +185,21 @@ class TestGenerateProspectiveQueriesLLM:
         result = _generate_prospective_queries_llm(note)
         assert len(result) == 2
 
-    def test_backend_none_response(self):
-        import answer_extractor
-
+    def test_backend_none_response(self) -> None:
         answer_extractor._BACKEND = _FakeBackend(None)
         note = _make_note("test content")
         result = _generate_prospective_queries_llm(note)
         assert result == []
 
-    def test_filters_short_queries(self):
-        import answer_extractor
-
+    def test_filters_short_queries(self) -> None:
         answer_extractor._BACKEND = _FakeBackend("What about hiking trails?\nOk\nShort")
         note = _make_note("test content")
         result = _generate_prospective_queries_llm(note)
         assert len(result) == 1  # only first one > 5 chars
 
-    def test_backend_exception(self):
-        import answer_extractor
-
+    def test_backend_exception(self) -> None:
         class _ErrorBackend:
-            def complete(self, prompt, **kwargs):
+            def complete(self, prompt: str, **kwargs: object) -> str:
                 raise RuntimeError("fail")
 
         answer_extractor._BACKEND = _ErrorBackend()
@@ -217,7 +209,7 @@ class TestGenerateProspectiveQueriesLLM:
 
 
 class TestIdentifyGaps:
-    def test_finds_unmeasured_decisions(self):
+    def test_finds_unmeasured_decisions(self) -> None:
         notes = [
             _make_note("We decided to use BM25 for all queries", entities=["bm25"]),
             _make_note("We decided to add cross-encoder reranking", entities=["cross-encoder"]),
@@ -226,7 +218,7 @@ class TestIdentifyGaps:
         gaps = _identify_gaps(notes)
         assert any("cross-encoder" in g for g in gaps)
 
-    def test_no_gaps(self):
+    def test_no_gaps(self) -> None:
         notes = [
             _make_note("We decided to use BM25", entities=["bm25"]),
             _make_note("BM25 accuracy measured at 81.2%", entities=["bm25"]),
@@ -234,19 +226,19 @@ class TestIdentifyGaps:
         gaps = _identify_gaps(notes)
         assert len(gaps) == 0
 
-    def test_empty(self):
+    def test_empty(self) -> None:
         assert _identify_gaps([]) == []
 
 
 class TestIdentifyContradictions:
-    def test_finds_supersession(self):
+    def test_finds_supersession(self) -> None:
         notes = [
             _make_note("SNN started", supersedes="old_note"),
         ]
         contradictions = _identify_contradictions(notes)
         assert len(contradictions) == 1
 
-    def test_ignores_resolved(self):
+    def test_ignores_resolved(self) -> None:
         notes = [
             _make_note("SNN started", supersedes="old", superseded_by="newer"),
         ]
@@ -255,7 +247,7 @@ class TestIdentifyContradictions:
 
 
 class TestReflectOnce:
-    def test_reflect_with_notes(self, tmp_path):
+    def test_reflect_with_notes(self, tmp_path: Path) -> None:
         store = KnowledgeStore()
         store.add_note("We decided to remove SNN from retrieval scoring.", source="a.md")
         store.add_note("BM25 retrieval accuracy measured at 81.2% on LOCOMO.", source="b.md")
@@ -275,7 +267,7 @@ class TestReflectOnce:
         assert "digest" in result
         assert "Reflection Digest" in result["digest"]
 
-    def test_reflect_no_notes(self, tmp_path):
+    def test_reflect_no_notes(self, tmp_path: Path) -> None:
         notes_path = tmp_path / "notes.jsonl"
         with (
             patch("knowledge_store.STORE_PATH", notes_path),
@@ -284,7 +276,7 @@ class TestReflectOnce:
             result = reflect_once(days=7)
         assert result["status"] == "no_notes"
 
-    def test_reflect_nothing_recent(self, tmp_path):
+    def test_reflect_nothing_recent(self, tmp_path: Path) -> None:
         store = KnowledgeStore()
         note = store.add_note("Old note content about BM25 retrieval.", source="old.md")
         note.created = "2020-01-01T0000"
@@ -300,7 +292,7 @@ class TestReflectOnce:
             result = reflect_once(days=7)
         assert result["status"] == "nothing_recent"
 
-    def test_reflect_finds_gaps(self, tmp_path):
+    def test_reflect_finds_gaps(self, tmp_path: Path) -> None:
         store = KnowledgeStore()
         store.add_note("We decided to add temporal graph support.", source="a.md")
         # No finding note about temporal graph → gap
@@ -323,12 +315,8 @@ class TestReflectOnce:
 
 
 class TestReflectorPipeline:
-    def test_reflect_once_with_store(self, tmp_path):
+    def test_reflect_once_with_store(self, tmp_path: Path) -> None:
         """Reflector processes knowledge store notes end-to-end."""
-        from knowledge_store import KnowledgeStore
-        from reflector import reflect_once
-        from unittest.mock import patch
-
         store = KnowledgeStore()
         store.add_note("BM25 accuracy measured at 88.5%.", source="a.md")
 
@@ -340,10 +328,14 @@ class TestReflectorPipeline:
         ):
             store.save()
             result = reflect_once(days=30, use_llm=False)
-        assert isinstance(result, dict)
+        assert result["status"] == "ok"
+        assert result["notes"] == 1
+        assert Path(result["digest_path"]).exists()
 
-    def test_reflect_empty_store(self):
-        from reflector import reflect_once
-
-        result = reflect_once(days=1, use_llm=False)
-        assert isinstance(result, dict)
+    def test_reflect_empty_store(self, tmp_path: Path) -> None:
+        with (
+            patch("knowledge_store.STORE_PATH", tmp_path / "missing-notes.jsonl"),
+            patch("knowledge_store.TRIGGERS_PATH", tmp_path / "missing-triggers.jsonl"),
+        ):
+            result = reflect_once(days=1, use_llm=False)
+        assert result == {"status": "no_notes", "notes": 0}

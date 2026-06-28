@@ -20,12 +20,58 @@ Processes recent knowledge notes and:
 from __future__ import annotations
 
 import time
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Protocol, TypedDict, cast
 
 BASE = Path(__file__).parent
 
 
-def _cluster_notes(notes: list) -> list[list]:
+class _ReflectNote(Protocol):
+    """Structural note shape consumed by the reflector."""
+
+    title: str
+    content: str
+    keywords: list[str]
+    entities: list[str]
+    source: str
+    created: str
+    updated: str
+    supersedes: str
+    superseded_by: str
+
+
+class _LlmBackend(Protocol):
+    """LLM completion boundary used by optional reflection helpers."""
+
+    def complete(self, prompt: str, *, max_tokens: int, system: str = "") -> str | None:
+        """Return a completion for ``prompt`` or ``None`` when no text is available."""
+
+
+class _SummaryRow(TypedDict):
+    """Digest-ready summary metadata for one related-note cluster."""
+
+    notes: int
+    entities: list[str]
+    summary: str
+
+
+class ReflectionResult(TypedDict, total=False):
+    """Result payload emitted by one reflection cycle."""
+
+    status: str
+    notes: int
+    days: int
+    clusters: int
+    summaries: int
+    prospective_queries: int
+    gaps: int
+    contradictions: int
+    digest_path: str
+    digest: str
+
+
+def _cluster_notes(notes: Sequence[_ReflectNote]) -> list[list[int]]:
     """Group notes by shared keywords/entities. Greedy overlap clustering."""
     if not notes:
         return []
@@ -36,12 +82,12 @@ def _cluster_notes(notes: list) -> list[list]:
         tuples = [  # pragma: no cover
             (list(note.keywords), list(note.entities)) for note in notes
         ]
-        return _rust_cn(tuples, 2)  # pragma: no cover
+        return cast(list[list[int]], _rust_cn(tuples, 2))  # pragma: no cover
     except ImportError:
         pass
 
     clusters: list[list[int]] = []
-    assigned = set()
+    assigned: set[int] = set()
 
     for i, note in enumerate(notes):
         if i in assigned:
@@ -66,7 +112,7 @@ def _cluster_notes(notes: list) -> list[list]:
     return clusters
 
 
-def _generate_summary_heuristic(notes: list) -> str:
+def _generate_summary_heuristic(notes: Sequence[_ReflectNote]) -> str:
     """Generate a summary from a cluster of notes without LLM."""
     if not notes:
         return ""
@@ -82,11 +128,13 @@ def _generate_summary_heuristic(notes: list) -> str:
     return "\n".join(lines)
 
 
-def _generate_summary_llm(notes: list, model: str = "claude-haiku-4-5-20251001") -> str | None:
+def _generate_summary_llm(
+    notes: Sequence[_ReflectNote], model: str = "claude-haiku-4-5-20251001"
+) -> str | None:
     """Generate a dense summary from a cluster of notes via LLM."""
     from answer_extractor import get_llm_backend
 
-    backend = get_llm_backend()
+    backend = cast(_LlmBackend | None, get_llm_backend())
     if backend is None:
         return None
 
@@ -102,11 +150,13 @@ def _generate_summary_llm(notes: list, model: str = "claude-haiku-4-5-20251001")
         return None
 
 
-def _generate_prospective_queries_llm(note, model: str = "claude-haiku-4-5-20251001") -> list[str]:
+def _generate_prospective_queries_llm(
+    note: _ReflectNote, model: str = "claude-haiku-4-5-20251001"
+) -> list[str]:
     """Generate hypothetical future queries for a note via LLM (Kumiho technique)."""
     from answer_extractor import get_llm_backend
 
-    backend = get_llm_backend()
+    backend = cast(_LlmBackend | None, get_llm_backend())
     if backend is None:
         return []
 
@@ -124,10 +174,10 @@ def _generate_prospective_queries_llm(note, model: str = "claude-haiku-4-5-20251
         return []
 
 
-def _identify_gaps(notes: list) -> list[str]:
+def _identify_gaps(notes: Sequence[_ReflectNote]) -> list[str]:
     """Identify knowledge gaps — decisions without measured outcomes,
     findings without follow-up, open questions."""
-    gaps = []
+    gaps: list[str] = []
     decisions = [
         n for n in notes if any(w in n.content.lower() for w in ("decided", "chose", "will"))
     ]
@@ -146,16 +196,16 @@ def _identify_gaps(notes: list) -> list[str]:
     return gaps
 
 
-def _identify_contradictions(notes: list) -> list[str]:
+def _identify_contradictions(notes: Sequence[_ReflectNote]) -> list[str]:
     """List unresolved contradictions."""
-    contradictions = []
+    contradictions: list[str] = []
     for n in notes:
         if n.supersedes and not n.superseded_by:
             contradictions.append(f"'{n.title}' supersedes an older note (may need verification)")
     return contradictions
 
 
-def reflect_once(days: int = 7, use_llm: bool = False) -> dict:
+def reflect_once(days: int = 7, use_llm: bool = False) -> ReflectionResult:
     """Run one reflection cycle over recent knowledge notes.
 
     Returns: summary notes created, gaps found, contradictions, digest text.
@@ -180,7 +230,7 @@ def reflect_once(days: int = 7, use_llm: bool = False) -> dict:
     clusters = _cluster_notes(recent)
 
     # Generate summaries
-    summaries = []
+    summaries: list[_SummaryRow] = []
     for cluster_indices in clusters:
         cluster_notes = [recent[i] for i in cluster_indices]
         if use_llm:  # pragma: no cover
