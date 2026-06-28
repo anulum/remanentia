@@ -8,7 +8,7 @@ pipeline, and MCP server. No LLM required for core operations.
 | Module | Stmts | Role |
 |--------|------:|------|
 | `memory_index.py` | 888 | Unified BM25 + embedding index, query decomposition, RRF |
-| `knowledge_store.py` | 357 | Zettelkasten notes, prospective queries, graph search |
+| `knowledge_store.py` | 414 | Zettelkasten notes, prospective queries, graph search |
 | `consolidation_engine.py` | 499 | Episodic → semantic compression, typed relation extraction |
 | `answer_extractor.py` | 306 | Regex answer extraction (dates, numbers, names), LLM fallback |
 | `fact_decomposer.py` | 216 | Atomic fact decomposition with temporal validity windows |

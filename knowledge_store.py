@@ -57,6 +57,12 @@ _NEGATIVE_ACTIONS = {
 
 
 def _tokenize(text: str) -> set[str]:
+    """Return normalized index tokens from ``text``.
+
+    The Rust extension is used when available; the Python fallback keeps the
+    same minimum-length and lowercase token contract for local and test-only
+    environments.
+    """
     try:
         from remanentia_knowledge_store import tokenize as _rust_tok
 
@@ -67,10 +73,12 @@ def _tokenize(text: str) -> set[str]:
 
 
 def _note_id(content: str, source: str) -> str:
+    """Return a stable short SHA-256 identifier for note content and source."""
     return hashlib.sha256(f"{content[:200]}:{source}".encode()).hexdigest()[:12]
 
 
 def _extract_keywords(text: str) -> list[str]:
+    """Extract repeated terms, capitalized identifiers, and versions from text."""
     try:
         from remanentia_knowledge_store import extract_keywords as _rust_kw
 
@@ -89,6 +97,7 @@ def _extract_keywords(text: str) -> list[str]:
 
 
 def _extract_entities(text: str) -> set[str]:
+    """Extract known memory entities, versions, percentages, and named terms."""
     try:
         from remanentia_knowledge_store import extract_entities as _rust_ents
 
@@ -270,6 +279,8 @@ def _generate_prospective_queries(
 
 @dataclass
 class KnowledgeNote:
+    """Atomic memory note with links, retrieval cues, and confidence metadata."""
+
     id: str
     title: str
     content: str
@@ -316,6 +327,7 @@ class KnowledgeNote:
             self.confidence = max(0.1, self.confidence - 0.01)
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize the note to a JSON-compatible mapping."""
         return {
             "id": self.id,
             "title": self.title,
@@ -338,6 +350,7 @@ class KnowledgeNote:
 
     @staticmethod
     def from_dict(d: dict[str, Any]) -> KnowledgeNote:
+        """Build a note from a persisted JSON mapping."""
         return KnowledgeNote(
             id=d["id"],
             title=d["title"],
@@ -371,6 +384,8 @@ class KnowledgeNote:
 
 @dataclass
 class Trigger:
+    """Prospective memory trigger fired by matching recall-query tokens."""
+
     id: str
     condition: str
     action: str
@@ -379,6 +394,7 @@ class Trigger:
     active: bool = True
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize the trigger to a JSON-compatible mapping."""
         return {
             "id": self.id,
             "condition": self.condition,
@@ -390,6 +406,7 @@ class Trigger:
 
     @staticmethod
     def from_dict(d: dict[str, Any]) -> Trigger:
+        """Build a trigger from a persisted JSON mapping."""
         return Trigger(
             id=d["id"],
             condition=d["condition"],
@@ -401,6 +418,8 @@ class Trigger:
 
 
 class KnowledgeStore:
+    """In-memory note graph with JSONL persistence and token search."""
+
     def age_memories(self) -> dict[str, int]:
         """Age knowledge notes based on last access. Decay confidence of inactive notes."""
         stats = {"scanned": 0, "stale": 0}
@@ -412,6 +431,7 @@ class KnowledgeStore:
         return stats
 
     def __init__(self) -> None:
+        """Initialize an empty note store, trigger list, and token index."""
         self.notes: dict[str, KnowledgeNote] = {}
         self.triggers: list[Trigger] = []
         self._token_index: dict[str, set[str]] = {}  # note_id -> tokens
@@ -832,6 +852,7 @@ class KnowledgeStore:
         return trigger
 
     def save(self, notes_path: Path | None = None, triggers_path: Path | None = None) -> None:
+        """Persist notes and triggers as locked atomic JSONL writes."""
         from file_utils import FileLock, atomic_write_text
 
         notes_path = notes_path or STORE_PATH
@@ -848,6 +869,7 @@ class KnowledgeStore:
             atomic_write_text(triggers_path, "\n".join(tlines) + "\n" if tlines else "")
 
     def load(self, notes_path: Path | None = None, triggers_path: Path | None = None) -> bool:
+        """Load notes and triggers from JSONL files and rebuild token indexes."""
         notes_path = notes_path or STORE_PATH
         triggers_path = triggers_path or TRIGGERS_PATH
         self.notes = {}
@@ -872,6 +894,7 @@ class KnowledgeStore:
 
     @property
     def stats(self) -> dict[str, int]:
+        """Return note, link, contradiction, trigger, and keyword counts."""
         n_links = sum(len(n.links) for n in self.notes.values())
         n_contradictions = sum(1 for n in self.notes.values() if n.supersedes)
         n_active_triggers = sum(1 for t in self.triggers if t.active)

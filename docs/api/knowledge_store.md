@@ -239,7 +239,7 @@ note2 = store.add_note("BM25 accuracy measured at 74.7%.", source="new_log.md")
 
 ## Test Coverage
 
-74 tests in `tests/test_knowledge_store.py`:
+79 focused tests in `tests/test_knowledge_store.py`:
 
 - **Add note**: basic, with source, duplicate detection
 - **Search**: keyword, entity boost, empty query
@@ -248,10 +248,13 @@ note2 = store.add_note("BM25 accuracy measured at 74.7%.", source="new_log.md")
 - **Triggers**: creation, matching, non-matching
 - **Prospective queries**: all 12 pattern categories
 - **Person names**: chat transcript, sentence boundary, stop words
-- **Persistence**: save/load roundtrip, corrupt file handling
-- **Performance**: add_note <50ms, search <20ms
+- **Persistence**: missing-file handling, save/load roundtrip, token-index rebuild
+- **Native fallback**: Rust-free helper, search, relation, and graph-search paths
+- **Pipeline integration**: observer writes, reflector consumption, recall triggers
 
-All 6 STRONG dimensions: empty, error, negative, pipeline, roundtrip, performance.
+The focused coverage command enforces 100% line coverage for
+`knowledge_store.py`; performance budgets live in the separate pipeline
+performance suite.
 
 ## API Reference
 
