@@ -26,7 +26,7 @@ Quick start::
     heartbeat("my-agent", project="my-project")
 """
 
-__version__ = "0.1.0"
+__version__ = "0.3.1"
 
 try:  # pragma: no cover
     from .retrieve import retrieve, retrieve_context, retrieval_history
@@ -41,7 +41,7 @@ try:  # pragma: no cover
     )
     from .active_retrieval import consult_memory, decision_guard
 except ImportError:
-    from retrieve import (  # type: ignore[import-not-found]
+    from retrieve import (
         chunk_traces,
         query_suggestions,
         related_traces,
@@ -50,19 +50,19 @@ except ImportError:
         retrieve_context,
         trace_summaries,
     )
-    from snn_daemon import drop_stimulus, heartbeat  # type: ignore[import-not-found]
-    from skill_extractor import (  # type: ignore[import-not-found]
+    from snn_daemon import drop_stimulus, heartbeat
+    from skill_extractor import (
         extract_skills,
         load_skills,
         query_skills,
     )
-    from cognitive_snapshot import (  # type: ignore[import-not-found]
+    from cognitive_snapshot import (
         snapshot_save,
         snapshot_load,
         continuity_score,
         reconstruction_prompt,
     )
-    from active_retrieval import consult_memory, decision_guard  # type: ignore[import-not-found]
+    from active_retrieval import consult_memory, decision_guard
 
 __all__ = [
     "retrieve",

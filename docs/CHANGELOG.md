@@ -45,6 +45,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - README badges, header image, branding footer
 
 ### Fixed
+- The top-level public export facade now has a strict-mypy clean test surface,
+  stale fallback import ignores removed, and `__version__` aligned with package
+  metadata.
 - `fact_decomposer.py` now has typed session input and optional native-extension
   boundaries, a documented `FactIndex.__post_init__`, and a strict-mypy clean
   dedicated decomposition/index test surface at 100% focused coverage.
