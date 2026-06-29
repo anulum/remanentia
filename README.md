@@ -321,13 +321,13 @@ same-unit sums and `COMPUTED COUNT:` for explicit distinct-item count questions
 such as "How many different doctors...". Ambiguous generic "how many" questions
 remain on the normal reader path.
 
-For the broader synthesis-failure class — where the answer needs facts about a
-named entity gathered across many retrieved sessions — the reader also receives
-an `ENTITY SUMMARY`: a deduplicated, chronologically-ordered consolidation of the
-retrieved facts about each entity the question names, with the latest dated
-statement marked `(most recent)`. It is deterministic, runs only over the
-already-retrieved facts (no extra model call), and can be disabled with
-`REMANENTIA_SYNTHESIS_DISABLE=1`.
+An experimental `ENTITY SUMMARY` reader hint also exists for the broader
+synthesis-failure class — a deterministic, deduplicated, chronologically-ordered
+consolidation of the retrieved facts about each entity the question names (latest
+dated statement marked `(most recent)`), built only from already-retrieved facts
+(no extra model call). It is **off by default**: a 2-seed full-S ablation found no
+reliable accuracy effect (the per-seed swings were larger than the difference).
+Opt in with `REMANENTIA_SYNTHESIS_ENABLE=1` to experiment.
 
 ### LOCOMO
 

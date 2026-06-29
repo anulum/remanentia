@@ -5,6 +5,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- Cross-session entity-summary synthesis is now **off by default** (opt in with
+  `REMANENTIA_SYNTHESIS_ENABLE=1`, replacing the previous
+  `REMANENTIA_SYNTHESIS_DISABLE` opt-out). A 2-seed full-S ablation found no
+  reliable accuracy effect — the per-seed reader-judge swings exceeded the
+  on/off difference — so it ships as an opt-in experiment rather than a default.
+
 ## [0.5.0] - 2026-06-29
 
 ### Added

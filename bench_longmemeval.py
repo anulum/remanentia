@@ -56,9 +56,10 @@ _RETRIEVED_CONTEXT = _USE_FULL
 _FULL_MAX_SESSIONS = int(os.environ.get("REMANENTIA_FULL_MAX_SESSIONS", "10"))
 _FULL_CHAR_BUDGET = int(os.environ.get("REMANENTIA_FULL_CHAR_BUDGET", "120000"))
 _FULL_RETRIEVE_K = int(os.environ.get("REMANENTIA_FULL_RETRIEVE_K", "50"))
-# Cross-session entity-summary synthesis (P1.3). On by default; opt out for
-# ablation runs that measure its benchmark contribution.
-_SYNTHESIS_DISABLE = os.environ.get("REMANENTIA_SYNTHESIS_DISABLE", "") == "1"
+# Cross-session entity-summary synthesis (P1.3). Off by default: the 2-seed
+# full-S ablation (2026-06-29) found no reliable accuracy effect (multi-session
+# +2.5 within reader-noise; seed42 +7 did not reproduce). Opt in to experiment.
+_SYNTHESIS_ENABLE = os.environ.get("REMANENTIA_SYNTHESIS_ENABLE", "") == "1"
 
 _USE_LLM = "--llm" in sys.argv
 _EVALUATE = "--evaluate" in sys.argv
@@ -631,7 +632,7 @@ def _arcane_answer(
             # not have to re-aggregate them from ~10 raw sessions. Operates
             # only over already-retrieved facts → no extra API call.
             synthesis_header = ""
-            if not _SYNTHESIS_DISABLE:
+            if _SYNTHESIS_ENABLE:
                 from cross_session_synthesis import synthesise
 
                 synth = synthesise(question, [r.fact for r in results], qtype=qtype)
