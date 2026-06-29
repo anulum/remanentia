@@ -36,9 +36,18 @@ from write_discipline import (
     WriteContract, FieldMap, DisciplineVerdict,
     inspect_write, producer_label,
     DisciplineLedger, ProducerRecord, audit_records,
-    load_stimulus_records,
+    load_stimulus_records, build_memory_record,
 )
 ```
+
+### `build_memory_record(content, project, actor, *, timestamp=None, entities=None, kind=None, source_ref=None) -> dict`
+
+The writer-side complement to `inspect_write`: the easiest way to emit a
+conformant write is to construct it here. Producers must supply real
+`content` / `project` / `actor` (each raises `ValueError` if empty); `timestamp`
+defaults to the wall clock (real provenance at write time, not a sentinel);
+`project` is normalised to an uppercase slug and `actor` to its controlled role.
+Fleet writers should adopt this instead of hand-building stimulus dicts.
 
 ### `WriteContract`
 

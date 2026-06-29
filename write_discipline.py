@@ -294,6 +294,53 @@ def audit_records(
     return ledger
 
 
+def build_memory_record(
+    content: str,
+    project: str,
+    actor: str,
+    *,
+    timestamp: float | None = None,
+    entities: Sequence[str] | None = None,
+    kind: str | None = None,
+    source_ref: str | None = None,
+) -> dict[str, object]:
+    """Build a canonical, contract-conformant memory record.
+
+    The writer-side complement to :func:`inspect_write`: the easiest way to emit
+    a conformant write is to construct it here. The producer must supply real
+    ``content``/``project``/``actor`` (a writer that cannot name what, where, and
+    who has nothing worth recording) — those raise :class:`ValueError` if empty.
+    ``timestamp`` defaults to the wall clock (the writer knows the time, so
+    stamping it here is real provenance, not a sentinel default). ``project`` is
+    normalised to an uppercase slug and ``actor`` to its controlled role.
+    Optional ``entities``/``kind``/``source_ref`` are included only when given.
+    """
+    import time
+
+    if not content.strip():
+        raise ValueError("content is required and must be non-empty")
+    if not project.strip():
+        raise ValueError("project is required and must be non-empty")
+    if not actor.strip():
+        raise ValueError("actor is required and must be non-empty")
+
+    record: dict[str, object] = {
+        "content": content.strip(),
+        "project": normalise_project(project),
+        "actor": normalise_actor(actor),
+        "timestamp": time.time() if timestamp is None else float(timestamp),
+    }
+    if entities:
+        deduped = [e.strip() for e in entities if e.strip()]
+        if deduped:
+            record["entities"] = deduped
+    if kind and kind.strip():
+        record["kind"] = kind.strip()
+    if source_ref and source_ref.strip():
+        record["source_ref"] = source_ref.strip()
+    return record
+
+
 def load_stimulus_records(directory: object) -> list[Mapping[str, object]]:
     """Load every ``*.json`` stimulus mapping under *directory*.
 

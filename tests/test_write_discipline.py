@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from write_discipline import (
     CONTENT_TOO_SHORT,
     MISSING_ACTOR,
@@ -27,6 +29,7 @@ from write_discipline import (
     _has_real_timestamp,
     _nonempty_text,
     audit_records,
+    build_memory_record,
     inspect_write,
     load_stimulus_records,
     producer_label,
@@ -207,6 +210,63 @@ class TestAuditRecords:
         assert led.accepted == 1
         assert led.quarantined == 1
         assert led.rejected == 1
+
+
+class TestBuildMemoryRecord:
+    def test_full_record_normalised(self) -> None:
+        rec = build_memory_record(
+            "  a real statement of content  ",
+            "scpn-quantum-control",
+            "SC-NEUROCORE/codex-7f3a",
+            timestamp=1782700000,
+            entities=["SCPN", " ", "Kuramoto"],
+            kind="finding",
+            source_ref="abc123",
+        )
+        assert rec["content"] == "a real statement of content"
+        assert rec["project"] == "SCPN-QUANTUM-CONTROL"
+        assert rec["actor"] == "codex"  # role, hex suffix stripped
+        assert rec["timestamp"] == 1782700000.0
+        assert rec["entities"] == ["SCPN", "Kuramoto"]
+        assert rec["kind"] == "finding"
+        assert rec["source_ref"] == "abc123"
+
+    def test_minimal_stamps_timestamp_and_omits_optionals(self) -> None:
+        rec = build_memory_record("a real statement of content", "REMANENTIA", "claude")
+        ts = rec["timestamp"]
+        assert isinstance(ts, float) and ts > 0  # wall-clock stamped
+        assert "entities" not in rec
+        assert "kind" not in rec
+        assert "source_ref" not in rec
+
+    def test_empty_optionals_are_dropped(self) -> None:
+        rec = build_memory_record(
+            "a real statement of content",
+            "REMANENTIA",
+            "claude",
+            entities=[" ", ""],
+            kind="  ",
+            source_ref="  ",
+        )
+        assert "entities" not in rec
+        assert "kind" not in rec
+        assert "source_ref" not in rec
+
+    def test_built_record_passes_the_gate(self) -> None:
+        rec = build_memory_record("a real statement of content", "REMANENTIA", "codex")
+        assert inspect_write(rec).disposition == "accepted"
+
+    def test_missing_content_raises(self) -> None:
+        with pytest.raises(ValueError, match="content"):
+            build_memory_record("   ", "REMANENTIA", "codex")
+
+    def test_missing_project_raises(self) -> None:
+        with pytest.raises(ValueError, match="project"):
+            build_memory_record("a real statement of content", "  ", "codex")
+
+    def test_missing_actor_raises(self) -> None:
+        with pytest.raises(ValueError, match="actor"):
+            build_memory_record("a real statement of content", "REMANENTIA", "")
 
 
 class TestLoadStimulusRecords:
