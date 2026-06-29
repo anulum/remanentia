@@ -117,6 +117,7 @@ nav:
     - feed_ingest: api/feed_ingest.md
     - feed_normalization: api/feed_normalization.md
     - write_discipline: api/write_discipline.md
+    - coverage_accuracy: api/coverage_accuracy.md
     - file_utils: api/file_utils.md
     - finding_envelope: api/finding_envelope.md
     - recall_gate: api/recall_gate.md
