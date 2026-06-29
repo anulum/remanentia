@@ -12,7 +12,7 @@ Contact: www.anulum.li | protoscience@anulum.li
 [![Docs](https://github.com/anulum/remanentia/actions/workflows/docs.yml/badge.svg)](https://github.com/anulum/remanentia/actions/workflows/docs.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/anulum/remanentia/badge)](https://securityscorecards.dev/viewer/?uri=github.com/anulum/remanentia)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12340/badge)](https://www.bestpractices.dev/projects/12340)
-[![Version](https://img.shields.io/badge/version-0.4.0-blue)](https://github.com/anulum/remanentia)
+[![Version](https://img.shields.io/badge/version-0.5.0-blue)](https://github.com/anulum/remanentia)
 [![Tests](https://img.shields.io/badge/tests-2143_passed-brightgreen)](VALIDATION.md)
 [![Coverage Gate](https://img.shields.io/badge/coverage_gate-100%25-brightgreen)](pyproject.toml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
@@ -320,6 +320,14 @@ synthesis when the retrieved context is unambiguous: `COMPUTED TOTAL:` for
 same-unit sums and `COMPUTED COUNT:` for explicit distinct-item count questions
 such as "How many different doctors...". Ambiguous generic "how many" questions
 remain on the normal reader path.
+
+For the broader synthesis-failure class — where the answer needs facts about a
+named entity gathered across many retrieved sessions — the reader also receives
+an `ENTITY SUMMARY`: a deduplicated, chronologically-ordered consolidation of the
+retrieved facts about each entity the question names, with the latest dated
+statement marked `(most recent)`. It is deterministic, runs only over the
+already-retrieved facts (no extra model call), and can be disabled with
+`REMANENTIA_SYNTHESIS_DISABLE=1`.
 
 ### LOCOMO
 

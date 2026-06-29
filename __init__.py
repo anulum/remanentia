@@ -26,7 +26,7 @@ Quick start::
     heartbeat("my-agent", project="my-project")
 """
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 try:  # pragma: no cover
     from .retrieve import retrieve, retrieve_context, retrieval_history

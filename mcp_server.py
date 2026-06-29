@@ -796,7 +796,7 @@ def handle_request(request: dict[str, Any]) -> dict[str, Any] | None:
             "result": {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "remanentia", "version": "0.4.0"},
+                "serverInfo": {"name": "remanentia", "version": "0.5.0"},
             },
         }
 
