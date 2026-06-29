@@ -116,6 +116,7 @@ py-modules = [
     "no_egress_audit",
     "lineage_completeness",
     "world_class_scorecard",
+    "lean_context",
     "finding_envelope",
     "recall_gate",
     "index_freshness",

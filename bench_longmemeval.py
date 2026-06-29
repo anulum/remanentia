@@ -60,6 +60,11 @@ _FULL_RETRIEVE_K = int(os.environ.get("REMANENTIA_FULL_RETRIEVE_K", "50"))
 # full-S ablation (2026-06-29) found no reliable accuracy effect (multi-session
 # +2.5 within reader-noise; seed42 +7 did not reproduce). Opt in to experiment.
 _SYNTHESIS_ENABLE = os.environ.get("REMANENTIA_SYNTHESIS_ENABLE", "") == "1"
+# Lean bi-temporal observe→reflect reader context (W2). Off by default until the
+# full-S ablation validates it; when on, the reader sees a lean, dated,
+# supersession-resolved observation set INSTEAD of the raw-session dump
+# (Mastra OM / Engram mechanism). Opt in: REMANENTIA_LEAN_CONTEXT=1.
+_LEAN_CONTEXT = os.environ.get("REMANENTIA_LEAN_CONTEXT", "") == "1"
 
 _USE_LLM = "--llm" in sys.argv
 _EVALUATE = "--evaluate" in sys.argv
@@ -639,11 +644,23 @@ def _arcane_answer(
                 if synth:
                     synthesis_header = f"{synth.message}\n\n"
 
+            # W2: when lean mode is on, the reader sees a lean, dated,
+            # supersession-resolved observation set INSTEAD of the raw-session
+            # dump (Mastra OM / Engram). Falls back to the raw history when the
+            # lean set is empty, so it never starves the reader.
+            history_block = f"FULL CONVERSATION HISTORY:\n{full_context}"
+            if _LEAN_CONTEXT:
+                from lean_context import build_lean_context
+
+                lean = build_lean_context([r.fact for r in results])
+                if lean:
+                    history_block = lean.rendered
+
             context = (
                 f"{precompute_header}"
                 f"{synthesis_header}"
                 f"RETRIEVED FACTS (ranked by relevance):\n{arcane_context}\n\n"
-                f"FULL CONVERSATION HISTORY:\n{full_context}"
+                f"{history_block}"
             )
     else:
         # Single-session: use retrieved facts as focused context
