@@ -70,6 +70,7 @@ remanentia-benchmark-manifest = "benchmark_manifest:main"
 remanentia-benchmark-report = "benchmark_report:main"
 remanentia-efficiency-frontier = "efficiency_frontier:main"
 remanentia-feed-ingest = "feed_ingest:main"
+remanentia-write-discipline = "write_discipline:main"
 remanentia-full-s-diagnostics = "full_s_diagnostics:main"
 remanentia-recall-calibration = "recall_calibration:main"
 remanentia-store-manifest = "store_manifest:main"
@@ -110,6 +111,7 @@ py-modules = [
     "finding_ingest",
     "feed_ingest",
     "feed_normalization",
+    "write_discipline",
     "finding_envelope",
     "recall_gate",
     "index_freshness",
