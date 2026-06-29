@@ -74,6 +74,15 @@ def safe_device(index: int | None = None, *, warn: bool = True) -> str:
     if index in _CACHE:
         return _CACHE[index]
 
+    forced = os.environ.get("REMANENTIA_FORCE_DEVICE", "").strip()
+    if forced:
+        # Operator override: trust the named device and bypass the arch-list
+        # guard. Use when a GPU runs despite its arch not being listed — e.g. a
+        # GTX 1060 (sm_61) on a torch build that ships sm_60 cubins, verified to
+        # execute. The operator takes responsibility for the choice.
+        _CACHE[index] = forced
+        return forced
+
     import torch
 
     if not torch.cuda.is_available():

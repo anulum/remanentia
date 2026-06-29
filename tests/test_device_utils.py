@@ -62,6 +62,28 @@ class TestSafeDeviceSupportedGPU:
             assert device_utils.safe_device() == "cuda"
 
 
+class TestForceDeviceOverride:
+    def test_force_cuda_bypasses_arch_check(self, monkeypatch):
+        # Operator override returns before any arch probe.
+        monkeypatch.setenv("REMANENTIA_FORCE_DEVICE", "cuda")
+        assert device_utils.safe_device() == "cuda"
+
+    def test_force_cuda_indexed(self, monkeypatch):
+        monkeypatch.setenv("REMANENTIA_FORCE_DEVICE", "cuda:0")
+        assert device_utils.safe_device() == "cuda:0"
+
+    def test_force_cpu_wins_over_available_gpu(self, monkeypatch):
+        monkeypatch.setenv("REMANENTIA_FORCE_DEVICE", "cpu")
+        with patch("torch.cuda.is_available", return_value=True):
+            assert device_utils.safe_device() == "cpu"
+
+    def test_blank_force_is_ignored(self, monkeypatch):
+        # Whitespace-only override falls through to the normal arch-checked path.
+        monkeypatch.setenv("REMANENTIA_FORCE_DEVICE", "  ")
+        with patch("torch.cuda.is_available", return_value=False):
+            assert device_utils.safe_device() == "cpu"
+
+
 class TestSafeDeviceUnsupportedGPU:
     def test_gtx1060_sm61_falls_back_to_cpu(self, capsys):
         # Reproduces the exact 2026-04-17 CI failure: torch build has
