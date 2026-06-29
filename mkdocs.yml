@@ -122,6 +122,7 @@ nav:
     - lineage_completeness: api/lineage_completeness.md
     - world_class_scorecard: api/world_class_scorecard.md
     - lean_context: api/lean_context.md
+    - scorecard_report: api/scorecard_report.md
     - file_utils: api/file_utils.md
     - finding_envelope: api/finding_envelope.md
     - recall_gate: api/recall_gate.md

@@ -71,6 +71,7 @@ remanentia-benchmark-report = "benchmark_report:main"
 remanentia-efficiency-frontier = "efficiency_frontier:main"
 remanentia-feed-ingest = "feed_ingest:main"
 remanentia-write-discipline = "write_discipline:main"
+remanentia-scorecard = "scorecard_report:main"
 remanentia-full-s-diagnostics = "full_s_diagnostics:main"
 remanentia-recall-calibration = "recall_calibration:main"
 remanentia-store-manifest = "store_manifest:main"
@@ -117,6 +118,7 @@ py-modules = [
     "lineage_completeness",
     "world_class_scorecard",
     "lean_context",
+    "scorecard_report",
     "finding_envelope",
     "recall_gate",
     "index_freshness",
