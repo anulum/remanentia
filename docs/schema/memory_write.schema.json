@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://anulum.li/schema/remanentia/memory_write.v1.json",
+  "title": "Remanentia Canonical Memory-Write Schema",
+  "description": "The structural contract every record written to fleet memory must satisfy (SNN stimuli, SYNAPSE findings/decisions, recall events). Enforced by Remanentia's write_discipline gate. Required fields are caught when absent, not silently defaulted.",
+  "type": "object",
+  "required": ["content", "project", "actor", "timestamp"],
+  "additionalProperties": true,
+  "properties": {
+    "content": {
+      "type": "string",
+      "minLength": 15,
+      "description": "The memory text. Real information, not a placeholder. Canonical key; do not use text/statement/summary/event."
+    },
+    "project": {
+      "type": "string",
+      "pattern": "^[A-Z0-9][A-Z0-9-]*$",
+      "description": "Originating project/repo as an UPPERCASE slug, e.g. SCPN-QUANTUM-CONTROL."
+    },
+    "actor": {
+      "type": "string",
+      "enum": ["codex", "claude", "gemini", "grok", "system", "operator"],
+      "description": "Producing agent ROLE. Never a random worker/process id; collapse worker-7f3a to its role."
+    },
+    "timestamp": {
+      "oneOf": [
+        {"type": "number", "exclusiveMinimum": 0, "description": "UNIX seconds."},
+        {"type": "string", "format": "date-time", "description": "ISO-8601 instant."}
+      ],
+      "description": "When the event happened. The single biggest current gap in fleet writes; always include it."
+    },
+    "entities": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "description": "Recommended. Salient entities for cross-session linking and entity-anchored retrieval."
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["event", "finding", "decision", "state"],
+      "description": "Recommended. The write category."
+    },
+    "source_ref": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Recommended. Provenance: commit SHA, file path, or URL."
+    }
+  }
+}
