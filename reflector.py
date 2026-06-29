@@ -134,7 +134,7 @@ def _generate_summary_llm(
     """Generate a dense summary from a cluster of notes via LLM."""
     from answer_extractor import get_llm_backend
 
-    backend = cast(_LlmBackend | None, get_llm_backend())
+    backend: _LlmBackend | None = get_llm_backend()
     if backend is None:
         return None
 
@@ -156,7 +156,7 @@ def _generate_prospective_queries_llm(
     """Generate hypothetical future queries for a note via LLM (Kumiho technique)."""
     from answer_extractor import get_llm_backend
 
-    backend = cast(_LlmBackend | None, get_llm_backend())
+    backend: _LlmBackend | None = get_llm_backend()
     if backend is None:
         return []
 

@@ -249,7 +249,7 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
                 {
                     "results": results,
                     "query": query,
-                    "entities": ctx.entities[:10],
+                    "entities": [e for e in ctx.entities[:10]],
                     "novelty": ctx.novelty_score if hasattr(ctx, "novelty_score") else 0.5,
                 }
             )
