@@ -141,6 +141,17 @@ def producer_label(record: Mapping[str, object], field_map: FieldMap = _DEFAULT_
     return f"{project}/{actor}"
 
 
+def resolve_content(record: Mapping[str, object], field_map: FieldMap = _DEFAULT_FIELD_MAP) -> str:
+    """Read a memory record's content via the canonical key order.
+
+    Resolves the canonical ``content`` key and the legacy ``text``/``statement``
+    shapes alike, so readers stay correct across the write-key migration: a
+    reader that calls this keeps working whether a producer has flipped to
+    ``content`` or still writes ``text``.
+    """
+    return _nonempty_text(_first_present(record, field_map.content))
+
+
 def inspect_write(
     record: Mapping[str, object],
     *,
@@ -156,7 +167,7 @@ def inspect_write(
     fm = contract.field_map
     violations: list[str] = []
 
-    content = _nonempty_text(_first_present(record, fm.content))
+    content = resolve_content(record, fm)
     content_failed = False
     if not content:
         violations.append(MISSING_CONTENT)

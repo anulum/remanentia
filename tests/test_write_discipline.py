@@ -33,6 +33,7 @@ from write_discipline import (
     inspect_write,
     load_stimulus_records,
     producer_label,
+    resolve_content,
 )
 
 # A well-disciplined stimulus that satisfies the default contract.
@@ -80,6 +81,21 @@ class TestProducerLabel:
 
     def test_label_defaults_when_absent(self) -> None:
         assert producer_label({}) == "REMANENTIA/synapse"
+
+
+class TestResolveContent:
+    def test_canonical_content_key(self) -> None:
+        assert resolve_content({"content": "the canonical write"}) == "the canonical write"
+
+    def test_legacy_text_key(self) -> None:
+        assert resolve_content({"text": "the legacy write"}) == "the legacy write"
+
+    def test_legacy_statement_key(self) -> None:
+        assert resolve_content({"statement": "a feed finding"}) == "a feed finding"
+
+    def test_absent_or_blank_is_empty(self) -> None:
+        assert resolve_content({}) == ""
+        assert resolve_content({"text": "   "}) == ""
 
 
 # ─── inspect_write ────────────────────────────────────────────────────

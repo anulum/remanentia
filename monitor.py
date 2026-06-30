@@ -25,6 +25,8 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from write_discipline import resolve_content
+
 PORT = 8888
 BASE = Path(__file__).parent
 STATE_DIR = BASE / "snn_state"
@@ -369,7 +371,7 @@ class MonitorHandler(SimpleHTTPRequestHandler):
             except json.JSONDecodeError:
                 self._json_response({"error": "invalid JSON"}, 400)
                 return
-            text = data.get("text", "").strip()
+            text = resolve_content(data)  # canonical 'content' or legacy 'text'
             source = data.get("source", "dashboard")
             if not text:
                 self._json_response({"error": "empty text"}, 400)
@@ -426,7 +428,7 @@ class MonitorHandler(SimpleHTTPRequestHandler):
                         {
                             "file": f.name,
                             "source": d.get("source", "unknown"),
-                            "text": d.get("text", "")[:200],
+                            "text": resolve_content(d)[:200],
                             "timestamp": d.get("timestamp", 0),
                             "project": d.get("project", ""),
                         }
