@@ -29,13 +29,16 @@ synapse_channel = pytest.importorskip("synapse_channel")
 
 from feed_ingest import (  # noqa: E402
     DEFAULT_FEED_CURSOR_NAME,
+    FEED_DISCIPLINE_CONTRACT,
     FeedIngestReport,
+    _discipline_view,
     default_feed_cursor,
     feed_record_to_finding,
     ingest_feed,
     ingest_from_feed,
     main,
 )
+from write_discipline import WriteContract  # noqa: E402
 
 
 def _append_feed(path: Path, *records: dict[str, Any] | str) -> None:
@@ -479,3 +482,85 @@ class TestIngestFromFeed:
         assert "feed-ingest: scanned=1 candidates=1 admitted=1" in captured.out
         assert (tmp_path / "memory" / "semantic" / DEFAULT_FEED_CURSOR_NAME).exists()
         assert len(list((tmp_path / "memory" / "semantic" / "findings").glob("*.md"))) == 1
+
+
+class _CollectSink:
+    """Sink double that records the line numbers it was asked to write."""
+
+    def __init__(self) -> None:
+        self.written: list[int] = []
+
+    def write(self, finding: object, line_no: int, verdict: str) -> None:
+        self.written.append(line_no)
+
+
+def _finding_row(statement: str, *, seq: int, with_timestamp: bool) -> dict[str, Any]:
+    """A ``ty=finding`` feed row; omit ``t`` to simulate the dominant write failure."""
+    row: dict[str, Any] = {
+        "v": 1,
+        "i": seq,
+        "ty": "finding",
+        "s": "SCPN-FUSION-CORE",
+        "p": _finding_payload(statement),
+        "h": "syn-test",
+    }
+    if with_timestamp:
+        row["t"] = 1_782_019_238_735
+    return row
+
+
+def _ingest(feed: Path, tmp_path: Path, contract: WriteContract | None) -> FeedIngestReport:
+    sink = _CollectSink()
+    return ingest_feed(
+        feed,
+        sink,
+        SeqCursor(tmp_path / "cursor"),
+        parse_finding=lambda raw: raw,
+        admit=lambda finding: _AcceptDecision(),
+        discipline=contract,
+    )
+
+
+class TestWriteDisciplineGate:
+    def test_discipline_view_projects_producer_fields(self) -> None:
+        view = _discipline_view({"t": 5, "s": "AGENT", "p": "ignored"}, {"statement": "the claim"})
+        assert view == {"content": "the claim", "t": 5, "s": "AGENT"}
+
+    def test_gate_off_does_not_tally(self, tmp_path: Path) -> None:
+        feed = tmp_path / "feed.ndjson"
+        _append_feed(
+            feed, _finding_row("A finding with no timestamp here", seq=1, with_timestamp=False)
+        )
+        report = _ingest(feed, tmp_path, contract=None)
+        assert report.quarantined == 0
+        assert report.admitted == 1
+
+    def test_observe_mode_tallies_but_still_ingests(self, tmp_path: Path) -> None:
+        feed = tmp_path / "feed.ndjson"
+        _append_feed(
+            feed,
+            _finding_row("A disciplined finding with a timestamp", seq=1, with_timestamp=True),
+            _finding_row("An undisciplined finding, no timestamp", seq=2, with_timestamp=False),
+        )
+        report = _ingest(feed, tmp_path, contract=FEED_DISCIPLINE_CONTRACT)
+        assert report.candidates == 2
+        assert report.quarantined == 1  # only the timestamp-less write
+        assert report.admitted == 2  # observe mode: both still flow
+        assert len(report.quarantine_producers) == 1
+        assert "scpn-fusion-core" in report.quarantine_producers[0]  # normalised producer label
+
+    def test_strict_mode_rejects_at_source(self, tmp_path: Path) -> None:
+        feed = tmp_path / "feed.ndjson"
+        _append_feed(
+            feed,
+            _finding_row("A disciplined finding with a timestamp", seq=1, with_timestamp=True),
+            _finding_row("An undisciplined finding, no timestamp", seq=2, with_timestamp=False),
+        )
+        strict = WriteContract(
+            require_project=False, require_actor=True, require_timestamp=True, strict=True
+        )
+        report = _ingest(feed, tmp_path, contract=strict)
+        assert report.quarantined == 1
+        assert report.admitted == 1  # the timestamp-less write is rejected, not ingested
+        assert report.rejected == 1
+        assert "write-discipline" in report.rejections[0][1]

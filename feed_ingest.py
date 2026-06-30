@@ -51,8 +51,32 @@ from feed_normalization import (
     normalise_timestamp,
     normalise_validity,
 )
+from write_discipline import WriteContract, inspect_write
 
 DEFAULT_PROJECT = "REMANENTIA"
+
+# The fleet feed carries the producer's own timestamp (``t``) and actor (``s``);
+# the candidate proves content exists. So the live gate checks producer discipline
+# — a real timestamp (the dominant fleet failure) and a controlled actor — not
+# content. Project is set by the ingest routing, not the producer, so it is not
+# required here. Non-strict by default: quarantined writes are tallied for
+# producer accountability but still flow (observe mode); flip ``strict`` to reject.
+FEED_DISCIPLINE_CONTRACT = WriteContract(
+    require_project=False, require_actor=True, require_timestamp=True, strict=False
+)
+
+
+def _discipline_view(
+    record: Mapping[str, object], candidate: Mapping[str, object]
+) -> dict[str, object]:
+    """A discipline-only view of a feed write: producer timestamp/actor + proven content."""
+    return {
+        "content": candidate.get("statement", ""),
+        "t": record.get("t"),
+        "s": record.get("s"),
+    }
+
+
 DEFAULT_FEED_PATH = Path.home() / "synapse" / "feed.ndjson"
 DEFAULT_FEED_CURSOR_NAME = STORE_DEFAULT_FEED_CURSOR_NAME
 _MARKER_RE = re.compile(
@@ -87,6 +111,11 @@ class FeedIngestReport:
         Physical line number stored in the cursor after this pass.
     rejections
         ``(line_number, reason)`` entries for the rejected rows.
+    quarantined
+        Candidates whose producer write failed the discipline contract (e.g. a
+        missing timestamp). In observe mode they are still ingested.
+    quarantine_producers
+        ``PROJECT/actor`` label per quarantined write, for producer accountability.
     """
 
     scanned: int
@@ -96,6 +125,8 @@ class FeedIngestReport:
     rejected: int
     last_seq: int
     rejections: tuple[tuple[int, str], ...] = ()
+    quarantined: int = 0
+    quarantine_producers: tuple[str, ...] = ()
 
     @property
     def advanced(self) -> bool:
@@ -159,12 +190,19 @@ def ingest_feed(
     project: str = DEFAULT_PROJECT,
     limit: int | None = None,
     admitting_verdicts: Sequence[str] = DEFAULT_ADMITTING_VERDICTS,
+    discipline: WriteContract | None = None,
 ) -> FeedIngestReport:
     """Read new feed rows, admit explicit candidates, persist them, advance.
 
     The cursor is a physical line cursor, not the feed row's ``i`` field. The
     live relay file can contain presence rows whose ``i`` value repeats, so line
     numbers are the only loss-free resume coordinate.
+
+    When *discipline* is given, each candidate's producer write is inspected
+    against the contract (:func:`write_discipline.inspect_write`). A non-conforming
+    write (typically a missing timestamp) is tallied against its producer for
+    accountability; in observe mode (``strict=False``) it still flows, and under a
+    strict contract it is rejected at source.
     """
     path = Path(feed_path)
     last = cursor.load()
@@ -173,6 +211,8 @@ def ingest_feed(
     candidates = 0
     admitted = 0
     skipped = 0
+    quarantined = 0
+    quarantine_producers: list[str] = []
     rejections: list[tuple[int, str]] = []
     admitting = set(admitting_verdicts)
     for line_no, raw_line in _iter_new_lines(path, after_line=last, limit=limit):
@@ -191,6 +231,16 @@ def ingest_feed(
             skipped += 1
             continue
         candidates += 1
+        if discipline is not None:
+            verdict = inspect_write(_discipline_view(decoded, candidate), contract=discipline)
+            if not verdict:  # truthy only when accepted
+                quarantined += 1
+                quarantine_producers.append(verdict.producer)
+                if discipline.strict:
+                    rejections.append(
+                        (line_no, f"write-discipline: {'; '.join(verdict.violations)}")
+                    )
+                    continue
         try:
             finding = parse_finding(candidate)
         except Exception as exc:  # noqa: BLE001 — bad feed candidate is rejected, not fatal
@@ -212,6 +262,8 @@ def ingest_feed(
         rejected=len(rejections),
         last_seq=high,
         rejections=tuple(rejections),
+        quarantined=quarantined,
+        quarantine_producers=tuple(quarantine_producers),
     )
 
 
@@ -222,12 +274,16 @@ def ingest_from_feed(
     *,
     project: str = DEFAULT_PROJECT,
     limit: int | None = None,
+    discipline: WriteContract | None = FEED_DISCIPLINE_CONTRACT,
 ) -> FeedIngestReport:
     """Bind the live ``synapse_channel`` parser/gate and ingest ``feed.ndjson``.
 
     The import is deferred so the parser-free helpers remain usable without the
     optional ``synapse-channel`` dependency. The sink is injected to keep storage
-    policy shared with :mod:`finding_ingest`.
+    policy shared with :mod:`finding_ingest`. The write-discipline gate runs in
+    observe mode by default (tallies non-conforming producers without dropping
+    their writes); pass ``discipline=None`` to disable or a strict contract to
+    reject at source.
     """
     import synapse_channel as sc
 
@@ -245,6 +301,7 @@ def ingest_from_feed(
         admit=admit_finding,
         project=project,
         limit=limit,
+        discipline=discipline,
     )
 
 
