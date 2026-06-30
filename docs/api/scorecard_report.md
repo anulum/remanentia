@@ -11,12 +11,15 @@ axis. This module reads the rows the judge already writes (`judge_label`,
 `judge_model`, `question_type`) and produces that report, using `no_egress_audit`
 for the local-vs-cloud verdict from the reader endpoint.
 
-Honesty over a full grid: the current bench emits neither per-question confidence
-nor per-answer provenance, so calibrated abstention (`coverage_accuracy`) and
-lineage-of-belief (`lineage_completeness`) cannot be scored from this file — the
-report flags them `not measured` rather than fabricate an uncalibrated curve.
-Populating them is a bench-instrumentation follow-up (emit confidence + cited
-provenance ids per answer), after which those modules plug straight in.
+The two new-category axes activate the moment the bench emits their data and stay
+honestly dark until then — no fabricated curve. When **every** judged row carries
+a numeric `confidence`, the calibrated-abstention axis is scored via
+`coverage_accuracy` (accuracy at full coverage, AURC, coverage retained at a
+target accuracy). When **every** judged row carries a `cited_ids` list, the
+lineage-of-belief axis is scored via `lineage_completeness` (the fraction of
+answers that rest on queryable provenance). A run missing a field reports that
+axis `not measured` rather than guess. The remaining producer-side work is the
+bench emitting `confidence` + `cited_ids` per question.
 
 ## Public surface
 
@@ -27,9 +30,11 @@ from scorecard_report import parse_results, ResultSummary, build_run_report, Run
 - `parse_results(path) -> ResultSummary(total, correct, accuracy, judge_models)`
   — boolean `judge_label` is correctness; unjudged/blank rows are skipped;
   `judge_model` collected for judge-matched comparison.
-- `build_run_report(results_path, *, setting, reader, reader_endpoints) ->
-  RunReport` — folds accuracy + judge + the no-egress verdict; flags
-  abstention/lineage as not-yet-instrumented.
+- `build_run_report(results_path, *, setting, reader, reader_endpoints,
+  accuracy_target=0.90) -> RunReport` — folds accuracy + judge + the no-egress
+  verdict, and (when the data is present) the calibrated-abstention axis (`aurc`,
+  `coverage_at_target`) and the lineage axis (`lineage_completeness`), each with
+  its `*_measured` flag.
 
 ## CLI
 
