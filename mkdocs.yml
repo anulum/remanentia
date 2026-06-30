@@ -124,6 +124,7 @@ nav:
     - lean_context: api/lean_context.md
     - scorecard_report: api/scorecard_report.md
     - answer_confidence: api/answer_confidence.md
+    - discipline_impact: api/discipline_impact.md
     - file_utils: api/file_utils.md
     - finding_envelope: api/finding_envelope.md
     - recall_gate: api/recall_gate.md

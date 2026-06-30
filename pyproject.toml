@@ -120,6 +120,7 @@ py-modules = [
     "lean_context",
     "scorecard_report",
     "answer_confidence",
+    "discipline_impact",
     "finding_envelope",
     "recall_gate",
     "index_freshness",
@@ -219,6 +220,7 @@ omit = [
     # logic (recall_curve, aggregate_recall) is unit-tested in
     # tests/test_retrieval_recall.py; the retriever loop is an I/O harness.
     "tools/retrieval_recall.py",
+    "tools/discipline_recall.py",
     # Test files themselves
     "tests/test_*.py",
     "tests/conftest.py",
