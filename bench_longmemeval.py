@@ -65,6 +65,42 @@ _SYNTHESIS_ENABLE = os.environ.get("REMANENTIA_SYNTHESIS_ENABLE", "") == "1"
 # supersession-resolved observation set INSTEAD of the raw-session dump
 # (Mastra OM / Engram mechanism). Opt in: REMANENTIA_LEAN_CONTEXT=1.
 _LEAN_CONTEXT = os.environ.get("REMANENTIA_LEAN_CONTEXT", "") == "1"
+# Emit per-question confidence + cited provenance so the W1 scorecard can score
+# the calibrated-abstention and lineage axes (scorecard_report). Off by default —
+# it appends a confidence-rating instruction to the reader prompt, so default
+# runs stay comparable to history. Opt in: REMANENTIA_EMIT_CONFIDENCE=1.
+_EMIT_CONFIDENCE = os.environ.get("REMANENTIA_EMIT_CONFIDENCE", "") == "1"
+# How many top retrieved items to cite as provenance per answer.
+_CITED_K = 5
+
+
+def _confidence_fields(
+    raw_answer: str | None, top_score: float, cited_texts: list[str]
+) -> tuple[str | None, dict[str, object]]:
+    """Split a self-reported confidence off the answer and build the axis fields.
+
+    Returns the answer with any trailing ``CONFIDENCE: x`` line removed, plus the
+    fields the scorecard reads: a retrieval-score proxy and stable cited ids (and
+    the self-report when the reader supplied one). Pure; no model calls.
+    """
+    import hashlib
+
+    from answer_confidence import normalise_score, parse_confidence
+
+    cleaned: str | None = raw_answer
+    self_conf: float | None = None
+    if raw_answer:
+        cleaned, self_conf = parse_confidence(raw_answer)
+    fields: dict[str, object] = {
+        "retrieval_confidence": normalise_score(top_score),
+        "cited_ids": [
+            hashlib.sha1(t.encode("utf-8")).hexdigest()[:12] for t in cited_texts[:_CITED_K]
+        ],
+    }
+    if self_conf is not None:
+        fields["confidence"] = self_conf
+    return cleaned, fields
+
 
 _USE_LLM = "--llm" in sys.argv
 _EVALUATE = "--evaluate" in sys.argv
@@ -241,6 +277,7 @@ def _answer_from_retrieval(
     use_llm: bool = False,
     haystack_dates: list[str] | None = None,
     question_date: str = "",
+    retrieval_diagnostics: dict[str, object] | None = None,
 ) -> str:
     """Search index and extract/synthesise answer with type-specific strategy."""
     results = idx.search(question, top_k=10)
@@ -266,7 +303,16 @@ def _answer_from_retrieval(
 
     # Get type-specific prompt
     prompt = _type_prompt(question, qtype, context)
+    if _EMIT_CONFIDENCE:
+        from answer_confidence import confidence_suffix
+
+        prompt = prompt + confidence_suffix()
     answer = _hypothesis_complete(prompt, max_tokens=400)
+    if _EMIT_CONFIDENCE and retrieval_diagnostics is not None:
+        top_score = float(getattr(results[0], "score", 0.0))
+        cited = [str(getattr(r, "snippet", "")) for r in results]
+        answer, fields = _confidence_fields(answer, top_score, cited)
+        retrieval_diagnostics.update(fields)
     if answer and answer.lower() not in ("unknown", "i don't know", "not mentioned"):
         return answer
 
@@ -667,7 +713,16 @@ def _arcane_answer(
         context = arcane_context
 
     prompt = _type_prompt(question, qtype, context)
+    if _EMIT_CONFIDENCE:
+        from answer_confidence import confidence_suffix
+
+        prompt = prompt + confidence_suffix()
     answer = _hypothesis_complete(prompt, max_tokens=400)
+    if _EMIT_CONFIDENCE:
+        top_score = results[0].score if results else 0.0
+        cited = [r.fact.text for r in results] if results else []
+        answer, fields = _confidence_fields(answer, top_score, cited)
+        retrieval_diagnostics.update(fields)
     if answer and answer.lower() not in ("unknown", "i don't know", "not mentioned"):
         return answer
 
@@ -748,6 +803,7 @@ def run_benchmark() -> None:
                     use_llm=True,
                     haystack_dates=item_dates,
                     question_date=item_question_date,
+                    retrieval_diagnostics=retrieval_diagnostics,
                 )
         else:
             # Legacy pipeline
@@ -760,6 +816,7 @@ def run_benchmark() -> None:
                 use_llm=_USE_LLM,
                 haystack_dates=item_dates,
                 question_date=item_question_date,
+                retrieval_diagnostics=retrieval_diagnostics,
             )
 
         hypothesis_record: dict[str, object] = {
@@ -768,6 +825,11 @@ def run_benchmark() -> None:
         }
         if retrieval_diagnostics:
             hypothesis_record["retrieval_diagnostics"] = retrieval_diagnostics
+            # Lift the abstention + lineage signals to the top level so the judge
+            # step carries them through to the scorecard (scorecard_report).
+            for key in ("confidence", "retrieval_confidence", "cited_ids"):
+                if key in retrieval_diagnostics:
+                    hypothesis_record[key] = retrieval_diagnostics[key]
         hypotheses.append(hypothesis_record)
 
         # Loud per-question heartbeat so a slow item is visible before the
