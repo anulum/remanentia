@@ -278,9 +278,10 @@ class CalibratedRecallGate:
 
         A score higher than the observed calibration range receives estimate
         ``1.0`` with zero neighbours: no lower-scoring miss should reduce a
-        stronger-than-observed query. Scores inside the observed range use all
-        examples with ``example.score >= score``. If no such examples exist for
-        another reason, accepted-threshold examples provide the fallback prior.
+        stronger-than-observed query. Scores at or inside the observed range use
+        all examples with ``example.score >= score`` — always at least the
+        top-scored example, so the neighbour set is never empty here. With no
+        examples at all the gate is in cold start and returns ``0.0``.
         """
 
         if not self.examples:
@@ -381,13 +382,15 @@ def split_examples(
     if holdout_count == 0:
         return ordered, ()
 
+    # Rank by score so the holdout genuinely spans the range: the top-scored
+    # example (a high-confidence check) plus the lowest-scored tail (the
+    # abstention zone). Ledger order is arbitrary, so a positional split would
+    # not reserve either extreme.
+    ranked = sorted(ordered, key=lambda example: example.score, reverse=True)
     holdout_indices = {0}
-    lower_start = max(1, len(ordered) - holdout_count)
-    holdout_indices.update(range(lower_start, len(ordered)))
-    while len(holdout_indices) > holdout_count:
-        holdout_indices.remove(max(holdout_indices))
-    train = tuple(example for index, example in enumerate(ordered) if index not in holdout_indices)
-    holdout = tuple(example for index, example in enumerate(ordered) if index in holdout_indices)
+    holdout_indices.update(range(len(ranked) - (holdout_count - 1), len(ranked)))
+    train = tuple(example for index, example in enumerate(ranked) if index not in holdout_indices)
+    holdout = tuple(example for index, example in enumerate(ranked) if index in holdout_indices)
     return train, holdout
 
 

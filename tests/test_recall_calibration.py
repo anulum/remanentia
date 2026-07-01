@@ -265,3 +265,21 @@ def test_cli_reports_json_calibration_summary(tmp_path: Path) -> None:
     assert payload["n_labelled"] == 5
     assert payload["holdout"]["n_total"] == 2
     assert payload["target_error_rate"] == 0.2
+
+
+def test_split_reserves_score_extremes_regardless_of_ledger_order() -> None:
+    """Holdout must span the score range (top + abstention-zone), not ledger position."""
+    # Scores in arbitrary ledger order; the top (0.9) and the low tail (0.1) must
+    # land in holdout so the report checks both high-confidence and abstention zones.
+    scrambled = [
+        CalibrationExample(f"e{i}", "q", score, True)
+        for i, score in enumerate([0.5, 0.9, 0.1, 0.7, 0.3])
+    ]
+    train, holdout = split_examples(scrambled, holdout_fraction=0.4)
+    holdout_scores = sorted(example.score for example in holdout)
+    assert len(holdout) == 2
+    assert holdout_scores[0] == 0.1  # abstention-zone low reserved
+    assert holdout_scores[-1] == 0.9  # high-confidence top reserved
+    # Every example is partitioned exactly once.
+    assert len(train) + len(holdout) == len(scrambled)
+    assert {e.event_id for e in train}.isdisjoint({e.event_id for e in holdout})
