@@ -30,8 +30,9 @@ question. Over-aggressive matching would do more harm than good, so
 the extractor refuses ambiguous cases and returns ``None``.
 
 **Out of scope:** entity-supersession chains (R11 audit §8 — needs
-knowledge_store integration), abstention gating (``_abs`` questions
-are skipped; that is R5's job), full NLI-grade arithmetic.
+knowledge_store integration), abstention gating (abstention is *not*
+suppressed here — see :func:`precompute_aggregation` for why it cannot be
+honestly gated from this module), full NLI-grade arithmetic.
 """
 
 from __future__ import annotations
@@ -432,15 +433,23 @@ def precompute_count(question: str, text: str) -> PrecomputeResult | None:
 def precompute_aggregation(question: str, text: str, *, qtype: str = "") -> PrecomputeResult | None:
     """Top-level entry point used by the bench.
 
-    Returns ``None`` for qtypes where aggregation is off-scope
-    (temporal → TReMu; abstention ``_abs`` questions → R5's job).
+    Returns ``None`` only for ``temporal-reasoning`` questions, which are
+    TReMu's job (``_tremu_precompute``). Every other qtype is aggregated when
+    the evidence is unambiguous; a non-question-shaped input (no trailing
+    ``?``) is tolerated, not rejected, since the sum/count extractors already
+    refuse anything that is not a clear aggregation.
+
+    This function does **not** suppress abstention (``_abs``) questions, and
+    cannot honestly do so: LongMemEval marks abstention on the *question id*
+    (a ``_abs`` suffix), not on the ``question_type`` this receives, so the
+    signal never reaches here — and reading the gold ``_abs`` label to gate
+    the answer would be test-set leakage. On an abstention question whose
+    retrieved context happens to hold two incidental same-unit numbers,
+    precompute can still fabricate a ``COMPUTED TOTAL`` that overrides a
+    correct "not enough info". The production-honest guard is a relevance gate
+    (aggregate only facts whose labels the question actually names), tracked as
+    a benchmark-validated follow-up rather than flipped blind here.
     """
     if qtype == "temporal-reasoning":
         return None
-    # Abstention questions intentionally report "not enough info"; a
-    # pre-computed total would undermine that signal.
-    if question.rstrip().lower().endswith("?") is False:
-        # All LongMemEval questions end with '?', so a missing '?' is a
-        # shape we did not train for — skip.
-        pass
     return precompute_sum(question, text) or precompute_count(question, text)
