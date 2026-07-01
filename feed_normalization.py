@@ -198,17 +198,25 @@ def normalise_validity(
     *,
     fallback_timestamp: float,
 ) -> dict[str, object]:
-    """Return a validity window with numeric timestamp fields."""
+    """Return a validity window with numeric timestamp fields.
+
+    ``valid_from`` and ``observed_at`` are lower coordinates: a missing one falls
+    back (to ``fallback_timestamp``, then to ``valid_from``) and an unreadable one
+    degrades to the ``0.0`` sentinel — both read downstream as "valid since the
+    epoch", a harmless open *lower* bound. ``valid_to`` is an *upper* bound with
+    the opposite polarity: there ``0.0`` reads as "expired at the epoch" and would
+    silently drop the finding from every as-of-scoped recall. So a missing *or*
+    unreadable ``valid_to`` is treated as no upper bound at all (``None``, open):
+    an expiry we could not parse must never manufacture an immediate one.
+    """
 
     base = dict(value) if isinstance(value, Mapping) else {}
     valid_from = _timestamp_or_default(base.get("valid_from"), fallback_timestamp)
     observed_at = _timestamp_or_default(base.get("observed_at"), valid_from)
-    valid_to_raw = base.get("valid_to")
-    valid_to = None if valid_to_raw is None else normalise_timestamp(valid_to_raw)
     base.update(
         {
             "valid_from": valid_from,
-            "valid_to": valid_to,
+            "valid_to": _upper_bound(base.get("valid_to")),
             "observed_at": observed_at,
         }
     )
@@ -299,6 +307,21 @@ def _timestamp_or_default(value: object, default: float) -> float:
     if value is None:
         return default
     return normalise_timestamp(value)
+
+
+def _upper_bound(value: object) -> float | None:
+    """Return a validity upper bound, or ``None`` for an absent/unreadable one.
+
+    A real (positive) timestamp is kept — including a past one, which legitimately
+    closes a superseded window. A missing bound (``None``) or an unparseable one
+    (the ``normalise_timestamp`` sentinel ``<= 0.0``, e.g. ``"next week"``, ``""``,
+    or a bool) both mean "no trustworthy upper bound", so both stay open (``None``)
+    rather than collapsing to ``0.0``, which downstream reads as already expired.
+    """
+    if value is None:
+        return None
+    parsed = normalise_timestamp(value)
+    return parsed if parsed > 0.0 else None
 
 
 def _text(value: object) -> str:

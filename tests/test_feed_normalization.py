@@ -103,6 +103,35 @@ def test_normalise_provenance_and_validity_preserve_extra_fields() -> None:
     assert validity["extra"] == "kept"
 
 
+def test_normalise_validity_unparseable_valid_to_stays_open() -> None:
+    """An unreadable upper bound must not manufacture an immediate expiry.
+
+    A producer expressing the expiry in natural language ("next week"), an empty
+    string, or a bool cannot be parsed to an epoch. Degrading it to the 0.0
+    sentinel would read downstream (``finding_envelope._valid_at``) as "expired at
+    the epoch" and silently drop the finding from every as-of-scoped recall, so an
+    unreadable valid_to must stay open (None) exactly like a missing one.
+    """
+
+    for unreadable in ("next week", "", "   ", True):
+        validity = normalise_validity({"valid_to": unreadable}, fallback_timestamp=100.0)
+        assert validity["valid_to"] is None, unreadable
+    assert normalise_validity({"valid_to": None}, fallback_timestamp=100.0)["valid_to"] is None
+    # An unreadable upper bound leaves the lower bound honest, not collapsed.
+    assert normalise_validity({"valid_to": "soon"}, fallback_timestamp=100.0)["valid_from"] == 100.0
+
+
+def test_normalise_validity_keeps_real_upper_bound_including_past() -> None:
+    """A real timestamp upper bound is preserved — a past one closes a superseded window."""
+
+    past = normalise_validity({"valid_to": 1_700_000_000}, fallback_timestamp=1_782_000_000.0)
+    assert past["valid_to"] == pytest.approx(1_700_000_000.0)
+    iso = normalise_validity({"valid_to": "2026-06-26T15:04:05Z"}, fallback_timestamp=0.0)
+    assert iso["valid_to"] == pytest.approx(1_782_486_245.0)
+    ms = normalise_validity({"valid_to": 1_782_486_245_000}, fallback_timestamp=0.0)
+    assert ms["valid_to"] == pytest.approx(1_782_486_245.0)
+
+
 def test_normalise_source_check_and_entities_use_controlled_project_names() -> None:
     """Source checks and entity hints should share the same project vocabulary."""
 
