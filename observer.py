@@ -182,7 +182,12 @@ def observe_once(
             for nd in note_dicts:
                 pending_notes.append(nd)
             new_files.append((f, source_name))
-            state.mark_processed(f)
+            # The cursor (mark_processed) is deliberately NOT advanced here.
+            # A file must not be recorded as observed until its extracted notes
+            # are durably in the store; otherwise a store failure below drops
+            # the notes while the caller persists a cursor that has skipped
+            # them — silent, permanent knowledge loss. Marking is deferred to
+            # after the commit.
 
     if pending_notes:
         try:
@@ -190,7 +195,10 @@ def observe_once(
             knowledge_store_cls = cast(Any, knowledge_module).KnowledgeStore
             store = knowledge_store_cls()
             store.load()
-        except Exception:  # pragma: no cover
+        except Exception:
+            # Store unavailable: leave every scanned-new file un-marked so the
+            # next cycle re-observes and retries (at-least-once), rather than
+            # losing the notes.
             return {
                 "files_scanned": files_scanned,
                 "files_new": files_new,
@@ -202,6 +210,11 @@ def observe_once(
             store.add_note(nd["content"], source=nd["source"])
         notes_created = len(pending_notes)
         store.save()
+
+    # Notes are now durably stored (or there were none) — safe to advance the
+    # cursor over every scanned-new file.
+    for f, _source_name in new_files:
+        state.mark_processed(f)
 
     # Incrementally update the unified index for new files
     if new_files:

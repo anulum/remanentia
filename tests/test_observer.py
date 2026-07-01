@@ -400,6 +400,36 @@ class TestObserverErrors:
         notes = extract_notes_from_file(f)
         assert notes == []
 
+    def test_store_failure_does_not_advance_cursor(self, tmp_path):
+        """A store failure must not mark files processed — notes must survive.
+
+        The cursor may only advance once notes are durably stored. If the
+        store is unavailable, every scanned-new file has to stay observable so
+        the next cycle retries (at-least-once); marking it as done here would
+        silently and permanently drop its notes.
+        """
+        traces_dir = tmp_path / "traces"
+        traces_dir.mkdir()
+        f = traces_dir / "2026-03-24_finding.md"
+        f.write_text(
+            "# Finding\n\nWe found that BM25 scoring measured 88.5% accuracy on the benchmark.\n",
+            encoding="utf-8",
+        )
+
+        failing_store = MagicMock()
+        failing_store.load.side_effect = RuntimeError("store offline")
+
+        with patch("knowledge_store.KnowledgeStore", return_value=failing_store):
+            state = ObserverState()
+            result = observe_once(state, {"traces": traces_dir})
+
+        assert result["files_new"] >= 1
+        assert result["notes_created"] == 0
+        assert result["error"] == "store load failed"
+        # Nothing was persisted, so the file must remain observable for retry.
+        assert state.is_new_or_changed(f) is True
+        failing_store.add_note.assert_not_called()
+
 
 # ── Heartbeat (observe + consolidate + age + capacity) ──────────
 
