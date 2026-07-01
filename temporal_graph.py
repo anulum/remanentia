@@ -718,9 +718,11 @@ def _resolve_question_date(question_date_str: str) -> date:
     if m:
         try:
             return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-        except ValueError:  # pragma: no cover — regex shape matches but calendar rejects
+        except ValueError:
+            # Regex shape matches but the calendar rejects it (e.g. "2023-13-45").
             pass
-    return date.today()  # pragma: no cover — only reached on regex non-match after bool check
+    # Reached on regex non-match, or after an invalid-calendar fallthrough above.
+    return date.today()
 
 
 def parse_dates(text: str, reference_date: date | None = None) -> list[str]:

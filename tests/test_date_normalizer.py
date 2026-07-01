@@ -337,6 +337,14 @@ class TestEdgeCases:
         assert parsed.month == 12
         assert parsed.year == 2022
 
+    def test_last_year_from_leap_day_clamps(self):
+        # 29 Feb 2024 has no counterpart in 2023 — "last year" must clamp the
+        # day to 28 (as its sibling "last month" clamps via _month_delta),
+        # not silently fail to resolve.
+        r = _rule_based_normalise("last year", date(2024, 2, 29))
+        assert r is not None
+        assert r.iso_date == "2023-02-28"
+
     def test_large_number_days(self):
         r = _rule_based_normalise("365 days ago", self.REF)
         assert r is not None
@@ -544,29 +552,37 @@ class TestModelLoading:
 
 class TestSimpleResolverException:
     def test_resolver_value_error_continues(self):
-        """When a resolver raises ValueError, the pattern is skipped."""
+        """A resolver that raises is skipped; a later pattern still resolves.
+
+        The text "earlier this month" matches both the "earlier this month"
+        pattern and the later "this month" pattern. Breaking the first and
+        feeding that text proves the ``except ... continue`` swallows the
+        error and falls through to "this month" (day 1), rather than
+        propagating or returning None.
+        """
         import date_normalizer
 
-        # Inject a broken resolver for "earlier this month" that raises
         original_simple = dict(date_normalizer._SIMPLE_RE)
 
         def _bad_resolver(ref):
             raise ValueError("intentional")
 
+        # Exact-match the compiled pattern's source so the injection actually
+        # lands on the intended resolver (a substring like "earlier.*month"
+        # never occurs in the real r"\bearlier\s+this\s+month\b" source).
         broken_re = {}
         for pattern, resolver in date_normalizer._SIMPLE_RE.items():
-            if "earlier.*month" in pattern.pattern:
+            if pattern.pattern == r"\bearlier\s+this\s+month\b":
                 broken_re[pattern] = _bad_resolver
             else:
                 broken_re[pattern] = resolver
 
         date_normalizer._SIMPLE_RE = broken_re
         try:
-            # "earlier this month" would normally match; now it raises
-            _rule_based_normalise("earlier this month", date(2023, 6, 15))
-            # Should either be None (if no other pattern matches)
-            # or match a different pattern
-            # The test verifies no exception escapes
+            result = _rule_based_normalise("earlier this month", date(2023, 6, 15))
+            assert result is not None
+            # Fell through to the "this month" pattern (first of the month).
+            assert result.iso_date == "2023-06-01"
         finally:
             date_normalizer._SIMPLE_RE = original_simple
 

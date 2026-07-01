@@ -85,7 +85,7 @@ _SIMPLE_RE = {
     re.compile(r"\bearlier\s+this\s+month\b", re.I): lambda r: r.replace(day=max(1, r.day // 2)),
     re.compile(r"\blast\s+week\b", re.I): lambda r: r - timedelta(weeks=1),
     re.compile(r"\blast\s+month\b", re.I): lambda r: _month_delta(r, -1),
-    re.compile(r"\blast\s+year\b", re.I): lambda r: r.replace(year=r.year - 1),
+    re.compile(r"\blast\s+year\b", re.I): lambda r: _month_delta(r, -12),
     re.compile(r"\bthis\s+week\b", re.I): lambda r: r - timedelta(days=r.weekday()),
     re.compile(r"\bthis\s+month\b", re.I): lambda r: r.replace(day=1),
     re.compile(r"\bthis\s+year\b", re.I): lambda r: r.replace(month=1, day=1),
@@ -213,7 +213,9 @@ def _rule_based_normalise(expr: str, ref: date) -> Optional[DateResult]:
             try:
                 target = resolver(ref)
                 return DateResult(iso_date=target.isoformat(), confidence=0.85, method="rule")
-            except (ValueError, AttributeError):  # pragma: no cover
+            except (ValueError, AttributeError):
+                # A resolver rejected this reference date (e.g. a calendar
+                # edge); skip it and let a later pattern try to match.
                 continue
 
     return None

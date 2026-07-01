@@ -1106,6 +1106,15 @@ class TestQuestionDateAnchor:
         assert _resolve_question_date("garbage") == _d.today()
         assert _resolve_question_date("") == _d.today()
 
+    def test_resolve_question_date_calendar_invalid_falls_back(self) -> None:
+        # Regex shape matches (YYYY-MM-DD) but the calendar rejects month 13 /
+        # day 45 — the ValueError branch must fall back to today(), not raise.
+        from temporal_graph import _resolve_question_date
+        from datetime import date as _d
+
+        assert _resolve_question_date("2023-13-45") == _d.today()
+        assert _resolve_question_date("2023/02/30 (Thu) 09:00") == _d.today()
+
 
 # ── Multi-event proximity tuning (Task #35) ─────────────────────
 
