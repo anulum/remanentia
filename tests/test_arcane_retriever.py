@@ -132,6 +132,21 @@ class TestCrossEncoderRerankDefault:
         mock_load.assert_called_once()
         assert out is results  # model not ready this call → un-reranked
 
+    def test_load_ce_returns_early_when_already_loading(self):
+        # When a load is already in flight, _load_ce must short-circuit without
+        # spawning a second background loader. This early return is otherwise
+        # only reached by chance via leftover class state across tests, so it is
+        # pinned deterministically here.
+        ar = ArcaneRetriever(SESSIONS)
+        with (
+            patch.object(ArcaneRetriever, "_ce_model", None),
+            patch.object(ArcaneRetriever, "_ce_loading", True),
+            patch("threading.Thread") as mock_thread,
+        ):
+            ar._load_ce()
+            mock_thread.assert_not_called()  # no second loader started
+            assert ArcaneRetriever._ce_loading is True  # flag left untouched
+
     def test_model_ready_with_no_pairs_returns_original_results(self):
         ar = ArcaneRetriever(SESSIONS)
         results: list[FusedResult] = []

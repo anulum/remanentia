@@ -207,27 +207,20 @@ class ArcaneRetriever:
     def _ch_temporal(self, query: str, top_k: int) -> list[RetrievalResult]:
         """TEMPORAL channel: date-aware retrieval with validity filtering.
 
-        Uses C3 temporal relation classifier to reorder results when available.
+        Ordering comes entirely from ``fact_index.temporal_query`` — the rank
+        assigned here is what RRF fusion consumes (fusion is rank-based, so a
+        per-result ``score`` is carried for reference but never affects the
+        fused order). A future enhancement may re-rank these hits with the C3
+        ``temporal_relation`` classifier, but that must re-sort and re-number
+        the ranks (not merely scale ``score``) and be benchmarked on the
+        temporal-reasoning split before it is enabled — see the debug-campaign
+        tracker.
         """
         hits = self.fact_index.temporal_query(query, top_k=top_k)
-        results = [
+        return [
             RetrievalResult(fact=f, score=s, channel="temporal", rank=i)
             for i, (f, s) in enumerate(hits)
         ]
-        # C3: reorder by temporal relation if classifier available
-        try:
-            from temporal_relation import classify_relation
-
-            if len(results) >= 2:
-                # Boost facts classified as temporally relevant to the query
-                for r in results:
-                    rel = classify_relation(query, r.fact.text)
-                    if rel and rel.confidence > 0.6:  # pragma: no cover
-                        if rel.relation in ("before", "after", "same_day"):  # pragma: no cover
-                            r.score *= 1.3  # pragma: no cover
-        except ImportError:
-            pass
-        return results
 
     def _ch_session(self, query: str, top_k: int) -> list[RetrievalResult]:
         """DEEP channel: cross-session diverse retrieval."""

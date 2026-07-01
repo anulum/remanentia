@@ -190,6 +190,25 @@ class TestSearchSemantic:
         assert len(results) > 0
         assert any("decision" in r["path"].lower() for r in results)
 
+    def test_include_content_toggles_body(self, tmp_semantic: Path) -> None:
+        # include_content is a public API/CLI parameter (default False on the
+        # REST endpoint): when False the heavy per-memory body must be dropped
+        # so a lightweight recall neither carries nor renders full memory text,
+        # while path/key_point/metadata stay populated.
+        with (
+            patch("memory_recall.SEMANTIC_DIR", tmp_semantic),
+            patch("memory_recall.BASE", tmp_semantic.parent),
+        ):
+            with_body = _search_semantic("SNN removal decision", top_k=5, include_content=True)
+            without_body = _search_semantic(
+                "SNN removal decision", top_k=5, include_content=False
+            )
+        assert with_body and without_body
+        assert any(r["content"] for r in with_body)
+        assert all(r["content"] == "" for r in without_body)
+        # Pointers survive so callers that only need paths still work.
+        assert all(r["path"] for r in without_body)
+
     def test_no_match(self, tmp_semantic: Path) -> None:
         with (
             patch("memory_recall.SEMANTIC_DIR", tmp_semantic),

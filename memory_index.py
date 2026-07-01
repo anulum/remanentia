@@ -2097,10 +2097,10 @@ def needs_rebuild() -> bool:
     idx_file = INDEX_PATH if INDEX_PATH.exists() else _LEGACY_INDEX_PATH
     idx_mtime = idx_file.stat().st_mtime
     for source_name, source_dir in SOURCES.items():
-        if not source_dir.exists():  # pragma: no cover
+        if not source_dir.exists():
             continue
         for f in _iter_source_files(source_name, source_dir):
-            if f.stat().st_mtime > idx_mtime:  # pragma: no cover
+            if f.stat().st_mtime > idx_mtime:
                 return True
     return False
 

@@ -780,6 +780,18 @@ class TestNeedsRebuild:
             with patch("memory_index.SOURCES", {"test": source_dir}):
                 assert needs_rebuild() is False
 
+    def test_missing_source_dir_is_skipped(self, tmp_path):
+        # A configured source whose directory does not exist must not force a
+        # rebuild — the staleness scan skips it and (with no other newer source)
+        # reports the index current. This guards the keystone anti-freeze gate:
+        # a stray/removed source root should never mask a genuinely fresh index.
+        idx_path = tmp_path / "index.pkl"
+        idx_path.write_bytes(b"data")
+
+        with patch("memory_index.INDEX_PATH", idx_path):
+            with patch("memory_index.SOURCES", {"gone": tmp_path / "does_not_exist"}):
+                assert needs_rebuild() is False
+
     def test_newer_python_file_needs_rebuild(self):
         case_dir = _scratch_case_dir("needs_rebuild_python_file")
         idx_path = case_dir / "index.pkl"

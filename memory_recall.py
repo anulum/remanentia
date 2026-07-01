@@ -178,8 +178,15 @@ def _entities_for_query(query: str, entities: dict[str, JsonMap]) -> list[str]:
 # ── Semantic memory search ───────────────────────────────────────
 
 
-def _search_semantic(query: str, top_k: int = 5) -> list[JsonMap]:
-    """Search consolidated semantic memories."""
+def _search_semantic(query: str, top_k: int = 5, include_content: bool = True) -> list[JsonMap]:
+    """Search consolidated semantic memories.
+
+    When *include_content* is ``False`` the heavy per-memory ``content`` body is
+    omitted (left empty), so a lightweight recall does not carry — or, via
+    :meth:`MemoryContext.to_llm_context`, emit — full memory text. The ``path``,
+    ``key_point`` and metadata fields are always populated so callers that only
+    need pointers still work.
+    """
     if not SEMANTIC_DIR.exists():
         return []
 
@@ -236,7 +243,7 @@ def _search_semantic(query: str, top_k: int = 5) -> list[JsonMap]:
                 "type": meta.get("type", ""),
                 "date": meta.get("date", ""),
                 "source_traces": meta.get("source_traces", ""),
-                "content": content[:1000],
+                "content": content[:1000] if include_content else "",
                 "key_point": key_point,
             }
         )
@@ -341,7 +348,11 @@ def recall(
 ) -> MemoryContext:
     """Deep memory recall: retrieval + consolidation + graph + temporal.
 
-    This is the main entry point for rich context retrieval.
+    This is the main entry point for rich context retrieval. When
+    *include_content* is ``False`` the consolidated semantic memories carry no
+    full ``content`` body — keeping the result (and any ``to_llm_context``
+    rendering of it) lightweight — while still returning their paths, key
+    points and metadata.
     """
     t0 = time.monotonic()
     ctx = MemoryContext(query=query)
@@ -364,7 +375,7 @@ def recall(
         log.debug("Primary memory index recall failed", exc_info=True)
 
     # 2. Search consolidated semantic memories
-    semantic = _search_semantic(query, top_k=5)
+    semantic = _search_semantic(query, top_k=5, include_content=include_content)
     ctx.semantic_memories = semantic
     sources += len(semantic)
 
