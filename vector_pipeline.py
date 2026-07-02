@@ -296,9 +296,7 @@ def load_or_build_memory_index(*, use_gpu_embeddings: bool = False) -> Any:
 def vector_index_status(index_dir: Path | str = DEFAULT_VECTOR_INDEX_DIR) -> dict[str, Any]:
     """Return operator-facing status for a persistent vector index."""
     index = PersistentVectorIndex(index_dir)
-    manifest: dict[str, Any] = {}
-    if index.manifest_path.exists():
-        manifest = json.loads(index.manifest_path.read_text(encoding="utf-8"))
+    manifest = _read_manifest(index.manifest_path)
     return {
         "index_dir": str(index.root),
         "exists": index.exists(),
@@ -656,13 +654,31 @@ def _result_to_dict(result: VectorSearchResult) -> dict[str, Any]:
 def _read_manifest(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        # The manifest is a rebuildable derived artefact, not source memory.
+        # A torn or unreadable manifest (a crash or disk-full mid-write) must
+        # not raise here: every reader runs *before* the rebuild that would
+        # repair it, so a raise would permanently stall the self-healing
+        # refresh worker on a file it can never get past. Treat it as absent
+        # instead — the corpus-fingerprint gate then sees a mismatch and
+        # rebuilds, and the rebuild rewrites a clean manifest atomically.
+        return {}
+    # A manifest that parsed to a non-object (list/scalar) is equally unusable
+    # for the ``.get(...)`` gate; treat it as absent for the same reason.
+    return loaded if isinstance(loaded, dict) else {}
 
 
 def _merge_manifest(path: Path, fields: dict[str, Any]) -> None:
+    from file_utils import atomic_write_text
+
     manifest = _read_manifest(path)
     manifest.update(fields)
-    path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    # Atomic write (tmpfile + fsync + os.replace): the refresh gate reads this
+    # manifest before it can rebuild, so a torn write here would brick the
+    # worker. This was the lone non-atomic writer in the store/persist stack.
+    atomic_write_text(path, json.dumps(manifest, indent=2, sort_keys=True) + "\n")
 
 
 def _worker_heartbeat(cycle: int, status: str, result: dict[str, Any]) -> dict[str, Any]:

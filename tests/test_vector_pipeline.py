@@ -33,6 +33,7 @@ from vector_pipeline import (
     chunks_from_memory_index,
     main,
     public_vector_results,
+    refresh_memory_vector_index,
     run_vector_cli,
     run_vector_refresh_worker,
     vector_index_status,
@@ -218,6 +219,66 @@ def test_status_and_cli_status_read_existing_manifest(tmp_path: Path):
     assert status["manifest"] == {"count": 7}
     assert code == 0
     assert json.loads(output.getvalue())["manifest"] == {"count": 7}
+
+
+class TestManifestResilience:
+    """A torn/unreadable manifest must self-heal, never stall the worker.
+
+    The manifest is a rebuildable derived artefact and the refresh gate reads
+    it *before* the rebuild that would repair it, so an unguarded ``json.loads``
+    turned a crash mid-write into a permanent stall — the per-cycle ``except``
+    in the worker can log but never get past the poisoned read.
+    """
+
+    def test_read_manifest_treats_corrupt_json_as_absent(self, tmp_path: Path):
+        path = tmp_path / "manifest.json"
+        path.write_text('{"corpus_fingerprint": "abc", trunc', encoding="utf-8")
+
+        assert vector_pipeline._read_manifest(path) == {}
+
+    def test_read_manifest_treats_non_object_as_absent(self, tmp_path: Path):
+        path = tmp_path / "manifest.json"
+        path.write_text("[1, 2, 3]\n", encoding="utf-8")
+
+        assert vector_pipeline._read_manifest(path) == {}
+
+    def test_merge_manifest_writes_atomically_over_corrupt_file(self, tmp_path: Path):
+        path = tmp_path / "manifest.json"
+        path.write_text("{ half-written", encoding="utf-8")
+
+        vector_pipeline._merge_manifest(path, {"corpus_fingerprint": "deadbeef"})
+
+        assert json.loads(path.read_text(encoding="utf-8")) == {"corpus_fingerprint": "deadbeef"}
+        # atomic_write_text cleans up its own tmpfile — no debris left behind.
+        assert list(tmp_path.glob("*.tmp")) == []
+
+    def test_refresh_rebuilds_instead_of_raising_on_corrupt_manifest(self, tmp_path: Path):
+        index_dir = tmp_path / "vec"
+        provider = KeywordEmbeddingProvider()
+        # First refresh builds the index and writes a valid manifest.
+        first = refresh_memory_vector_index(_built_memory_index(), index_dir, provider)
+        assert first["action"] == "rebuilt"
+
+        # Corrupt the manifest as a crash mid-write would.
+        (index_dir / "manifest.json").write_text("{ torn", encoding="utf-8")
+
+        # The corpus is unchanged, so the pre-bug behaviour would have raised
+        # JSONDecodeError; the fix must instead rebuild and repair the manifest.
+        second = refresh_memory_vector_index(_built_memory_index(), index_dir, provider)
+        assert second["action"] == "rebuilt"
+        assert second["changed"] is True
+        # Manifest is valid JSON again and carries the fingerprint.
+        healed = json.loads((index_dir / "manifest.json").read_text(encoding="utf-8"))
+        assert healed["corpus_fingerprint"] == second["corpus_fingerprint"]
+
+    def test_status_does_not_raise_on_corrupt_manifest(self, tmp_path: Path):
+        index_dir = tmp_path / "vec"
+        index_dir.mkdir()
+        (index_dir / "manifest.json").write_text("{ not json", encoding="utf-8")
+
+        status = vector_index_status(index_dir)
+
+        assert status["manifest"] == {}
 
 
 def test_cli_watch_runs_refresh_worker_with_injected_memory(tmp_path: Path):
