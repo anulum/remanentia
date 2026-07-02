@@ -80,6 +80,35 @@ class TestIBAN:
         r = redact("DE89370400440532013000")
         assert r.counts["IBAN"] == 1
 
+    def test_sepa_spaced_iban_is_redacted_as_iban(self):
+        # The SEPA print format (groups of four, single spaces) is the most
+        # common real-world rendering. It must be caught by the IBAN detector
+        # itself — not partially swallowed by the credit-card/phone regex,
+        # which would leave the country + check-digit prefix in plaintext and
+        # report IBAN: 0 to any audit consumer.
+        for iban in (
+            "NO93 8601 1117 947",
+            "BE68 5390 0754 7034",
+            "SK89 7500 0000 0000 1234 5671",
+            "DE89 3704 0044 0532 0130 00",
+            "GB29 NWBK 6016 1331 9268 19",
+        ):
+            r = redact(f"wire to {iban} today")
+            assert r.counts.get("IBAN") == 1, iban
+            assert r.counts.get("CREDIT_CARD", 0) == 0, iban
+            assert r.counts.get("PHONE", 0) == 0, iban
+            # no digit or country-code fragment survives
+            assert iban.split()[0] not in r.text, iban
+            for group in iban.split():
+                assert group not in r.text, (iban, group)
+
+    def test_spaced_iban_does_not_run_into_following_word(self):
+        # The grouped alternation is bounded: it stops at the IBAN and leaves
+        # trailing prose intact rather than greedily absorbing later tokens.
+        r = redact("SK89 7500 0000 0000 1234 5671 HELLO WORLD")
+        assert r.counts["IBAN"] == 1
+        assert "HELLO WORLD" in r.text
+
 
 class TestCreditCard:
     def test_four_groups(self):

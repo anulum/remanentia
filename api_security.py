@@ -106,7 +106,13 @@ class BearerAuth:
         candidate = authorization_header[len(prefix) :]
         if not candidate:
             return False
-        return hmac.compare_digest(candidate, token)
+        # Compare as UTF-8 bytes, not str. hmac.compare_digest raises
+        # TypeError on str operands carrying non-ASCII characters, and
+        # HTTP servers decode header bytes as latin-1 — so a crafted
+        # "Authorization: Bearer £" would otherwise raise out of the auth
+        # gate (crashing the request / leaking a 500 traceback) instead of
+        # cleanly failing the check. Byte comparison stays constant-time.
+        return hmac.compare_digest(candidate.encode("utf-8"), token.encode("utf-8"))
 
 
 class TokenBucketLimiter:

@@ -451,6 +451,19 @@ class TestSecurityGates:
         h.do_GET()
         h.send_response.assert_called_with(401)
 
+    def test_non_ascii_bearer_returns_401_not_crash(self) -> None:
+        # A crafted non-ASCII Authorization header reaches the handler as
+        # latin-1-decoded str. The auth gate must return a clean 401,
+        # never raise a TypeError out of do_GET into a 500/connection reset.
+        server = _HandlerServer(auth=BearerAuth("valid-value", warn_on_disabled=False))
+        h = _make_handler(
+            "/status",
+            server=server,
+            headers={"Authorization": "Bearer \xa3\xa3"},
+        )
+        h.do_GET()
+        h.send_response.assert_called_with(401)
+
     def test_rate_limit_triggers_429(self) -> None:
         # burst=1, rate=60/min, same IP → second request immediately denied
         server = _HandlerServer(limiter=TokenBucketLimiter(rate_per_minute=60, burst=1))

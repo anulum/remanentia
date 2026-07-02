@@ -73,6 +73,27 @@ class TestBearerAuth:
         assert a.check_header("Bearer " + "a" * 64) is True
         assert a.check_header("Bearer " + "a" * 63 + "b") is False
 
+    def test_non_ascii_token_fails_without_crashing(self) -> None:
+        """A crafted non-ASCII bearer must fail the check, not raise.
+
+        hmac.compare_digest raises TypeError on str operands carrying
+        non-ASCII characters, and HTTP servers decode header bytes as
+        latin-1. Comparing UTF-8 bytes keeps the auth gate returning a
+        clean False (→ 401) instead of crashing the request handler.
+        """
+        a = BearerAuth("secret", warn_on_disabled=False)
+        # £ (U+00A3), an em-dash, and a raw latin-1-decoded byte all
+        # reach check_header as non-ASCII str from a real HTTP header.
+        assert a.check_header("Bearer \xa3") is False
+        assert a.check_header("Bearer sécret") is False
+        assert a.check_header("Bearer " + "\xff" * 6) is False
+
+    def test_non_ascii_matching_utf8_token_passes(self) -> None:
+        """A non-ASCII token still authenticates its own UTF-8 form."""
+        a = BearerAuth("clé-café-£", warn_on_disabled=False)
+        assert a.check_header("Bearer clé-café-£") is True
+        assert a.check_header("Bearer clé-café-x") is False
+
     def test_from_env_unset(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("REMANENTIA_API_TOKEN", raising=False)
         a = BearerAuth.from_env()

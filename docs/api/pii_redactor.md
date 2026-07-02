@@ -74,7 +74,7 @@ Order matters for correctness. The fixed sequence is:
 | 6 | `SLACK_TOKEN` | `xox[abprs]-…{10,}` |
 | 7 | `HEX_TOKEN` | `[a-f0-9]{32,}` (fallback) |
 | 8 | `EMAIL` | RFC-ish address |
-| 9 | `IBAN` | 2 letters + 2 digits + 10-30 alnum |
+| 9 | `IBAN` | 2 letters + 2 digits + 11-30 alnum, contiguous or SEPA-spaced (groups of four) |
 | 10 | `CREDIT_CARD` | 13-19 digit groups |
 | 11 | `PHONE` | 3-4 digit groups with separators |
 

@@ -76,8 +76,24 @@ _PHONE = re.compile(
     r"(?!\w)"
 )
 
-# IBAN: 2 country letters + 2 check digits + up to 30 alphanumerics.
-_IBAN = re.compile(r"(?<![A-Z0-9])[A-Z]{2}\d{2}[A-Z0-9]{10,30}(?![A-Z0-9])")
+# IBAN: 2 country letters + 2 check digits + 11-30 alphanumerics of BBAN.
+# Two renderings must both match, otherwise the detector silently misses the
+# most common form and another detector (credit-card / phone) mislabels the
+# body while the country + check-digit prefix leaks in plaintext:
+#   A) contiguous  — SK8975000000000012345671
+#   B) SEPA print  — SK89 7500 0000 0000 1234 5671  (groups of four, single
+#      spaces, final group 1-4 chars). The grouped alternation is bounded so
+#      it cannot run away into a following all-caps word (see tests).
+_IBAN = re.compile(
+    r"(?<![A-Z0-9])"
+    r"[A-Z]{2}\d{2}"
+    r"(?:"
+    r"[A-Z0-9]{11,30}"
+    r"|"
+    r"(?:[ ][A-Z0-9]{4}){2,7}(?:[ ][A-Z0-9]{1,4})?"
+    r")"
+    r"(?![A-Z0-9])"
+)
 
 # Credit card: 13-19 digits, optional spaces/hyphens in groups of four.
 _CREDIT_CARD = re.compile(
