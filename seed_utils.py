@@ -16,7 +16,10 @@ This module is the one call every reproducible entry point now makes.
 One level of indirection lets us pin the following chain atomically:
 
 1. Python ``random``
-2. ``numpy.random`` (legacy + default_rng)
+2. ``numpy.random`` legacy process-global generator (``np.random.seed``).
+   NOT ``np.random.default_rng()`` — it is a factory with no global state
+   to pin; a caller wanting a reproducible ``Generator`` must pass the
+   seed to ``default_rng`` itself.
 3. ``torch.manual_seed`` (CPU + all CUDA devices)
 4. Environment ``PYTHONHASHSEED`` (for inter-process reproducibility
    — applies only to child processes launched after this call)
@@ -74,10 +77,16 @@ def seed_everything(seed: int | None = None, *, torch_cuda_deterministic: bool =
     try:
         import numpy as np
 
+        # Pins the legacy process-global generator behind np.random.seed,
+        # np.random.rand, np.random.choice, etc. It does NOT pin the newer
+        # np.random.default_rng(): that is a factory returning a fresh,
+        # independently seeded Generator on every call, with no global state
+        # to fix. Code needing a reproducible Generator must pass this seed
+        # to default_rng() itself (nearly all Remanentia call sites already
+        # do — see snn_backend, encoding, pattern_separation). Instantiating
+        # and discarding a Generator here would pin nothing and only imply a
+        # guarantee we cannot keep.
         np.random.seed(seed)
-        # The newer default_rng API keeps its own state; instantiate it
-        # with the same seed so callers that prefer it stay aligned.
-        np.random.default_rng(seed)
     except ImportError:  # pragma: no cover — numpy is a hard dep
         pass
 

@@ -47,6 +47,35 @@ except ImportError:  # pragma: no cover — Windows
 # ─── Atomic writes ────────────────────────────────────────────────────
 
 
+def _fsync_parent_dir(directory: Path) -> None:
+    """fsync *directory* so the rename that just landed is itself durable.
+
+    ``os.replace`` makes the swap atomic, and we already fsync the file's
+    data before renaming — but the *directory entry* the rename creates
+    lives in the directory's own metadata, which is not on stable storage
+    until the directory is flushed. A power loss in that window can lose
+    the rename, and for a brand-new target the entire entry, even though
+    the file contents were safely fsynced. That is exactly the torn-write
+    class this module exists to prevent, so we close it here.
+
+    Opening a directory for fsync is POSIX-only and not universally
+    permitted (Windows has no directory fds; some filesystems reject the
+    fsync). Durability is therefore best-effort: a failure here cannot
+    corrupt or half-write the target — the atomic swap has already
+    happened — so it is swallowed rather than raised.
+    """
+    try:
+        dir_fd = os.open(str(directory), os.O_RDONLY)  # codeql[py/path-injection]
+    except OSError:  # pragma: no cover — platform without directory fds (Windows)
+        return
+    try:
+        os.fsync(dir_fd)
+    except OSError:  # pragma: no cover — filesystem/platform rejects dir fsync
+        pass
+    finally:
+        os.close(dir_fd)
+
+
 def _atomic_write_raw(path: Path, data: bytes) -> None:
     """Core write-then-rename. Caller hands us bytes."""
     path = Path(path)
@@ -65,6 +94,7 @@ def _atomic_write_raw(path: Path, data: bytes) -> None:
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp_name, path)  # codeql[py/path-injection]
+        _fsync_parent_dir(path.parent)
     except Exception:
         # Leave the partial file for post-mortem but do not clobber target.
         try:

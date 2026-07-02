@@ -39,12 +39,38 @@ class TestSeedEverything:
         b = np.random.rand(5).tolist()
         assert a == b
 
-    def test_numpy_default_rng_independent_between_seeds(self):
+    def test_numpy_legacy_global_differs_between_seeds(self):
+        # The legacy process-global generator (np.random.rand) is what
+        # seed_everything pins; distinct seeds must produce distinct draws.
         seed_everything(1)
         a = np.random.rand(3).tolist()
         seed_everything(2)
         b = np.random.rand(3).tolist()
         assert a != b
+
+    def test_default_rng_is_not_pinned_by_seed_everything(self):
+        # Honest contract: seed_everything does NOT pin np.random.default_rng().
+        # It is a factory returning a freshly, independently seeded Generator
+        # on every call — there is no global state to fix — so two bare
+        # default_rng() draws after the same seed_everything must differ.
+        # This locks the documented behaviour against a regression to the
+        # old no-op line that instantiated and discarded a seeded Generator,
+        # implying a guarantee the module cannot keep.
+        seed_everything(1234)
+        first = np.random.default_rng().random()
+        seed_everything(1234)
+        second = np.random.default_rng().random()
+        assert first != second
+
+    def test_default_rng_is_reproducible_only_with_explicit_seed(self):
+        # The supported way to get a reproducible Generator: pass the seed
+        # yourself. This is what the live call sites (snn_backend, encoding,
+        # pattern_separation) already do.
+        seed_everything(1234)
+        pinned_a = np.random.default_rng(99).random()
+        seed_everything(4321)
+        pinned_b = np.random.default_rng(99).random()
+        assert pinned_a == pinned_b
 
     def test_pythonhashseed_set(self):
         seed_everything(99)
