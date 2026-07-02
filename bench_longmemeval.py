@@ -60,11 +60,18 @@ _FULL_RETRIEVE_K = int(os.environ.get("REMANENTIA_FULL_RETRIEVE_K", "50"))
 # full-S ablation (2026-06-29) found no reliable accuracy effect (multi-session
 # +2.5 within reader-noise; seed42 +7 did not reproduce). Opt in to experiment.
 _SYNTHESIS_ENABLE = os.environ.get("REMANENTIA_SYNTHESIS_ENABLE", "") == "1"
-# Lean bi-temporal observe→reflect reader context (W2). Off by default until the
-# full-S ablation validates it; when on, the reader sees a lean, dated,
-# supersession-resolved observation set INSTEAD of the raw-session dump
-# (Mastra OM / Engram mechanism). Opt in: REMANENTIA_LEAN_CONTEXT=1.
+# Deterministic lean bi-temporal context (W2). Stays OFF: the full-S ablation
+# (2026-06-30) measured it at 49.0% vs 56.6% baseline (−7.6 pp) — a rule-based
+# dedup/supersession drops clauses the reader still needed. Kept for the ablation
+# record. Opt in: REMANENTIA_LEAN_CONTEXT=1.
 _LEAN_CONTEXT = os.environ.get("REMANENTIA_LEAN_CONTEXT", "") == "1"
+# LLM observe→reflect context (W2-v2). The realistic-SOTA mechanism the
+# deterministic lean pass could not be: an LLM Observer reads the retrieved
+# sessions and writes dated, supersession-aware observations that REPLACE the raw
+# dump (Mastra OM / Engram). Same completer as the reader, so the no-egress path
+# stays no-egress. Off by default until the full-S ablation validates it; takes
+# precedence over _LEAN_CONTEXT when both are set. Opt in: REMANENTIA_OBSERVE_REFLECT=1.
+_OBSERVE_REFLECT = os.environ.get("REMANENTIA_OBSERVE_REFLECT", "") == "1"
 # Emit per-question confidence + cited provenance so the W1 scorecard can score
 # the calibrated-abstention and lineage axes (scorecard_report). Off by default —
 # it appends a confidence-rating instruction to the reader prompt, so default
@@ -712,6 +719,15 @@ def _arcane_answer(
                 lean = build_lean_context([r.fact for r in results])
                 if lean:
                     history_block = lean.rendered
+            # W2-v2 takes precedence: an LLM Observer distils the retrieved
+            # sessions into dated observations that replace the raw dump. Falls
+            # back to whatever history_block already holds when the pass is empty.
+            if _OBSERVE_REFLECT:
+                from observed_context import build_observed_context
+
+                observed = build_observed_context(question, full_context, _hypothesis_complete)
+                if observed:
+                    history_block = observed.rendered
 
             context = (
                 f"{precompute_header}"
