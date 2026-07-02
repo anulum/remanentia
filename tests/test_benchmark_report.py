@@ -167,6 +167,32 @@ def test_report_from_longmemeval_jsonl_groups_scores_and_runtime(tmp_path: Path)
             prompt_sha256("judge prompt without precomputed hash"),
         ]
     )
+    assert report["n_unjudged"] == 0
+
+
+def test_unjudged_rows_excluded_from_score_but_reported(tmp_path: Path) -> None:
+    """An unjudged row must not count as wrong — and must not disappear either.
+
+    Regression pin: rows without a ``judge_label`` (a crash mid-judging, an
+    unjudged hypothesis file) used to be scored as incorrect, silently
+    deflating accuracy and diverging from ``scorecard_report`` on the same
+    artefact.
+    """
+    results = tmp_path / "partial.results.jsonl"
+    _write_jsonl(
+        results,
+        [
+            {"question_id": "q1", "question_type": "x", "judge_label": True},
+            {"question_id": "q2", "question_type": "x", "judge_label": False},
+            {"question_id": "q3", "question_type": "x", "hypothesis": "not judged yet"},
+        ],
+    )
+
+    report = report_from_path(results, benchmark="longmemeval", generated_at="2026-07-02")
+
+    assert report["n_records"] == 2  # judged rows only
+    assert report["n_unjudged"] == 1  # the partial artefact stays visible
+    assert report["score"] == {"correct": 1, "total": 2, "accuracy": 50.0}
 
 
 def test_jsonl_report_handles_empty_rows_even_median_and_prompt_fallback(

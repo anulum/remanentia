@@ -151,7 +151,14 @@ def _summarise_rows(
     generated_at: str,
     source_format: str,
 ) -> JsonDict:
-    """Summarise row-wise judged benchmark output."""
+    """Summarise row-wise judged benchmark output.
+
+    Rows without a ``judge_label`` are unjudged: they carry no correctness
+    evidence, so they are excluded from the score rather than silently counted
+    as wrong (which would deflate accuracy and diverge from
+    ``scorecard_report`` on the same artefact). Their count is reported as
+    ``n_unjudged`` so a partially judged artefact stays visible.
+    """
     correct_by: dict[str, int] = defaultdict(int)
     total_by: dict[str, int] = defaultdict(int)
     latencies: list[float] = []
@@ -159,8 +166,12 @@ def _summarise_rows(
     models: set[str] = set()
     prompt_token_estimate = 0
     completion_tokens = 0
+    unjudged = 0
 
     for row in rows:
+        if "judge_label" not in row:
+            unjudged += 1
+            continue
         qtype = str(row.get("question_type") or row.get("category") or "unknown")
         total_by[qtype] += 1
         if bool(row.get("judge_label")):
@@ -207,6 +218,7 @@ def _summarise_rows(
         "source_format": source_format,
         "generated_at": generated_at,
         "n_records": overall_total,
+        "n_unjudged": unjudged,
         "score": _score(overall_correct, overall_total),
         "by_category": by_category,
         "runtime": {
@@ -268,6 +280,7 @@ def _summarise_json_summary(
         "source_format": "json",
         "generated_at": generated_at,
         "n_records": total,
+        "n_unjudged": 0,
         "score": _score(correct, total),
         "by_category": by_category,
         "runtime": runtime,

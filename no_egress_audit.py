@@ -19,19 +19,28 @@ The stance is deliberately conservative — an unknown or empty endpoint counts 
 cloud. Sovereignty must be *proven* (the endpoint demonstrably points at a
 loopback address or an on-device runtime), never assumed; a misconfigured run
 that silently reached a cloud API must fail the audit, not pass it by default.
+A network URL (http/https/ws/wss) is therefore judged by its *host alone* —
+local iff the host is a loopback address; a runtime name in the URL cannot
+rescue it, because ``https://ollama.com/v1`` is egress no matter what it runs.
 """
 
 from __future__ import annotations
 
+import ipaddress
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Literal
+from urllib.parse import urlsplit
 
 EndpointClass = Literal["local", "cloud"]
 
-# Substrings that demonstrate an on-device / loopback model endpoint. Anything
-# not matching one of these is treated as cloud (prove-local, not assume-local).
+# URL schemes whose endpoint is a network host: judged by loopback host only.
+_NETWORK_SCHEMES = ("http", "https", "ws", "wss")
+
+# Substrings that demonstrate an on-device runtime or loopback descriptor for
+# NON-network endpoints (runtime labels, socket paths, scheme-less hosts).
+# Anything not matching is treated as cloud (prove-local, not assume-local).
 _LOCAL_MARKERS = (
     "localhost",
     "127.0.0.1",
@@ -47,16 +56,36 @@ _LOCAL_MARKERS = (
 )
 
 
+def _is_loopback_host(host: str) -> bool:
+    """Whether *host* is provably this machine (loopback or unspecified)."""
+    if host == "localhost":
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        # Not an IP literal — a DNS name like ``localhost.evil.com`` or
+        # ``127.0.0.1.evil.com`` proves nothing about locality.
+        return False
+    return ip.is_loopback or ip.is_unspecified
+
+
 def classify_endpoint(endpoint: object) -> EndpointClass:
     """Classify a model endpoint as ``local`` or ``cloud``.
 
     Local only when the endpoint visibly points at a loopback address or an
     on-device runtime; an empty or unrecognised endpoint is ``cloud`` so an
-    unproven endpoint can never silently pass a sovereignty audit.
+    unproven endpoint can never silently pass a sovereignty audit. Network
+    URLs are judged by host alone — a runtime name in the hostname or path
+    (``https://ollama.com/v1``, ``https://proxy.example.com/ollama``) does not
+    make the call local, and a loopback *substring* in a DNS name
+    (``https://localhost.evil.com``) does not either.
     """
     text = str(endpoint).strip().lower()
     if not text:
         return "cloud"
+    parts = urlsplit(text)
+    if parts.scheme in _NETWORK_SCHEMES:
+        return "local" if _is_loopback_host(parts.hostname or "") else "cloud"
     return "local" if any(marker in text for marker in _LOCAL_MARKERS) else "cloud"
 
 

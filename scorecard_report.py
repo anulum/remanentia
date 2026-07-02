@@ -14,20 +14,23 @@ and produces a single comparable run report that pins what makes a number
 comparable (setting, reader, judge) and records the sovereign no-egress axis
 (:mod:`no_egress_audit`) from the reader endpoint.
 
-The two new-category axes activate the moment the bench emits the data, and stay
-honestly dark until then — no fabricated curve. When every judged row carries a
-numeric ``confidence``, the calibrated-abstention axis is scored via
+The new-category axes activate the moment their data exists, and stay honestly
+dark until then — no fabricated curve. When every judged row carries a numeric
+``confidence``, the calibrated-abstention axis is scored via
 :mod:`coverage_accuracy` (accuracy at full coverage, AURC, coverage at a target
-accuracy). When every judged row carries a ``cited_ids`` list, the
-lineage-of-belief axis is scored via :mod:`lineage_completeness` (the fraction of
-answers that rest on queryable provenance). A run missing a field reports that
-axis ``not measured`` rather than guess.
+accuracy). When every judged row carries a ``cited_ids`` list, *citation
+presence* is scored: the fraction of answers that cited at least one memory.
+The lineage-of-belief axis (:mod:`lineage_completeness` — every cited id
+resolves to a record whose chain reaches an originating write) additionally
+requires a real provenance store; a results file alone cannot prove
+queryability, so without one the axis reports ``not measured`` rather than
+score citations against a store synthesised from the citations themselves.
 """
 
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -41,7 +44,7 @@ Setting = Literal["oracle", "full_s"]
 
 @dataclass(frozen=True)
 class ResultSummary:
-    """Accuracy, judges, and (when present) the abstention + lineage inputs."""
+    """Accuracy, judges, and (when present) the abstention + citation inputs."""
 
     total: int
     correct: int
@@ -49,7 +52,6 @@ class ResultSummary:
     judge_models: tuple[str, ...]
     outcomes: tuple[Outcome, ...]  # non-empty only when every judged row had confidence
     lineages: tuple[AnswerLineage, ...]  # non-empty only when every row had cited_ids
-    provenance: tuple[ProvenanceNode, ...]  # origin nodes for the cited ids
 
 
 def _confidence(value: object) -> float | None:
@@ -67,15 +69,16 @@ def parse_results(path: str | Path) -> ResultSummary:
     Each row's boolean ``judge_label`` is the correctness verdict; rows without a
     ``judge_label`` (unjudged) are skipped. ``judge_model`` is collected for
     judge-matched comparison. Optional per-row ``confidence`` (float) feeds the
-    calibrated-abstention axis and ``cited_ids`` (list) feeds the lineage axis —
-    each axis activates only if *every* judged row carries its field.
+    calibrated-abstention axis and ``cited_ids`` (list) feeds the citation and
+    lineage axes — each axis activates only if *every* judged row carries its
+    field. The cited ids are collected as claims to verify, never turned into
+    provenance records themselves: only a real store can prove they resolve.
     """
     total = 0
     correct = 0
     judges: set[str] = set()
     outcomes: list[Outcome] = []
     lineages: list[AnswerLineage] = []
-    store: dict[str, ProvenanceNode] = {}
     has_confidence = True
     has_cited = True
     for raw in Path(path).read_text(encoding="utf-8").splitlines():
@@ -104,8 +107,6 @@ def parse_results(path: str | Path) -> ResultSummary:
             cited_ids = tuple(str(c) for c in cited)
             answer_id = str(row.get("question_id", f"q{total}"))
             lineages.append(AnswerLineage(answer_id=answer_id, cited_ids=cited_ids))
-            for cid in cited_ids:
-                store.setdefault(cid, ProvenanceNode(id=cid, origin=True, parent=None))
         else:
             has_cited = False
 
@@ -117,8 +118,34 @@ def parse_results(path: str | Path) -> ResultSummary:
         judge_models=tuple(sorted(judges)),
         outcomes=tuple(outcomes) if (total and has_confidence) else (),
         lineages=tuple(lineages) if (total and has_cited) else (),
-        provenance=tuple(store.values()),
     )
+
+
+def load_provenance_store(path: str | Path) -> dict[str, ProvenanceNode]:
+    """Load a real provenance store from a JSONL of provenance nodes.
+
+    Each line is an object with a non-empty string ``id``, an optional boolean
+    ``origin`` (default false), and an optional string ``parent`` (default
+    null). This is the store the lineage axis verifies cited ids against —
+    produced by the memory pipeline, not derived from the results file.
+    """
+    store: dict[str, ProvenanceNode] = {}
+    for raw in Path(path).read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        row = json.loads(line)
+        node_id = row.get("id")
+        if not isinstance(node_id, str) or not node_id:
+            raise ValueError(f"provenance node needs a non-empty string id: {line!r}")
+        origin = row.get("origin", False)
+        if not isinstance(origin, bool):
+            raise ValueError(f"provenance node {node_id!r} origin must be a boolean")
+        parent = row.get("parent")
+        if parent is not None and not isinstance(parent, str):
+            raise ValueError(f"provenance node {node_id!r} parent must be a string or null")
+        store[node_id] = ProvenanceNode(id=node_id, origin=origin, parent=parent)
+    return store
 
 
 @dataclass(frozen=True)
@@ -136,6 +163,8 @@ class RunReport:
     aurc: float  # area under the risk-coverage curve (0 when not measured)
     coverage_at_target: float  # coverage retained at accuracy_target (0 when not measured)
     accuracy_target: float
+    citation_measured: bool
+    citation_presence: float  # fraction of answers citing >= 1 memory (0 when not measured)
     lineage_measured: bool
     lineage_completeness: (
         float  # fraction of answers with queryable provenance (0 when not measured)
@@ -155,6 +184,8 @@ class RunReport:
             "aurc": round(self.aurc, 4),
             "coverage_at_target": round(self.coverage_at_target, 4),
             "accuracy_target": self.accuracy_target,
+            "citation_measured": self.citation_measured,
+            "citation_presence": round(self.citation_presence, 4),
             "lineage_measured": self.lineage_measured,
             "lineage_completeness": round(self.lineage_completeness, 4),
         }
@@ -167,8 +198,18 @@ def build_run_report(
     reader: str,
     reader_endpoints: Sequence[object],
     accuracy_target: float = 0.90,
+    provenance_store: Mapping[str, ProvenanceNode] | None = None,
 ) -> RunReport:
-    """Build the comparable run report from a results file and the reader endpoints."""
+    """Build the comparable run report from a results file and the reader endpoints.
+
+    Citation presence (did each answer cite at least one memory?) needs only the
+    results file. Lineage completeness (does every cited id resolve to a record
+    whose chain reaches an originating write?) additionally needs
+    *provenance_store* — the real store the memory pipeline maintains. Without
+    it the lineage axis stays honestly dark: scoring citations against a store
+    built from the citations themselves would mark every cited id an origin and
+    the axis could never fail, so a dangling citation would go undetected.
+    """
     summary = parse_results(results_path)
     egress = audit_endpoints(reader_endpoints)
     judge = summary.judge_models[0] if summary.judge_models else "unknown"
@@ -181,11 +222,17 @@ def build_run_report(
         aurc = rc.aurc
         coverage_at_target = rc.coverage_at_accuracy(accuracy_target)
 
+    citation_measured = bool(summary.lineages)
+    citation_presence = 0.0
+    if citation_measured:
+        citing = sum(1 for lineage in summary.lineages if lineage.cited_ids)
+        citation_presence = citing / len(summary.lineages)
+
     lineage_value = 0.0
-    lineage_measured = bool(summary.lineages)
+    lineage_measured = citation_measured and provenance_store is not None
     if lineage_measured:
-        store = {node.id: node for node in summary.provenance}
-        lineage_value = lineage_completeness(summary.lineages, store).completeness
+        assert provenance_store is not None  # narrowed by lineage_measured
+        lineage_value = lineage_completeness(summary.lineages, provenance_store).completeness
 
     return RunReport(
         setting=setting,
@@ -199,6 +246,8 @@ def build_run_report(
         aurc=aurc,
         coverage_at_target=coverage_at_target,
         accuracy_target=accuracy_target,
+        citation_measured=citation_measured,
+        citation_presence=citation_presence,
         lineage_measured=lineage_measured,
         lineage_completeness=lineage_value,
     )
@@ -222,14 +271,21 @@ def main() -> int:  # pragma: no cover - CLI entry point
         help="reader endpoint(s) for the no-egress audit (repeatable)",
     )
     parser.add_argument("--accuracy-target", type=float, default=0.90)
+    parser.add_argument(
+        "--provenance-store",
+        default=None,
+        help="provenance-node JSONL to verify cited ids against (enables the lineage axis)",
+    )
     args = parser.parse_args()
     endpoints = args.reader_endpoint or ["https://api.openai.com/v1"]
+    store = load_provenance_store(args.provenance_store) if args.provenance_store else None
     report = build_run_report(
         args.results,
         setting=args.setting,
         reader=args.reader,
         reader_endpoints=endpoints,
         accuracy_target=args.accuracy_target,
+        provenance_store=store,
     )
     print(json.dumps(report.as_dict(), indent=2))
     return 0

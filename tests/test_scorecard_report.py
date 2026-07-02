@@ -11,7 +11,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from scorecard_report import _confidence, build_run_report, parse_results
+import pytest
+
+from lineage_completeness import ProvenanceNode
+from scorecard_report import (
+    _confidence,
+    build_run_report,
+    load_provenance_store,
+    parse_results,
+)
 
 
 def _write(path: Path, rows: list[dict[str, object]]) -> None:
@@ -103,9 +111,8 @@ class TestParseResults:
         s = parse_results(p)
         assert len(s.lineages) == 2
         assert s.lineages[0].answer_id == "q-A"
+        assert s.lineages[0].cited_ids == ("f1", "f2")
         assert s.lineages[1].answer_id == "q2"  # fallback f"q{total}"
-        ids = {n.id for n in s.provenance}
-        assert ids == {"f1", "f2"}  # f1 deduped via setdefault
 
     def test_lineage_axis_dark_if_one_row_missing(self, tmp_path: Path) -> None:
         p = tmp_path / "r.jsonl"
@@ -137,6 +144,8 @@ class TestBuildRunReport:
         assert r.abstention_measured is False
         assert r.aurc == 0.0
         assert r.coverage_at_target == 0.0
+        assert r.citation_measured is False
+        assert r.citation_presence == 0.0
         assert r.lineage_measured is False
         assert r.lineage_completeness == 0.0
 
@@ -173,13 +182,65 @@ class TestBuildRunReport:
         # two high-confidence correct answers form a prefix >= 0.90 accuracy
         assert r.coverage_at_target > 0.0
         assert 0.0 <= r.aurc <= 1.0
-        assert r.lineage_measured is True
-        # 2 of 3 answers cite provenance (third cites nothing -> not visible)
-        assert abs(r.lineage_completeness - 2 / 3) < 1e-9
+        assert r.citation_measured is True
+        # 2 of 3 answers cite at least one memory (third cites nothing)
+        assert abs(r.citation_presence - 2 / 3) < 1e-9
+        # No provenance store supplied -> lineage cannot be proven, stays dark.
+        assert r.lineage_measured is False
+        assert r.lineage_completeness == 0.0
         d = r.as_dict()
         assert d["abstention_measured"] is True
-        assert d["lineage_measured"] is True
+        assert d["citation_measured"] is True
+        assert d["lineage_measured"] is False
         assert d["accuracy_target"] == 0.9
+
+    def test_lineage_axis_verifies_against_real_store(self, tmp_path: Path) -> None:
+        """A dangling citation must drag lineage below citation presence.
+
+        This is the regression pin for the fabricated-provenance defect: the
+        parser used to mint an origin node for every cited id, so the lineage
+        axis was satisfied by construction and could never catch a citation
+        that resolves nowhere.
+        """
+        p = tmp_path / "r.jsonl"
+        _write(
+            p,
+            [
+                {"judge_label": True, "question_id": "qa", "cited_ids": ["real"]},
+                {"judge_label": True, "question_id": "qb", "cited_ids": ["chained"]},
+                {"judge_label": False, "question_id": "qc", "cited_ids": ["dangling"]},
+            ],
+        )
+        store = {
+            "real": ProvenanceNode(id="real", origin=True, parent=None),
+            "chained": ProvenanceNode(id="chained", origin=False, parent="real"),
+            # "dangling" is deliberately absent — cited but resolves nowhere.
+        }
+        r = build_run_report(
+            p,
+            setting="full_s",
+            reader="qwen3:8b",
+            reader_endpoints=["http://localhost:11434/v1"],
+            provenance_store=store,
+        )
+        assert r.citation_measured is True
+        assert r.citation_presence == 1.0  # every answer cited something
+        assert r.lineage_measured is True
+        # ...but only 2 of 3 citations resolve to an originating write.
+        assert abs(r.lineage_completeness - 2 / 3) < 1e-9
+
+    def test_lineage_dark_without_citations_even_with_store(self, tmp_path: Path) -> None:
+        p = tmp_path / "r.jsonl"
+        _write(p, [{"judge_label": True}])  # no cited_ids at all
+        r = build_run_report(
+            p,
+            setting="full_s",
+            reader="qwen3:8b",
+            reader_endpoints=["http://localhost:11434/v1"],
+            provenance_store={"x": ProvenanceNode(id="x", origin=True, parent=None)},
+        )
+        assert r.citation_measured is False
+        assert r.lineage_measured is False
 
     def test_unknown_judge_when_absent(self, tmp_path: Path) -> None:
         p = tmp_path / "r.jsonl"
@@ -192,3 +253,36 @@ class TestBuildRunReport:
         )
         assert r.judge == "unknown"
         assert r.as_dict()["accuracy"] == 1.0
+
+
+class TestLoadProvenanceStore:
+    def test_loads_nodes_with_defaults_and_blank_lines(self, tmp_path: Path) -> None:
+        p = tmp_path / "prov.jsonl"
+        p.write_text(
+            '{"id": "root", "origin": true}\n\n{"id": "child", "parent": "root"}\n',
+            encoding="utf-8",
+        )
+        store = load_provenance_store(p)
+        assert store["root"] == ProvenanceNode(id="root", origin=True, parent=None)
+        assert store["child"] == ProvenanceNode(id="child", origin=False, parent="root")
+
+    def test_rejects_missing_or_empty_id(self, tmp_path: Path) -> None:
+        p = tmp_path / "prov.jsonl"
+        p.write_text('{"origin": true}\n', encoding="utf-8")
+        with pytest.raises(ValueError, match="non-empty string id"):
+            load_provenance_store(p)
+        p.write_text('{"id": ""}\n', encoding="utf-8")
+        with pytest.raises(ValueError, match="non-empty string id"):
+            load_provenance_store(p)
+
+    def test_rejects_non_boolean_origin(self, tmp_path: Path) -> None:
+        p = tmp_path / "prov.jsonl"
+        p.write_text('{"id": "n", "origin": "yes"}\n', encoding="utf-8")
+        with pytest.raises(ValueError, match="origin must be a boolean"):
+            load_provenance_store(p)
+
+    def test_rejects_non_string_parent(self, tmp_path: Path) -> None:
+        p = tmp_path / "prov.jsonl"
+        p.write_text('{"id": "n", "parent": 7}\n', encoding="utf-8")
+        with pytest.raises(ValueError, match="parent must be a string or null"):
+            load_provenance_store(p)

@@ -20,6 +20,9 @@ class TestClassifyEndpoint:
         for ep in (
             "http://localhost:11434/v1",
             "http://127.0.0.1:8080",
+            "http://[::1]:8080/v1",
+            "http://0.0.0.0:8000",
+            "localhost:11434",  # scheme-less loopback descriptor
             "ollama://gemma3:4b",
             "file:///models/qwen.gguf",
             "in-process",
@@ -30,6 +33,23 @@ class TestClassifyEndpoint:
     def test_cloud_hosts_are_cloud(self) -> None:
         assert classify_endpoint("https://api.openai.com/v1") == "cloud"
         assert classify_endpoint("https://api.anthropic.com") == "cloud"
+
+    def test_runtime_name_cannot_rescue_a_network_url(self) -> None:
+        """Regression pin: a runtime substring must not make a remote URL local.
+
+        ``ollama.com`` is Ollama's hosted cloud service and a proxy path
+        containing ``/ollama`` still leaves the machine — both are egress.
+        The pre-fix substring match classified them local.
+        """
+        assert classify_endpoint("https://ollama.com/v1") == "cloud"
+        assert classify_endpoint("https://api.ollama.com") == "cloud"
+        assert classify_endpoint("https://proxy.example.com/ollama/v1") == "cloud"
+        assert classify_endpoint("wss://llamacpp.example.com/stream") == "cloud"
+
+    def test_loopback_substring_in_dns_name_is_cloud(self) -> None:
+        # a DNS name is not an IP literal — it proves nothing about locality
+        assert classify_endpoint("https://localhost.evil.com") == "cloud"
+        assert classify_endpoint("http://127.0.0.1.evil.com/v1") == "cloud"
 
     def test_empty_or_unknown_is_cloud(self) -> None:
         # prove-local, not assume-local
