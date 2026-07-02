@@ -38,6 +38,8 @@ def _probe(argv_extra: list[str], env: dict[str, str] | None = None) -> dict[str
         "print('_USE_LLM=', b._USE_LLM)\n"
         "print('_LIMIT=', b._LIMIT)\n"
         "print('_EFFECTIVE_SEED=', b._EFFECTIVE_SEED)\n"
+        "print('_LOCAL_MODEL=', b._LOCAL_MODEL)\n"
+        "print('_LOCAL_URL=', b._LOCAL_URL)\n"
     )
     r = subprocess.run(
         [PY, "-c", code],
@@ -124,3 +126,52 @@ class TestSeed:
 
     def test_flag_beats_env(self):
         assert _probe(["--seed", "111"], env={"REMANENTIA_SEED": "222"})["_EFFECTIVE_SEED"] == "111"
+
+
+class TestLocalReaderSelection:
+    """The pure-local W3 number is attributable only if the model/endpoint the
+    reader actually queried is resolved from config and printed verbatim — a
+    literal baked into the banner could drift from the model that answered."""
+
+    def test_defaults(self):
+        vals = _probe([])
+        assert vals["_LOCAL_MODEL"] == "gemma3:4b"
+        assert vals["_LOCAL_URL"] == "http://localhost:11434/v1"
+
+    def test_model_env_override(self):
+        vals = _probe([], env={"REMANENTIA_LOCAL_MODEL": "gemma3:12b"})
+        assert vals["_LOCAL_MODEL"] == "gemma3:12b"
+
+    def test_url_env_override(self):
+        vals = _probe([], env={"REMANENTIA_LOCAL_URL": "http://localhost:8080/v1"})
+        assert vals["_LOCAL_URL"] == "http://localhost:8080/v1"
+
+    def test_resolved_reader_reaches_the_backend(self, monkeypatch):
+        # The honesty contract is not that the constants resolve, but that the
+        # model/endpoint the reader actually queried is the resolved one — a
+        # local score is attributable only if the backend was built from it.
+        import bench_longmemeval as b
+        import llm_backend
+
+        captured: dict[str, object] = {}
+
+        class _FakeBackend:
+            def __init__(self, **kwargs):
+                captured.update(kwargs)
+
+            def is_available(self):
+                return True
+
+            def complete(self, prompt, max_tokens=400):
+                return "answer"
+
+        monkeypatch.setattr(llm_backend, "LocalLLMBackend", _FakeBackend)
+        monkeypatch.setattr(b, "_USE_LOCAL_LLM", True)
+        monkeypatch.setattr(b, "_LOCAL_MODEL", "qwen2.5:7b")
+        monkeypatch.setattr(b, "_LOCAL_URL", "http://localhost:9999/v1")
+
+        result = b._hypothesis_complete("q")
+
+        assert result == "answer"
+        assert captured["model"] == "qwen2.5:7b"
+        assert captured["base_url"] == "http://localhost:9999/v1"

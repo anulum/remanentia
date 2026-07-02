@@ -123,6 +123,15 @@ for i, arg in enumerate(sys.argv):
 # set on the client constructor).
 _OPENAI_TIMEOUT = float(os.environ.get("REMANENTIA_OPENAI_TIMEOUT", "30"))
 
+# Local (no-egress) reader selection. The pure-local W3 number depends entirely
+# on WHICH model answered, so both the model tag and the endpoint are resolved
+# once here and printed verbatim in the run banner — a hardcoded literal in the
+# banner would drift from the model actually queried and misattribute the score.
+# Override to measure a different local reader (e.g. gemma3:12b, a Qwen pull)
+# without touching code: REMANENTIA_LOCAL_MODEL / REMANENTIA_LOCAL_URL.
+_LOCAL_MODEL = os.environ.get("REMANENTIA_LOCAL_MODEL", "gemma3:4b")
+_LOCAL_URL = os.environ.get("REMANENTIA_LOCAL_URL", "http://localhost:11434/v1")
+
 # Pin every randomness source Remanentia pulls in. REMANENTIA_SEED env
 # or --seed flag overrides the 42 default; result banners print the
 # effective seed so the noise envelope can be measured rather than
@@ -137,10 +146,12 @@ def _hypothesis_complete(prompt: str, max_tokens: int = 400) -> str | None:
     """Generate a hypothesis answer using the configured LLM backend.
 
     When ``--local-llm`` is set (or ``OPENAI_API_KEY`` is missing),
-    routes through :class:`llm_backend.LocalLLMBackend` (default Ollama
-    at localhost:11434 running ``gemma3:4b``). Otherwise uses the
-    hosted ``gpt-4o-mini`` endpoint directly. Returns ``None`` on
-    backend failure.
+    routes through :class:`llm_backend.LocalLLMBackend` against the
+    endpoint and model resolved into ``_LOCAL_URL`` / ``_LOCAL_MODEL``
+    (default Ollama at localhost:11434 running ``gemma3:4b``; override
+    via ``REMANENTIA_LOCAL_URL`` / ``REMANENTIA_LOCAL_MODEL``). Otherwise
+    uses the hosted ``gpt-4o-mini`` endpoint directly. Returns ``None``
+    on backend failure.
 
     The GPT-judge in :func:`run_evaluation` is NOT affected — it stays
     on ``gpt-4o-mini`` via the hosted API so that scores remain
@@ -149,7 +160,7 @@ def _hypothesis_complete(prompt: str, max_tokens: int = 400) -> str | None:
     if _USE_LOCAL_LLM or not os.environ.get("OPENAI_API_KEY"):
         from llm_backend import LocalLLMBackend
 
-        backend = LocalLLMBackend(timeout=120.0)
+        backend = LocalLLMBackend(base_url=_LOCAL_URL, model=_LOCAL_MODEL, timeout=120.0)
         if backend.is_available():
             try:
                 return cast(str | None, backend.complete(prompt, max_tokens=max_tokens))
@@ -748,7 +759,7 @@ def run_benchmark() -> None:
         )
     print(f"LLM mode: {_USE_LLM}")
     print(f"Arcane mode: {_USE_ARCANE}")
-    print(f"Local LLM mode: {_USE_LOCAL_LLM} (Ollama gemma3:4b)")
+    print(f"Local LLM mode: {_USE_LOCAL_LLM} (model={_LOCAL_MODEL} @ {_LOCAL_URL})")
     print(f"Progress every: {_PROGRESS_EVERY} questions")
     print(f"Hosted-LLM timeout: {_OPENAI_TIMEOUT:.0f} s per request")
     print(f"Seed: {_EFFECTIVE_SEED}")
