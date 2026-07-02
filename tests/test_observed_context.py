@@ -9,20 +9,22 @@
 """Verify the LLM Observer distils retrieved sessions into a lean, dated set.
 
 The mechanism only helps if it (a) hands the reader an observation block instead
-of the transcript when the completion is good, and (b) falls back to the raw dump
-— never an empty answer — when the completion is blank, failed, or unparseable.
-Both halves, plus the parse discipline (dating, supersession, dedup, caps), are
-pinned here against a fake completer so no model runs in the suite.
+of the transcript when the completion is good, (b) falls back to the raw dump —
+never an empty answer — when the completion is blank, failed, or unparseable, and
+(c) chunks the sessions so a short-context local model is never handed the whole
+retrieved dump in one call. All three, plus the parse discipline (dating,
+supersession, dedup, caps), are pinned here against a fake completer so no model
+runs in the suite.
 """
 
 from __future__ import annotations
 
 from observed_context import Completer, ObservedContext, build_observed_context
 
-SESSIONS = (
-    "=== Session 1 (2023-05-01) ===\n[USER]: I adopted a dog named Max.\n"
-    "=== Session 2 (2023-06-12) ===\n[USER]: Max is now on a grain-free diet.\n"
-)
+SESSIONS = [
+    "=== Session 1 (2023-05-01) ===\n[USER]: I adopted a dog named Max.",
+    "=== Session 2 (2023-06-12) ===\n[USER]: Max is now on a grain-free diet.",
+]
 
 
 def _fixed(reply: str | None) -> Completer:
@@ -37,7 +39,7 @@ def _fixed(reply: str | None) -> Completer:
 class TestFallbackToRawDump:
     """A bad observation pass must yield an empty context, not a starved reader."""
 
-    def test_blank_sessions_text_short_circuits(self):
+    def test_empty_sessions_short_circuits(self):
         called = False
 
         def _complete(prompt: str, max_tokens: int) -> str | None:
@@ -45,11 +47,15 @@ class TestFallbackToRawDump:
             called = True
             return "- [2023] something"
 
-        ctx = build_observed_context("q", "   \n  ", _complete)
+        ctx = build_observed_context("q", [], _complete)
         assert not ctx
         assert ctx.rendered == ""
-        # No model call is worth making over empty retrieval.
+        # No chunk to observe → no model call is worth making.
         assert called is False
+
+    def test_whitespace_only_sessions_short_circuit(self):
+        ctx = build_observed_context("q", ["   ", "\n\t"], _fixed("- [2023] x"))
+        assert not ctx
 
     def test_none_completion(self):
         ctx = build_observed_context("q", SESSIONS, _fixed(None))
@@ -73,13 +79,12 @@ class TestFallbackToRawDump:
         assert not ctx
 
     def test_date_only_lines_have_no_body(self):
-        # A line that is nothing but a date carries no observation.
         ctx = build_observed_context("q", SESSIONS, _fixed("[2023-05-01]\n[2023-06-12]"))
         assert not ctx
 
 
 class TestDistillation:
-    def test_parses_dated_observations_newest_first_as_authored(self):
+    def test_parses_dated_observations_in_authored_order(self):
         reply = (
             "- [2023-06-12] Max is on a grain-free diet.\n"
             "- [2023-05-01] User adopted a dog named Max.\n"
@@ -102,7 +107,6 @@ class TestDistillation:
         reply = "- [2023-05-01] Max eats kibble. [superseded: switched later]"
         ctx = build_observed_context("q", SESSIONS, _fixed(reply))
         assert ctx.observations[0].superseded is True
-        # The marker is consumed, not left dangling in the observation text.
         assert "superseded: switched later" not in ctx.observations[0].text
         assert ctx.observations[0].text == "Max eats kibble."
         assert ctx.rendered.endswith("[superseded]")
@@ -128,7 +132,8 @@ class TestCaps:
 
     def test_char_budget_stops_after_first(self):
         reply = "[2023] first observation here\n[2024] second observation here"
-        # Budget admits the header + first line but not the second.
+        # One chunk (default per_call budget), so arrival order is authored order;
+        # the global char budget admits the header + first line but not the second.
         ctx = build_observed_context("q", SESSIONS, _fixed(reply), char_budget=1)
         assert len(ctx.observations) == 1
         assert ctx.observations[0].text == "first observation here"
@@ -153,3 +158,69 @@ class TestCaps:
         build_observed_context("Where does Max live?", SESSIONS, _complete)
         assert "Where does Max live?" in seen["prompt"]
         assert "Max is now on a grain-free diet." in seen["prompt"]
+
+
+class TestChunking:
+    """Sessions are packed into size-bounded chunks so a short-context local model
+    is never handed the whole retrieved dump in one call."""
+
+    def test_small_budget_makes_one_call_per_session(self):
+        calls: list[str] = []
+
+        def _complete(prompt: str, max_tokens: int) -> str | None:
+            calls.append(prompt)
+            # Emit an observation that echoes which session this call saw.
+            if "adopted a dog" in prompt:
+                return "[2023-05-01] User adopted Max."
+            return "[2023-06-12] Max is on a grain-free diet."
+
+        # Each SESSIONS block is > 20 chars, so a tiny budget splits them.
+        ctx = build_observed_context("q", SESSIONS, _complete, per_call_char_budget=40)
+        assert len(calls) == 2  # one call per session
+        # Each prompt carried only its own session, not the other.
+        assert "adopted a dog" in calls[0] and "grain-free" not in calls[0]
+        assert "grain-free" in calls[1] and "adopted a dog" not in calls[1]
+        # Observations from both chunks merged.
+        texts = [o.text for o in ctx.observations]
+        assert texts == ["User adopted Max.", "Max is on a grain-free diet."]
+
+    def test_large_budget_is_a_single_call(self):
+        calls: list[str] = []
+
+        def _complete(prompt: str, max_tokens: int) -> str | None:
+            calls.append(prompt)
+            return "[2023] one fact"
+
+        build_observed_context("q", SESSIONS, _complete, per_call_char_budget=1_000_000)
+        assert len(calls) == 1  # both sessions in one chunk — the validated cloud shape
+
+    def test_dedup_across_chunks(self):
+        def _complete(prompt: str, max_tokens: int) -> str | None:
+            # Both chunks report the same fact — it must appear once.
+            return "[2023] Max is a dog."
+
+        ctx = build_observed_context("q", SESSIONS, _complete, per_call_char_budget=40)
+        assert len(ctx.observations) == 1
+
+    def test_partial_chunk_failure_still_yields(self):
+        def _complete(prompt: str, max_tokens: int) -> str | None:
+            if "adopted a dog" in prompt:
+                return None  # first chunk fails
+            return "[2023-06-12] Max is on a grain-free diet."
+
+        ctx = build_observed_context("q", SESSIONS, _complete, per_call_char_budget=40)
+        assert len(ctx.observations) == 1
+        assert ctx.observations[0].text == "Max is on a grain-free diet."
+
+    def test_session_larger_than_budget_gets_its_own_chunk(self):
+        calls = 0
+
+        def _complete(prompt: str, max_tokens: int) -> str | None:
+            nonlocal calls
+            calls += 1
+            return f"[2023] fact {calls}"
+
+        big = ["x" * 500, "y" * 500, "z" * 500]
+        ctx = build_observed_context("q", big, _complete, per_call_char_budget=100)
+        assert calls == 3  # each oversized session observed alone
+        assert len(ctx.observations) == 3

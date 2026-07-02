@@ -53,6 +53,10 @@ class RetrievedContext:
     Attributes:
         session_text: the rendered transcript of the selected sessions,
             oldest-first, ready to drop into the reader prompt.
+        session_blocks: the same selected sessions as individual rendered
+            transcripts (the parts joined into ``session_text``), oldest-first —
+            so an observer can process one bounded session at a time rather than
+            the whole concatenated dump.
         selected_session_idxs: haystack indices of the sessions included, in
             display (chronological) order — the set against which retrieval
             recall is measured.
@@ -67,6 +71,7 @@ class RetrievedContext:
 
     session_text: str
     selected_session_idxs: list[int]
+    session_blocks: list[str] = field(default_factory=list)
     n_candidate_sessions: int = 0
     dropped_to_session_limit: list[int] = field(default_factory=list)
     dropped_to_budget: list[int] = field(default_factory=list)
@@ -207,6 +212,7 @@ def select_sessions(
     return RetrievedContext(
         session_text="\n\n".join(parts),
         selected_session_idxs=display,
+        session_blocks=parts,
         n_candidate_sessions=n_candidates,
         dropped_to_session_limit=dropped_to_session_limit,
         dropped_to_budget=dropped,

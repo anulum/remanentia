@@ -72,6 +72,12 @@ _LEAN_CONTEXT = os.environ.get("REMANENTIA_LEAN_CONTEXT", "") == "1"
 # stays no-egress. Off by default until the full-S ablation validates it; takes
 # precedence over _LEAN_CONTEXT when both are set. Opt in: REMANENTIA_OBSERVE_REFLECT=1.
 _OBSERVE_REFLECT = os.environ.get("REMANENTIA_OBSERVE_REFLECT", "") == "1"
+# Per-observer-call character budget: retrieved sessions are packed into chunks
+# no larger than this, one completion each. The default keeps every session in a
+# single call (the cloud shape the ablation validated); a short-context local
+# model must lower it (e.g. 12000) so a chunk fits its window — the whole ~110k
+# dump in one call overflows a small model and returns nothing. REMANENTIA_OBSERVE_CHUNK_CHARS.
+_OBSERVE_CHUNK_CHARS = int(os.environ.get("REMANENTIA_OBSERVE_CHUNK_CHARS", "100000"))
 # Emit per-question confidence + cited provenance so the W1 scorecard can score
 # the calibrated-abstention and lineage axes (scorecard_report). Off by default —
 # it appends a confidence-rating instruction to the reader prompt, so default
@@ -634,6 +640,7 @@ def _arcane_answer(
                 )
                 retrieval_diagnostics.update(diagnostics.as_json_dict())
             full_context = retrieved.session_text
+            session_blocks = retrieved.session_blocks
         else:
             # Oracle: dump every haystack session (gold-only, tiny) oldest-first.
             indexed_sessions = list(enumerate(sessions))
@@ -659,6 +666,7 @@ def _arcane_answer(
                     turns.append(f"[{role}]: {turn.get('content', '')}")
                 session_parts.append(header + "\n" + "\n".join(turns))
             full_context = "\n\n".join(session_parts)
+            session_blocks = session_parts
 
         if qtype == "temporal-reasoning":
             # Prepend date-rich facts from retrieval + timeline
@@ -720,12 +728,18 @@ def _arcane_answer(
                 if lean:
                     history_block = lean.rendered
             # W2-v2 takes precedence: an LLM Observer distils the retrieved
-            # sessions into dated observations that replace the raw dump. Falls
-            # back to whatever history_block already holds when the pass is empty.
+            # sessions (chunked to fit the reader model's window) into dated
+            # observations that replace the raw dump. Falls back to whatever
+            # history_block already holds when the pass is empty.
             if _OBSERVE_REFLECT:
                 from observed_context import build_observed_context
 
-                observed = build_observed_context(question, full_context, _hypothesis_complete)
+                observed = build_observed_context(
+                    question,
+                    session_blocks,
+                    _hypothesis_complete,
+                    per_call_char_budget=_OBSERVE_CHUNK_CHARS,
+                )
                 if observed:
                     history_block = observed.rendered
 
