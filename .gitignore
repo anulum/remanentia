@@ -66,3 +66,6 @@ data/*_committed.jsonl
 paper/experiment_results_v2.json
 docs/REMANENTIA_10X_REPORT.md
 docs/assets/orcid_qr.png
+target/
+node_modules/
+.venv/

@@ -119,6 +119,7 @@ _USE_LLM = "--llm" in sys.argv
 _EVALUATE = "--evaluate" in sys.argv
 _USE_ARCANE = "--arcane" in sys.argv
 _USE_LOCAL_LLM = "--local-llm" in sys.argv
+_RESUME = "--resume" in sys.argv
 _LIMIT = None
 _PROGRESS_EVERY = 25  # questions between progress prints
 _SEED: int | None = None
@@ -798,11 +799,29 @@ def run_benchmark() -> None:
     type_correct: defaultdict[str, int] = defaultdict(int)
     type_total: defaultdict[str, int] = defaultdict(int)
 
-    hypotheses: list[dict[str, object]] = []
+    # Incremental checkpoint: every record is appended to OUTPUT_PATH as it is
+    # produced, so a kill during a tens-of-hours run keeps the work done so far.
+    # --resume reloads those records and skips the questions already answered; a
+    # fresh run starts from an empty file.
+    from hypothesis_checkpoint import append_record, completed_ids, load_completed
+
+    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if _RESUME:
+        hypotheses: list[dict[str, object]] = list(load_completed(OUTPUT_PATH))
+        done_ids = completed_ids(hypotheses)
+        if done_ids:
+            print(f"Resuming: {len(done_ids)} question(s) already complete, skipping them")
+    else:
+        OUTPUT_PATH.write_text("", encoding="utf-8")
+        hypotheses = []
+        done_ids = set()
+
     t0 = time.monotonic()
 
     for i, item in enumerate(data):
         qid = str(item["question_id"])
+        if qid in done_ids:
+            continue
         qtype = str(item["question_type"])
         question = str(item["question"])
         gold = str(item["answer"])
@@ -872,6 +891,7 @@ def run_benchmark() -> None:
                 if key in retrieval_diagnostics:
                     hypothesis_record[key] = retrieval_diagnostics[key]
         hypotheses.append(hypothesis_record)
+        append_record(OUTPUT_PATH, hypothesis_record)
 
         # Loud per-question heartbeat so a slow item is visible before the
         # next progress milestone.  (2026-04-17T0711: a single stalled call
@@ -912,8 +932,9 @@ def run_benchmark() -> None:
 
     elapsed = time.monotonic() - t0
 
-    # Save hypotheses
-    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    # Finalise: rewrite the full set once at the end. The per-question appends
+    # already persisted every record; this pass normalises the file (dropping any
+    # partial line a prior interrupted run left behind) so the judge reads it clean.
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         for h in hypotheses:
             f.write(json.dumps(h, ensure_ascii=False) + "\n")
@@ -1209,6 +1230,11 @@ def _parse_cli() -> None:
     )
     p.add_argument("--arcane", action="store_true", help="use ArcaneRetriever hybrid pipeline")
     p.add_argument("--local-llm", action="store_true", help="route synthesis through local Ollama")
+    p.add_argument(
+        "--resume",
+        action="store_true",
+        help="reload OUTPUT_PATH and skip questions already answered (else start fresh)",
+    )
     p.add_argument("--limit", type=int, metavar="N", help="cap question count at N")
     p.add_argument(
         "--progress-every",
