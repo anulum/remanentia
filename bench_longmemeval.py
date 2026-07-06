@@ -78,6 +78,13 @@ _OBSERVE_REFLECT = os.environ.get("REMANENTIA_OBSERVE_REFLECT", "") == "1"
 # model must lower it (e.g. 12000) so a chunk fits its window — the whole ~110k
 # dump in one call overflows a small model and returns nothing. REMANENTIA_OBSERVE_CHUNK_CHARS.
 _OBSERVE_CHUNK_CHARS = int(os.environ.get("REMANENTIA_OBSERVE_CHUNK_CHARS", "100000"))
+# Bound the assembled reader prompt to the reader model's window. 0 = unbounded
+# (a cloud reader's ~128k-token window). A sovereign local reader on a short-window
+# server (e.g. llama.cpp at 8192 tokens) must set this to the window in characters
+# (tokens x ~3.5, less the instruction and reserved answer, e.g. 24000): the
+# answer-critical sections are kept and only the raw-history tail is clipped, so an
+# over-window prompt never stalls the server. REMANENTIA_READER_CTX_CHARS.
+_READER_CTX_CHARS = int(os.environ.get("REMANENTIA_READER_CTX_CHARS", "0"))
 # Emit per-question confidence + cited provenance so the W1 scorecard can score
 # the calibrated-abstention and lineage axes (scorecard_report). Off by default —
 # it appends a confidence-rating instruction to the reader prompt, so default
@@ -684,11 +691,15 @@ def _arcane_answer(
             if question_date:
                 today_header = f"TODAY (question was asked on): {question_date}\n\n"
 
-            context = (
-                f"{today_header}"
-                f"TIMELINE OF DATED EVENTS:\n{timeline_str}\n\n"
-                f"RETRIEVED FACTS (ranked by relevance):\n{arcane_context}\n\n"
-                f"FULL CONVERSATION HISTORY:\n{full_context}"
+            from reader_budget import fit_context
+
+            context = fit_context(
+                [
+                    f"{today_header}TIMELINE OF DATED EVENTS:\n{timeline_str}",
+                    f"RETRIEVED FACTS (ranked by relevance):\n{arcane_context}",
+                    f"FULL CONVERSATION HISTORY:\n{full_context}",
+                ],
+                _READER_CTX_CHARS,
             )
         else:
             # Non-temporal arcane-path qtypes (multi-session /
@@ -702,7 +713,7 @@ def _arcane_answer(
 
             agg_context = f"{arcane_context}\n\n{full_context}"
             agg = precompute_aggregation(question, agg_context, qtype=qtype)
-            precompute_header = f"{agg.message}\n\n" if agg else ""
+            precompute_header = agg.message if agg else ""
 
             # Reflection / entity-summary synthesis (P1.3): consolidate the
             # retrieved facts about the question's named entities into one
@@ -715,7 +726,7 @@ def _arcane_answer(
 
                 synth = synthesise(question, [r.fact for r in results], qtype=qtype)
                 if synth:
-                    synthesis_header = f"{synth.message}\n\n"
+                    synthesis_header = synth.message
 
             # W2: when lean mode is on, the reader sees a lean, dated,
             # supersession-resolved observation set INSTEAD of the raw-session
@@ -744,11 +755,16 @@ def _arcane_answer(
                 if observed:
                     history_block = observed.rendered
 
-            context = (
-                f"{precompute_header}"
-                f"{synthesis_header}"
-                f"RETRIEVED FACTS (ranked by relevance):\n{arcane_context}\n\n"
-                f"{history_block}"
+            from reader_budget import fit_context
+
+            context = fit_context(
+                [
+                    precompute_header,
+                    synthesis_header,
+                    f"RETRIEVED FACTS (ranked by relevance):\n{arcane_context}",
+                    history_block,
+                ],
+                _READER_CTX_CHARS,
             )
     else:
         # Single-session: use retrieved facts as focused context
