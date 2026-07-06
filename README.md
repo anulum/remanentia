@@ -494,7 +494,7 @@ Tiers 1–3 + recall pipeline complete — all compute-bound functions have a Ru
 
 Full regex pipeline: **0.60ms** (Rust) vs 9.07ms (Python) on 470K chars = **14.1× on large workloads**.
 
-Details: [RUSTIFICATION_PLAN.md](docs/guides/RUSTIFICATION_PLAN.md) | [PERFORMANCE_TUNING.md](docs/guides/PERFORMANCE_TUNING.md)
+Details: [PERFORMANCE_TUNING.md](docs/guides/PERFORMANCE_TUNING.md)
 
 ## Research (Negative Results)
 
