@@ -10,7 +10,7 @@
 
 The mechanism only helps if it (a) hands the reader an observation block instead
 of the transcript when the completion is good, (b) falls back to the raw dump —
-never an empty answer — when the completion is blank, failed, or unparseable, and
+never an empty answer — when the completion is blank, failed, or unparsable, and
 (c) chunks the sessions so a short-context local model is never handed the whole
 retrieved dump in one call. All three, plus the parse discipline (dating,
 supersession, dedup, caps), are pinned here against a fake completer so no model

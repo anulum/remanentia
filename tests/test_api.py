@@ -61,7 +61,7 @@ class TestHealth:
         assert data["status"] == "ok"
         assert data["daemon"] == "stale"
         assert data["vector_worker"] == "missing"
-        assert data["version"] == "0.2.0"
+        assert data["version"] == "0.5.0"
 
     def test_health_daemon_alive(self, client: Any, tmp_path: Path) -> None:
         state_dir = tmp_path / "snn_state"

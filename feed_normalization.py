@@ -313,7 +313,7 @@ def _upper_bound(value: object) -> float | None:
     """Return a validity upper bound, or ``None`` for an absent/unreadable one.
 
     A real (positive) timestamp is kept — including a past one, which legitimately
-    closes a superseded window. A missing bound (``None``) or an unparseable one
+    closes a superseded window. A missing bound (``None``) or an unparsable one
     (the ``normalise_timestamp`` sentinel ``<= 0.0``, e.g. ``"next week"``, ``""``,
     or a bool) both mean "no trustworthy upper bound", so both stay open (``None``)
     rather than collapsing to ``0.0``, which downstream reads as already expired.

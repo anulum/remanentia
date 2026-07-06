@@ -153,7 +153,7 @@ def _installed_remanentia_version() -> str:
     try:
         return str(metadata.version("remanentia"))
     except metadata.PackageNotFoundError:
-        return "0.3.1"
+        return "0.5.0"
 
 
 def _seal_api() -> tuple[Any, Any, Any]:

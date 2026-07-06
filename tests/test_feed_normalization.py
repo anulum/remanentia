@@ -103,7 +103,7 @@ def test_normalise_provenance_and_validity_preserve_extra_fields() -> None:
     assert validity["extra"] == "kept"
 
 
-def test_normalise_validity_unparseable_valid_to_stays_open() -> None:
+def test_normalise_validity_unparsable_valid_to_stays_open() -> None:
     """An unreadable upper bound must not manufacture an immediate expiry.
 
     A producer expressing the expiry in natural language ("next week"), an empty

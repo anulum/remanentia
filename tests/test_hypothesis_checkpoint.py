@@ -50,7 +50,7 @@ class TestLoadCompleted:
         assert completed_ids(load_completed(p)) == {"a", "b"}
 
     def test_partial_trailing_fragment_is_skipped(self, tmp_path: Path) -> None:
-        # A write interrupted mid-record leaves an unparseable last line.
+        # A write interrupted mid-record leaves an unparsable last line.
         p = tmp_path / "h.jsonl"
         p.write_text(
             '{"question_id": "a", "hypothesis": "one"}\n'

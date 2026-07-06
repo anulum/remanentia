@@ -29,7 +29,7 @@ merge across chunks, deduplicated, order preserved (chunks are oldest-first; the
 observer writes newest-first within each), then capped to stay lean.
 
 Safety mirrors :mod:`lean_context`: no sessions, or every completion blank/failed/
-unparseable, yields an empty context and the caller falls back to the raw dump —
+unparsable, yields an empty context and the caller falls back to the raw dump —
 the reader is never starved by a bad observation pass.
 """
 
@@ -170,7 +170,7 @@ def build_observed_context(
     each observed in one call to *complete*; observations merge across chunks
     (deduplicated by text, arrival order preserved) and the result is capped by
     *max_observations* and *char_budget*. An empty *sessions*, or every chunk
-    returning a blank/failed/unparseable completion, yields an empty context so
+    returning a blank/failed/unparsable completion, yields an empty context so
     the caller falls back to the raw dump rather than answering from nothing.
     """
     chunks = _pack(sessions, per_call_char_budget)

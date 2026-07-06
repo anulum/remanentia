@@ -170,7 +170,7 @@ class TestSealDependencies:
 
         monkeypatch.setattr(importlib_metadata, "version", missing_version)
 
-        assert FindingSealPolicy().grader()["version"] == "0.3.1"
+        assert FindingSealPolicy().grader()["version"] == "0.5.0"
 
     def test_missing_optional_seal_dependency_has_actionable_error(
         self,

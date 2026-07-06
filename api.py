@@ -66,7 +66,7 @@ def _cors_origins_from_env() -> list[str]:
 app = FastAPI(
     title="Remanentia",
     description="Persistent AI memory with SNN-orchestrated consolidation",
-    version="0.2.0",
+    version="0.5.0",
 )
 
 app.add_middleware(
@@ -199,7 +199,7 @@ def health() -> dict[str, Any]:
         "daemon_kind": "vector_worker" if vector_worker["state"] == "alive" else "legacy",
         "legacy_daemon": legacy_daemon["state"],
         "vector_worker": vector_worker["state"],
-        "version": "0.2.0",
+        "version": "0.5.0",
     }
 
 
