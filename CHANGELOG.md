@@ -14,6 +14,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `rust_stdp`, `rust_temporal`), joining the previously in-tree `rust_recall`
   and `remanentia_topology` — the full 16-crate Rust surface is now
   version-controlled and buildable from a clean checkout.
+- ROCm (AMD) GPU support: `device_utils.safe_device` now recognises a ROCm
+  PyTorch build (`torch.version.hip`) and runs the retrieval cross-encoder and
+  embeddings on an AMD GPU via HIP, not only CUDA — the compute-capability guard
+  is CUDA-specific and previously forced ROCm cards to CPU. Verified on an
+  RX 6600 XT.
+- `REMANENTIA_ARCANE_CE_SYNC=1` loads the retrieval cross-encoder synchronously
+  and eagerly, so benchmark retrieval is deterministic; the default background
+  load could silently skip reranking on a short run.
+- `coverage_accuracy.render_curve_jsonl` serialises the full risk–coverage curve
+  (the calibrated-abstention artefact), alongside the existing AURC and
+  coverage-at-target summaries.
+- `provenance_export` projects the knowledge-store belief graph into the
+  provenance store the lineage-of-belief scorer (`lineage_completeness`,
+  `scorecard_report`) consumes, closing the loop from stored belief to scored
+  lineage.
+- `docs/benchmarks/SOVEREIGN_MEMORY_EVALUATION.md` documents the evaluation axes
+  beyond accuracy (sovereign no-egress, write-discipline, calibrated abstention,
+  fleet-fed recall, lineage-of-belief).
 
 ### Changed
 - Cross-session entity-summary synthesis is now **off by default** (opt in with
@@ -21,6 +39,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `REMANENTIA_SYNTHESIS_DISABLE` opt-out). A 2-seed full-S ablation found no
   reliable accuracy effect — the per-seed reader-judge swings exceeded the
   on/off difference — so it ships as an opt-in experiment rather than a default.
+- The benchmark reader prompt is bounded to the reader's context window
+  (`REMANENTIA_READER_CTX_CHARS`, 0 = unbounded/cloud): answer-critical sections
+  are kept and only the raw-history tail is clipped, so a short-window local
+  reader is never handed an over-window prompt that would stall it.
 
 ## [0.5.0] - 2026-06-29
 
