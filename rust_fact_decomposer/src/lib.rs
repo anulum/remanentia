@@ -2,6 +2,8 @@
 // Commercial license available
 // © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
 // © Code 2020–2026 Miroslav Šotek. All rights reserved.
+// ORCID: 0009-0009-3560-0851
+// Contact: www.anulum.li | protoscience@anulum.li
 // Remanentia — Rust fact decomposer helpers (sentence split + 9-type classify)
 // PyO3-exposed signatures carry the Python-side argument set; cleanup tracked in TODO.md.
 #![allow(clippy::too_many_arguments)]

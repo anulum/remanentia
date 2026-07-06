@@ -2,7 +2,9 @@
 // Commercial license available
 // © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
 // © Code 2020–2026 Miroslav Šotek. All rights reserved.
-// Arcane Sapience — Rust STDP Kernel
+// ORCID: 0009-0009-3560-0851
+// Contact: www.anulum.li | protoscience@anulum.li
+// Remanentia — Rust STDP Kernel
 //
 // Vectorized STDP weight update via outer product.
 // Replaces the pure-numpy STDP in snn_daemon.py with ~10-50x speedup.
