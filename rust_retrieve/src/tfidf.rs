@@ -24,11 +24,7 @@ pub fn build_idf(
     let mut df: FxHashMap<String, u32> = FxHashMap::default();
 
     for (name, text) in &docs {
-        let combined = format!(
-            "{} {}",
-            text,
-            name.replace('-', " ").replace('_', " ")
-        );
+        let combined = format!("{} {}", text, name.replace('-', " ").replace('_', " "));
         let tokens = tokenize::tokenize(&combined, stopwords.clone());
         let bgs = tokenize::bigrams(tokens.clone());
         let mut terms: FxHashSet<String> = tokens.into_iter().collect();

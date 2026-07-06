@@ -13,7 +13,7 @@ on:
       - "*.py"
       - "tests/**"
       - "pyproject.toml"
-      - "rust_recall/**"
+      - "rust_*/**"
       - "remanentia_topology/**"
       - ".github/workflows/ci.yml"
   pull_request:
@@ -99,7 +99,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        crate: [rust_recall, remanentia_topology]
+        crate:
+          - rust_recall
+          - remanentia_topology
+          - rust_active_retrieval
+          - rust_aggregate_precompute
+          - rust_answer_extractor
+          - rust_answer_normalizer
+          - rust_consolidation
+          - rust_entity_extractor
+          - rust_fact_decomposer
+          - rust_knowledge_store
+          - rust_pii_redactor
+          - rust_retrieve
+          - rust_search
+          - rust_skill_extractor
+          - rust_stdp
+          - rust_temporal
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 

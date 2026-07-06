@@ -11,13 +11,11 @@ use regex::Regex;
 use rustc_hash::FxHashSet;
 use std::sync::LazyLock;
 
-static RE_TOKEN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"[a-z0-9_]+").unwrap());
+static RE_TOKEN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[a-z0-9_]+").unwrap());
 
 const STEM_SUFFIXES: &[&str] = &[
-    "ation", "tion", "sion", "meant", "ness", "ity", "ous", "ive",
-    "ing", "ical", "ally", "able", "ible", "full", "less", "ized",
-    "ise", "ize", "ed", "ly", "er", "est", "al", "es", "s",
+    "ation", "tion", "sion", "meant", "ness", "ity", "ous", "ive", "ing", "ical", "ally", "able",
+    "ible", "full", "less", "ized", "ise", "ize", "ed", "ly", "er", "est", "al", "es", "s",
 ];
 
 /// Lowercase regex tokeniser with stopword removal.

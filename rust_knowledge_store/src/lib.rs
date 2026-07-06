@@ -11,28 +11,24 @@ use std::sync::LazyLock;
 
 // ── Tokenizer ──────────────────────────────────────────────────
 
-static RE_TOKEN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"[a-z0-9][a-z0-9_]{2,}").unwrap()
-});
+static RE_TOKEN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[a-z0-9][a-z0-9_]{2,}").unwrap());
 
 /// Tokenize text into lowercase words (3+ chars).
 #[pyfunction]
 fn tokenize(text: &str) -> HashSet<String> {
     let lower = text.to_lowercase();
-    RE_TOKEN.find_iter(&lower).map(|m| m.as_str().to_string()).collect()
+    RE_TOKEN
+        .find_iter(&lower)
+        .map(|m| m.as_str().to_string())
+        .collect()
 }
 
 // ── Keyword extraction ─────────────────────────────────────────
 
-static RE_KW_TOKEN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"[a-z0-9_]{4,}").unwrap()
-});
-static RE_CAPS: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"[A-Z][a-z]+(?:[A-Z][a-z]+)*").unwrap()
-});
-static RE_VERSION: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"v\d+\.\d+(?:\.\d+)?").unwrap()
-});
+static RE_KW_TOKEN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[a-z0-9_]{4,}").unwrap());
+static RE_CAPS: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[A-Z][a-z]+(?:[A-Z][a-z]+)*").unwrap());
+static RE_VERSION: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"v\d+\.\d+(?:\.\d+)?").unwrap());
 
 /// Extract keywords: frequency ≥2, capitalized terms, version numbers. Max 20.
 #[pyfunction]
@@ -42,7 +38,8 @@ fn extract_keywords(text: &str) -> Vec<String> {
     for m in RE_KW_TOKEN.find_iter(&lower) {
         *freq.entry(m.as_str().to_string()).or_insert(0) += 1;
     }
-    let mut keywords: Vec<String> = freq.into_iter()
+    let mut keywords: Vec<String> = freq
+        .into_iter()
         .filter(|(_, c)| *c >= 2)
         .map(|(t, _)| t)
         .collect();
@@ -64,18 +61,30 @@ fn extract_keywords(text: &str) -> Vec<String> {
 // ── Entity extraction ──────────────────────────────────────────
 
 static KNOWN_ENTITIES: &[&str] = &[
-    "stdp", "bm25", "lif", "snn", "embedding", "pytorch", "cuda", "gpu",
-    "locomo", "remanentia", "director-ai", "sc-neurocore", "scpn",
-    "consolidation", "retrieval", "daemon", "mcp", "fastapi",
+    "stdp",
+    "bm25",
+    "lif",
+    "snn",
+    "embedding",
+    "pytorch",
+    "cuda",
+    "gpu",
+    "locomo",
+    "remanentia",
+    "director-ai",
+    "sc-neurocore",
+    "scpn",
+    "consolidation",
+    "retrieval",
+    "daemon",
+    "mcp",
+    "fastapi",
 ];
-static RE_PCT: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\d+\.?\d*%").unwrap()
-});
+static RE_PCT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\d+\.?\d*%").unwrap());
 // Note: Rust regex does not support lookbehind, so we use a simpler pattern
 // for names after sentence boundaries
-static RE_NAME_AFTER_SENT: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"[.!?\n] ([A-Z][a-z]{2,})").unwrap()
-});
+static RE_NAME_AFTER_SENT: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[.!?\n] ([A-Z][a-z]{2,})").unwrap());
 
 /// Extract entities: known concepts, version numbers, percentages, names.
 #[pyfunction]
@@ -104,16 +113,13 @@ fn extract_entities(text: &str) -> HashSet<String> {
 
 // ── Person name extraction ─────────────────────────────────────
 
-static RE_PERSON_COLON: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?m)^([A-Z][a-z]{2,}):").unwrap()
-});
-static RE_PERSON_SENT: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?:^|\.\s+|!\s+|\?\s+|\n\s*)([A-Z][a-z]{2,})\b").unwrap()
-});
+static RE_PERSON_COLON: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?m)^([A-Z][a-z]{2,}):").unwrap());
+static RE_PERSON_SENT: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?:^|\.\s+|!\s+|\?\s+|\n\s*)([A-Z][a-z]{2,})\b").unwrap());
 static STOP_WORDS: &[&str] = &[
-    "the", "this", "that", "what", "when", "where", "who", "how", "why",
-    "yes", "yeah", "wow", "hey", "thanks", "congrats", "glad", "great",
-    "sure", "gonna",
+    "the", "this", "that", "what", "when", "where", "who", "how", "why", "yes", "yeah", "wow",
+    "hey", "thanks", "congrats", "glad", "great", "sure", "gonna",
 ];
 
 /// Extract person names from conversational text.
@@ -149,7 +155,13 @@ fn knowledge_search(
     top_k: usize,
     exclude_superseded: bool,
 ) -> Vec<(String, f64)> {
-    knowledge_search_inner(&token_index, &superseded_ids, &query_tokens, top_k, exclude_superseded)
+    knowledge_search_inner(
+        &token_index,
+        &superseded_ids,
+        &query_tokens,
+        top_k,
+        exclude_superseded,
+    )
 }
 
 fn knowledge_search_inner(
@@ -235,9 +247,7 @@ fn graph_search(
     top_k: usize,
     hop_depth: usize,
 ) -> Vec<(String, f64)> {
-    let seeds = knowledge_search_inner(
-        &token_index, &superseded_ids, &query_tokens, 3, true,
-    );
+    let seeds = knowledge_search_inner(&token_index, &superseded_ids, &query_tokens, 3, true);
     if seeds.is_empty() {
         return Vec::new();
     }
@@ -247,9 +257,8 @@ fn graph_search(
         all_notes.insert(id.clone(), true);
     }
     for (seed_id, _) in &seeds {
-        let related = get_related_ids_inner(
-            &note_links, seed_id, hop_depth, &HashSet::new(), &valid_ids,
-        );
+        let related =
+            get_related_ids_inner(&note_links, seed_id, hop_depth, &HashSet::new(), &valid_ids);
         for rid in related {
             if !superseded_ids.contains(&rid) {
                 all_notes.entry(rid).or_insert(false);
@@ -297,20 +306,56 @@ impl RustKnowledgeIndex {
         note_links: HashMap<String, Vec<(String, String)>>,
         valid_ids: HashSet<String>,
     ) -> Self {
-        RustKnowledgeIndex { token_index, superseded_ids, note_links, valid_ids }
+        RustKnowledgeIndex {
+            token_index,
+            superseded_ids,
+            note_links,
+            valid_ids,
+        }
     }
 
-    fn search(&self, query_tokens: HashSet<String>, top_k: usize, exclude_superseded: bool) -> Vec<(String, f64)> {
-        knowledge_search_inner(&self.token_index, &self.superseded_ids, &query_tokens, top_k, exclude_superseded)
+    fn search(
+        &self,
+        query_tokens: HashSet<String>,
+        top_k: usize,
+        exclude_superseded: bool,
+    ) -> Vec<(String, f64)> {
+        knowledge_search_inner(
+            &self.token_index,
+            &self.superseded_ids,
+            &query_tokens,
+            top_k,
+            exclude_superseded,
+        )
     }
 
-    fn get_related(&self, start_id: &str, depth: usize, edge_types: HashSet<String>) -> Vec<String> {
-        get_related_ids_inner(&self.note_links, start_id, depth, &edge_types, &self.valid_ids)
+    fn get_related(
+        &self,
+        start_id: &str,
+        depth: usize,
+        edge_types: HashSet<String>,
+    ) -> Vec<String> {
+        get_related_ids_inner(
+            &self.note_links,
+            start_id,
+            depth,
+            &edge_types,
+            &self.valid_ids,
+        )
     }
 
-    fn graph_search(&self, query_tokens: HashSet<String>, top_k: usize, hop_depth: usize) -> Vec<(String, f64)> {
+    fn graph_search(
+        &self,
+        query_tokens: HashSet<String>,
+        top_k: usize,
+        hop_depth: usize,
+    ) -> Vec<(String, f64)> {
         let seeds = knowledge_search_inner(
-            &self.token_index, &self.superseded_ids, &query_tokens, 3, true,
+            &self.token_index,
+            &self.superseded_ids,
+            &query_tokens,
+            3,
+            true,
         );
         if seeds.is_empty() {
             return Vec::new();
@@ -322,7 +367,11 @@ impl RustKnowledgeIndex {
         }
         for (seed_id, _) in &seeds {
             let related = get_related_ids_inner(
-                &self.note_links, seed_id, hop_depth, &HashSet::new(), &self.valid_ids,
+                &self.note_links,
+                seed_id,
+                hop_depth,
+                &HashSet::new(),
+                &self.valid_ids,
             );
             for rid in related {
                 if !self.superseded_ids.contains(&rid) {

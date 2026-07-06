@@ -17,10 +17,7 @@ use rustc_hash::FxHashMap;
 /// Returns: list of (para_idx, score) sorted by score descending.
 #[pyfunction]
 #[pyo3(signature = (ranked_lists, k=60))]
-pub fn reciprocal_rank_fusion(
-    ranked_lists: Vec<Vec<(usize, f64)>>,
-    k: usize,
-) -> Vec<(usize, f64)> {
+pub fn reciprocal_rank_fusion(ranked_lists: Vec<Vec<(usize, f64)>>, k: usize) -> Vec<(usize, f64)> {
     let mut rrf_scores: FxHashMap<usize, f64> = FxHashMap::default();
 
     for ranked in &ranked_lists {

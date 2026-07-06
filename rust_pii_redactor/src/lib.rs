@@ -48,15 +48,12 @@ static RE_GITHUB: LazyLock<Regex> =
 // specificity (e.g. `\d{3,4}[ .\-]\d{3,4}[ .\-]\d{3,4}` for phone
 // naturally rejects ISO dates because `03` has 2 digits). Boundary
 // anchors are kept only where they do not need lookbehind.
-static RE_AWS: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"AKIA[0-9A-Z]{16}").unwrap());
+static RE_AWS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"AKIA[0-9A-Z]{16}").unwrap());
 static RE_SLACK: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"xox[abprs]-[A-Za-z0-9-]{10,}").unwrap());
-static RE_HEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"[a-f0-9]{32,}").unwrap());
-static RE_EMAIL: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}").unwrap()
-});
+static RE_HEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[a-f0-9]{32,}").unwrap());
+static RE_EMAIL: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}").unwrap());
 static RE_IBAN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[A-Z]{2}\d{2}[A-Z0-9]{10,30}").unwrap());
 static RE_CREDIT_CARD: LazyLock<Regex> =
@@ -84,18 +81,51 @@ struct Detector {
 static DETECTORS: LazyLock<Vec<Detector>> = LazyLock::new(|| {
     vec![
         // API keys first (order matters — Anthropic before OpenAI).
-        Detector { tag: "ANTHROPIC_KEY", re: &RE_ANTHROPIC },
-        Detector { tag: "OPENAI_KEY", re: &RE_OPENAI },
-        Detector { tag: "HUGGINGFACE_KEY", re: &RE_HUGGINGFACE },
-        Detector { tag: "GITHUB_PAT", re: &RE_GITHUB },
-        Detector { tag: "AWS_ACCESS_KEY", re: &RE_AWS },
-        Detector { tag: "SLACK_TOKEN", re: &RE_SLACK },
-        Detector { tag: "HEX_TOKEN", re: &RE_HEX },
+        Detector {
+            tag: "ANTHROPIC_KEY",
+            re: &RE_ANTHROPIC,
+        },
+        Detector {
+            tag: "OPENAI_KEY",
+            re: &RE_OPENAI,
+        },
+        Detector {
+            tag: "HUGGINGFACE_KEY",
+            re: &RE_HUGGINGFACE,
+        },
+        Detector {
+            tag: "GITHUB_PAT",
+            re: &RE_GITHUB,
+        },
+        Detector {
+            tag: "AWS_ACCESS_KEY",
+            re: &RE_AWS,
+        },
+        Detector {
+            tag: "SLACK_TOKEN",
+            re: &RE_SLACK,
+        },
+        Detector {
+            tag: "HEX_TOKEN",
+            re: &RE_HEX,
+        },
         // Then structured PII.
-        Detector { tag: "EMAIL", re: &RE_EMAIL },
-        Detector { tag: "IBAN", re: &RE_IBAN },
-        Detector { tag: "CREDIT_CARD", re: &RE_CREDIT_CARD },
-        Detector { tag: "PHONE", re: &RE_PHONE },
+        Detector {
+            tag: "EMAIL",
+            re: &RE_EMAIL,
+        },
+        Detector {
+            tag: "IBAN",
+            re: &RE_IBAN,
+        },
+        Detector {
+            tag: "CREDIT_CARD",
+            re: &RE_CREDIT_CARD,
+        },
+        Detector {
+            tag: "PHONE",
+            re: &RE_PHONE,
+        },
     ]
 });
 
@@ -124,10 +154,7 @@ fn placeholder(tag: &str) -> String {
 /// Returns the redacted text plus a per-tag count map. The regex
 /// engine is UTF-8-safe and replacements are char-boundary-safe
 /// (Regex::replace_all works on &str directly).
-fn redact_inner(
-    text: &str,
-    policy: &HashMap<String, bool>,
-) -> (String, HashMap<String, u32>) {
+fn redact_inner(text: &str, policy: &HashMap<String, bool>) -> (String, HashMap<String, u32>) {
     let mut out = text.to_string();
     let mut counts: HashMap<String, u32> = HashMap::new();
     for d in DETECTORS.iter() {
@@ -158,7 +185,11 @@ fn redact_inner(
 /// Missing keys default to True (detector active).
 #[pyfunction]
 #[pyo3(signature = (text, policy=None))]
-fn redact(py: Python<'_>, text: &str, policy: Option<&Bound<'_, PyDict>>) -> PyResult<(String, Py<PyDict>)> {
+fn redact(
+    py: Python<'_>,
+    text: &str,
+    policy: Option<&Bound<'_, PyDict>>,
+) -> PyResult<(String, Py<PyDict>)> {
     let mut pol_map: HashMap<String, bool> = HashMap::new();
     if let Some(p) = policy {
         for (k, v) in p.iter() {

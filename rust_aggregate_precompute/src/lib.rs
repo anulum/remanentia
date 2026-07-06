@@ -63,7 +63,10 @@ static CURRENCY: LazyLock<Regex> = LazyLock::new(|| {
 // ─── Core helpers ────────────────────────────────────────────────────
 
 fn coerce_number(s: &str) -> Option<f64> {
-    let cleaned: String = s.chars().filter(|c| *c != ',' && *c != '$' && *c != '£' && *c != '€').collect();
+    let cleaned: String = s
+        .chars()
+        .filter(|c| *c != ',' && *c != '$' && *c != '£' && *c != '€')
+        .collect();
     cleaned.trim().parse::<f64>().ok()
 }
 
@@ -109,7 +112,10 @@ fn extract_facts_inner(text: &str) -> Vec<RustFact> {
 
     // Stage 2: currency amounts with optional prefix label.
     for cap in CURRENCY.captures_iter(text) {
-        let label = cap.get(1).map(|m| m.as_str().trim().to_string()).unwrap_or_default();
+        let label = cap
+            .get(1)
+            .map(|m| m.as_str().trim().to_string())
+            .unwrap_or_default();
         let (unit, val_str) = if let Some(sym) = cap.get(2) {
             (sym.as_str().to_string(), cap.get(3).map(|m| m.as_str()))
         } else if let Some(iso) = cap.get(4) {

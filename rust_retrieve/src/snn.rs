@@ -40,7 +40,10 @@ fn spike_feature_impl(w: &ArrayView2<f64>, stim: &ArrayView1<f64>, steps: usize)
 
     for _ in 0..steps {
         // Compute fired mask
-        let fired: Vec<f32> = v.iter().map(|&vi| if vi >= V_THRESH { 1.0 } else { 0.0 }).collect();
+        let fired: Vec<f32> = v
+            .iter()
+            .map(|&vi| if vi >= V_THRESH { 1.0 } else { 0.0 })
+            .collect();
 
         // i_syn = w @ fired
         let mut i_syn = vec![0.0f64; n];

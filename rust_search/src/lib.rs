@@ -14,13 +14,9 @@ use std::sync::LazyLock;
 
 // ── Index helper regexes ───────────────────────────────────────
 
-static RE_TOKEN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"[a-z0-9][a-z0-9_]{2,}").unwrap()
-});
-static RE_CODE_START: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\s*(def |fn |pub fn |class |impl )").unwrap()
-});
-
+static RE_TOKEN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[a-z0-9][a-z0-9_]{2,}").unwrap());
+static RE_CODE_START: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^\s*(def |fn |pub fn |class |impl )").unwrap());
 
 /// BM25 index over paragraphs. Parallel scoring via rayon.
 #[pyclass]
@@ -56,11 +52,7 @@ impl BM25Index {
     /// Build index from lists of token lists + paragraph mappings.
     /// paragraph_tokens: list of list of strings
     /// para_map: list of (doc_idx, para_idx) tuples
-    fn build(
-        &mut self,
-        paragraph_tokens: Vec<Vec<String>>,
-        para_map: Vec<(u32, u32)>,
-    ) {
+    fn build(&mut self, paragraph_tokens: Vec<Vec<String>>, para_map: Vec<(u32, u32)>) {
         let n = paragraph_tokens.len();
         self.para_map = para_map;
 
@@ -145,8 +137,7 @@ impl BM25Index {
                 for (&tid, &count) in tf_map.iter() {
                     let tf = count as f32;
                     let idf = self.idf[tid as usize];
-                    score += idf * (tf * (k1 + 1.0))
-                        / (tf + k1 * (1.0 - b + b * dl / self.avg_dl));
+                    score += idf * (tf * (k1 + 1.0)) / (tf + k1 * (1.0 - b + b * dl / self.avg_dl));
                 }
 
                 if score > 0.0 {
@@ -207,7 +198,10 @@ fn cosine_batch(query: Vec<f32>, matrix: Vec<Vec<f32>>) -> Vec<f32> {
 #[pyfunction]
 fn tokenize(text: &str) -> Vec<String> {
     let lower = text.to_lowercase();
-    RE_TOKEN.find_iter(&lower).map(|m| m.as_str().to_string()).collect()
+    RE_TOKEN
+        .find_iter(&lower)
+        .map(|m| m.as_str().to_string())
+        .collect()
 }
 
 /// Count occurrences of each token for real TF in BM25.
@@ -230,14 +224,38 @@ fn classify_paragraph(text: &str, is_code: bool) -> String {
         }
         return "code".into();
     }
-    let decision_kw = ["decided", "decision", "chose", "rejected", "we will", "the plan"];
-    if decision_kw.iter().any(|w| lower.contains(w)) { return "decision".into(); }
-    let finding_kw = ["found", "finding", "result", "measured", "shows that", "proved"];
-    if finding_kw.iter().any(|w| lower.contains(w)) { return "finding".into(); }
-    let metric_kw = ["p@1", "percent", "accuracy", "precision", "score", "benchmark"];
-    if metric_kw.iter().any(|w| lower.contains(w)) { return "metric".into(); }
+    let decision_kw = [
+        "decided", "decision", "chose", "rejected", "we will", "the plan",
+    ];
+    if decision_kw.iter().any(|w| lower.contains(w)) {
+        return "decision".into();
+    }
+    let finding_kw = [
+        "found",
+        "finding",
+        "result",
+        "measured",
+        "shows that",
+        "proved",
+    ];
+    if finding_kw.iter().any(|w| lower.contains(w)) {
+        return "finding".into();
+    }
+    let metric_kw = [
+        "p@1",
+        "percent",
+        "accuracy",
+        "precision",
+        "score",
+        "benchmark",
+    ];
+    if metric_kw.iter().any(|w| lower.contains(w)) {
+        return "metric".into();
+    }
     let version_kw = ["version", "v0.", "v1.", "v2.", "v3.", "release", "shipped"];
-    if version_kw.iter().any(|w| lower.contains(w)) { return "version".into(); }
+    if version_kw.iter().any(|w| lower.contains(w)) {
+        return "version".into();
+    }
     "discussion".into()
 }
 
@@ -259,7 +277,9 @@ fn split_paragraphs(text: &str, is_code: bool) -> Vec<String> {
                 current.push_str(line);
                 current.push('\n');
             }
-            if chunks.len() >= 200 { break; }
+            if chunks.len() >= 200 {
+                break;
+            }
         }
         let trimmed = current.trim().to_string();
         if trimmed.len() >= 30 && chunks.len() < 200 {
@@ -272,11 +292,15 @@ fn split_paragraphs(text: &str, is_code: bool) -> Vec<String> {
     let mut paragraphs = Vec::new();
     for block in text.split("\n\n") {
         let stripped = block.trim();
-        if stripped.is_empty() { continue; }
+        if stripped.is_empty() {
+            continue;
+        }
         // Skip pure headers
         let lines: Vec<&str> = stripped.lines().collect();
         let has_content = lines.iter().any(|l| !l.trim_start().starts_with('#'));
-        if !has_content && lines.len() == 1 { continue; }
+        if !has_content && lines.len() == 1 {
+            continue;
+        }
         if stripped.len() >= 30 && stripped.len() <= 10_000 {
             paragraphs.push(stripped.to_string());
         }

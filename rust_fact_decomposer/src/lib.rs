@@ -9,44 +9,60 @@ use regex::Regex;
 use std::sync::LazyLock;
 
 // Priority 8: state-change verbs
-static RE_CHANGE: LazyLock<Regex> = LazyLock::new(|| Regex::new(
+static RE_CHANGE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
     r"(?i)\b(started|began|switched|changed|moved|left|quit|joined|got|bought|sold|upgraded|downgraded|replaced|updated|decided|chose|picked|adopted|dropped|stopped|finished|married|divorced|graduated|retired|hired|fired)\b"
-).unwrap());
+).unwrap()
+});
 
 // Priority 7: preference
-static RE_PREF: LazyLock<Regex> = LazyLock::new(|| Regex::new(
+static RE_PREF: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
     r"(?i)\b(I (?:like|love|prefer|enjoy|hate|dislike|want|need|always|never|usually|favorite|favourite)|my (?:favorite|favourite|go-to|preferred))\b"
-).unwrap());
+).unwrap()
+});
 
 // Priority 6: plan/future
-static RE_PLAN: LazyLock<Regex> = LazyLock::new(|| Regex::new(
+static RE_PLAN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
     r"(?i)\b(I (?:plan to|will|am going to|intend to|might|may|hope to|want to|'m planning)|going to|planning to|scheduled for|booked for|appointment|reservation)\b"
-).unwrap());
+).unwrap()
+});
 
 // Priority 1: decision (checked first — highest priority)
-static RE_DECISION: LazyLock<Regex> = LazyLock::new(|| Regex::new(
+static RE_DECISION: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
     r"(?i)\b(we (?:decided|chose|picked|selected|agreed|concluded|resolved)|decision was|the verdict|final (?:choice|answer|call)|consensus)\b"
-).unwrap());
+).unwrap()
+});
 
 // Priority 2: correction
-static RE_CORRECTION: LazyLock<Regex> = LazyLock::new(|| Regex::new(
+static RE_CORRECTION: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
     r"(?i)\b(actually|correction|was wrong|mistake|misunderstood|should have been|turned out|in fact|not true|incorrect|clarification|I was wrong|we were wrong)\b"
-).unwrap());
+).unwrap()
+});
 
 // Priority 3: principle/rule
-static RE_PRINCIPLE: LazyLock<Regex> = LazyLock::new(|| Regex::new(
+static RE_PRINCIPLE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
     r"(?i)\b(always (?:do|use|check|ensure|verify)|never (?:do|use|skip|delete)|rule(?:s)? (?:is|are|of)|principle|best practice|guideline|must always|must never|invariant|axiom|law of)\b"
-).unwrap());
+).unwrap()
+});
 
 // Priority 4: commitment/deadline
-static RE_COMMITMENT: LazyLock<Regex> = LazyLock::new(|| Regex::new(
+static RE_COMMITMENT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
     r"(?i)\b(I (?:promise|commit|guarantee|owe|agreed to)|deadline|due (?:by|on|date)|deliverable|committed to|obligation|must (?:deliver|finish|complete) by)\b"
-).unwrap());
+).unwrap()
+});
 
 // Priority 5: skill/procedure
-static RE_SKILL: LazyLock<Regex> = LazyLock::new(|| Regex::new(
+static RE_SKILL: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
     r"(?i)\b(to (?:do this|fix this|run this|build this|deploy|install|configure|set up)|step (?:1|2|3|one|two)|the (?:command|procedure|workflow|recipe|process) is|how to|run the following|execute|you need to)\b"
-).unwrap());
+).unwrap()
+});
 
 /// Classify sentence into one of 9 fact types.
 ///
@@ -54,15 +70,25 @@ static RE_SKILL: LazyLock<Regex> = LazyLock::new(|| Regex::new(
 /// plan > preference > state > event (default).
 #[pyfunction]
 fn classify_fact_type(sentence: &str) -> String {
-    if RE_DECISION.is_match(sentence) { "decision".into() }
-    else if RE_CORRECTION.is_match(sentence) { "correction".into() }
-    else if RE_PRINCIPLE.is_match(sentence) { "principle".into() }
-    else if RE_COMMITMENT.is_match(sentence) { "commitment".into() }
-    else if RE_SKILL.is_match(sentence) { "skill".into() }
-    else if RE_PLAN.is_match(sentence) { "plan".into() }
-    else if RE_PREF.is_match(sentence) { "preference".into() }
-    else if RE_CHANGE.is_match(sentence) { "state".into() }
-    else { "event".into() }
+    if RE_DECISION.is_match(sentence) {
+        "decision".into()
+    } else if RE_CORRECTION.is_match(sentence) {
+        "correction".into()
+    } else if RE_PRINCIPLE.is_match(sentence) {
+        "principle".into()
+    } else if RE_COMMITMENT.is_match(sentence) {
+        "commitment".into()
+    } else if RE_SKILL.is_match(sentence) {
+        "skill".into()
+    } else if RE_PLAN.is_match(sentence) {
+        "plan".into()
+    } else if RE_PREF.is_match(sentence) {
+        "preference".into()
+    } else if RE_CHANGE.is_match(sentence) {
+        "state".into()
+    } else {
+        "event".into()
+    }
 }
 
 /// Split text into sentences (at ". " followed by uppercase).
@@ -102,39 +128,42 @@ fn has_change_verb(sentence: &str) -> bool {
 /// Extract words of 4+ characters (for entity overlap checks).
 #[pyfunction]
 fn tokenize_words(text: &str) -> Vec<String> {
-    static RE_WORDS: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"\w{4,}").unwrap()
-    });
-    RE_WORDS.find_iter(text).map(|m| m.as_str().to_string()).collect()
+    static RE_WORDS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\w{4,}").unwrap());
+    RE_WORDS
+        .find_iter(text)
+        .map(|m| m.as_str().to_string())
+        .collect()
 }
 
 // ── FactIndex.query() kernel ──────────────────────────────────
 
-static RE_WORD3: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\w{3,}").unwrap()
-});
+static RE_WORD3: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\w{3,}").unwrap());
 
-static RE_ENTITY: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b").unwrap()
-});
+static RE_ENTITY: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b").unwrap());
 
-static RE_QUOTED: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#""([^"]{2,40})""#).unwrap()
-});
+static RE_QUOTED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#""([^"]{2,40})""#).unwrap());
 
 fn tokenize_lower(text: &str) -> Vec<String> {
     let lower = text.to_lowercase();
-    RE_WORD3.find_iter(&lower).map(|m| m.as_str().to_string()).collect()
+    RE_WORD3
+        .find_iter(&lower)
+        .map(|m| m.as_str().to_string())
+        .collect()
 }
 
 fn extract_entities(text: &str) -> Vec<String> {
     let mut entities = Vec::new();
     for m in RE_ENTITY.find_iter(text) {
         let pos = m.start();
-        if pos == 0 { continue; }
+        if pos == 0 {
+            continue;
+        }
         if pos >= 2 {
             let prev2 = &text[pos.saturating_sub(2)..pos];
-            if prev2 == ". " || prev2 == "! " || prev2 == "? " { continue; }
+            if prev2 == ". " || prev2 == "! " || prev2 == "? " {
+                continue;
+            }
         }
         if m.as_str().len() > 1 {
             entities.push(m.as_str().to_string());
@@ -149,7 +178,7 @@ fn extract_entities(text: &str) -> Vec<String> {
 }
 
 fn date_before(a: &str, b: &str) -> bool {
-    a < b  // ISO dates sort lexicographically
+    a < b // ISO dates sort lexicographically
 }
 
 use std::collections::HashMap;
@@ -228,7 +257,8 @@ impl RustFactIndex {
         }
 
         if filter_expired && !reference_date.is_empty() {
-            let expired: Vec<usize> = scores.keys()
+            let expired: Vec<usize> = scores
+                .keys()
                 .filter(|&&idx| {
                     if idx < self.fact_valid_until.len() {
                         let vu = &self.fact_valid_until[idx];
@@ -245,9 +275,16 @@ impl RustFactIndex {
         }
 
         let q_lower = question.to_lowercase();
-        let is_update = ["current", "now", "latest", "most recent", "today", "right now"]
-            .iter()
-            .any(|w| q_lower.contains(w));
+        let is_update = [
+            "current",
+            "now",
+            "latest",
+            "most recent",
+            "today",
+            "right now",
+        ]
+        .iter()
+        .any(|w| q_lower.contains(w));
         if is_update {
             let keys: Vec<usize> = scores.keys().copied().collect();
             for idx in keys {

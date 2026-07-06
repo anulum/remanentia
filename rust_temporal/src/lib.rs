@@ -32,8 +32,9 @@ static QUANTIFIED: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\b(?:about\s+|around\s+|roughly\s+|approximately\s+)?(\d+)\s+(days?|weeks?|months?|years?)\s+ago\b").unwrap()
 });
 
-static COUPLE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)\ba\s+couple\s+of\s+(days?|weeks?|months?)\s+ago\b").unwrap());
+static COUPLE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)\ba\s+couple\s+of\s+(days?|weeks?|months?)\s+ago\b").unwrap()
+});
 
 static FEW: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)\ba\s+few\s+(days?|weeks?|months?)\s+ago\b").unwrap());
@@ -49,11 +50,23 @@ static SIMPLE_PATTERNS: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(|| 
     vec![
         (Regex::new(r"(?i)\byesterday\b").unwrap(), "yesterday"),
         (Regex::new(r"(?i)\btoday\b").unwrap(), "today"),
-        (Regex::new(r"(?i)\bthe\s+other\s+day\b").unwrap(), "other_day"),
-        (Regex::new(r"(?i)\bnot\s+long\s+ago\b").unwrap(), "not_long_ago"),
+        (
+            Regex::new(r"(?i)\bthe\s+other\s+day\b").unwrap(),
+            "other_day",
+        ),
+        (
+            Regex::new(r"(?i)\bnot\s+long\s+ago\b").unwrap(),
+            "not_long_ago",
+        ),
         (Regex::new(r"(?i)\brecently\b").unwrap(), "recently"),
-        (Regex::new(r"(?i)\bearlier\s+this\s+week\b").unwrap(), "earlier_week"),
-        (Regex::new(r"(?i)\bearlier\s+this\s+month\b").unwrap(), "earlier_month"),
+        (
+            Regex::new(r"(?i)\bearlier\s+this\s+week\b").unwrap(),
+            "earlier_week",
+        ),
+        (
+            Regex::new(r"(?i)\bearlier\s+this\s+month\b").unwrap(),
+            "earlier_month",
+        ),
         (Regex::new(r"(?i)\blast\s+week\b").unwrap(), "last_week"),
         (Regex::new(r"(?i)\blast\s+month\b").unwrap(), "last_month"),
         (Regex::new(r"(?i)\blast\s+year\b").unwrap(), "last_year"),
@@ -119,7 +132,9 @@ fn resolve_simple(tag: &str, r: NaiveDate) -> Option<NaiveDate> {
         "other_day" => Some(r - Duration::days(3)),
         "not_long_ago" => Some(r - Duration::days(7)),
         "recently" => Some(r - Duration::days(5)),
-        "earlier_week" => Some(r - Duration::days(r.weekday().num_days_from_monday().max(1) as i64)),
+        "earlier_week" => {
+            Some(r - Duration::days(r.weekday().num_days_from_monday().max(1) as i64))
+        }
         "earlier_month" => NaiveDate::from_ymd_opt(r.year(), r.month(), (r.day() / 2).max(1)),
         "last_week" => Some(r - Duration::weeks(1)),
         "last_month" => Some(month_delta(r, -1)),
@@ -177,7 +192,8 @@ fn parse_dates(text: &str, reference_date: Option<&str>) -> Vec<String> {
     let _ref_str = ref_date.format("%Y-%m-%d").to_string();
     for regex in [&*QUANTIFIED, &*COUPLE, &*FEW, &*SEVERAL, &*WEEKDAY] {
         for cap in regex.captures_iter(text) {
-            if let Some(result) = normalise_vague_date_inner(cap.get(0).unwrap().as_str(), ref_date) {
+            if let Some(result) = normalise_vague_date_inner(cap.get(0).unwrap().as_str(), ref_date)
+            {
                 dates.insert(result.0);
             }
         }
@@ -210,10 +226,7 @@ fn resolve_relative(expr: &str, r: NaiveDate) -> Option<String> {
     Some(d.format("%Y-%m-%d").to_string())
 }
 
-fn normalise_vague_date_inner(
-    expr: &str,
-    ref_date: NaiveDate,
-) -> Option<(String, f64, String)> {
+fn normalise_vague_date_inner(expr: &str, ref_date: NaiveDate) -> Option<(String, f64, String)> {
     let e = expr.trim();
 
     // "N days/weeks/months/years ago"
@@ -298,10 +311,7 @@ fn normalise_vague_date_inner(
 /// Rule-based vague date normalisation. Returns (iso_date, confidence, method)
 /// or None if no rule matches.
 #[pyfunction]
-fn normalise_vague_date(
-    expr: &str,
-    reference_date: &str,
-) -> Option<(String, f64, String)> {
+fn normalise_vague_date(expr: &str, reference_date: &str) -> Option<(String, f64, String)> {
     let ref_date = NaiveDate::parse_from_str(reference_date, "%Y-%m-%d").ok()?;
     normalise_vague_date_inner(expr, ref_date)
 }
@@ -310,7 +320,8 @@ fn normalise_vague_date(
 #[pyfunction]
 fn extract_temporal_events(text: &str, reference_date: Option<&str>) -> Vec<(String, String)> {
     let ref_str = reference_date.unwrap_or("2026-01-01");
-    let sentences: Vec<&str> = text.split(|c: char| c == '.' || c == '!' || c == '?' || c == '\n')
+    let sentences: Vec<&str> = text
+        .split(|c: char| c == '.' || c == '!' || c == '?' || c == '\n')
         .filter(|s| s.len() > 10)
         .collect();
 
@@ -319,7 +330,11 @@ fn extract_temporal_events(text: &str, reference_date: Option<&str>) -> Vec<(Str
         let dates = parse_dates(sent, Some(ref_str));
         for d in dates {
             let trimmed = sent.trim();
-            let display = if trimmed.len() > 200 { &trimmed[..200] } else { trimmed };
+            let display = if trimmed.len() > 200 {
+                &trimmed[..200]
+            } else {
+                trimmed
+            };
             results.push((d, display.to_string()));
         }
     }
@@ -371,8 +386,13 @@ fn build_temporal_edges(
             Some(b) => b,
             None => continue,
         };
-        let new_in_bucket: Vec<usize> = bucket.iter().filter(|&&i| i >= start_idx).copied().collect();
-        let old_in_bucket: Vec<usize> = bucket.iter().filter(|&&i| i < start_idx).copied().collect();
+        let new_in_bucket: Vec<usize> = bucket
+            .iter()
+            .filter(|&&i| i >= start_idx)
+            .copied()
+            .collect();
+        let old_in_bucket: Vec<usize> =
+            bucket.iter().filter(|&&i| i < start_idx).copied().collect();
 
         for &ni in &new_in_bucket {
             for &oi in &old_in_bucket {
@@ -402,11 +422,18 @@ fn build_temporal_edges(
     let mut all_dates: Vec<String> = updated_by_date.keys().cloned().collect();
     all_dates.sort();
     for (idx_d, d) in all_dates.iter().enumerate() {
-        if !new_dates.contains(d.as_str()) { continue; }
+        if !new_dates.contains(d.as_str()) {
+            continue;
+        }
         if idx_d + 1 < all_dates.len() {
             let next_d = &all_dates[idx_d + 1];
-            let new_here: Vec<usize> = updated_by_date.get(d).unwrap()
-                .iter().filter(|&&i| i >= start_idx).copied().collect();
+            let new_here: Vec<usize> = updated_by_date
+                .get(d)
+                .unwrap()
+                .iter()
+                .filter(|&&i| i >= start_idx)
+                .copied()
+                .collect();
             let next_bucket = updated_by_date.get(next_d).unwrap();
             for &ni in new_here.iter().take(3) {
                 for &nj in next_bucket.iter().take(3) {
@@ -427,9 +454,7 @@ fn build_temporal_edges(
 
 // ── TemporalGraph.query_temporal() kernel ─────────────────────
 
-static RE_QUERY_TOKEN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"[a-z0-9]{3,}").unwrap()
-});
+static RE_QUERY_TOKEN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[a-z0-9]{3,}").unwrap());
 
 /// Score and filter temporal events for query_temporal().
 ///
@@ -469,20 +494,26 @@ fn score_temporal_query(
             } else {
                 true
             };
-            if keep { filtered_indices.push(i); }
+            if keep {
+                filtered_indices.push(i);
+            }
         }
     } else {
         filtered_indices = (0..events.len()).collect();
     }
 
     // Score by token overlap
-    let q_tokens: HashSet<String> = RE_QUERY_TOKEN.find_iter(&q)
-        .map(|m| m.as_str().to_string()).collect();
+    let q_tokens: HashSet<String> = RE_QUERY_TOKEN
+        .find_iter(&q)
+        .map(|m| m.as_str().to_string())
+        .collect();
     let mut scored: Vec<(usize, usize)> = Vec::new();
     for &i in &filtered_indices {
         let ev_lower = events[i].1.to_lowercase();
-        let ev_tokens: HashSet<String> = RE_QUERY_TOKEN.find_iter(&ev_lower)
-            .map(|m| m.as_str().to_string()).collect();
+        let ev_tokens: HashSet<String> = RE_QUERY_TOKEN
+            .find_iter(&ev_lower)
+            .map(|m| m.as_str().to_string())
+            .collect();
         let overlap = q_tokens.intersection(&ev_tokens).count();
         if overlap > 0 || !dates_in_query.is_empty() {
             scored.push((i, overlap));
@@ -490,17 +521,25 @@ fn score_temporal_query(
     }
 
     // Sort by query intent
-    let is_latest = ["latest", "recent", "last", "newest"].iter().any(|w| q.contains(w));
-    let is_earliest = ["first", "earliest", "oldest", "original"].iter().any(|w| q.contains(w));
+    let is_latest = ["latest", "recent", "last", "newest"]
+        .iter()
+        .any(|w| q.contains(w));
+    let is_earliest = ["first", "earliest", "oldest", "original"]
+        .iter()
+        .any(|w| q.contains(w));
 
     if is_latest {
         scored.sort_by(|a, b| {
-            events[b.0].0.cmp(&events[a.0].0)
+            events[b.0]
+                .0
+                .cmp(&events[a.0].0)
                 .then_with(|| b.1.cmp(&a.1))
         });
     } else if is_earliest {
         scored.sort_by(|a, b| {
-            events[a.0].0.cmp(&events[b.0].0)
+            events[a.0]
+                .0
+                .cmp(&events[b.0].0)
                 .then_with(|| b.1.cmp(&a.1))
         });
     } else {

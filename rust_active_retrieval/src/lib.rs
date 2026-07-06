@@ -8,16 +8,16 @@ use pyo3::prelude::*;
 use regex::Regex;
 use std::sync::LazyLock;
 
-static DECISION_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| vec![
+static DECISION_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    vec![
     Regex::new(r"(?i)(?:going to|will|plan to|about to)\s+(?:change|modify|delete|remove|add|replace|refactor)").unwrap(),
     Regex::new(r"(?i)(?:choosing|chose|decision|decided)\s+(?:to|between|against)").unwrap(),
     Regex::new(r"(?i)(?:trade.?off|alternative|instead of|rather than)").unwrap(),
     Regex::new(r"(?i)(?:should we|should i|do we|question is)").unwrap(),
-]);
-
-static RE_SENT_SPLIT: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"[.!?\n]").unwrap()
+]
 });
+
+static RE_SENT_SPLIT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[.!?\n]").unwrap());
 
 /// Identify sentences that contain decision points.
 #[pyfunction]

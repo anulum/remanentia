@@ -15,70 +15,194 @@ static PROJECTS: &[(&str, &[&str])] = &[
     ("director-ai", &["director-ai", "director_ai"]),
     ("sc-neurocore", &["sc-neurocore", "neurocore"]),
     ("scpn-fusion-core", &["scpn-fusion", "fusion-core"]),
-    ("scpn-phase-orchestrator", &["scpn-phase-orchestrator", "phase-orchestrator"]),
+    (
+        "scpn-phase-orchestrator",
+        &["scpn-phase-orchestrator", "phase-orchestrator"],
+    ),
     ("scpn-control", &["scpn-control"]),
-    ("scpn-quantum-control", &["scpn-quantum-control", "quantum-control"]),
-    ("remanentia", &["remanentia", "arcane", "snn", "holographic"]),
+    (
+        "scpn-quantum-control",
+        &["scpn-quantum-control", "quantum-control"],
+    ),
+    (
+        "remanentia",
+        &["remanentia", "arcane", "snn", "holographic"],
+    ),
     ("revenue", &["revenue", "pricing", "commercial"]),
 ];
 
 // ── Known concepts (60+) ───────────────────────────────────────
 
 static CONCEPTS: &[&str] = &[
-    "stdp", "lif", "kuramoto", "hopfield", "tf-idf", "bm25", "embedding",
-    "pytorch", "cuda", "gpu", "cpu", "daemon", "holographic", "attractor",
-    "inhibition", "spike", "neuron", "retrieval", "consolidation", "upde",
-    "stuart-landau", "dimits", "gyrokinetic", "tokamak", "vqe", "heron",
-    "bcpnn", "csdp", "hebbian", "perron-frobenius", "marchenko-pastur",
-    "eigenvalue", "svd", "minilm", "sentence-transformer", "fastapi", "mcp",
-    "docker", "prometheus", "grafana", "ci", "pytest", "rust", "pyo3",
-    "maturin", "rayon", "arcaneneuron", "chirp", "chimera", "bifurcation",
-    "entropy", "fisher", "lyapunov", "boltzmann", "hippocampus",
-    "dentate gyrus", "pattern separation", "dale's law", "e/i balance",
-    "mem0", "letta", "zep", "memos", "langmem", "joss", "neurips",
-    "emnlp", "arxiv", "zenodo", "agpl", "pypi", "loihi",
+    "stdp",
+    "lif",
+    "kuramoto",
+    "hopfield",
+    "tf-idf",
+    "bm25",
+    "embedding",
+    "pytorch",
+    "cuda",
+    "gpu",
+    "cpu",
+    "daemon",
+    "holographic",
+    "attractor",
+    "inhibition",
+    "spike",
+    "neuron",
+    "retrieval",
+    "consolidation",
+    "upde",
+    "stuart-landau",
+    "dimits",
+    "gyrokinetic",
+    "tokamak",
+    "vqe",
+    "heron",
+    "bcpnn",
+    "csdp",
+    "hebbian",
+    "perron-frobenius",
+    "marchenko-pastur",
+    "eigenvalue",
+    "svd",
+    "minilm",
+    "sentence-transformer",
+    "fastapi",
+    "mcp",
+    "docker",
+    "prometheus",
+    "grafana",
+    "ci",
+    "pytest",
+    "rust",
+    "pyo3",
+    "maturin",
+    "rayon",
+    "arcaneneuron",
+    "chirp",
+    "chimera",
+    "bifurcation",
+    "entropy",
+    "fisher",
+    "lyapunov",
+    "boltzmann",
+    "hippocampus",
+    "dentate gyrus",
+    "pattern separation",
+    "dale's law",
+    "e/i balance",
+    "mem0",
+    "letta",
+    "zep",
+    "memos",
+    "langmem",
+    "joss",
+    "neurips",
+    "emnlp",
+    "arxiv",
+    "zenodo",
+    "agpl",
+    "pypi",
+    "loihi",
 ];
 
 // ── Regex patterns ─────────────────────────────────────────────
 
-static RE_VERSION: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"v\d+\.\d+(?:\.\d+)?").unwrap()
-});
-static RE_PERCENT: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\d+\.?\d*%").unwrap()
-});
-static RE_FILEPATH: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"[\w/\\]+\.(?:py|rs|md|json|yaml|toml)\b").unwrap()
-});
-static RE_FUNC_NAME: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\b[a-z][a-z_]+(?:_[a-z]+){2,}\b").unwrap()
-});
-static RE_CAMEL_CASE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b").unwrap()
-});
+static RE_VERSION: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"v\d+\.\d+(?:\.\d+)?").unwrap());
+static RE_PERCENT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\d+\.?\d*%").unwrap());
+static RE_FILEPATH: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[\w/\\]+\.(?:py|rs|md|json|yaml|toml)\b").unwrap());
+static RE_FUNC_NAME: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\b[a-z][a-z_]+(?:_[a-z]+){2,}\b").unwrap());
+static RE_CAMEL_CASE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b").unwrap());
 
 // Typed relation patterns
-static RELATION_PATTERNS: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(|| vec![
-    (Regex::new(r"(?i)\bbecause\b|\bcaused by\b|\bdue to\b|\broot cause\b").unwrap(), "caused_by"),
-    (Regex::new(r"(?i)\bfixed\b|\brepaired\b|\bcorrected\b|\bpatched\b").unwrap(), "fixed_by"),
-    (Regex::new(r"(?i)\breplaced\b|\bsuperseded\b|\binstead of\b").unwrap(), "replaced"),
-    (Regex::new(r"(?i)\bcontradicts?\b|\binconsistent with\b|\bconflicts? with\b").unwrap(), "contradicts"),
-    (Regex::new(r"(?i)\bv\d+\.\d+|\bversion\b").unwrap(), "version_of"),
-    (Regex::new(r"(?i)\bdepends on\b|\brequires\b|\bneeds\b").unwrap(), "depends_on"),
-    (Regex::new(r"(?i)\bimproved\b|\bfrom .+ to\b|\bincreased\b|\bdecreased\b").unwrap(), "improved"),
-    (Regex::new(r"(?i)\bproduced\b|\bcreated\b|\bgenerated\b|\bwrote\b").unwrap(), "produced"),
-    (Regex::new(r"(?i)\bused in\b|\bpart of\b|\bcomponent of\b").unwrap(), "used_in"),
-    (Regex::new(r"(?i)\btested\b|\bbenchmarked\b|\bevaluated\b|\bmeasured\b").unwrap(), "tested_with"),
-]);
+static RELATION_PATTERNS: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(|| {
+    vec![
+        (
+            Regex::new(r"(?i)\bbecause\b|\bcaused by\b|\bdue to\b|\broot cause\b").unwrap(),
+            "caused_by",
+        ),
+        (
+            Regex::new(r"(?i)\bfixed\b|\brepaired\b|\bcorrected\b|\bpatched\b").unwrap(),
+            "fixed_by",
+        ),
+        (
+            Regex::new(r"(?i)\breplaced\b|\bsuperseded\b|\binstead of\b").unwrap(),
+            "replaced",
+        ),
+        (
+            Regex::new(r"(?i)\bcontradicts?\b|\binconsistent with\b|\bconflicts? with\b").unwrap(),
+            "contradicts",
+        ),
+        (
+            Regex::new(r"(?i)\bv\d+\.\d+|\bversion\b").unwrap(),
+            "version_of",
+        ),
+        (
+            Regex::new(r"(?i)\bdepends on\b|\brequires\b|\bneeds\b").unwrap(),
+            "depends_on",
+        ),
+        (
+            Regex::new(r"(?i)\bimproved\b|\bfrom .+ to\b|\bincreased\b|\bdecreased\b").unwrap(),
+            "improved",
+        ),
+        (
+            Regex::new(r"(?i)\bproduced\b|\bcreated\b|\bgenerated\b|\bwrote\b").unwrap(),
+            "produced",
+        ),
+        (
+            Regex::new(r"(?i)\bused in\b|\bpart of\b|\bcomponent of\b").unwrap(),
+            "used_in",
+        ),
+        (
+            Regex::new(r"(?i)\btested\b|\bbenchmarked\b|\bevaluated\b|\bmeasured\b").unwrap(),
+            "tested_with",
+        ),
+    ]
+});
 
 // Key line triggers
 static TRIGGERS: &[&str] = &[
-    "decided", "decision", "found", "finding", "result", "key insight",
-    "conclusion", "fix", "resolved", "chose", "rejected", "confirmed",
-    "measured", "p@1", "precision", "accuracy", "because", "therefore",
-    "root cause", "the reason", "we proved", "this means", "critical",
-    "important", "changed", "broke", "works", "doesn't work", "failed",
-    "succeeded", "shipped", "version", "v0.", "v1.", "v2.", "v3.",
+    "decided",
+    "decision",
+    "found",
+    "finding",
+    "result",
+    "key insight",
+    "conclusion",
+    "fix",
+    "resolved",
+    "chose",
+    "rejected",
+    "confirmed",
+    "measured",
+    "p@1",
+    "precision",
+    "accuracy",
+    "because",
+    "therefore",
+    "root cause",
+    "the reason",
+    "we proved",
+    "this means",
+    "critical",
+    "important",
+    "changed",
+    "broke",
+    "works",
+    "doesn't work",
+    "failed",
+    "succeeded",
+    "shipped",
+    "version",
+    "v0.",
+    "v1.",
+    "v2.",
+    "v3.",
 ];
 
 /// Extract entity names from trace text (3-layer extraction).
@@ -143,11 +267,16 @@ fn extract_key_lines(text: &str) -> Vec<String> {
         }
         let lower = stripped.to_lowercase();
         if TRIGGERS.iter().any(|t| lower.contains(t)) {
-            let clean = stripped.trim_start_matches(|c: char| "- *>".contains(c)).trim();
+            let clean = stripped
+                .trim_start_matches(|c: char| "- *>".contains(c))
+                .trim();
             if clean.len() > 20 {
                 let mut context = vec![clean.to_string()];
                 for j in (i + 1)..std::cmp::min(i + 3, lines.len()) {
-                    let next = lines[j].trim().trim_start_matches(|c: char| "- *>".contains(c)).trim();
+                    let next = lines[j]
+                        .trim()
+                        .trim_start_matches(|c: char| "- *>".contains(c))
+                        .trim();
                     if !next.is_empty() && !next.starts_with('#') && next.len() > 10 {
                         context.push(next.to_string());
                     }
@@ -268,7 +397,9 @@ fn date_gap_days(a: &str, b: &str) -> i64 {
     let parse = |s: &str| -> Option<i64> {
         let s = if s.len() >= 10 { &s[..10] } else { s };
         let parts: Vec<&str> = s.split('-').collect();
-        if parts.len() != 3 { return None; }
+        if parts.len() != 3 {
+            return None;
+        }
         let y: i64 = parts[0].parse().ok()?;
         let m: i64 = parts[1].parse().ok()?;
         let d: i64 = parts[2].parse().ok()?;
@@ -316,7 +447,12 @@ fn build_summary_dag(
         let mut leaves: Vec<Node> = Vec::new();
         for (name, date, project, entities, key_lines, text) in &sorted_data {
             let summary = if !key_lines.is_empty() {
-                key_lines.iter().take(5).cloned().collect::<Vec<_>>().join(" ")
+                key_lines
+                    .iter()
+                    .take(5)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(" ")
             } else {
                 let end = std::cmp::min(200, text.len());
                 text[..end].to_string()
@@ -380,8 +516,12 @@ fn build_summary_dag(
                 let project = most_common(&projects).unwrap_or_else(|| "general".to_string());
                 let merged_summary = merged_parts.join(" | ");
                 let node_id = format!("L{}_{}", level, chunk_start / fanout);
-                if earliest == "9999" { earliest = String::new(); }
-                if latest == "0000" { latest = String::new(); }
+                if earliest == "9999" {
+                    earliest = String::new();
+                }
+                if latest == "0000" {
+                    latest = String::new();
+                }
                 if !earliest.is_empty() {
                     let node_id = format!("L{}_{}_{}", level, chunk_start / fanout, earliest);
                     let mut sorted_ents: Vec<String> = all_entities.into_iter().collect();
@@ -421,17 +561,45 @@ fn build_summary_dag(
         }
 
         // Convert to Python dicts
-        all_nodes.into_iter().map(|node| {
-            let mut d: HashMap<String, PyObject> = HashMap::new();
-            d.insert("node_id".to_string(), node.node_id.into_pyobject(py).unwrap().into_any().unbind());
-            d.insert("level".to_string(), node.level.into_pyobject(py).unwrap().into_any().unbind());
-            d.insert("summary".to_string(), node.summary.into_pyobject(py).unwrap().into_any().unbind());
-            d.insert("children".to_string(), node.children.into_pyobject(py).unwrap().into_any().unbind());
-            d.insert("date_range".to_string(), vec![node.date_range.0, node.date_range.1].into_pyobject(py).unwrap().into_any().unbind());
-            d.insert("entities".to_string(), node.entities.into_pyobject(py).unwrap().into_any().unbind());
-            d.insert("project".to_string(), node.project.into_pyobject(py).unwrap().into_any().unbind());
-            d
-        }).collect()
+        all_nodes
+            .into_iter()
+            .map(|node| {
+                let mut d: HashMap<String, PyObject> = HashMap::new();
+                d.insert(
+                    "node_id".to_string(),
+                    node.node_id.into_pyobject(py).unwrap().into_any().unbind(),
+                );
+                d.insert(
+                    "level".to_string(),
+                    node.level.into_pyobject(py).unwrap().into_any().unbind(),
+                );
+                d.insert(
+                    "summary".to_string(),
+                    node.summary.into_pyobject(py).unwrap().into_any().unbind(),
+                );
+                d.insert(
+                    "children".to_string(),
+                    node.children.into_pyobject(py).unwrap().into_any().unbind(),
+                );
+                d.insert(
+                    "date_range".to_string(),
+                    vec![node.date_range.0, node.date_range.1]
+                        .into_pyobject(py)
+                        .unwrap()
+                        .into_any()
+                        .unbind(),
+                );
+                d.insert(
+                    "entities".to_string(),
+                    node.entities.into_pyobject(py).unwrap().into_any().unbind(),
+                );
+                d.insert(
+                    "project".to_string(),
+                    node.project.into_pyobject(py).unwrap().into_any().unbind(),
+                );
+                d
+            })
+            .collect()
     })
 }
 
@@ -440,7 +608,10 @@ fn most_common(items: &[String]) -> Option<String> {
     for item in items {
         *counts.entry(item.as_str()).or_insert(0) += 1;
     }
-    counts.into_iter().max_by_key(|&(_, c)| c).map(|(s, _)| s.to_string())
+    counts
+        .into_iter()
+        .max_by_key(|&(_, c)| c)
+        .map(|(s, _)| s.to_string())
 }
 
 // ── Tier 3: cluster_notes ──────────────────────────────────────
@@ -458,12 +629,19 @@ fn cluster_notes(notes: Vec<(Vec<String>, Vec<String>)>, min_overlap: usize) -> 
     }
 
     // Pre-compute keyword sets
-    let sets: Vec<HashSet<&str>> = notes.iter().map(|(kw, ent)| {
-        let mut s: HashSet<&str> = HashSet::new();
-        for k in kw { s.insert(k.as_str()); }
-        for e in ent { s.insert(e.as_str()); }
-        s
-    }).collect();
+    let sets: Vec<HashSet<&str>> = notes
+        .iter()
+        .map(|(kw, ent)| {
+            let mut s: HashSet<&str> = HashSet::new();
+            for k in kw {
+                s.insert(k.as_str());
+            }
+            for e in ent {
+                s.insert(e.as_str());
+            }
+            s
+        })
+        .collect();
 
     let mut clusters: Vec<Vec<usize>> = Vec::new();
     let mut assigned: HashSet<usize> = HashSet::new();

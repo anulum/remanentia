@@ -177,7 +177,9 @@ fn encode_text<'py>(
 ) -> PyResult<Bound<'py, PyArray1<f32>>> {
     use std::hash::{Hash, Hasher};
 
-    const PRIMES: [usize; 7] = [7919, 104729, 15485863, 32452843, 49979687, 67867967, 86028121];
+    const PRIMES: [usize; 7] = [
+        7919, 104729, 15485863, 32452843, 49979687, 67867967, 86028121,
+    ];
 
     let mut pattern = vec![0.0f32; n_neurons];
     let lower = text.to_lowercase();
