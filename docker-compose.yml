@@ -27,6 +27,12 @@ services:
       REMANENTIA_API_RATE_PER_MINUTE: "60"
       REMANENTIA_API_RATE_BURST: "10"
       REMANENTIA_CORS_ORIGINS: ""
+      # Redirect all cache/scratch writes onto the tmpfs below so the root
+      # filesystem can stay read-only. The data volume at /data remains writable.
+      HOME: /tmp
+      TMPDIR: /tmp
+      XDG_CACHE_HOME: /tmp/cache
+      HF_HOME: /tmp/hf
     ports:
       - "127.0.0.1:8001:8001"
     volumes:
@@ -48,6 +54,20 @@ services:
       start_period: 20s
       retries: 3
     restart: unless-stopped
+    # Runtime hardening: the process runs non-root (uid/gid 10001, set in the
+    # Dockerfile). A read-only root filesystem plus a small writable tmpfs for
+    # scratch, all Linux capabilities dropped, no privilege escalation, and
+    # bounded memory/CPU/PIDs contain the blast radius of any code-exec bug.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 2g
+    cpus: "2.0"
+    pids_limit: 256
 
 volumes:
   remanentia-data:
