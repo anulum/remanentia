@@ -31,6 +31,7 @@ cloud dependency.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -124,3 +125,25 @@ def _trapezoid_aurc(points: Sequence[CoveragePoint]) -> float:
         area += width * (point.risk + prev.risk) / 2.0
         prev = point
     return area
+
+
+def render_curve_jsonl(curve: RiskCoverage) -> str:
+    """Serialise the risk–coverage curve to one JSON object per coverage point.
+
+    Each line carries ``coverage``, ``answered``, ``accuracy`` and ``risk`` — the
+    plottable coverage-accuracy curve the calibrated-abstention axis publishes,
+    not only the AURC scalar the scorecard already reports. Points are emitted in
+    curve order (most-confident prefix first, coverage ascending to full); an
+    empty curve yields an empty string.
+    """
+    return "\n".join(
+        json.dumps(
+            {
+                "coverage": round(point.coverage, 6),
+                "answered": point.answered,
+                "accuracy": round(point.accuracy, 6),
+                "risk": round(point.risk, 6),
+            }
+        )
+        for point in curve.points
+    )

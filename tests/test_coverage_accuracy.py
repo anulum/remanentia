@@ -8,7 +8,9 @@
 
 from __future__ import annotations
 
-from coverage_accuracy import Outcome, _trapezoid_aurc, risk_coverage
+import json
+
+from coverage_accuracy import Outcome, _trapezoid_aurc, render_curve_jsonl, risk_coverage
 
 
 def _calibrated() -> list[Outcome]:
@@ -78,3 +80,28 @@ class TestTrapezoidAurc:
     def test_direct_single_point(self) -> None:
         rc = risk_coverage([Outcome(True, 0.5)])
         assert _trapezoid_aurc(rc.points) == 0.0
+
+
+class TestRenderCurveJsonl:
+    def test_empty_curve_is_empty_string(self) -> None:
+        assert render_curve_jsonl(risk_coverage([])) == ""
+
+    def test_one_line_per_point_with_shape(self) -> None:
+        rc = risk_coverage(_calibrated())
+        lines = render_curve_jsonl(rc).splitlines()
+        assert len(lines) == len(rc.points)
+        first = json.loads(lines[0])
+        assert set(first) == {"coverage", "answered", "accuracy", "risk"}
+
+    def test_coverage_ascending_and_full_point_matches_summary(self) -> None:
+        rc = risk_coverage(_calibrated())
+        rows = [json.loads(x) for x in render_curve_jsonl(rc).splitlines()]
+        coverages = [r["coverage"] for r in rows]
+        assert coverages == sorted(coverages)  # ascending to full coverage
+        assert rows[-1]["coverage"] == 1.0
+        assert rows[-1]["accuracy"] == round(rc.accuracy_at_full_coverage, 6)
+
+    def test_risk_is_one_minus_accuracy(self) -> None:
+        rc = risk_coverage(_calibrated())
+        for row in (json.loads(x) for x in render_curve_jsonl(rc).splitlines()):
+            assert row["risk"] == round(1.0 - row["accuracy"], 6)
