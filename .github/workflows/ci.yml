@@ -84,6 +84,30 @@ jobs:
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -e ".[dev,all]"
 
+      - name: Build Rust extensions (3.11 only — exercises the fast path + FFI parity)
+        # The 100 % coverage gate runs on 3.12 against the pure-Python fallback, so
+        # we build the compiled extensions in the 3.11 job instead: that makes the
+        # Rust↔Python parity / e2e tests (which `importorskip` the extension) run for
+        # real, without the fallback branches going uncovered under the 3.12 gate.
+        # Each crate is a bare cargo cdylib; the module name is the crate's
+        # `[lib] name` (NOT the directory), e.g. rust_recall -> remanentia_recall,
+        # rust_stdp -> arcane_stdp. Copy lib<name>.so -> <name>.so onto sys.path.
+        if: matrix.python-version == '3.11'
+        run: |
+          set -euo pipefail
+          for crate in rust_recall remanentia_topology rust_active_retrieval \
+                       rust_aggregate_precompute rust_answer_extractor \
+                       rust_answer_normalizer rust_consolidation rust_entity_extractor \
+                       rust_fact_decomposer rust_knowledge_store rust_pii_redactor \
+                       rust_retrieve rust_search rust_skill_extractor rust_stdp \
+                       rust_temporal; do
+            cargo build --release --manifest-path "$crate/Cargo.toml"
+            modname=$(sed -n '/\[lib\]/,/^\[/{s/^name *= *"\(.*\)"/\1/p;}' "$crate/Cargo.toml")
+            if [ -z "$modname" ]; then echo "no [lib] name in $crate/Cargo.toml" >&2; exit 1; fi
+            cp "$crate/target/release/lib${modname}.so" "./${modname}.so"
+            echo "built $crate -> ${modname}.so"
+          done
+
       - name: Run tests
         run: python -m pytest tests/ -q --tb=short
 

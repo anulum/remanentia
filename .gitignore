@@ -69,5 +69,7 @@ docs/assets/orcid_qr.png
 target/
 node_modules/
 .venv/
+# Compiled Rust extensions (built locally or in CI, never committed)
+*.so
 rust_*/Cargo.lock
 remanentia_topology/Cargo.lock
