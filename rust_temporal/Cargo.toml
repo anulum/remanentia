@@ -1,0 +1,17 @@
+[package]
+name = "remanentia-temporal"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "remanentia_temporal"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.25", features = ["extension-module"] }
+regex = "1.11"
+chrono = "0.4"
+
+[profile.release]
+opt-level = 3
+lto = true

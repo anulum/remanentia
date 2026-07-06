@@ -1,0 +1,19 @@
+[package]
+name = "remanentia-aggregate-precompute"
+version = "0.1.0"
+edition = "2021"
+authors = ["Miroslav Šotek <miroslav@anulum.ch>"]
+license = "Proprietary"
+description = "Rust-accelerated cross-session aggregation precompute for Remanentia"
+
+[lib]
+name = "remanentia_aggregate_precompute"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.25", features = ["extension-module"] }
+regex = "1.11"
+
+[profile.release]
+opt-level = 3
+lto = true

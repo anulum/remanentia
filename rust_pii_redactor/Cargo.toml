@@ -1,0 +1,19 @@
+[package]
+name = "remanentia-pii-redactor"
+version = "0.1.0"
+edition = "2021"
+authors = ["Miroslav Šotek <miroslav@anulum.ch>"]
+license = "Proprietary"
+description = "Rust-accelerated PII redaction for Remanentia persistent AI memory"
+
+[lib]
+name = "remanentia_pii_redactor"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.25", features = ["extension-module"] }
+regex = "1.11"
+
+[profile.release]
+opt-level = 3
+lto = true

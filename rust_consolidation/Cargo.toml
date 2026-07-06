@@ -1,0 +1,19 @@
+[package]
+name = "remanentia-consolidation"
+version = "0.1.0"
+edition = "2021"
+authors = ["Miroslav Šotek <miroslav@anulum.ch>"]
+license = "Proprietary"
+description = "Rust-based consolidation engine helpers for Remanentia persistent AI memory"
+
+[lib]
+name = "remanentia_consolidation"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.25", features = ["extension-module"] }
+regex = "1.11"
+
+[profile.release]
+opt-level = 3
+lto = true

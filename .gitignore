@@ -69,3 +69,5 @@ docs/assets/orcid_qr.png
 target/
 node_modules/
 .venv/
+rust_*/Cargo.lock
+remanentia_topology/Cargo.lock

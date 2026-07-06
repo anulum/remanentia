@@ -5,6 +5,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Source for the 14 remaining PyO3 acceleration crates now lives in the
+  repository (`rust_active_retrieval`, `rust_aggregate_precompute`,
+  `rust_answer_extractor`, `rust_answer_normalizer`, `rust_consolidation`,
+  `rust_entity_extractor`, `rust_fact_decomposer`, `rust_knowledge_store`,
+  `rust_pii_redactor`, `rust_retrieve`, `rust_search`, `rust_skill_extractor`,
+  `rust_stdp`, `rust_temporal`), joining the previously in-tree `rust_recall`
+  and `remanentia_topology` — the full 16-crate Rust surface is now
+  version-controlled and buildable from a clean checkout.
+
 ### Changed
 - Cross-session entity-summary synthesis is now **off by default** (opt in with
   `REMANENTIA_SYNTHESIS_ENABLE=1`, replacing the previous

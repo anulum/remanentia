@@ -24,3 +24,5 @@ abd = "abd"
 ded = "ded"
 caf = "caf"
 aded = "aded"
+# variable names in rust_answer_normalizer: py/pn = predicted yes/no
+pn = "pn"
