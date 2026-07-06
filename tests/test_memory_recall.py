@@ -200,9 +200,7 @@ class TestSearchSemantic:
             patch("memory_recall.BASE", tmp_semantic.parent),
         ):
             with_body = _search_semantic("SNN removal decision", top_k=5, include_content=True)
-            without_body = _search_semantic(
-                "SNN removal decision", top_k=5, include_content=False
-            )
+            without_body = _search_semantic("SNN removal decision", top_k=5, include_content=False)
         assert with_body and without_body
         assert any(r["content"] for r in with_body)
         assert all(r["content"] == "" for r in without_body)
