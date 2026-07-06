@@ -33,7 +33,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   beyond accuracy (sovereign no-egress, write-discipline, calibrated abstention,
   fleet-fed recall, lineage-of-belief).
 
+### Security
+- The production `docker-compose.yml` now runs the API container with a read-only
+  root filesystem (plus a writable tmpfs for scratch), all Linux capabilities
+  dropped, `no-new-privileges`, and bounded memory/CPU/PIDs — containing the blast
+  radius of any code-exec bug. The process already ran non-root.
+
 ### Changed
+- `ROADMAP.md` and `VALIDATION.md` re-anchored to v0.5.0 and the honest realistic
+  full-S convention (56.6 % cloud / 35.4 % sovereign), replacing stale oracle-only
+  framing and pre-reframing test/API counts; `VALIDATION.md` now states the
+  coverage-scope caveat (the 100 % gate measures the pure-Python path) explicitly.
 - Cross-session entity-summary synthesis is now **off by default** (opt in with
   `REMANENTIA_SYNTHESIS_ENABLE=1`, replacing the previous
   `REMANENTIA_SYNTHESIS_DISABLE` opt-out). A 2-seed full-S ablation found no
