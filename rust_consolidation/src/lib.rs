@@ -3,6 +3,12 @@
 // © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
 // © Code 2020–2026 Miroslav Šotek. All rights reserved.
 // Remanentia — Rust consolidation engine helpers
+// Imported crate; idiomatic clippy cleanup tracked in TODO.md (Rust WIP).
+#![allow(
+    clippy::needless_range_loop,
+    clippy::type_complexity,
+    clippy::useless_vec
+)]
 
 use pyo3::prelude::*;
 use regex::Regex;

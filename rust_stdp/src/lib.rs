@@ -6,6 +6,8 @@
 //
 // Vectorized STDP weight update via outer product.
 // Replaces the pure-numpy STDP in snn_daemon.py with ~10-50x speedup.
+// PyO3-exposed signatures carry the Python-side argument set; cleanup tracked in TODO.md.
+#![allow(clippy::too_many_arguments)]
 
 use ndarray::{Array1, Array2, Zip};
 use numpy::{PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1, PyReadonlyArray2};

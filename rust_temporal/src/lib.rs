@@ -5,6 +5,8 @@
 // ORCID: 0009-0009-3560-0851
 // Contact: www.anulum.li | protoscience@anulum.li
 // Remanentia — Rust temporal engine (date parsing + vague normalisation)
+// Imported crate; idiomatic clippy cleanup tracked in TODO.md (Rust WIP).
+#![allow(clippy::manual_pattern_char_comparison, clippy::unnecessary_sort_by)]
 
 use chrono::{Datelike, Duration, NaiveDate};
 use pyo3::prelude::*;

@@ -5,6 +5,8 @@
 // ORCID: 0009-0009-3560-0851
 // Contact: www.anulum.li | protoscience@anulum.li
 // Remanentia — Rust Retrieval Pipeline (hot-path acceleration)
+// Imported crate; idiomatic clippy cleanup (fusion/tfidf) tracked in TODO.md (Rust WIP).
+#![allow(clippy::if_same_then_else, clippy::collapsible_str_replace)]
 
 use pyo3::prelude::*;
 

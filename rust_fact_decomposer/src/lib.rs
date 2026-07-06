@@ -3,6 +3,8 @@
 // © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
 // © Code 2020–2026 Miroslav Šotek. All rights reserved.
 // Remanentia — Rust fact decomposer helpers (sentence split + 9-type classify)
+// PyO3-exposed signatures carry the Python-side argument set; cleanup tracked in TODO.md.
+#![allow(clippy::too_many_arguments)]
 
 use pyo3::prelude::*;
 use regex::Regex;
