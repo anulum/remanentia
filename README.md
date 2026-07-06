@@ -352,6 +352,13 @@ by the reproducer; the preprocessed question order is pinned in
 reproduce. See [`docs/benchmarks/LOCOMO.md`](docs/benchmarks/LOCOMO.md)
 for the full methodology and the pre-LLM 74.7 % baseline.
 
+Accuracy is necessary but not sufficient. Remanentia also measures the axes
+leaderboards omit — sovereign no-egress accuracy, write-discipline, calibrated
+abstention, fleet-fed recall, and lineage-of-belief auditability — each as a
+tested metric module. See
+[`docs/benchmarks/SOVEREIGN_MEMORY_EVALUATION.md`](docs/benchmarks/SOVEREIGN_MEMORY_EVALUATION.md)
+for the definitions, how each is measured, and the honest current status.
+
 ## Trained components — honest status
 
 The temporal-training programme produced five components with
