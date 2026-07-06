@@ -103,7 +103,5 @@ def render_provenance_jsonl(store: Mapping[str, ProvenanceNode]) -> str:
     lines = []
     for node_id in sorted(store):
         node = store[node_id]
-        lines.append(
-            json.dumps({"id": node.id, "origin": node.origin, "parent": node.parent})
-        )
+        lines.append(json.dumps({"id": node.id, "origin": node.origin, "parent": node.parent}))
     return "\n".join(lines)
