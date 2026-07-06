@@ -7,7 +7,7 @@
 // Vectorized STDP weight update via outer product.
 // Replaces the pure-numpy STDP in snn_daemon.py with ~10-50x speedup.
 // PyO3-exposed signatures carry the Python-side argument set; cleanup tracked in TODO.md.
-#![allow(clippy::too_many_arguments)]
+#![allow(clippy::too_many_arguments, clippy::needless_range_loop)]
 
 use ndarray::{Array1, Array2, Zip};
 use numpy::{PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1, PyReadonlyArray2};
@@ -177,8 +177,6 @@ fn encode_text<'py>(
     text: &str,
     n_neurons: usize,
 ) -> PyResult<Bound<'py, PyArray1<f32>>> {
-    use std::hash::{Hash, Hasher};
-
     const PRIMES: [usize; 7] = [
         7919, 104729, 15485863, 32452843, 49979687, 67867967, 86028121,
     ];
