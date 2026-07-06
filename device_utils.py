@@ -89,6 +89,19 @@ def safe_device(index: int | None = None, *, warn: bool = True) -> str:
         _CACHE[index] = "cpu"
         return "cpu"
 
+    # ROCm builds expose AMD GPUs under the same ``cuda`` device string, but the
+    # ``sm_<cc>`` arch-list guard below is a CUDA concept — a ROCm build's arch
+    # list holds gfx targets (e.g. ``gfx1030``) that never match an ``sm_``
+    # string, so the guard would wrongly reject a working AMD card. That guard
+    # exists only for the CUDA sm_61 silent-fail trap (see module docstring);
+    # ROCm surfaces an unsupported gfx as a load-time error, not a silent bad
+    # kernel, so the device is trusted here. ``HSA_OVERRIDE_GFX_VERSION`` maps
+    # gfx1032 → gfx1030 upstream of this call.
+    if getattr(torch.version, "hip", None):
+        device = "cuda" if index is None else f"cuda:{index}"
+        _CACHE[index] = device
+        return device
+
     target = 0 if index is None else index
     try:
         cap = torch.cuda.get_device_capability(target)

@@ -409,26 +409,46 @@ class ArcaneRetriever:
 
     _ce_model = None
     _ce_loading = False
+    _ce_device: str | None = None
+    _ce_error: str | None = None
 
     def _load_ce(self) -> None:
-        """Lazy-load cross-encoder model in background thread."""
+        """Load the cross-encoder model, in a background thread by default.
+
+        The background load returns un-reranked results until the model is
+        ready — a 5–16 s load, slower still under GIL contention from a running
+        benchmark. On a short run the model may never finish loading, so every
+        query silently falls back to the un-reranked first pass and the
+        reranker never engages. Set ``REMANENTIA_ARCANE_CE_SYNC=1`` to load
+        synchronously instead, guaranteeing the reranker is present before the
+        first query — required for reproducible benchmarking. The resolved
+        device lands on ``_ce_device`` and any load failure on ``_ce_error`` so
+        a silent GPU/CPU fallback can be diagnosed.
+        """
         if ArcaneRetriever._ce_model is not None or ArcaneRetriever._ce_loading:
             return
         ArcaneRetriever._ce_loading = True
 
-        def _load() -> None:  # pragma: no cover — runs in background thread
+        def _load() -> None:
             try:
                 from sentence_transformers import CrossEncoder
 
                 from device_utils import safe_device
 
                 device = safe_device()
+                ArcaneRetriever._ce_device = device
                 ArcaneRetriever._ce_model = CrossEncoder(
                     "cross-encoder/ms-marco-MiniLM-L-6-v2", device=device
                 )
-            except Exception:
+            except Exception as exc:  # pragma: no cover — only on a broken CE install
+                ArcaneRetriever._ce_error = f"{type(exc).__name__}: {exc}"
                 ArcaneRetriever._ce_model = False
-            ArcaneRetriever._ce_loading = False
+            finally:
+                ArcaneRetriever._ce_loading = False
+
+        if os.getenv("REMANENTIA_ARCANE_CE_SYNC") == "1":
+            _load()
+            return
 
         import threading
 

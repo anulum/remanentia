@@ -147,6 +147,26 @@ class TestCrossEncoderRerankDefault:
             mock_thread.assert_not_called()  # no second loader started
             assert ArcaneRetriever._ce_loading is True  # flag left untouched
 
+    def test_sync_env_loads_cross_encoder_before_returning(self, monkeypatch):
+        # REMANENTIA_ARCANE_CE_SYNC=1 loads the reranker synchronously so a
+        # benchmark has it before the first query, and records the device it
+        # resolved to (guards against a silent CPU/GPU fallback).
+        fake = _FakeCrossEncoder([0.5])
+        monkeypatch.setattr("device_utils.safe_device", lambda: "cuda:0")
+        monkeypatch.setattr("sentence_transformers.CrossEncoder", lambda *a, **k: fake)
+        monkeypatch.setenv("REMANENTIA_ARCANE_CE_SYNC", "1")
+        ar = ArcaneRetriever(SESSIONS)
+        with (
+            patch.object(ArcaneRetriever, "_ce_model", None),
+            patch.object(ArcaneRetriever, "_ce_loading", False),
+            patch.object(ArcaneRetriever, "_ce_device", None),
+            patch.object(ArcaneRetriever, "_ce_error", None),
+        ):
+            ar._load_ce()
+            assert ArcaneRetriever._ce_model is fake  # loaded synchronously, no thread
+            assert ArcaneRetriever._ce_device == "cuda:0"
+            assert ArcaneRetriever._ce_loading is False  # finally reset the flag
+
     def test_model_ready_with_no_pairs_returns_original_results(self):
         ar = ArcaneRetriever(SESSIONS)
         results: list[FusedResult] = []

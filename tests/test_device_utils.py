@@ -62,6 +62,35 @@ class TestSafeDeviceSupportedGPU:
             assert device_utils.safe_device() == "cuda"
 
 
+class TestSafeDeviceROCm:
+    def test_rocm_build_returns_cuda_without_arch_check(self):
+        # A ROCm torch build reports a non-None ``torch.version.hip`` and exposes
+        # AMD GPUs under the ``cuda`` device string; the sm_ guard must be skipped.
+        with (
+            patch("torch.cuda.is_available", return_value=True),
+            patch("torch.version.hip", "6.2.41134", create=True),
+        ):
+            assert device_utils.safe_device() == "cuda"
+
+    def test_rocm_build_indexed(self):
+        with (
+            patch("torch.cuda.is_available", return_value=True),
+            patch("torch.version.hip", "6.2.41134", create=True),
+        ):
+            assert device_utils.safe_device(index=2) == "cuda:2"
+
+    def test_rocm_bypasses_arch_list_that_would_reject_under_cuda(self):
+        # gfx1030 reports capability (10, 3) → "sm_103", absent from any real arch
+        # list. Under the CUDA path this would fall back to CPU; ROCm must not.
+        with (
+            patch("torch.cuda.is_available", return_value=True),
+            patch("torch.version.hip", "6.2.41134", create=True),
+            patch("torch.cuda.get_device_capability", return_value=(10, 3)),
+            patch("torch.cuda.get_arch_list", return_value=["gfx1030", "gfx1100"]),
+        ):
+            assert device_utils.safe_device() == "cuda"
+
+
 class TestForceDeviceOverride:
     def test_force_cuda_bypasses_arch_check(self, monkeypatch):
         # Operator override returns before any arch probe.
