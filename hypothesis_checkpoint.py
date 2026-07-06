@@ -31,7 +31,7 @@ def load_completed(path: Path) -> list[dict[str, Any]]:
     """Return the hypothesis records already persisted at *path*.
 
     A missing file yields an empty list. Each line is parsed independently so a
-    blank line or an unparseable trailing fragment — the signature of a write
+    blank line or an unparsable trailing fragment — the signature of a write
     interrupted mid-record — is skipped instead of failing the whole load. Only
     JSON objects carrying a ``question_id`` are returned; anything else (a bare
     list, a number, an object without the key) is ignored as not-a-record.
