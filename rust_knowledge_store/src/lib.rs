@@ -415,3 +415,42 @@ fn remanentia_knowledge_store(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<RustKnowledgeIndex>()?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tokenize_yields_lowercase_three_plus_char_tokens() {
+        let toks = tokenize("Hello World foo ab");
+        assert!(toks.contains("hello"));
+        assert!(toks.contains("world"));
+        assert!(toks.contains("foo"));
+        // "ab" is below the 3-char floor.
+        assert!(!toks.contains("ab"));
+    }
+
+    #[test]
+    fn extract_keywords_covers_frequency_caps_and_versions() {
+        let kw = extract_keywords("error error Kubernetes v1.2.3");
+        assert!(kw.contains(&"error".to_string())); // frequency >= 2
+        assert!(kw.contains(&"kubernetes".to_string())); // capitalised term
+        assert!(kw.contains(&"v1.2.3".to_string())); // version number
+    }
+
+    #[test]
+    fn extract_entities_finds_known_terms_versions_and_percentages() {
+        let ents = extract_entities("pytorch and bm25 at 90% on v2.0");
+        assert!(ents.contains("pytorch"));
+        assert!(ents.contains("bm25"));
+        assert!(ents.contains("90%"));
+        assert!(ents.contains("v2.0"));
+    }
+
+    #[test]
+    fn extract_person_names_reads_speaker_and_sentence_starts() {
+        let names = extract_person_names("Alice: hi there\nBob left early.");
+        assert!(names.contains("alice"));
+        assert!(names.contains("bob"));
+    }
+}
