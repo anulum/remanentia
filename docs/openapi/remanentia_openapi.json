@@ -2,6 +2,7 @@
   "components": {
     "schemas": {
       "ConsolidateRequest": {
+        "description": "Request body for consolidation runs.",
         "properties": {
           "force": {
             "default": false,
@@ -26,6 +27,7 @@
         "type": "object"
       },
       "PublicVectorSearchRequest": {
+        "description": "Request body for public-safe vector search.",
         "properties": {
           "query": {
             "title": "Query",
@@ -49,6 +51,7 @@
         "type": "object"
       },
       "RecallCorrectnessRequest": {
+        "description": "Request body for recall correctness feedback.",
         "properties": {
           "by": {
             "default": "",
@@ -72,6 +75,7 @@
         "type": "object"
       },
       "RecallRequest": {
+        "description": "Request body for `/recall`.",
         "properties": {
           "format": {
             "default": "summary",
@@ -150,12 +154,13 @@
   "info": {
     "description": "Persistent AI memory with SNN-orchestrated consolidation",
     "title": "Remanentia",
-    "version": "0.2.0"
+    "version": "0.5.0"
   },
   "openapi": "3.1.0",
   "paths": {
     "/consolidate": {
       "post": {
+        "description": "Run the consolidation engine and return its result payload.",
         "operationId": "consolidate_endpoint_consolidate_post",
         "requestBody": {
           "content": {
@@ -171,7 +176,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "title": "Response Consolidate Endpoint Consolidate Post"
+                }
               }
             },
             "description": "Successful Response"
@@ -197,12 +204,20 @@
     },
     "/entities": {
       "get": {
+        "description": "Return all entity graph nodes from the JSONL graph store.",
         "operationId": "list_entities_entities_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response List Entities Entities Get",
+                  "type": "array"
+                }
               }
             },
             "description": "Successful Response"
@@ -218,6 +233,7 @@
     },
     "/graph": {
       "get": {
+        "description": "Return top weighted graph relations.",
         "operationId": "graph_graph_get",
         "parameters": [
           {
@@ -236,7 +252,14 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Graph Graph Get",
+                  "type": "array"
+                }
               }
             },
             "description": "Successful Response"
@@ -262,6 +285,7 @@
     },
     "/graph/entity/{entity_id}": {
       "get": {
+        "description": "Return one entity and weighted graph connections.",
         "operationId": "entity_detail_graph_entity__entity_id__get",
         "parameters": [
           {
@@ -278,7 +302,11 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Entity Detail Graph Entity  Entity Id  Get",
+                  "type": "object"
+                }
               }
             },
             "description": "Successful Response"
@@ -304,12 +332,17 @@
     },
     "/health": {
       "get": {
+        "description": "Return service health and daemon freshness state.",
         "operationId": "health_health_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Health Health Get",
+                  "type": "object"
+                }
               }
             },
             "description": "Successful Response"
@@ -321,6 +354,7 @@
     },
     "/recall": {
       "post": {
+        "description": "Recall memory context and return summary or LLM-context JSON.",
         "operationId": "recall_endpoint_recall_post",
         "requestBody": {
           "content": {
@@ -336,7 +370,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "title": "Response Recall Endpoint Recall Post"
+                }
               }
             },
             "description": "Successful Response"
@@ -378,7 +414,11 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Recall Correctness Endpoint Recall Correctness Post",
+                  "type": "object"
+                }
               }
             },
             "description": "Successful Response"
@@ -404,12 +444,17 @@
     },
     "/status": {
       "get": {
+        "description": "Return memory-store, graph, and daemon status counters.",
         "operationId": "status_status_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Status Status Get",
+                  "type": "object"
+                }
               }
             },
             "description": "Successful Response"
@@ -441,7 +486,11 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Public Vector Search Endpoint Vector Search Public Post",
+                  "type": "object"
+                }
               }
             },
             "description": "Successful Response"
