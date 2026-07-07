@@ -563,9 +563,21 @@ class TestSimpleResolverException:
         import date_normalizer
 
         original_simple = dict(date_normalizer._SIMPLE_RE)
+        original_import = date_normalizer.import_module
 
         def _bad_resolver(ref):
             raise ValueError("intentional")
+
+        def _force_python_fallback(name, *args, **kwargs):
+            # This test exercises the Python fallback's ``except ValueError:
+            # continue`` fall-through. When the compiled ``remanentia_temporal``
+            # extension is installed, ``_rule_based_normalise`` resolves via Rust
+            # and returns before the patched ``_SIMPLE_RE`` is ever reached, so
+            # force the fallback here to test the branch deterministically
+            # regardless of whether the extension is present.
+            if name == "remanentia_temporal":
+                raise ImportError(name)
+            return original_import(name, *args, **kwargs)
 
         # Exact-match the compiled pattern's source so the injection actually
         # lands on the intended resolver (a substring like "earlier.*month"
@@ -578,6 +590,7 @@ class TestSimpleResolverException:
                 broken_re[pattern] = resolver
 
         date_normalizer._SIMPLE_RE = broken_re
+        date_normalizer.import_module = _force_python_fallback
         try:
             result = _rule_based_normalise("earlier this month", date(2023, 6, 15))
             assert result is not None
@@ -585,6 +598,7 @@ class TestSimpleResolverException:
             assert result.iso_date == "2023-06-01"
         finally:
             date_normalizer._SIMPLE_RE = original_simple
+            date_normalizer.import_module = original_import
 
 
 # ── DateResult dataclass ───────────────────────────────────────
