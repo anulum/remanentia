@@ -135,17 +135,17 @@ jobs:
         run: cargo clippy -- -D warnings
 
   rust-parity:
-    # Advisory (like the mypy step above): build the compiled Rust extensions and run
-    # the suite against the fast path, so the Rust<->Python parity / e2e tests — which
-    # importorskip the extension and otherwise NEVER run in CI — execute for real. The
-    # pure-Python test matrix and the 100 % coverage gate stay green on the fallback;
-    # this job surfaces fast-path defects without blocking. Non-blocking until the
-    # known parity gaps (BACKLOG L2.8) are fixed, after which it becomes required.
-    # Each crate is a bare cargo cdylib; the module name is its `[lib] name` (NOT the
-    # directory) — rust_recall -> remanentia_recall, rust_stdp -> arcane_stdp — read
-    # from Cargo.toml; copy lib<name>.so -> <name>.so onto sys.path.
+    # Required: build the compiled Rust extensions and run the suite against the fast
+    # path, so the Rust<->Python parity / e2e tests — which importorskip the extension
+    # and otherwise NEVER run in CI — execute for real. The pure-Python test matrix and
+    # the 100 % coverage gate stay green on the fallback; this job enforces that the
+    # compiled fast path stays bit-parity with the Python reference. (It was advisory
+    # while the initial parity gaps in BACKLOG L2.8 were fixed — 2026-07-07 — and is now
+    # a blocking check.) Each crate is a bare cargo cdylib; the module name is its
+    # `[lib] name` (NOT the directory) — rust_recall -> remanentia_recall,
+    # rust_stdp -> arcane_stdp — read from Cargo.toml; copy lib<name>.so -> <name>.so
+    # onto sys.path.
     runs-on: ubuntu-latest
-    continue-on-error: true
     permissions:
       contents: read
     steps:
