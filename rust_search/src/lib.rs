@@ -318,3 +318,101 @@ fn remanentia_search(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(split_paragraphs, m)?)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn s(items: &[&str]) -> Vec<String> {
+        items.iter().map(|t| (*t).to_string()).collect()
+    }
+
+    #[test]
+    fn tokenize_keeps_lowercase_words_of_three_plus_chars() {
+        // RE_TOKEN requires an alnum start + 2 more alnum/underscore chars.
+        assert_eq!(tokenize("Hello ab world_x"), s(&["hello", "world_x"]));
+    }
+
+    #[test]
+    fn token_counts_tallies_each_token() {
+        let counts = token_counts(s(&["a", "a", "b"]));
+        assert_eq!(counts.get("a"), Some(&2));
+        assert_eq!(counts.get("b"), Some(&1));
+        assert_eq!(counts.get("c"), None);
+    }
+
+    #[test]
+    fn classify_paragraph_covers_each_semantic_type() {
+        assert_eq!(classify_paragraph("def foo():", true), "function");
+        assert_eq!(classify_paragraph("x = 1", true), "code");
+        assert_eq!(
+            classify_paragraph("We decided to ship it", false),
+            "decision"
+        );
+        assert_eq!(
+            classify_paragraph("The result shows a gain", false),
+            "finding"
+        );
+        // Keep the metric text free of finding substrings (e.g. "improved"
+        // contains "proved", which classify checks earlier).
+        assert_eq!(
+            classify_paragraph("benchmark numbers here", false),
+            "metric"
+        );
+        assert_eq!(classify_paragraph("version bump", false), "version");
+        assert_eq!(
+            classify_paragraph("just chatting here", false),
+            "discussion"
+        );
+    }
+
+    #[test]
+    fn cosine_batch_scores_rows_and_guards_zero_norm() {
+        assert_eq!(
+            cosine_batch(vec![1.0, 0.0], vec![vec![1.0, 0.0], vec![0.0, 1.0]]),
+            vec![1.0, 0.0]
+        );
+        // A zero-norm query yields all-zero scores rather than NaN.
+        assert_eq!(
+            cosine_batch(vec![0.0, 0.0], vec![vec![1.0, 0.0]]),
+            vec![0.0]
+        );
+        // A zero-norm row also scores zero.
+        assert_eq!(
+            cosine_batch(vec![1.0, 0.0], vec![vec![0.0, 0.0]]),
+            vec![0.0]
+        );
+    }
+
+    #[test]
+    fn split_paragraphs_keeps_substantial_text_blocks() {
+        let text = "This first paragraph is comfortably long enough to keep.\n\n\
+                    This second paragraph also clears the length threshold.";
+        assert_eq!(split_paragraphs(text, false).len(), 2);
+        // A short block below the 30-char floor is dropped.
+        assert!(split_paragraphs("too short", false).is_empty());
+    }
+
+    #[test]
+    fn bm25_index_builds_and_ranks_matching_paragraph() {
+        let mut idx = BM25Index::new();
+        idx.build(
+            vec![s(&["apple", "banana"]), s(&["banana", "cherry"])],
+            vec![(0, 0), (1, 0)],
+        );
+        assert_eq!(idx.num_paragraphs(), 2);
+        assert_eq!(idx.vocab_size(), 3);
+
+        let results = idx.search(s(&["apple"]), 10);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].0, 0);
+
+        // An unknown / empty query returns no results.
+        assert!(idx.search(s(&["durian"]), 10).is_empty());
+        assert!(idx.search(vec![], 10).is_empty());
+
+        assert_eq!(idx.get_para_info(1), (1, 0));
+        // Out-of-range mapping falls back to (0, 0).
+        assert_eq!(idx.get_para_info(99), (0, 0));
+    }
+}

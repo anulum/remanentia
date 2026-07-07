@@ -75,3 +75,53 @@ fn remanentia_recall(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(assess_novelty, m)?)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn set(items: &[&str]) -> HashSet<String> {
+        items.iter().map(|s| (*s).to_string()).collect()
+    }
+
+    #[test]
+    fn tokenize_words_lowercases_and_dedupes() {
+        assert_eq!(
+            tokenize_words("Hello WORLD hello"),
+            set(&["hello", "world"])
+        );
+        assert!(tokenize_words("").is_empty());
+    }
+
+    #[test]
+    fn tokenize_words_min_uses_fast_path_for_short_min() {
+        // min_len <= 4 goes through RE_WORD4; "the"/"fox" (len 3) are dropped.
+        assert_eq!(
+            tokenize_words_min("the quick brown fox", 4),
+            set(&["quick", "brown"])
+        );
+    }
+
+    #[test]
+    fn tokenize_words_min_uses_general_path_for_long_min() {
+        // min_len > 4 takes the general branch; "bb" (len 2) is dropped.
+        assert_eq!(
+            tokenize_words_min("alpha bb gamma", 5),
+            set(&["alpha", "gamma"])
+        );
+    }
+
+    #[test]
+    fn token_overlap_score_is_intersection_over_query() {
+        assert_eq!(token_overlap_score(set(&["a", "b"]), set(&["b", "c"])), 0.5);
+        // An empty query divides by max(0, 1) = 1 rather than panicking.
+        assert_eq!(token_overlap_score(HashSet::new(), set(&["x"])), 0.0);
+    }
+
+    #[test]
+    fn assess_novelty_is_fraction_of_unknown_tokens() {
+        assert_eq!(assess_novelty("novel unknown", set(&["novel"])), 0.5);
+        // No token of length >= 4 -> defined as zero novelty.
+        assert_eq!(assess_novelty("a bb ccc", HashSet::new()), 0.0);
+    }
+}
