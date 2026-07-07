@@ -696,3 +696,59 @@ fn remanentia_consolidation(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(cluster_notes, m)?)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn v(items: &[&str]) -> Vec<String> {
+        items.iter().map(|s| (*s).to_string()).collect()
+    }
+
+    #[test]
+    fn parse_frontmatter_reads_key_values_and_skips_non_pairs() {
+        let fm = parse_frontmatter("---\ntitle: Hello\ntags: a b\n- listitem\nnocolon\n---\nbody");
+        assert_eq!(fm.get("title"), Some(&"Hello".to_string()));
+        assert_eq!(fm.get("tags"), Some(&"a b".to_string()));
+        assert_eq!(fm.get("nocolon"), None);
+        // No leading fence -> empty map.
+        assert!(parse_frontmatter("plain text").is_empty());
+    }
+
+    #[test]
+    fn date_gap_days_is_absolute_and_zero_on_unparseable() {
+        assert_eq!(date_gap_days("2023-06-01", "2023-06-03"), 2);
+        assert_eq!(date_gap_days("2023-06-03", "2023-06-01"), 2);
+        assert_eq!(date_gap_days("not-a-date", "2023-06-01"), 0);
+    }
+
+    #[test]
+    fn most_common_returns_the_modal_item() {
+        assert_eq!(most_common(&v(&["a", "b", "a"])), Some("a".to_string()));
+        assert_eq!(most_common(&[]), None);
+    }
+
+    #[test]
+    fn cluster_notes_merges_on_shared_terms() {
+        let clusters = cluster_notes(
+            vec![
+                (v(&["x", "y"]), vec![]),
+                (v(&["x", "y"]), vec![]),
+                (v(&["z"]), vec![]),
+            ],
+            2,
+        );
+        // Notes 0 and 1 share 2 terms; note 2 stays alone (single-note cluster dropped).
+        assert_eq!(clusters, vec![vec![0, 1]]);
+    }
+
+    #[test]
+    fn cluster_traces_splits_on_a_gap_over_two_days() {
+        let clusters = cluster_traces(vec![
+            ("t1".into(), "p".into(), "2023-06-01".into()),
+            ("t2".into(), "p".into(), "2023-06-02".into()),
+            ("t3".into(), "p".into(), "2023-06-10".into()),
+        ]);
+        assert_eq!(clusters, vec![vec!["t1", "t2"], vec!["t3"]]);
+    }
+}
