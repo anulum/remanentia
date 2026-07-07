@@ -72,6 +72,7 @@ remanentia-efficiency-frontier = "efficiency_frontier:main"
 remanentia-feed-ingest = "feed_ingest:main"
 remanentia-write-discipline = "write_discipline:main"
 remanentia-scorecard = "scorecard_report:main"
+remanentia-provenance-export = "provenance_export:main"
 remanentia-full-s-diagnostics = "full_s_diagnostics:main"
 remanentia-recall-calibration = "recall_calibration:main"
 remanentia-store-manifest = "store_manifest:main"
@@ -116,6 +117,7 @@ py-modules = [
     "coverage_accuracy",
     "no_egress_audit",
     "lineage_completeness",
+    "provenance_export",
     "world_class_scorecard",
     "lean_context",
     "scorecard_report",

@@ -34,8 +34,10 @@ closing the loop from stored belief to scored lineage. Pure and deterministic.
 
 from __future__ import annotations
 
+import argparse
 import json
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 
 from lineage_completeness import ProvenanceNode
 
@@ -105,3 +107,51 @@ def render_provenance_jsonl(store: Mapping[str, ProvenanceNode]) -> str:
         node = store[node_id]
         lines.append(json.dumps({"id": node.id, "origin": node.origin, "parent": node.parent}))
     return "\n".join(lines)
+
+
+def export_knowledge_store(notes_path: Path | None, output_path: Path) -> int:
+    """Project a persisted knowledge store to a provenance-node JSONL file.
+
+    Loads the knowledge store (from ``notes_path`` or its default location),
+    projects every note to a provenance node keyed by the note's own id — the
+    same id the store already assigns — and writes the JSONL that
+    :func:`scorecard_report.load_provenance_store` reads. Returns the number of
+    nodes written. This closes the lineage loop for a wheel consumer: the note
+    id is the one canonical belief id, so a run whose cited ids are note ids
+    resolves against this store and lights the lineage axis.
+    """
+    from knowledge_store import KnowledgeStore
+
+    store = KnowledgeStore()
+    store.load(notes_path=notes_path)
+    notes = [note.to_dict() for note in store.notes.values()]
+    provenance = build_provenance_store(notes)
+    output_path.write_text(render_provenance_jsonl(provenance) + "\n", encoding="utf-8")
+    return len(provenance)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Export a knowledge store's belief graph as a provenance-node JSONL."""
+    parser = argparse.ArgumentParser(
+        description="Export the knowledge-store belief graph to a provenance JSONL"
+    )
+    parser.add_argument(
+        "--notes",
+        type=Path,
+        default=None,
+        help="knowledge_notes.jsonl to read (defaults to the store's standard path)",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        required=True,
+        help="destination provenance-node JSONL",
+    )
+    args = parser.parse_args(argv)
+    count = export_knowledge_store(args.notes, args.output)
+    print(f"Wrote {count} provenance nodes: {args.output}")
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())

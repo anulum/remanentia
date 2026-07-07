@@ -28,7 +28,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `provenance_export` projects the knowledge-store belief graph into the
   provenance store the lineage-of-belief scorer (`lineage_completeness`,
   `scorecard_report`) consumes, closing the loop from stored belief to scored
-  lineage.
+  lineage. Now a shipped module with a `remanentia-provenance-export` CLI
+  (`--notes`/`--output`) that reads a persisted knowledge store and writes the
+  provenance JSONL keyed by each note's own id — the one canonical belief id — so a
+  wheel consumer can light the lineage axis on a real run.
 - `docs/benchmarks/SOVEREIGN_MEMORY_EVALUATION.md` documents the evaluation axes
   beyond accuracy (sovereign no-egress, write-discipline, calibrated abstention,
   fleet-fed recall, lineage-of-belief).

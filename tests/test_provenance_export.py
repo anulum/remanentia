@@ -15,6 +15,8 @@ import pytest
 from lineage_completeness import ProvenanceNode, is_lineage_complete, lineage_completeness
 from provenance_export import (
     build_provenance_store,
+    export_knowledge_store,
+    main,
     provenance_node_from_note,
     render_provenance_jsonl,
 )
@@ -170,3 +172,35 @@ class TestRoundTripToScorer:
         )
         assert report.completeness == 0.5
         assert report.incomplete_answers == ("q2",)
+
+
+class TestExportKnowledgeStore:
+    def _saved_store(self, tmp_path):
+        from knowledge_store import KnowledgeStore
+
+        store = KnowledgeStore()
+        store.add_note("The capital of France is Paris", source="atlas", redact_pii=False)
+        store.add_note("Kubernetes scaled the cluster overnight", source="ops", redact_pii=False)
+        notes_path = tmp_path / "notes.jsonl"
+        store.save(notes_path=notes_path, triggers_path=tmp_path / "triggers.jsonl")
+        return notes_path
+
+    def test_export_round_trips_through_the_scorecard_reader(self, tmp_path):
+        notes_path = self._saved_store(tmp_path)
+        out = tmp_path / "prov.jsonl"
+        count = export_knowledge_store(notes_path, out)
+        assert count == 2
+
+        from scorecard_report import load_provenance_store
+
+        loaded = load_provenance_store(out)
+        # Every note projects to a provenance node keyed by its own id.
+        assert len(loaded) == 2
+
+    def test_main_writes_the_store_and_reports_the_count(self, tmp_path, capsys):
+        notes_path = self._saved_store(tmp_path)
+        out = tmp_path / "prov.jsonl"
+        rc = main(["--notes", str(notes_path), "--output", str(out)])
+        assert rc == 0
+        assert out.exists()
+        assert "Wrote 2 provenance nodes" in capsys.readouterr().out
