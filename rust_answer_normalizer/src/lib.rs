@@ -101,3 +101,52 @@ fn remanentia_answer_normalizer(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(answers_match, m)?)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_answer_strips_hedge_and_detects_polarity() {
+        assert_eq!(normalize_answer(""), "");
+        assert_eq!(normalize_answer("   "), "");
+        // Hedge prefix removed, then the yes-marker matches.
+        assert_eq!(normalize_answer("I think yes, it works"), "yes");
+        assert_eq!(normalize_answer("No, because it failed"), "no");
+    }
+
+    #[test]
+    fn normalize_answer_trims_explanation_and_trailing_dot() {
+        assert_eq!(
+            normalize_answer("Paris, because it is the capital"),
+            "paris"
+        );
+        assert_eq!(normalize_answer("The Eiffel Tower."), "the eiffel tower");
+    }
+
+    #[test]
+    fn extract_answer_items_splits_lists() {
+        assert_eq!(
+            extract_answer_items("apples, oranges and bananas"),
+            vec!["apples", "oranges", "bananas"]
+        );
+    }
+
+    #[test]
+    fn answers_match_handles_equality_polarity_and_overlap() {
+        // Exact (after normalisation).
+        assert!(answers_match("Paris", "paris", 0.5));
+        // Same polarity via synonyms.
+        assert!(answers_match("yes", "correct", 0.5));
+        // Opposite polarity is an explicit mismatch.
+        assert!(!answers_match("yes", "no", 0.5));
+        // List overlap at/above threshold.
+        assert!(answers_match(
+            "apples and oranges",
+            "oranges and grapes",
+            0.5
+        ));
+        // An empty side never matches.
+        assert!(!answers_match("", "paris", 0.5));
+    }
+}

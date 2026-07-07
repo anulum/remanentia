@@ -162,3 +162,49 @@ fn remanentia_entity_extractor(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(extract_relations, m)?)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn regex_entities_labels_known_terms_versions_and_files() {
+        let ents = regex_entities("We use PyTorch and BM25 in Remanentia v1.2.3, see foo.py");
+        assert!(ents.contains(&("pytorch".into(), "software tool".into(), 0.5)));
+        assert!(ents.contains(&("bm25".into(), "algorithm".into(), 0.5)));
+        assert!(ents.contains(&("remanentia".into(), "project".into(), 0.5)));
+        assert!(ents.contains(&("v1.2.3".into(), "version number".into(), 0.6)));
+        assert!(ents.contains(&("foo.py".into(), "file path".into(), 0.5)));
+    }
+
+    #[test]
+    fn regex_entities_returns_empty_for_unremarkable_text() {
+        assert!(regex_entities("nothing notable in this sentence").is_empty());
+    }
+
+    #[test]
+    fn extract_relations_detects_typed_relation() {
+        let rels = extract_relations(
+            "the bug was fixed by the patch",
+            vec!["bug".into(), "patch".into()],
+        );
+        assert!(rels
+            .iter()
+            .any(|r| r.0 == "bug" && r.1 == "patch" && r.2 == "fixed_by"));
+    }
+
+    #[test]
+    fn extract_relations_falls_back_to_co_occurrence() {
+        let rels = extract_relations(
+            "alpha stands near beta",
+            vec!["alpha".into(), "beta".into()],
+        );
+        assert_eq!(rels.len(), 1);
+        assert_eq!(rels[0].2, "co_occurs");
+    }
+
+    #[test]
+    fn extract_relations_skips_entities_absent_from_text() {
+        assert!(extract_relations("unrelated prose", vec!["x".into(), "y".into()]).is_empty());
+    }
+}
