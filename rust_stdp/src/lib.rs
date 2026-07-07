@@ -234,3 +234,23 @@ fn arcane_stdp(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(encode_text, m)?)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The numeric kernels (stdp_batch, lif_step, homeostatic_scaling, encode_text)
+    // take PyO3/numpy arrays and are covered end-to-end by the Python parity tests
+    // (tests/test_snn_backend_rust.py) run in the rust-parity CI job. Here we cover
+    // the pure hashing helper directly.
+    #[test]
+    fn md5_hash_is_deterministic_and_distinguishes_inputs() {
+        assert_eq!(md5_hash(b"hello"), md5_hash(b"hello"));
+        assert_ne!(md5_hash(b"hello"), md5_hash(b"world"));
+    }
+
+    #[test]
+    fn md5_hash_empty_input_is_the_fnv_offset_basis() {
+        assert_eq!(md5_hash(b""), 0xcbf29ce484222325_u64 as usize);
+    }
+}
