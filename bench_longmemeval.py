@@ -898,6 +898,11 @@ def run_benchmark() -> None:
         hypothesis_record: dict[str, object] = {
             "question_id": qid,
             "hypothesis": hypothesis,
+            # Machine-checkable comparability marker: the realistic full-S haystack
+            # and the oracle (gold-only) setting are NOT comparable (the oracle
+            # inflates ~30 %). Stamping every row means a downstream consumer never
+            # has to infer the setting from a filename or an operator's memory.
+            "setting": "full_s" if _USE_FULL else "oracle",
         }
         if retrieval_diagnostics:
             hypothesis_record["retrieval_diagnostics"] = retrieval_diagnostics
