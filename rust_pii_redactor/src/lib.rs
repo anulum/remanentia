@@ -56,8 +56,15 @@ static RE_SLACK: LazyLock<Regex> =
 static RE_HEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[a-f0-9]{32,}").unwrap());
 static RE_EMAIL: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}").unwrap());
-static RE_IBAN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"[A-Z]{2}\d{2}[A-Z0-9]{10,30}").unwrap());
+static RE_IBAN: LazyLock<Regex> = LazyLock::new(|| {
+    // Two renderings, matching pii_redactor.py: A) contiguous BBAN, or B) SEPA
+    // print (groups of four separated by single spaces, final group 1-4). The
+    // Rust `regex` crate has no lookaround, so a trailing `\b` bounds the match
+    // in place of Python's `(?![A-Z0-9])` — it stops a spaced IBAN from running
+    // into a following all-caps word.
+    Regex::new(r"[A-Z]{2}\d{2}(?:[A-Z0-9]{11,30}|(?: [A-Z0-9]{4}){2,7}(?: [A-Z0-9]{1,4})?)\b")
+        .unwrap()
+});
 static RE_CREDIT_CARD: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?:\d{4}[ \-]?){3,4}\d{1,4}").unwrap());
 static RE_PHONE: LazyLock<Regex> = LazyLock::new(|| {
