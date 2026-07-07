@@ -604,3 +604,56 @@ fn remanentia_temporal(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(resonance_search, m)?)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ymd(y: i32, m: u32, d: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(y, m, d).unwrap()
+    }
+
+    #[test]
+    fn month_and_weekday_lookups() {
+        assert_eq!(month_num("January"), Some(1));
+        assert_eq!(month_num("dec"), Some(12));
+        assert_eq!(month_num("nope"), None);
+        assert_eq!(weekday_num("Monday"), Some(0));
+        assert_eq!(weekday_num("sunday"), Some(6));
+        assert_eq!(weekday_num("funday"), None);
+    }
+
+    #[test]
+    fn days_in_month_handles_leap_years() {
+        assert_eq!(days_in_month(2023, 2), 28);
+        assert_eq!(days_in_month(2024, 2), 29);
+        assert_eq!(days_in_month(2023, 4), 30);
+        assert_eq!(days_in_month(2023, 12), 31);
+    }
+
+    #[test]
+    fn month_delta_clamps_an_overflowing_day() {
+        assert_eq!(month_delta(ymd(2023, 1, 15), 1), ymd(2023, 2, 15));
+        // Feb 2023 has 28 days, so day 31 clamps down.
+        assert_eq!(month_delta(ymd(2023, 1, 31), 1), ymd(2023, 2, 28));
+    }
+
+    #[test]
+    fn normalise_vague_date_resolves_relative_expressions() {
+        assert_eq!(
+            normalise_vague_date("yesterday", "2023-06-15").map(|(d, _, _)| d),
+            Some("2023-06-14".to_string())
+        );
+        assert_eq!(
+            normalise_vague_date("2 days ago", "2023-06-15").map(|(d, _, _)| d),
+            Some("2023-06-13".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_dates_extracts_iso_dates() {
+        assert!(
+            parse_dates("Shipped on 2023-06-15 finally", None).contains(&"2023-06-15".to_string())
+        );
+    }
+}
