@@ -95,7 +95,7 @@ mod tests {
 
     #[test]
     fn stem_strips_known_suffixes_keeping_at_least_three_chars() {
-        assert_eq!(stem("running"), "runn");
+        assert_eq!(stem("testing"), "test");
         assert_eq!(stem("cats"), "cat");
         // Stripping "s" would leave < 3 chars, so it is left intact.
         assert_eq!(stem("is"), "is");
@@ -104,8 +104,8 @@ mod tests {
     #[test]
     fn expand_query_appends_novel_stems_sorted() {
         assert_eq!(
-            expand_query("running cats", sw(&[])),
-            "running cats cat runn"
+            expand_query("testing cats", sw(&[])),
+            "testing cats cat test"
         );
         // When every stem is already a token, the query is unchanged.
         assert_eq!(expand_query("cat dog", sw(&[])), "cat dog");

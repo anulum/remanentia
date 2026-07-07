@@ -716,7 +716,7 @@ mod tests {
     }
 
     #[test]
-    fn date_gap_days_is_absolute_and_zero_on_unparseable() {
+    fn date_gap_days_is_absolute_and_zero_on_unparsable() {
         assert_eq!(date_gap_days("2023-06-01", "2023-06-03"), 2);
         assert_eq!(date_gap_days("2023-06-03", "2023-06-01"), 2);
         assert_eq!(date_gap_days("not-a-date", "2023-06-01"), 0);
