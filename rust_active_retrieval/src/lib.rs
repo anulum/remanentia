@@ -45,3 +45,29 @@ fn remanentia_active_retrieval(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(extract_decision_points, m)?)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_decision_points_flags_decision_sentences() {
+        let pts =
+            extract_decision_points("We are going to refactor the module. The sky is blue today.");
+        assert_eq!(pts, vec!["We are going to refactor the module"]);
+    }
+
+    #[test]
+    fn extract_decision_points_skips_short_and_plain_sentences() {
+        // "Do it" is below the 15-char floor; the second has no decision marker.
+        assert!(extract_decision_points("Do it. A plain unremarkable statement here.").is_empty());
+    }
+
+    #[test]
+    fn extract_decision_points_matches_question_form() {
+        assert_eq!(
+            extract_decision_points("Should we choose the faster path here?").len(),
+            1
+        );
+    }
+}

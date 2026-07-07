@@ -96,3 +96,42 @@ fn remanentia_skill_extractor(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(rank_skills_by_overlap, m)?)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn v(items: &[&str]) -> Vec<String> {
+        items.iter().map(|s| (*s).to_string()).collect()
+    }
+
+    #[test]
+    fn tokenize_lower_keeps_lowercase_word_and_underscore_runs() {
+        assert_eq!(
+            tokenize_lower("Fix the Bug_123!"),
+            v(&["fix", "the", "bug_123"])
+        );
+    }
+
+    #[test]
+    fn matches_skill_marker_needs_a_trigger_and_action_pair() {
+        // "bug" trigger + "patch" action.
+        assert!(matches_skill_marker("A bug was found; we will patch it"));
+        // A trigger with no paired action does not match.
+        assert!(!matches_skill_marker("There is a bug somewhere"));
+        // Ordinary prose matches nothing.
+        assert!(!matches_skill_marker("just a normal sentence"));
+    }
+
+    #[test]
+    fn rank_skills_by_overlap_scores_and_filters() {
+        let ranked = rank_skills_by_overlap(
+            "python testing",
+            vec![v(&["python", "rust"]), v(&["java", "c"])],
+        );
+        // Only skill 0 overlaps ("python"): 1 of 2 query tokens.
+        assert_eq!(ranked, vec![(0, 0.5)]);
+        // An empty query yields no ranking.
+        assert!(rank_skills_by_overlap("", vec![v(&["python"])]).is_empty());
+    }
+}
