@@ -46,6 +46,7 @@ from api_security import (  # noqa: E402 — path inserted above
     BearerAuth,
     RequestAuditLogger,
     TokenBucketLimiter,
+    cors_allow_origin,
     enforce_body_size,
 )
 
@@ -330,7 +331,9 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Access-Control-Allow-Origin", "*")
+        allow_origin = cors_allow_origin(self.headers.get("Origin"))
+        if allow_origin is not None:
+            self.send_header("Access-Control-Allow-Origin", allow_origin)
         for name, value in (headers or {}).items():
             self.send_header(name, value)
         self.end_headers()

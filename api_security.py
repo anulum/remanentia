@@ -214,6 +214,39 @@ def retry_after_seconds(rate_per_minute: float) -> str:
     return str(max(1, math.ceil(60.0 / rate_per_minute)))
 
 
+def cors_origins_from_env() -> list[str]:
+    """Return the configured CORS allowlist, or the open local default.
+
+    Reads ``REMANENTIA_CORS_ORIGINS`` (comma-separated). An empty/unset value keeps
+    the permissive local default of ``["*"]``; otherwise the explicit allowlist is
+    honoured. Shared by the FastAPI app (``api``) and the stdlib server
+    (``api_server``) so both enforce the same policy.
+    """
+
+    configured = os.environ.get("REMANENTIA_CORS_ORIGINS", "").strip()
+    if not configured:
+        return ["*"]
+    return [origin.strip() for origin in configured.split(",") if origin.strip()]
+
+
+def cors_allow_origin(request_origin: str | None) -> str | None:
+    """Resolve the ``Access-Control-Allow-Origin`` value for a request.
+
+    Returns ``"*"`` when the allowlist is the open default, the request's own
+    ``Origin`` when it is explicitly allowed, or ``None`` (send no header — deny) when
+    a restricted allowlist does not contain the request origin. This lets the stdlib
+    server honour ``REMANENTIA_CORS_ORIGINS`` instead of emitting an unconditional
+    wildcard that ignored the configured policy.
+    """
+
+    origins = cors_origins_from_env()
+    if origins == ["*"]:
+        return "*"
+    if request_origin is not None and request_origin in origins:
+        return request_origin
+    return None
+
+
 def _disabled_env_value(value: str | None) -> bool:
     """Return whether an environment value explicitly disables a feature."""
 

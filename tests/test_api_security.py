@@ -25,6 +25,8 @@ from api_security import (
     TokenBucketLimiter,
     _RotatingJsonlWriter,
     _read_int_env,
+    cors_allow_origin,
+    cors_origins_from_env,
     enforce_body_size,
     retry_after_seconds,
 )
@@ -478,3 +480,31 @@ class TestDefaults:
 
     def test_burst_default(self) -> None:
         assert DEFAULT_BURST == 10
+
+
+class TestCorsOrigins:
+    def test_default_is_open(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("REMANENTIA_CORS_ORIGINS", raising=False)
+        assert cors_origins_from_env() == ["*"]
+
+    def test_configured_allowlist_is_parsed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("REMANENTIA_CORS_ORIGINS", "https://a.example, https://b.example ,")
+        assert cors_origins_from_env() == ["https://a.example", "https://b.example"]
+
+    def test_allow_origin_wildcard_ignores_request_origin(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("REMANENTIA_CORS_ORIGINS", raising=False)
+        assert cors_allow_origin("https://anything.example") == "*"
+        assert cors_allow_origin(None) == "*"
+
+    def test_allow_origin_echoes_listed_origin(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("REMANENTIA_CORS_ORIGINS", "https://ok.example")
+        assert cors_allow_origin("https://ok.example") == "https://ok.example"
+
+    def test_allow_origin_denies_unlisted_and_missing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("REMANENTIA_CORS_ORIGINS", "https://ok.example")
+        assert cors_allow_origin("https://evil.example") is None
+        assert cors_allow_origin(None) is None

@@ -353,6 +353,25 @@ class TestJsonResponse:
         h._json_response({"error": "bad"}, 400)
         h.send_response.assert_called_with(400)
 
+    def test_cors_scoped_echoes_listed_origin(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("REMANENTIA_CORS_ORIGINS", "https://ok.example")
+        h = _make_handler("/test", headers={"Origin": "https://ok.example"})
+        h._json_response({"ok": True}, 200)
+        h.send_header.assert_any_call("Access-Control-Allow-Origin", "https://ok.example")
+
+    def test_cors_scoped_omits_header_for_unlisted_origin(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("REMANENTIA_CORS_ORIGINS", "https://ok.example")
+        h = _make_handler("/test", headers={"Origin": "https://evil.example"})
+        h._json_response({"ok": True}, 200)
+        cors_calls = [
+            c
+            for c in h.send_header.call_args_list
+            if c.args and c.args[0] == "Access-Control-Allow-Origin"
+        ]
+        assert cors_calls == []
+
 
 # ── Missing patterns: pipeline, roundtrip ─────────────────────
 

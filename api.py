@@ -55,12 +55,15 @@ JsonObject: TypeAlias = dict[str, JsonValue]
 
 
 def _cors_origins_from_env() -> list[str]:
-    """Return CORS origins from `REMANENTIA_CORS_ORIGINS` or open local default."""
+    """Return CORS origins from `REMANENTIA_CORS_ORIGINS` or open local default.
 
-    configured = os.environ.get("REMANENTIA_CORS_ORIGINS", "").strip()
-    if not configured:
-        return ["*"]
-    return [origin.strip() for origin in configured.split(",") if origin.strip()]
+    Delegates to the shared `api_security` helper so the FastAPI app and the stdlib
+    `api_server` enforce one identical CORS policy.
+    """
+
+    from api_security import cors_origins_from_env
+
+    return cors_origins_from_env()
 
 
 app = FastAPI(
