@@ -341,3 +341,77 @@ fn remanentia_fact_decomposer(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<RustFactIndex>()?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn classify_fact_type_respects_priority_order() {
+        assert_eq!(classify_fact_type("We decided to ship it"), "decision");
+        assert_eq!(classify_fact_type("Actually that was wrong"), "correction");
+        assert_eq!(classify_fact_type("always verify the input"), "principle");
+        assert_eq!(classify_fact_type("I promise to finish it"), "commitment");
+        assert_eq!(classify_fact_type("the command is make build"), "skill");
+        assert_eq!(classify_fact_type("I plan to travel soon"), "plan");
+        assert_eq!(classify_fact_type("I love pizza"), "preference");
+        assert_eq!(classify_fact_type("She started a new job"), "state");
+        assert_eq!(classify_fact_type("The sky is blue today"), "event");
+        // Decision outranks a correction marker in the same sentence.
+        assert_eq!(
+            classify_fact_type("We decided, actually, to wait"),
+            "decision"
+        );
+    }
+
+    #[test]
+    fn split_sentences_breaks_on_terminator_then_capital() {
+        assert_eq!(
+            split_sentences("First sentence here. Second sentence follows."),
+            vec!["First sentence here.", "Second sentence follows."]
+        );
+        // No internal break: the whole (long enough) line is one sentence.
+        assert_eq!(
+            split_sentences("only one line here"),
+            vec!["only one line here"]
+        );
+    }
+
+    #[test]
+    fn has_change_verb_detects_state_change() {
+        assert!(has_change_verb("She joined the team"));
+        assert!(!has_change_verb("a quiet morning"));
+    }
+
+    #[test]
+    fn tokenize_words_keeps_four_plus_char_words() {
+        assert_eq!(
+            tokenize_words("The quick fox jumps"),
+            vec!["quick", "jumps"]
+        );
+    }
+
+    #[test]
+    fn date_before_compares_iso_dates_lexicographically() {
+        assert!(date_before("2023-01-01", "2023-06-01"));
+        assert!(!date_before("2023-06-01", "2023-01-01"));
+    }
+
+    #[test]
+    fn rust_fact_index_ranks_keyword_and_entity_hits_first() {
+        let idx = RustFactIndex::new(
+            vec![
+                "the kubernetes cluster scaled".into(),
+                "unrelated note about coffee".into(),
+            ],
+            vec![vec!["Kubernetes".into()], vec![]],
+            vec![String::new(), String::new()],
+            vec![0.0, 0.0],
+            vec![false, false],
+        );
+        // "Kubernetes" (not at position 0) contributes the entity boost; the
+        // shared keywords add to it, so fact 0 ranks ahead of the coffee note.
+        let ranked = idx.query("the Kubernetes cluster status", "", false, 10);
+        assert_eq!(ranked[0].0, 0);
+    }
+}
