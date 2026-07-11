@@ -239,7 +239,7 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
                 results.append(trace_result)
             for sm in ctx.semantic_memories[:top_k]:
                 semantic_result: JsonObject = {
-                    "name": str(sm.get("file", "")),
+                    "name": str(sm.get("path", "")),
                     "score": float(sm.get("score", 0.0)),
                     "snippet": str(sm.get("content", ""))[:300],
                     "type": "semantic",

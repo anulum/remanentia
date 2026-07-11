@@ -400,6 +400,49 @@ class TestAPIServerPipeline:
         assert body["entities"] == ["pipeline"]
         assert body["results"][0]["name"] == "pipeline_trace.md"
 
+    def test_recall_handler_preserves_real_semantic_memory_path(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A real semantic recall result must expose its canonical non-empty name."""
+        import memory_index
+        import memory_recall
+
+        semantic_dir = tmp_path / "memory" / "semantic"
+        semantic_dir.mkdir(parents=True)
+        (semantic_dir / "known-memory.md").write_text(
+            "---\nproject: integration\ntype: finding\n---\n"
+            "- Known semantic memory survives the HTTP mapping.\n",
+            encoding="utf-8",
+        )
+        empty_index = MagicMock()
+        empty_index.load.return_value = True
+        empty_index.search.return_value = []
+        monkeypatch.setattr(memory_index, "MemoryIndex", lambda: empty_index)
+        monkeypatch.setattr(memory_recall, "BASE", tmp_path)
+        monkeypatch.setattr(memory_recall, "SEMANTIC_DIR", semantic_dir)
+        monkeypatch.setattr(memory_recall, "TRACES_DIR", tmp_path / "reasoning_traces")
+        monkeypatch.setattr(memory_recall, "GRAPH_DIR", tmp_path / "memory" / "graph")
+
+        handler = _make_handler(
+            "/recall",
+            "POST",
+            {"query": "known semantic memory", "top_k": 1},
+        )
+        handler.do_POST()
+
+        handler.send_response.assert_called_with(200)
+        body = _get_response_body(handler)
+        assert body["results"] == [
+            {
+                "name": "memory/semantic/known-memory.md",
+                "score": 1.0,
+                "snippet": "- Known semantic memory survives the HTTP mapping.",
+                "type": "semantic",
+            }
+        ]
+
     def test_malformed_recall_json_returns_missing_query_error(self) -> None:
         h = _make_handler("/recall", "POST")
         h.rfile = io.BytesIO(b'{"query":')

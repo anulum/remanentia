@@ -57,6 +57,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   are kept and only the raw-history tail is clipped, so a short-window local
   reader is never handed an over-window prompt that would stall it.
 
+### Fixed
+- The lightweight `POST /recall` API now returns each semantic memory's
+  canonical `path` as the result `name`. It previously looked for a nonexistent
+  `file` field and emitted an empty name, breaking strict cross-service clients
+  even though semantic retrieval itself succeeded.
+
 ## [0.5.0] - 2026-06-29
 
 ### Added
