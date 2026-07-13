@@ -53,6 +53,7 @@ import logging
 import os
 import threading
 from collections.abc import Callable, Sequence
+from importlib import import_module
 from typing import Any, cast
 
 log = logging.getLogger(__name__)
@@ -77,10 +78,11 @@ def _load_agent_factory() -> AgentFactory | None:
     import of the recall path that depends on this module.
     """
     try:
-        from synapse_channel import SynapseAgent
+        agent_module = import_module("synapse_channel.client.agent")
+        factory = getattr(agent_module, "SynapseAgent", None)
     except Exception:  # pragma: no cover — exercised via injected factory in tests
         return None
-    return cast(AgentFactory, SynapseAgent)
+    return cast(AgentFactory, factory) if callable(factory) else None
 
 
 class BusRecallEmitter:

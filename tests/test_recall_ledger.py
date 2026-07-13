@@ -14,7 +14,13 @@ resolution, concurrency, and the default-location factory.
 from __future__ import annotations
 
 import json
+import socket
+import sqlite3
+import subprocess
 import threading
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -432,42 +438,93 @@ class TestMcpRecallHook:
         assert first is second
 
 
-class _FakeEmitter:
-    """Records bus emits without touching the network."""
+@contextmanager
+def _real_hub(tmp_path: Path) -> Iterator[tuple[str, Path]]:
+    probe = socket.socket()
+    probe.bind(("127.0.0.1", 0))
+    port = probe.getsockname()[1]
+    probe.close()
+    db_path = tmp_path / "hub.db"
+    process = subprocess.Popen(
+        [
+            "synapse",
+            "hub",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+            "--db",
+            str(db_path),
+            "--log-level",
+            "ERROR",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        for _ in range(100):
+            if process.poll() is not None:
+                stderr = process.stderr.read() if process.stderr is not None else ""
+                raise RuntimeError(f"Synapse hub exited during startup: {stderr}")
+            try:
+                with socket.create_connection(("127.0.0.1", port), timeout=0.05):
+                    break
+            except OSError:
+                time.sleep(0.02)
+        else:
+            raise RuntimeError("Synapse hub did not bind its test port")
+        yield f"ws://127.0.0.1:{port}", db_path
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
 
-    def __init__(self, *, fail: bool = False):
-        self.calls: list[tuple] = []
-        self._fail = fail
 
-    def emit(self, query_text, *, returned_claim_ids, was_used=False, abstained=False):
-        if self._fail:
-            raise RuntimeError("emit boom")
-        self.calls.append((query_text, list(returned_claim_ids), was_used, abstained))
-        return True
+def _wait_for_bus_recall(db_path: Path, query: str) -> dict[str, object]:
+    for _ in range(100):
+        if db_path.exists():
+            with sqlite3.connect(db_path) as connection:
+                rows = connection.execute(
+                    "select payload from events where kind = 'recall' order by seq"
+                ).fetchall()
+            for (raw_payload,) in rows:
+                payload = json.loads(raw_payload)
+                if payload.get("query_text") == query:
+                    return dict(payload)
+        time.sleep(0.02)
+    raise AssertionError(f"recall event {query!r} did not reach the durable hub store")
 
 
 class TestMcpRecallBus:
     """The mcp_server recall hook mirrors the query stream onto the fleet bus."""
 
-    def test_log_recall_emits_to_bus(self, monkeypatch):
+    def test_log_recall_emits_to_real_hub(self, tmp_path: Path, monkeypatch):
+        from bus_recall import BusRecallEmitter
         import mcp_server
 
-        fake = _FakeEmitter()
-        monkeypatch.setattr(mcp_server, "_BUS_EMITTER", fake)
-        monkeypatch.setattr(mcp_server, "_BUS_EMITTER_INIT", True)
-        monkeypatch.setenv("REMANENTIA_RECALL_LEDGER_DISABLE", "1")  # isolate the bus sink
-        mcp_server._log_recall("q", ["sem:trace"], 3, "scpn", 0.9)
-        assert fake.calls == [("q", ["sem:trace"], False, False)]
+        with _real_hub(tmp_path) as (uri, db_path):
+            emitter = BusRecallEmitter(name="REMANENTIA-test-recall", uri=uri, connect_timeout=3)
+            monkeypatch.setattr(mcp_server, "_BUS_EMITTER", emitter)
+            monkeypatch.setattr(mcp_server, "_BUS_EMITTER_INIT", True)
+            monkeypatch.setenv("REMANENTIA_RECALL_LEDGER_DISABLE", "1")
+            try:
+                mcp_server._log_recall("q", ["sem:trace"], 3, "scpn", 0.9)
+                mcp_server._log_recall("unknown", [], 5, "")
+                emitted = _wait_for_bus_recall(db_path, "q")
+                abstained = _wait_for_bus_recall(db_path, "unknown")
+            finally:
+                emitter.close()
 
-    def test_bus_abstains_when_nothing_returned(self, monkeypatch):
-        import mcp_server
-
-        fake = _FakeEmitter()
-        monkeypatch.setattr(mcp_server, "_BUS_EMITTER", fake)
-        monkeypatch.setattr(mcp_server, "_BUS_EMITTER_INIT", True)
-        monkeypatch.setenv("REMANENTIA_RECALL_LEDGER_DISABLE", "1")
-        mcp_server._log_recall("unknown", [], 5, "")
-        assert fake.calls == [("unknown", [], False, True)]
+        assert emitted["returned_claim_ids"] == ["sem:trace"]
+        assert emitted["was_used"] is False
+        assert emitted["abstained"] is False
+        assert emitted["by"] == "REMANENTIA-test-recall"
+        assert abstained["returned_claim_ids"] == []
+        assert abstained["abstained"] is True
 
     def test_emit_recall_bus_none_is_noop(self, monkeypatch):
         import mcp_server
@@ -477,13 +534,25 @@ class TestMcpRecallBus:
         # No emitter → silent return, no exception.
         mcp_server._emit_recall_bus("q", ["a:1"])
 
-    def test_failing_emitter_never_breaks_recall(self, monkeypatch):
+    def test_unreachable_real_hub_never_breaks_recall(self, monkeypatch):
+        from bus_recall import BusRecallEmitter
         import mcp_server
 
-        monkeypatch.setattr(mcp_server, "_BUS_EMITTER", _FakeEmitter(fail=True))
+        probe = socket.socket()
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+        probe.close()
+        emitter = BusRecallEmitter(
+            name="REMANENTIA-test-unreachable",
+            uri=f"ws://127.0.0.1:{port}",
+            connect_timeout=0.1,
+        )
+        monkeypatch.setattr(mcp_server, "_BUS_EMITTER", emitter)
         monkeypatch.setattr(mcp_server, "_BUS_EMITTER_INIT", True)
-        # A raising emitter must be swallowed, not propagated.
-        mcp_server._emit_recall_bus("q", ["a:1"])
+        try:
+            mcp_server._emit_recall_bus("q", ["a:1"])
+        finally:
+            emitter.close()
 
     def test_get_bus_emitter_lazy_and_cached(self, monkeypatch):
         import mcp_server
