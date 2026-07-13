@@ -40,6 +40,7 @@ def _probe(argv_extra: list[str], env: dict[str, str] | None = None) -> dict[str
         "print('_EFFECTIVE_SEED=', b._EFFECTIVE_SEED)\n"
         "print('_LOCAL_MODEL=', b._LOCAL_MODEL)\n"
         "print('_LOCAL_URL=', b._LOCAL_URL)\n"
+        "print('_READER_MODEL=', b._READER_MODEL)\n"
     )
     r = subprocess.run(
         [PY, "-c", code],
@@ -111,6 +112,27 @@ class TestLegacyFlags:
     def test_limit_flag(self):
         assert _probe(["--limit", "42"])["_LIMIT"] == "42"
         assert _probe([])["_LIMIT"] == "None"
+
+
+class TestReaderModel:
+    """The per-row reader stamp must mirror the completion-routing decision."""
+
+    def test_local_llm_flag_stamps_local_model(self):
+        vals = _probe(["--local-llm"], env={"OPENAI_API_KEY": "sk-test"})
+        assert vals["_READER_MODEL"] == vals["_LOCAL_MODEL"]
+
+    def test_missing_hosted_key_stamps_local_model(self):
+        # No OPENAI_API_KEY in the probe env → completions route locally.
+        vals = _probe([])
+        assert vals["_READER_MODEL"] == vals["_LOCAL_MODEL"]
+
+    def test_hosted_key_without_local_flag_stamps_hosted_model(self):
+        vals = _probe([], env={"OPENAI_API_KEY": "sk-test"})
+        assert vals["_READER_MODEL"] == "gpt-4o-mini"
+
+    def test_local_model_env_override_propagates_to_stamp(self):
+        vals = _probe(["--local-llm"], env={"REMANENTIA_LOCAL_MODEL": "gemma3:12b"})
+        assert vals["_READER_MODEL"] == "gemma3:12b"
 
 
 class TestSeed:

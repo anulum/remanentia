@@ -166,12 +166,13 @@ def _summarise_rows(
     models: set[str] = set()
     seeds: set[int] = set()
     settings: set[str] = set()
+    readers: set[str] = set()
     prompt_token_estimate = 0
     completion_tokens = 0
     unjudged = 0
 
     for row in rows:
-        # Seed and setting provenance are run metadata, not correctness
+        # Seed, setting and reader provenance are run metadata, not correctness
         # evidence, so they are collected from every row — judged or not.
         seed = _int_from_value(row.get("seed"))
         if seed is not None:
@@ -179,6 +180,9 @@ def _summarise_rows(
         setting = row.get("setting")
         if isinstance(setting, str) and setting:
             settings.add(setting)
+        reader = row.get("reader")
+        if isinstance(reader, str) and reader:
+            readers.add(reader)
         if "judge_label" not in row:
             unjudged += 1
             continue
@@ -248,6 +252,7 @@ def _summarise_rows(
         },
         "seeds": sorted(seeds),
         "settings": sorted(settings),
+        "readers": sorted(readers),
     }
 
 
@@ -320,6 +325,9 @@ def _summarise_json_summary(
         "seeds": _seeds_from_payload(payload),
         "settings": [payload["setting"]]
         if isinstance(payload.get("setting"), str) and payload["setting"]
+        else [],
+        "readers": [payload["reader"]]
+        if isinstance(payload.get("reader"), str) and payload["reader"]
         else [],
     }
     method = payload.get("method")

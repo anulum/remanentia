@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-13T04:46:09.723725+00:00",
+  "generated_at": "2026-07-13T07:37:31.424168+00:00",
   "git": {
-    "head": "b7c6465e15f33dc54861ecbd3ad7c34e57fe3185"
+    "head": "b330fa81ec54d0c89c86f717e7857c1c9472cf67"
   },
   "environment": {
     "python_version": "3.12.3",
@@ -53,7 +53,8 @@
         "prompt_sha256": []
       },
       "seeds": [],
-      "settings": []
+      "settings": [],
+      "readers": []
     },
     {
       "benchmark": "locomo",
@@ -89,7 +90,8 @@
         "prompt_sha256": []
       },
       "seeds": [],
-      "settings": []
+      "settings": [],
+      "readers": []
     },
     {
       "benchmark": "longmemeval",
@@ -635,7 +637,8 @@
       ],
       "settings": [
         "full_s"
-      ]
+      ],
+      "readers": []
     }
   ],
   "artifacts": [
@@ -650,6 +653,7 @@
     {
       "benchmark": "locomo",
       "setting": "unknown",
+      "reader": "unknown",
       "runs": 1,
       "seeds": [],
       "accuracy": {
@@ -664,11 +668,12 @@
         83.1
       ],
       "headline_eligible": false,
-      "reason": "no_seed_metadata"
+      "reason": "no_setting_metadata"
     },
     {
       "benchmark": "longmemeval",
       "setting": "full_s",
+      "reader": "unknown",
       "runs": 1,
       "seeds": [
         42
@@ -685,11 +690,12 @@
         56.4
       ],
       "headline_eligible": false,
-      "reason": "single_seed"
+      "reason": "no_reader_metadata"
     },
     {
       "benchmark": "longmemeval",
       "setting": "unknown",
+      "reader": "unknown",
       "runs": 1,
       "seeds": [],
       "accuracy": {
@@ -704,7 +710,7 @@
         72.2
       ],
       "headline_eligible": false,
-      "reason": "no_seed_metadata"
+      "reason": "no_setting_metadata"
     }
   ]
 }

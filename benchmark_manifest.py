@@ -142,7 +142,8 @@ def _report_entry(path: Path, repo_root: Path) -> JsonObject:
         "tokens": _optional_object(payload.get("tokens")) or {},
         "judge": _optional_object(payload.get("judge")) or {},
         "seeds": _seed_list(payload.get("seeds")),
-        "settings": _setting_list(payload.get("settings")),
+        "settings": _string_list(payload.get("settings")),
+        "readers": _string_list(payload.get("readers")),
     }
 
 
@@ -154,45 +155,53 @@ def _seed_list(value: object) -> list[int]:
     return sorted(seeds)
 
 
-def _setting_list(value: object) -> list[str]:
-    """Return the report's distinct setting labels, sorted; never fabricated."""
+def _string_list(value: object) -> list[str]:
+    """Return the report's distinct non-empty string labels, sorted; never fabricated."""
     if not isinstance(value, list):
         return []
     return sorted({item for item in value if isinstance(item, str) and item})
 
 
-def _setting_label(entry: JsonObject) -> str:
-    """Collapse one report's settings into a headline group label.
+def _group_label(entry: JsonObject, field: str) -> str:
+    """Collapse one report's *field* label list into a headline group label.
 
-    ``oracle`` and ``full_s`` runs are never comparable (the oracle inflates
-    ~30 %), so a single results file carrying both is an integrity fault
-    (``mixed``) and pre-L6.2 artefacts without the stamp are ``unknown``.
+    A single results file carrying two labels is an integrity fault
+    (``mixed``) and artefacts predating the stamp are ``unknown``. Applies to
+    ``settings`` (oracle vs full-S inflates ~30 %) and ``readers`` (a
+    sovereign local reader and a cloud reader are different systems).
     """
-    settings = cast(list[str], entry["settings"])
-    if len(settings) == 1:
-        return settings[0]
-    return "mixed" if settings else "unknown"
+    labels = cast(list[str], entry[field])
+    if len(labels) == 1:
+        return labels[0]
+    return "mixed" if labels else "unknown"
 
 
 def _headline_entries(reports: list[JsonObject]) -> list[JsonObject]:
-    """Aggregate per-(benchmark, setting) headline eligibility and variance.
+    """Aggregate per-(benchmark, setting, reader) headline eligibility and variance.
 
-    Groups the manifest's report entries by benchmark name AND setting label —
-    oracle and full-S runs of the same benchmark never pool into one band. A
-    group is headline-eligible only when its runs carry at least two distinct
-    RNG seeds; a single run, runs without seed metadata (every pre-L6.5
-    artefact), or a mixed-setting results file are honestly marked ineligible
+    Groups the manifest's report entries by benchmark name, setting label AND
+    reader label — oracle and full-S runs never pool into one band, and a
+    sovereign local-reader run never pools with a cloud-reader run of the same
+    setting (SOVEREIGN_MEMORY_EVALUATION guardrail 2). A group is
+    headline-eligible only when its reader is pinned and its runs carry at
+    least two distinct RNG seeds; a single run, runs without seed metadata
+    (every pre-L6.5 artefact), runs without reader metadata (every pre-L6.7
+    artefact), or a mixed-label results file are honestly marked ineligible
     instead of being presented as a settled number. Accuracy is reported as a
     variance band across runs, not a point estimate.
     """
-    grouped: dict[tuple[str, str], list[JsonObject]] = {}
+    grouped: dict[tuple[str, str, str], list[JsonObject]] = {}
     for report in reports:
-        key = (cast(str, report["benchmark"]), _setting_label(report))
+        key = (
+            cast(str, report["benchmark"]),
+            _group_label(report, "settings"),
+            _group_label(report, "readers"),
+        )
         grouped.setdefault(key, []).append(report)
 
     headlines: list[JsonObject] = []
-    for benchmark, setting in sorted(grouped):
-        entries = grouped[(benchmark, setting)]
+    for benchmark, setting, reader in sorted(grouped):
+        entries = grouped[(benchmark, setting, reader)]
         seeds = sorted({seed for entry in entries for seed in cast(list[int], entry["seeds"])})
         accuracies = [
             accuracy
@@ -203,6 +212,15 @@ def _headline_entries(reports: list[JsonObject]) -> list[JsonObject]:
         if setting == "mixed":
             eligible = False
             reason = "mixed_settings"
+        elif setting == "unknown":
+            eligible = False
+            reason = "no_setting_metadata"
+        elif reader == "mixed":
+            eligible = False
+            reason = "mixed_readers"
+        elif reader == "unknown":
+            eligible = False
+            reason = "no_reader_metadata"
         elif len(seeds) >= 2:
             eligible = True
             reason = "ok"
@@ -216,6 +234,7 @@ def _headline_entries(reports: list[JsonObject]) -> list[JsonObject]:
             {
                 "benchmark": benchmark,
                 "setting": setting,
+                "reader": reader,
                 "runs": len(entries),
                 "seeds": seeds,
                 "accuracy": {
@@ -412,7 +431,7 @@ def main(argv: list[str] | None = None) -> int:
             for headline in ineligible:
                 print(
                     f"single-seed headline gate: {headline['benchmark']}"
-                    f"/{headline['setting']} ({headline['reason']}, "
+                    f"/{headline['setting']}/{headline['reader']} ({headline['reason']}, "
                     f"runs={headline['runs']}, seeds={headline['seeds']})"
                 )
             return 1

@@ -381,8 +381,14 @@ def _seeded_report(
     benchmark: str = "longmemeval",
     seeds: list[int] | None = None,
     accuracy: float = 50.0,
+    settings: list[str] | None = None,
+    readers: list[str] | None = None,
 ) -> None:
-    """Create a manifest-compatible evidence report carrying seed metadata."""
+    """Create a manifest-compatible evidence report carrying run metadata.
+
+    Defaults pin one setting and one reader so seed-focused tests exercise
+    the seed rules rather than tripping the metadata gates.
+    """
     _write_json(
         path,
         {
@@ -397,6 +403,8 @@ def _seeded_report(
             "tokens": {},
             "judge": {},
             "seeds": seeds if seeds is not None else [],
+            "settings": settings if settings is not None else ["full_s"],
+            "readers": readers if readers is not None else ["gpt-4o-mini"],
         },
     )
 
@@ -459,6 +467,8 @@ def test_headline_without_accuracies_has_null_band(tmp_path: Path) -> None:
             "n_records": 0,
             "score": {"correct": None, "total": None, "accuracy": None},
             "seeds": [1, 2],
+            "settings": ["full_s"],
+            "readers": ["gpt-4o-mini"],
         },
     )
 
@@ -550,6 +560,7 @@ def test_headlines_never_pool_across_settings(tmp_path: Path) -> None:
             "score": {"correct": 1, "total": 2, "accuracy": 72.2},
             "seeds": [],
             "settings": ["oracle"],
+            "readers": ["gpt-4o-mini"],
         },
     )
     for path, seed, accuracy in ((full_a, 42, 56.8), (full_b, 1337, 55.4)):
@@ -565,6 +576,7 @@ def test_headlines_never_pool_across_settings(tmp_path: Path) -> None:
                 "score": {"correct": 1, "total": 2, "accuracy": accuracy},
                 "seeds": [seed],
                 "settings": ["full_s"],
+                "readers": ["gpt-4o-mini"],
             },
         )
 
@@ -595,6 +607,7 @@ def test_mixed_setting_report_is_ineligible(tmp_path: Path) -> None:
             "score": {"correct": 1, "total": 2, "accuracy": 60.0},
             "seeds": [1, 2],
             "settings": ["full_s", "oracle"],
+            "readers": ["gpt-4o-mini"],
         },
     )
 
@@ -604,3 +617,70 @@ def test_mixed_setting_report_is_ineligible(tmp_path: Path) -> None:
     assert headline["setting"] == "mixed"
     assert headline["headline_eligible"] is False
     assert headline["reason"] == "mixed_settings"
+
+
+def test_headlines_never_pool_across_readers(tmp_path: Path) -> None:
+    """A sovereign local-reader run never pools with a cloud-reader run."""
+    cloud_a = tmp_path / "cloud_a.json"
+    cloud_b = tmp_path / "cloud_b.json"
+    sovereign = tmp_path / "sovereign.json"
+    _seeded_report(cloud_a, seeds=[42], accuracy=56.8)
+    _seeded_report(cloud_b, seeds=[1337], accuracy=55.4)
+    _seeded_report(sovereign, seeds=[42], accuracy=35.4, readers=["gemma3:4b"])
+
+    manifest = build_benchmark_manifest(
+        report_paths=[cloud_a, cloud_b, sovereign], repo_root=tmp_path
+    )
+    by_reader = {h["reader"]: h for h in manifest["headlines"]}
+
+    assert set(by_reader) == {"gpt-4o-mini", "gemma3:4b"}
+    cloud = by_reader["gpt-4o-mini"]
+    assert cloud["headline_eligible"] is True
+    assert cloud["variance_band"] == [55.4, 56.8]
+    local = by_reader["gemma3:4b"]
+    assert local["headline_eligible"] is False
+    assert local["reason"] == "single_seed"
+    assert local["variance_band"] == [35.4, 35.4]
+
+
+def test_mixed_reader_report_is_ineligible(tmp_path: Path) -> None:
+    """A single results file answered by two different readers is a fault."""
+    mixed = tmp_path / "mixed_reader.json"
+    _seeded_report(mixed, seeds=[1, 2], readers=["gemma3:4b", "gpt-4o-mini"])
+
+    manifest = build_benchmark_manifest(report_paths=[mixed], repo_root=tmp_path)
+    (headline,) = manifest["headlines"]
+
+    assert headline["reader"] == "mixed"
+    assert headline["headline_eligible"] is False
+    assert headline["reason"] == "mixed_readers"
+
+
+def test_headline_without_reader_metadata_is_ineligible(tmp_path: Path) -> None:
+    """Pre-L6.7 artefacts without a reader stamp cannot prove one reader answered."""
+    a = tmp_path / "a.json"
+    b = tmp_path / "b.json"
+    _seeded_report(a, seeds=[1], readers=[])
+    _seeded_report(b, seeds=[2], readers=[])
+
+    manifest = build_benchmark_manifest(report_paths=[a, b], repo_root=tmp_path)
+    (headline,) = manifest["headlines"]
+
+    assert headline["reader"] == "unknown"
+    assert headline["headline_eligible"] is False
+    assert headline["reason"] == "no_reader_metadata"
+
+
+def test_headline_without_setting_metadata_is_ineligible(tmp_path: Path) -> None:
+    """Pre-L6.2 artefacts without a setting stamp cannot prove one setting ran."""
+    a = tmp_path / "a.json"
+    b = tmp_path / "b.json"
+    _seeded_report(a, seeds=[1], settings=[])
+    _seeded_report(b, seeds=[2], settings=[])
+
+    manifest = build_benchmark_manifest(report_paths=[a, b], repo_root=tmp_path)
+    (headline,) = manifest["headlines"]
+
+    assert headline["setting"] == "unknown"
+    assert headline["headline_eligible"] is False
+    assert headline["reason"] == "no_setting_metadata"

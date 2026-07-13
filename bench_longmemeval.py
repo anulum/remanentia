@@ -153,6 +153,19 @@ _OPENAI_TIMEOUT = float(os.environ.get("REMANENTIA_OPENAI_TIMEOUT", "30"))
 _LOCAL_MODEL = os.environ.get("REMANENTIA_LOCAL_MODEL", "gemma3:4b")
 _LOCAL_URL = os.environ.get("REMANENTIA_LOCAL_URL", "http://localhost:11434/v1")
 
+# The hosted reader model, named once so the per-row reader stamp and the
+# actual completion call can never diverge.
+_HOSTED_MODEL = "gpt-4o-mini"
+# The reader that will actually answer: mirrors the routing decision in
+# ``_hypothesis_complete`` (local backend when --local-llm is set or no hosted
+# key is present). Stamped into every emitted row — two runs are comparable
+# only when setting, reader AND judge all match (SOVEREIGN_MEMORY_EVALUATION
+# guardrail 2), so the reader must be machine-readable per row, not inferred
+# from a filename or an operator's memory.
+_READER_MODEL = (
+    _LOCAL_MODEL if (_USE_LOCAL_LLM or not os.environ.get("OPENAI_API_KEY")) else _HOSTED_MODEL
+)
+
 # Pin every randomness source Remanentia pulls in. REMANENTIA_SEED env
 # or --seed flag overrides the 42 default; result banners print the
 # effective seed so the noise envelope can be measured rather than
@@ -194,7 +207,7 @@ def _hypothesis_complete(prompt: str, max_tokens: int = 400) -> str | None:
 
         client = OpenAI(timeout=_OPENAI_TIMEOUT)
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=_HOSTED_MODEL,
             max_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -341,7 +354,7 @@ def _answer_from_retrieval(
         prompt = prompt + confidence_suffix()
     answer = _hypothesis_complete(prompt, max_tokens=400)
     if _EMIT_CONFIDENCE and retrieval_diagnostics is not None:
-        top_score = float(getattr(results[0], "score", 0.0))
+        top_score = float(getattr(results[0], "score", 0.0)) if results else 0.0
         cited = [str(getattr(r, "snippet", "")) for r in results]
         answer, fields = _confidence_fields(answer, top_score, cited)
         retrieval_diagnostics.update(fields)
@@ -776,8 +789,10 @@ def _arcane_answer(
 
         prompt = prompt + confidence_suffix()
     answer = _hypothesis_complete(prompt, max_tokens=400)
-    if _EMIT_CONFIDENCE:
-        top_score = results[0].score if results else 0.0
+    if _EMIT_CONFIDENCE and retrieval_diagnostics is not None:
+        # FusedResult carries the RRF fusion score (there is no ``.score``);
+        # the logistic normalisation only needs a monotone relevance proxy.
+        top_score = results[0].rrf_score if results else 0.0
         cited = [r.fact.text for r in results] if results else []
         answer, fields = _confidence_fields(answer, top_score, cited)
         retrieval_diagnostics.update(fields)
@@ -908,6 +923,10 @@ def run_benchmark() -> None:
             # are independent seeds and refuse a single-seed headline (roadmap
             # "never a single run").
             "seed": _EFFECTIVE_SEED,
+            # Reader-identity marker: a sovereign gemma3:4b answer and a cloud
+            # gpt-4o-mini answer are different systems, so the manifest must
+            # never pool their accuracies into one headline band.
+            "reader": _READER_MODEL,
         }
         if retrieval_diagnostics:
             hypothesis_record["retrieval_diagnostics"] = retrieval_diagnostics

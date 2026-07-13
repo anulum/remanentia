@@ -46,7 +46,7 @@ which inflates scores by ~30 % and is not comparable to SOTA full-S leaderboards
 
 | Benchmark | Setting | Reader | Score | Notes |
 |-----------|---------|--------|------:|-------|
-| LongMemEval full-S | realistic | cloud gpt-4o-mini | **56.4 %** | committed scored artefact (`benchmarks/longmemeval_full_s_seed42_snapshot_report.json`, seed 42, full judge evidence); consistent with the earlier 3-run mean 56.6 % (spread 2.2). Single-seed → headline-ineligible in the manifest until a second-seed run |
+| LongMemEval full-S | realistic | cloud gpt-4o-mini | **56.4 %** | committed scored artefact (`benchmarks/longmemeval_full_s_seed42_snapshot_report.json`, seed 42, full judge evidence); consistent with the earlier 3-run mean 56.6 % (spread 2.2). Headline-ineligible in the manifest (single seed; rows predate the per-row reader stamp) until re-run |
 | LongMemEval full-S | realistic | sovereign local `gemma3:4b` | **35.4 %** | no-egress; −21 pp vs cloud — the honest local cost |
 | LongMemEval (retrieval) | — | GPT-free | **~81 %@10** | recall; multi-session 88 %@10 — retrieval is strong, synthesis is the gap |
 | LongMemEval oracle | oracle (NOT comparable) | cloud | 72.2 % (R11) | historical; retained only as an oracle reference, not a headline |
