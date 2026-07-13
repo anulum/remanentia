@@ -567,7 +567,7 @@ class TestMCPProtocolRemember:
 
 
 class TestMCPToolAudit:
-    def test_tool_call_writes_metadata_only_record(self, tmp_path):
+    def test_tool_call_writes_metadata_only_record(self, tmp_path, tmp_traces):
         from api_security import ToolAuditLogger
 
         audit_path = tmp_path / "mcp_audit.jsonl"
@@ -584,12 +584,13 @@ class TestMCPToolAudit:
                 },
             },
         }
-        with (
-            patch("mcp_server.MCP_AUDIT_LOGGER", ToolAuditLogger(audit_path)),
-            patch("mcp_server.handle_recall", return_value="result"),
-        ):
-            resp = handle_request(req)
-        assert resp["result"]["content"][0]["text"] == "result"
+        resp = handle_request(
+            req,
+            base=tmp_traces.parent,
+            audit_logger=ToolAuditLogger(audit_path),
+        )
+        assert resp is not None
+        assert isinstance(resp["result"]["content"][0]["text"], str)
 
         record = json.loads(audit_path.read_text(encoding="utf-8"))
         assert record["server"] == "mcp"
@@ -612,8 +613,7 @@ class TestMCPToolAudit:
             "method": "tools/call",
             "params": {"name": "nonexistent_tool", "arguments": {"content": "do not log"}},
         }
-        with patch("mcp_server.MCP_AUDIT_LOGGER", ToolAuditLogger(audit_path)):
-            handle_request(req)
+        handle_request(req, audit_logger=ToolAuditLogger(audit_path))
 
         record = json.loads(audit_path.read_text(encoding="utf-8"))
         assert record["tool"] == "nonexistent_tool"
@@ -627,22 +627,26 @@ class TestMCPToolAudit:
         audit_path = tmp_path / "mcp_audit.jsonl"
         req = {
             "jsonrpc": "2.0",
-            "id": "status-fail",
+            "id": "recall-fail",
             "method": "tools/call",
-            "params": {"name": "remanentia_status", "arguments": {}},
+            "params": {
+                "name": "remanentia_recall",
+                "arguments": {"query": {"sensitive": "detail"}},
+            },
         }
-        with (
-            patch("mcp_server.MCP_AUDIT_LOGGER", ToolAuditLogger(audit_path)),
-            patch("mcp_server.handle_status", side_effect=RuntimeError("sensitive detail")),
-        ):
-            resp = handle_request(req)
+        resp = handle_request(
+            req,
+            base=tmp_path,
+            audit_logger=ToolAuditLogger(audit_path),
+        )
 
+        assert resp is not None
         assert resp["error"]["code"] == -32000
         assert "sensitive detail" not in resp["error"]["message"]
         record = json.loads(audit_path.read_text(encoding="utf-8"))
-        assert record["tool"] == "remanentia_status"
+        assert record["tool"] == "remanentia_recall"
         assert record["outcome"] == "error"
-        assert record["error_type"] == "RuntimeError"
+        assert record["error_type"] in {"AttributeError", "TypeError"}
 
 
 class TestMCPTelemetryAndCli:

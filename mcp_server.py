@@ -649,6 +649,7 @@ def handle_request(
     *,
     base: Path | None = None,
     ledger: Any | None = None,
+    audit_logger: Any | None = None,
 ) -> dict[str, Any] | None:
     """Dispatch one stdio JSON-RPC request through production tool handlers."""
     handlers = {
@@ -684,7 +685,7 @@ def handle_request(
     return dispatch_request(
         request,
         handlers=handlers,
-        audit_logger=MCP_AUDIT_LOGGER,
+        audit_logger=audit_logger if audit_logger is not None else MCP_AUDIT_LOGGER,
         limiter_factory=_mcp_rate_limiter,
         rate_key=_mcp_rate_limit_key,
     )
