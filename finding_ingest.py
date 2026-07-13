@@ -17,12 +17,12 @@ resume across hub restarts), runs each finding through the admission gate, and
 writes the admitted ones to a sink. Structurally invalid findings (a missing
 validity window, an invariant breach) are gated out and logged, never indexed.
 
-The core (:func:`ingest_findings`) is deliberately free of any message-bus or workspace
-coupling: the event store, the finding parser, the admission gate, and the sink
-are all injected, so it is unit-testable with fakes and extractable as the
-read-side core of a standalone fleet-memory package. Only :func:`ingest_from_hub`
-binds the live ``synapse_channel`` event store + gate, and only the default sink
-knows where Remanentia keeps its findings on disk.
+The core (:func:`ingest_findings`) is deliberately free of workspace coupling:
+the event store, finding parser, admission gate, and sink are expressed as
+contracts so the read side remains extractable as a standalone fleet-memory
+package. Tests drive those contracts with the real ``synapse_channel`` event
+store and gate plus persisted Remanentia sinks. Only :func:`ingest_from_hub`
+binds those production collaborators for callers.
 
 The cursor advances past every scanned event — admitted, floored, or rejected —
 so a structurally invalid finding is gated once and never re-examined. Admission
@@ -40,7 +40,7 @@ import re
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from claim_axes import is_falsified_reference_validated
 from store_paths import default_finding_cursor as store_default_finding_cursor
@@ -72,7 +72,7 @@ class IngestReport:
         return self.scanned > 0
 
 
-class StoredEventLike(Protocol):
+class StoredEventLike(Protocol):  # pragma: no cover - structural typing contract
     """The minimal shape :func:`ingest_findings` needs from a hub event.
 
     Declared read-only so a ``NamedTuple`` hub event (the real ``StoredEvent``)
@@ -87,7 +87,7 @@ class StoredEventLike(Protocol):
     def payload(self) -> Any: ...
 
 
-class EventSource(Protocol):
+class EventSource(Protocol):  # pragma: no cover - structural typing contract
     """The minimal read surface of a hub event store."""
 
     def read_since(
@@ -95,7 +95,7 @@ class EventSource(Protocol):
     ) -> Sequence[StoredEventLike]: ...
 
 
-class DecisionLike(Protocol):
+class DecisionLike(Protocol):  # pragma: no cover - structural typing contract
     """The admission gate's verdict shape (read-only, so a frozen gate
     ``Decision`` satisfies it structurally)."""
 
@@ -105,7 +105,7 @@ class DecisionLike(Protocol):
     def reasons(self) -> Sequence[str]: ...
 
 
-class FindingSink(Protocol):
+class FindingSink(Protocol):  # pragma: no cover - structural typing contract
     """Where an admitted finding is persisted for retrieval."""
 
     def write(self, finding: Any, seq: int, verdict: str) -> None: ...
@@ -163,7 +163,7 @@ def ingest_findings(
     rejections: list[tuple[int, str]] = []
     high = last
     for event in events:
-        if event.seq > high:
+        if event.seq > high:  # pragma: no branch - event stores return ascending new rows
             high = event.seq
         try:
             finding = parse_finding(event.payload)
@@ -283,7 +283,7 @@ def ingest_from_hub(
     ``synapse-channel`` extra; the import is deferred so the module loads (and
     the generic core stays usable) without it.
     """
-    import synapse_channel as sc  # deferred: optional [bus] dependency
+    import synapse_channel as sc  # type: ignore[import-untyped]  # optional [bus]
 
     store = sc.EventStore(str(hub_db_path))
     try:
@@ -302,7 +302,7 @@ def ingest_from_hub(
 
 def default_findings_dir(base: str | Path | None = None) -> Path:
     """Where Remanentia keeps ingested findings."""
-    return store_default_findings_dir(base)
+    return cast(Path, store_default_findings_dir(base))
 
 
 def main() -> int:  # pragma: no cover — CLI/cron entry point
