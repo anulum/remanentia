@@ -15,6 +15,42 @@ from importlib import import_module
 from typing import Any, cast
 
 
+def tokenize_python(text: str) -> list[str]:
+    """Tokenize lowercase three-character BM25 terms without native code."""
+    return re.findall(r"[a-z0-9][a-z0-9_]{2,}", text.lower())
+
+
+def tokenize(text: str) -> list[str]:
+    """Tokenize with the installed native engine when available."""
+    try:
+        native_tokenize = import_module("remanentia_search").tokenize
+    except ImportError:  # pragma: no cover - platform-dependent dispatch
+        return tokenize_python(text)
+    return cast(list[str], native_tokenize(text))  # pragma: no cover - native dispatch
+
+
+def reciprocal_rank_fusion_python(
+    ranked_lists: list[list[tuple[int, float]]], k: int = 60
+) -> list[tuple[int, float]]:
+    """Fuse heterogeneous rankings with standard reciprocal-rank weights."""
+    scores: dict[int, float] = {}
+    for ranked in ranked_lists:
+        for rank, (paragraph_index, _score) in enumerate(ranked):
+            scores[paragraph_index] = scores.get(paragraph_index, 0.0) + 1.0 / (k + rank + 1)
+    return sorted(scores.items(), key=lambda item: -item[1])
+
+
+def reciprocal_rank_fusion(
+    ranked_lists: list[list[tuple[int, float]]], k: int = 60
+) -> list[tuple[int, float]]:
+    """Fuse rankings with the installed native engine when available."""
+    try:
+        native_rrf = import_module("remanentia_retrieve").reciprocal_rank_fusion
+    except ImportError:  # pragma: no cover - platform-dependent dispatch
+        return reciprocal_rank_fusion_python(ranked_lists, k)
+    return cast(list[tuple[int, float]], native_rrf(ranked_lists, k))  # pragma: no cover
+
+
 def classify_query(query: str) -> dict[str, Any]:
     """Classify query intent for search routing."""
     normalized = query.lower()
@@ -26,8 +62,7 @@ def classify_query(query: str) -> dict[str, Any]:
     }
 
     if any(
-        word in normalized
-        for word in ("where is", "find the", "locate", "which file", "what file")
+        word in normalized for word in ("where is", "find the", "locate", "which file", "what file")
     ):
         intent["type"] = "location"
         intent["boost_types"] = ["function", "code"]
@@ -37,17 +72,14 @@ def classify_query(query: str) -> dict[str, Any]:
     ):
         intent["type"] = "decision"
         intent["boost_types"] = ["decision"]
-    elif any(
-        word in normalized for word in ("what went wrong", "failure", "bug", "error", "fix")
-    ):
+    elif any(word in normalized for word in ("what went wrong", "failure", "bug", "error", "fix")):
         intent["type"] = "debugging"
         intent["boost_types"] = ["finding", "decision"]
     elif any(word in normalized for word in ("status", "progress", "current", "latest")):
         intent["type"] = "status"
         intent["recency"] = True
     elif any(
-        word in normalized
-        for word in ("performance", "benchmark", "accuracy", "score", "percent")
+        word in normalized for word in ("performance", "benchmark", "accuracy", "score", "percent")
     ):
         intent["type"] = "metric"
         intent["boost_types"] = ["metric"]
@@ -97,8 +129,7 @@ def classify_paragraph_python(text: str, is_code: bool = False) -> str:
     ):
         return "metric"
     if any(
-        word in normalized
-        for word in ("version", "v0.", "v1.", "v2.", "v3.", "release", "shipped")
+        word in normalized for word in ("version", "v0.", "v1.", "v2.", "v3.", "release", "shipped")
     ):
         return "version"
     return "discussion"
@@ -194,9 +225,7 @@ def generate_prospective_queries(text: str, document_name: str, paragraph_type: 
         )
         for subject in subjects[:2]:
             normalized = subject.strip().lower()
-            queries.extend(
-                (f"why did we {normalized}", f"what did we decide about {normalized}")
-            )
+            queries.extend((f"why did we {normalized}", f"what did we decide about {normalized}"))
     if paragraph_type == "finding":
         subject = document_name.replace(".md", "").replace("_", " ")
         queries.append(f"what did we find about {subject}")

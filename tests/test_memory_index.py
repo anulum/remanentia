@@ -17,7 +17,11 @@ import memory_index
 import numpy as np
 
 from compiled_memory import CompiledFact, write_compiled_facts
-from memory_query_intelligence import classify_paragraph_python
+from memory_query_intelligence import (
+    classify_paragraph_python,
+    reciprocal_rank_fusion_python,
+    tokenize_python,
+)
 from memory_index import (
     Document,
     MemoryIndex,
@@ -94,17 +98,8 @@ class TestTokenize:
         assert "score" in tokens
         assert "stdp" in tokens
 
-    def test_python_fallback_when_native_tokenizer_missing(self, monkeypatch):
-        real_import = memory_index.import_module
-
-        def import_without_native(name: str):
-            if name == "remanentia_search":
-                raise ImportError(name)
-            return real_import(name)
-
-        monkeypatch.setattr(memory_index, "import_module", import_without_native)
-
-        assert _tokenize("Native-free BM25 tokenizer") == [
+    def test_explicit_python_tokenizer(self):
+        assert tokenize_python("Native-free BM25 tokenizer") == [
             "native",
             "free",
             "bm25",
@@ -2244,17 +2239,8 @@ class TestReciprocalRankFusion:
         result = _reciprocal_rank_fusion([[(5, 1.0), (3, 0.5)]])
         assert len(result) == 2
 
-    def test_python_fallback_when_native_rrf_missing(self, monkeypatch):
-        real_import = memory_index.import_module
-
-        def import_without_native(name: str):
-            if name == "remanentia_retrieve":
-                raise ImportError(name)
-            return real_import(name)
-
-        monkeypatch.setattr(memory_index, "import_module", import_without_native)
-
-        result = _reciprocal_rank_fusion([[(0, 1.0)], [(0, 0.5), (1, 0.4)]], k=60)
+    def test_explicit_python_rrf(self):
+        result = reciprocal_rank_fusion_python([[(0, 1.0)], [(0, 0.5), (1, 0.4)]], k=60)
 
         assert result[0][0] == 0
         assert result[0][1] > result[1][1]

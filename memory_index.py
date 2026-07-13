@@ -58,6 +58,8 @@ from memory_query_intelligence import (
     classify_paragraph as _classify_paragraph,
     classify_query as _classify_query,
     generate_prospective_queries as _generate_prospective_queries_impl,
+    reciprocal_rank_fusion as _reciprocal_rank_fusion,
+    tokenize as _tokenize,
 )
 from memory_sources import DEFAULT_TEXT_EXTENSIONS, load_source_config
 import text_chunking as _text_chunking
@@ -1266,17 +1268,6 @@ def _generate_prospective_queries(text: str, doc_name: str, para_type: str) -> l
     return _generate_prospective_queries_impl(text, doc_name, para_type)
 
 
-def _tokenize(text: str) -> list[str]:
-    """Tokenize text for BM25. Lowercase, 3+ char words."""
-    try:
-        _rust_tok = import_module("remanentia_search").tokenize
-
-        return cast(list[str], _rust_tok(text))  # pragma: no cover
-    except ImportError:
-        pass
-    return re.findall(r"[a-z0-9][a-z0-9_]{2,}", text.lower())
-
-
 def _token_counts(token_list: list[str]) -> dict[str, int]:
     """Count occurrences of each token for real TF in BM25."""
     counts: dict[str, int] = {}
@@ -1360,30 +1351,6 @@ def _extract_lookup_terms(query: str) -> set[str]:
         for token in _tokenize(query)
         if token not in LOCATION_STOPWORDS and not token.isdigit()
     }
-
-
-def _reciprocal_rank_fusion(
-    ranked_lists: list[list[tuple[int, float]]],
-    k: int = 60,
-) -> list[tuple[int, float]]:
-    """Reciprocal Rank Fusion across multiple ranked lists.
-
-    RRF score = sum(1 / (k + rank_i)) for each list where the item appears.
-    Scale-invariant — no need to normalise heterogeneous score distributions.
-    k=60 is the standard constant from Cormack et al. (2009).
-    """
-    try:
-        _rust_rrf = import_module("remanentia_retrieve").reciprocal_rank_fusion
-
-        return cast(list[tuple[int, float]], _rust_rrf(ranked_lists, k))  # pragma: no cover
-    except ImportError:
-        pass
-    rrf_scores: dict[int, float] = {}
-    for ranked in ranked_lists:
-        for rank, (para_idx, _score) in enumerate(ranked):
-            rrf_scores[para_idx] = rrf_scores.get(para_idx, 0.0) + 1.0 / (k + rank + 1)
-    result = sorted(rrf_scores.items(), key=lambda x: -x[1])
-    return result
 
 
 def _get_rust_bm25_class() -> Any | None:
