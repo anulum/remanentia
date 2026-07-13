@@ -134,6 +134,13 @@ class TestReaderModel:
         vals = _probe(["--local-llm"], env={"REMANENTIA_LOCAL_MODEL": "gemma3:12b"})
         assert vals["_READER_MODEL"] == "gemma3:12b"
 
+    def test_hosted_model_env_override_propagates_to_stamp(self):
+        vals = _probe(
+            [],
+            env={"OPENAI_API_KEY": "sk-test", "REMANENTIA_HOSTED_MODEL": "gpt-5.4-nano"},
+        )
+        assert vals["_READER_MODEL"] == "gpt-5.4-nano"
+
 
 class TestSeed:
     def test_default_seed_is_42(self):

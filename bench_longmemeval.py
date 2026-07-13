@@ -31,7 +31,7 @@ import sys
 import time
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 if __name__ == "__main__":  # pragma: no cover — avoid breaking pytest capture
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -154,8 +154,22 @@ _LOCAL_MODEL = os.environ.get("REMANENTIA_LOCAL_MODEL", "gemma3:4b")
 _LOCAL_URL = os.environ.get("REMANENTIA_LOCAL_URL", "http://localhost:11434/v1")
 
 # The hosted reader model, named once so the per-row reader stamp and the
-# actual completion call can never diverge.
-_HOSTED_MODEL = "gpt-4o-mini"
+# actual completion call can never diverge. Override to measure a different
+# hosted reader (e.g. gpt-5.4-nano) — the judge is NOT affected: it stays
+# pinned to gpt-4o-mini so correctness labels remain comparable across reader
+# lanes. GPT-5-family models reject the legacy ``max_tokens`` parameter and
+# spend billable reasoning tokens by default, so non-gpt-4o readers are called
+# with ``max_completion_tokens`` + ``reasoning_effort`` (default "none" = a
+# plain reader, the closest analogue to the gpt-4o-mini anchor; override via
+# REMANENTIA_HOSTED_REASONING).
+_HOSTED_MODEL = os.environ.get("REMANENTIA_HOSTED_MODEL", "gpt-4o-mini")
+_HOSTED_REASONING = os.environ.get("REMANENTIA_HOSTED_REASONING", "none")
+_ALLOWED_REASONING = ("none", "minimal", "low", "medium", "high", "xhigh")
+if _HOSTED_REASONING not in _ALLOWED_REASONING:
+    # Crash early (the timeout-env precedent) rather than fail 500 questions in.
+    raise ValueError(
+        f"REMANENTIA_HOSTED_REASONING={_HOSTED_REASONING!r} not in {_ALLOWED_REASONING}"
+    )
 # The reader that will actually answer: mirrors the routing decision in
 # ``_hypothesis_complete`` (local backend when --local-llm is set or no hosted
 # key is present). Stamped into every emitted row — two runs are comparable
@@ -206,11 +220,25 @@ def _hypothesis_complete(prompt: str, max_tokens: int = 400) -> str | None:
         from openai import OpenAI
 
         client = OpenAI(timeout=_OPENAI_TIMEOUT)
-        response = client.chat.completions.create(
-            model=_HOSTED_MODEL,
-            max_tokens=max_tokens,
-            messages=[{"role": "user", "content": prompt}],
-        )
+        if _HOSTED_MODEL.startswith("gpt-4o"):
+            response = client.chat.completions.create(
+                model=_HOSTED_MODEL,
+                max_tokens=max_tokens,
+                messages=[{"role": "user", "content": prompt}],
+            )
+        else:
+            # Validated against _ALLOWED_REASONING at import; the cast narrows
+            # the env string to the SDK's Literal.
+            effort = cast(
+                'Literal["none", "minimal", "low", "medium", "high", "xhigh"]',
+                _HOSTED_REASONING,
+            )
+            response = client.chat.completions.create(
+                model=_HOSTED_MODEL,
+                max_completion_tokens=max_tokens,
+                reasoning_effort=effort,
+                messages=[{"role": "user", "content": prompt}],
+            )
         content = response.choices[0].message.content
         return content.strip() if isinstance(content, str) else None
     except Exception as e:  # pragma: no cover — surface the cause
