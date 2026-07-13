@@ -26,7 +26,6 @@ import logging
 import re
 import time
 from collections import Counter
-from dataclasses import dataclass, field
 from importlib import import_module
 from pathlib import Path
 from typing import Any, Callable, Iterator, cast
@@ -37,6 +36,14 @@ import hashlib as _hashlib
 
 import memory_dates as _memory_dates
 import memory_index_storage as _index_storage
+from memory_index_models import (
+    Document,
+    Paragraph,  # noqa: F401 - retained as a compatibility export
+    SearchResult,
+    compiled_fact_results as _compiled_fact_results,
+    has_operational_compiled_memory as _has_operational_compiled_memory,
+    merge_priority_results as _merge_priority_results,
+)
 import memory_sparse_scoring as _sparse_scoring
 from memory_entity_scoring import (
     Entity,
@@ -102,7 +109,6 @@ MAX_FILE_CHARS = 1_000_000
 GRAPH_BOOST_QUERY_TYPES = {"general", "decision", "debugging", "explanation"}
 RUST_BM25_MIN_PARAGRAPHS = 50_000
 TEMPORAL_GRAPH_MAX_DOCUMENTS = 20_000
-COMPILED_FACT_MIN_SCORE = 8.0
 COMPILED_FACT_EARLY_SCORE = 1008.0
 LOCATION_STOPWORDS = {
     "where",
@@ -130,89 +136,6 @@ LOCATION_STOPWORDS = {
 
 _RUST_BM25_CLASS: Any | bool | None = None
 _RUST_BM25_IMPORT_ATTEMPTED = False
-
-
-@dataclass
-class Document:
-    name: str
-    source: str
-    path: str
-    paragraphs: list[str] = field(default_factory=list)
-    tokens: set[str] = field(default_factory=set)
-    embedding: np.ndarray | None = None
-    date: str = ""  # parsed date for temporal search
-    doc_type: str = ""  # document type for filtering
-
-
-@dataclass
-class Paragraph:
-    text: str
-    para_type: str = ""  # function, decision, finding, metric, discussion
-    prospective_queries: list[str] = field(default_factory=list)
-
-
-@dataclass
-class SearchResult:
-    name: str
-    source: str
-    score: float
-    snippet: str
-    paragraph_idx: int = 0
-    answer: str = ""
-    confidence: float = 0.0  # 0.0-1.0, computed from score distribution
-
-
-def _compiled_fact_results(
-    query: str, top_k: int, facts_path: Path | None = None
-) -> list[SearchResult]:
-    try:
-        from compiled_memory import load_compiled_facts, search_compiled_facts
-    except Exception:
-        return []
-    try:
-        matches = search_compiled_facts(query, load_compiled_facts(facts_path), top_k=top_k)
-    except Exception:
-        log.debug("Compiled memory search failed", exc_info=True)
-        return []
-    results: list[SearchResult] = []
-    for fact, score in matches:
-        if score < COMPILED_FACT_MIN_SCORE:
-            continue
-        snippet = fact.fact[:300]
-        results.append(
-            SearchResult(
-                name=f"{fact.fact_id}.fact",
-                source="compiled",
-                score=round(1000.0 + score, 4),
-                snippet=snippet,
-                paragraph_idx=0,
-                answer=fact.fact,
-                confidence=1.0,
-            )
-        )
-    return results
-
-
-def _merge_priority_results(
-    priority_results: list[SearchResult],
-    ranked_results: list[SearchResult],
-    top_k: int,
-) -> list[SearchResult]:
-    merged: list[SearchResult] = []
-    seen = set()
-    for result in priority_results + ranked_results:
-        key = (result.source, result.name, result.answer or result.snippet)
-        if key in seen:
-            continue
-        seen.add(key)
-        merged.append(result)
-        if len(merged) >= top_k:
-            break
-    return merged
-
-
-def _has_operational_compiled_memory(index: MemoryIndex) -> bool:
-    return len(index.paragraph_index) > 1000 or any(d.source == "compiled" for d in index.documents)
 
 
 class MemoryIndex:
