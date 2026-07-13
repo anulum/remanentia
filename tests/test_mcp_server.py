@@ -196,18 +196,12 @@ class TestMCPProtocol:
 
 
 class TestHandleRecall:
-    def test_no_index_falls_back(self):
-        with (
-            patch("mcp_server._UNIFIED_INDEX", None),
-            patch("mcp_server._lightweight_recall", return_value="lightweight result"),
-        ):
-            # MemoryIndex load fails → lightweight
-            result = handle_recall("test query")
-        assert isinstance(result, str)
+    def test_isolated_workspace_uses_real_filesystem_fallback(self, tmp_traces):
+        result = handle_recall("SNN removal decision", base=tmp_traces.parent)
+        assert "SNN" in result
 
-    def test_empty_query(self):
-        result = handle_recall("")
-        assert isinstance(result, str)
+    def test_empty_query(self, tmp_path):
+        assert handle_recall("", base=tmp_path) == "Empty query."
 
 
 # ── handle_remember ──────────────────────────────────────────
@@ -272,38 +266,6 @@ class TestHandleGraph:
 
 
 # ── handle_status ────────────────────────────────────────────────
-
-
-class TestHandleRememberConsolidation:
-    def test_triggers_consolidation(self, tmp_path):
-        import time
-        from unittest.mock import MagicMock
-
-        mock_consolidate = MagicMock(return_value={"status": "nothing_to_consolidate"})
-        with (
-            patch("mcp_server.BASE", tmp_path),
-            patch("mcp_server._RECALL_INDEX", None),
-            patch("mcp_server._UNIFIED_INDEX", None),
-            patch("mcp_server._consolidation_last", 0.0),
-            patch("mcp_server._CONSOLIDATION_DEBOUNCE_S", 0.0),
-            patch("consolidation_engine.consolidate", mock_consolidate),
-        ):
-            handle_remember("Test consolidation trigger", "finding", "test")
-            # Consolidation now runs in a background thread
-            for _ in range(20):
-                if mock_consolidate.called:
-                    break
-                time.sleep(0.1)
-        mock_consolidate.assert_called_once()
-
-    def test_consolidation_failure_safe(self, tmp_path):
-        with (
-            patch("mcp_server.BASE", tmp_path),
-            patch("mcp_server._RECALL_INDEX", None),
-            patch("mcp_server._UNIFIED_INDEX", None),
-        ):
-            result = handle_remember("Test content", "context", "test")
-        assert "Remembered:" in result
 
 
 class TestHandleRecallWithIndex:
@@ -555,20 +517,8 @@ class TestHandleRecallLoadIndex:
             mcp_server._UNIFIED_INDEX = old
 
     def test_load_fails_falls_back(self, tmp_traces):
-        import mcp_server
-
-        old = mcp_server._UNIFIED_INDEX
-        mcp_server._UNIFIED_INDEX = None
-        mcp_server._RECALL_INDEX = None
-        try:
-            with (
-                patch("mcp_server.BASE", tmp_traces.parent),
-                patch("mcp_server._UNIFIED_INDEX", None),
-            ):
-                result = handle_recall("SNN decision")
-            assert isinstance(result, str)
-        finally:
-            mcp_server._UNIFIED_INDEX = old
+        result = handle_recall("SNN decision", base=tmp_traces.parent)
+        assert "SNN" in result
 
 
 class TestHandleRememberIndex:

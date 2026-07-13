@@ -297,9 +297,15 @@ def handle_recall(
     after: str = "",
     before: str = "",
     llm: bool = False,
+    *,
+    base: Path | None = None,
 ) -> str:
     """Memory recall via unified BM25 + embedding index + knowledge notes."""
     global _UNIFIED_INDEX
+
+    workspace = (base or BASE).resolve()
+    if workspace != BASE.resolve():
+        return _lightweight_recall(query, top_k, base=workspace)
 
     # Check prospective triggers
     trigger_lines = []
@@ -638,6 +644,7 @@ def handle_request(
             after=args.get("after", ""),
             before=args.get("before", ""),
             llm=args.get("llm", False),
+            base=base,
         ),
         "remanentia_remember": lambda args: handle_remember(
             args.get("content", ""),
