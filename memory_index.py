@@ -19,7 +19,6 @@ Usage::
 
 from __future__ import annotations
 
-import gzip
 import json
 import math
 import os
@@ -37,6 +36,7 @@ import numpy as np
 import hashlib as _hashlib
 
 import memory_dates as _memory_dates
+import memory_index_storage as _index_storage
 from memory_entity_scoring import (
     Entity,
     EntityGraph,
@@ -1210,73 +1210,30 @@ class MemoryIndex:
     @staticmethod
     def _load_content_hashes(path: Path | None = None) -> dict[str, str]:
         """Load SHA-256 content hashes from the cache file."""
-        path = path or HASH_CACHE_PATH
-        if not path.exists():
-            return {}
-        try:
-            return cast(dict[str, str], json.loads(path.read_text(encoding="utf-8")))
-        except (json.JSONDecodeError, OSError):
-            return {}
+        return _index_storage.load_content_hashes(path or HASH_CACHE_PATH)
 
     @staticmethod
     def _save_content_hashes(hashes: dict[str, str], path: Path | None = None) -> None:
         """Persist SHA-256 content hashes for the next incremental build."""
-        path = path or HASH_CACHE_PATH
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(hashes), encoding="utf-8")
+        _index_storage.save_content_hashes(path or HASH_CACHE_PATH, hashes)
 
     def save(self, path: Path | None = None, quantize: bool = True) -> None:
         """Save index to disk as JSON+gzip (metadata) + npz (embeddings).
 
         Quantizes embeddings to int8 by default (~4x smaller).
         """
-        path = path or INDEX_PATH
-        path.parent.mkdir(parents=True, exist_ok=True)
-
-        emb_data: np.ndarray | None = None
-        emb_scale: np.ndarray | None = None
-        embeddings = self.embeddings
-        has_emb = embeddings is not None
-        if embeddings is not None:
-            if quantize:
-                scale = np.max(np.abs(embeddings), axis=1, keepdims=True)
-                scale = np.where(scale == 0, 1.0, scale)
-                emb_data = (embeddings / scale * 127).astype(np.int8)
-                emb_scale = scale.astype(np.float32)
-            else:
-                emb_data = embeddings
-
-        meta = {
-            "documents": [
-                (d.name, d.source, d.path, d.paragraphs, d.date, d.doc_type) for d in self.documents
-            ],
-            "paragraph_index": self.paragraph_index,
-            "paragraph_tokens": [list(t) for t in self.paragraph_tokens],
-            "paragraph_token_counts": self.paragraph_token_counts,
-            "paragraph_types": self.paragraph_types,
-            "idf": self.idf,
-            "_df": self._df,
-            "quantized": quantize and has_emb,
-            "timestamp": time.time(),
-        }
-
-        # Atomic write: temp file + rename
-        tmp = path.with_suffix(".tmp")
-        raw = json.dumps(meta, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-        with gzip.open(tmp, "wb") as f:
-            f.write(raw)
-        tmp.replace(path)
-
-        # Save embeddings separately as npz
-        stem = path.stem.replace(".json", "")
-        emb_path = path.with_name(stem + "_embeddings.npz")
-        if emb_data is not None:
-            arrays: dict[str, np.ndarray] = {"embeddings": emb_data}
-            if emb_scale is not None:
-                arrays["emb_scale"] = emb_scale
-            cast(Any, np.savez_compressed)(emb_path, **arrays)
-        elif emb_path.exists():
-            emb_path.unlink()
+        _index_storage.save_index(
+            path or INDEX_PATH,
+            self.documents,
+            self.paragraph_index,
+            self.paragraph_tokens,
+            self.paragraph_token_counts,
+            self.paragraph_types,
+            self.idf,
+            self._df,
+            self.embeddings,
+            quantize=quantize,
+        )
 
     def load(self, path: Path | None = None) -> bool:
         """Load index from disk (JSON+gzip or legacy pickle)."""
@@ -1343,71 +1300,23 @@ class MemoryIndex:
         *,
         quantized: bool,
     ) -> np.ndarray | None:
-        if emb_data is None:
-            return None
-        try:
-            embeddings: np.ndarray = np.asarray(emb_data)
-            if quantized:
-                if emb_scale is None:
-                    return None
-                scale = np.asarray(emb_scale, dtype=np.float32)
-                embeddings = (embeddings.astype(np.float32) / 127.0) * scale
-            else:
-                embeddings = embeddings.astype(np.float32, copy=False)
-        except Exception:
-            log.debug("Loaded embedding sidecar has invalid array data", exc_info=True)
-            return None
-
-        if embeddings.ndim != 2 or embeddings.shape[0] != len(self.paragraph_index):
-            log.debug(
-                "Ignoring embedding sidecar with shape %s for %d paragraphs",
-                embeddings.shape,
-                len(self.paragraph_index),
-            )
-            return None
-        if not np.isfinite(embeddings).all():
-            log.debug("Ignoring embedding sidecar containing non-finite values")
-            return None
-        return embeddings
+        return _index_storage.validate_loaded_embeddings(
+            emb_data,
+            emb_scale,
+            quantized=quantized,
+            paragraph_count=len(self.paragraph_index),
+        )
 
     def _load_index_data(self, path: Path) -> dict[str, Any] | None:
         """Load index data from JSON+gzip (new) or pickle (legacy).
 
         Format is detected by file magic bytes (gzip = 0x1f8b), not extension.
         """
-        if not path.exists():
-            # Check legacy path as fallback
-            if path == INDEX_PATH and _LEGACY_INDEX_PATH.exists():
-                path = _LEGACY_INDEX_PATH
-            else:
-                return None
-        # Detect format by magic bytes
-        try:
-            with open(path, "rb") as f:
-                magic = f.read(2)
-        except Exception:
-            return None
-        if magic == b"\x1f\x8b":
-            # gzip JSON format
-            try:
-                with gzip.open(path, "rb") as f:
-                    meta = cast(dict[str, Any], json.loads(f.read()))
-                # Load embeddings from companion npz
-                stem = path.stem.replace(".json", "")
-                emb_path = path.with_name(stem + "_embeddings.npz")
-                if emb_path.exists():
-                    try:
-                        with np.load(emb_path, allow_pickle=False) as emb:
-                            meta["embeddings"] = emb.get("embeddings")
-                            meta["emb_scale"] = emb.get("emb_scale")
-                    except Exception:
-                        log.debug("Embedding sidecar load failed: %s", emb_path, exc_info=True)
-                return meta
-            except Exception:
-                return None
-        # Legacy pickle no longer accepted. Caller gets None and the
-        # migrator message surfaces in the outer load() diagnostics.
-        return None
+        return _index_storage.load_index_data(
+            path,
+            default_path=INDEX_PATH,
+            legacy_path=_LEGACY_INDEX_PATH,
+        )
 
 
 # ── Entity graph for retrieval boosting ──────────────────────────
