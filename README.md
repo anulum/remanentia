@@ -13,7 +13,7 @@ Contact: www.anulum.li | protoscience@anulum.li
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/anulum/remanentia/badge)](https://securityscorecards.dev/viewer/?uri=github.com/anulum/remanentia)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12340/badge)](https://www.bestpractices.dev/projects/12340)
 [![Version](https://img.shields.io/badge/version-0.5.0-blue)](https://github.com/anulum/remanentia)
-[![Tests](https://img.shields.io/badge/tests-2143_passed-brightgreen)](VALIDATION.md)
+[![Tests](https://img.shields.io/badge/tests-see_VALIDATION.md-brightgreen)](VALIDATION.md)
 [![Coverage Gate](https://img.shields.io/badge/coverage_gate-100%25-brightgreen)](pyproject.toml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
@@ -29,7 +29,7 @@ Contact: www.anulum.li | protoscience@anulum.li
 
 **Persistent AI memory with SNN-orchestrated consolidation, entity graphs, and deep contextual recall.**
 
-> **Active Development** — Remanentia is under intensive development. The core memory engine, BM25+embedding hybrid retrieval, SNN-orchestrated consolidation, temporal reasoning, and the MCP server are functional, tested (2,143 passing tests in the 2026-05-12 local full-suite run), and deployable. The repository keeps a 100% coverage gate in CI via `pyproject.toml`; regenerate a coverage report before publishing module-level coverage numbers. Rust acceleration spans 16 crates with a Python fallback on every path. LongMemEval, **full-S setting** (realistic ~50-session haystacks, retrieval actually exercised; this is what published leaderboards measure): **56.6% overall** (3-run mean on the current `gpt-4o-mini`, spread 2.2). The older 72.2%/~71% figures are the *oracle* setting (gold sessions only, retrieval bypassed) and are not comparable to leaderboards — see Benchmarks for both. Figures are 3-run means, not single runs. APIs may evolve as this work progresses.
+> **Active Development** — Remanentia is under intensive development. The core memory engine, BM25+embedding hybrid retrieval, SNN-orchestrated consolidation, temporal reasoning, and the MCP server are functional, tested, and deployable. **Canonical test and coverage numbers live only in [`VALIDATION.md`](VALIDATION.md)** (do not copy counts into this README — they drift). The repository keeps a 100% product-module coverage gate in CI via `pyproject.toml`. Rust acceleration spans 16 crates with a Python fallback on every path. LongMemEval, **full-S setting** (realistic ~50-session haystacks, retrieval actually exercised; this is what published leaderboards measure): **56.6% overall** (3-run mean on the current `gpt-4o-mini`, spread 2.2). The older 72.2%/~71% figures are the *oracle* setting (gold sessions only, retrieval bypassed) and are not comparable to leaderboards — see Benchmarks for both. Figures are 3-run means, not single runs. APIs may evolve as this work progresses.
 
 BM25+embedding hybrid retrieval with RRF | 11 typed entity relation types | temporal reasoning with date arithmetic | async consolidation | thread-safe MCP server
 
@@ -365,7 +365,7 @@ The temporal-training programme produced five components with
 mixed outcomes. We publish a model card for each so downstream
 users can decide what to rely on; the rule-based date normaliser is
 the only one with a committed, measured benchmark impact. Full
-cards live at [`docs/models/`](docs/models/).
+cards live at [`docs/models/README.md`](docs/models/README.md).
 
 | Component | Status | Note |
 |-----------|--------|------|
@@ -516,7 +516,8 @@ pip install -e ".[dev]"
 pytest tests/ -q
 ```
 
-Current local full-suite baseline: 2,143 passed, 3 skipped on 2026-05-12.
+Current local full-suite baseline: see [VALIDATION.md](VALIDATION.md) (single
+canonical count; last recorded full gate 2,905 passed / 11 skipped on 2026-06-29).
 The CI coverage job is configured with `--cov-fail-under=100`; refresh the
 coverage report before publishing exact module-level coverage counts.
 

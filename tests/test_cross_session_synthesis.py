@@ -8,8 +8,10 @@
 
 from __future__ import annotations
 
+import inspect
 from dataclasses import dataclass, field
 
+import cross_session_synthesis as css
 from cross_session_synthesis import (
     EntityDigest,
     StatementLine,
@@ -43,6 +45,25 @@ class TestSynthFactProtocol:
     def test_fixture_satisfies_protocol(self) -> None:
         """SynthFact is a runtime-checkable structural protocol."""
         assert isinstance(Fact("t", 0, []), SynthFact)
+
+
+class TestNoDeadRustScaffold:
+    """L1.3: module must not advertise a non-existent Rust extension."""
+
+    def test_module_has_no_rust_import_scaffold(self) -> None:
+        """Live module must not import remanentia_cross_session_synthesis."""
+        source = inspect.getsource(css)
+        assert "import remanentia_cross_session_synthesis" not in source
+        assert not hasattr(css, "_HAVE_RUST")
+        assert not hasattr(css, "_rust_syn")
+
+    def test_focus_entities_is_pure_python(self) -> None:
+        """focus_entities returns question-grounded entities without Rust."""
+        out = focus_entities(
+            "what is the status of the kitchen renovation?",
+            ["kitchen renovation", "garage roof"],
+        )
+        assert out == ["kitchen renovation"]
 
 
 # ─── token / entity selection ─────────────────────────────────────────

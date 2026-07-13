@@ -36,8 +36,18 @@ remanentia/
 │   └── knowledge_notes.jsonl  Zettelkasten atomic notes
 ├── snn_state/              SNN checkpoint (npz), index (JSON+gzip), weight snapshots
 ├── docs/                   Documentation (MkDocs)
-└── tests/                  1,677 tests, 100% coverage
+│   └── adr/                Architecture Decision Records (MADR)
+└── tests/                  pytest suite — see VALIDATION.md for the
+                            canonical count and coverage gate
 ```
+
+## Architecture Decision Records
+
+Significant design choices live under [`docs/adr/`](docs/adr/README.md).
+Start with the ADR index for the accepted log (for example ADR 0002 on
+removing pickle runtime and ADR 0004 on dual retrieval stacks). New
+decisions use the template in that directory; accepted conclusions are not
+rewritten — superseding ADRs replace them.
 
 ## Retrieval Pipeline
 

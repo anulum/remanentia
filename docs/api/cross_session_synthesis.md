@@ -79,18 +79,12 @@ Dataclasses for one consolidated statement (date, session, text), all statements
 about one entity, and the whole rendered result. `SynthesisResult` is falsy when
 it carries no entities.
 
-## Rust fast path
+## Implementation surface
 
-`cross_session_synthesis` attempts to import `remanentia_cross_session_synthesis`
-at module load. When present, `focus_entities` delegates the tokenisation /
-entity-matching primitive to the Rust binding; the pure-Python path is the
-documented fallback floor and runs on `ImportError`.
-
-The repository does not currently track a Rust source crate for this extension
-(the same state as `remanentia_aggregate_precompute`, whose compiled artefact is
-installed but whose source is not in the tree). The Rust acceleration is
-therefore a stable extension point, not yet a built artefact; the Python path is
-the active implementation and the benchmark-validated one.
+`focus_entities` and the rest of this module are pure Python. There is no
+in-tree `remanentia_cross_session_synthesis` crate; an earlier optional-import
+scaffold was removed (BACKLOG L1.3) so the package no longer advertises a Rust
+fast path that cannot load.
 
 ## Out of scope
 

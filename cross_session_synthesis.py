@@ -31,9 +31,10 @@ entity or no entity has enough cross-session evidence to be worth consolidating
 — over-firing would add reader-distracting noise, which is the very failure it
 targets.
 
-The optional ``remanentia_cross_session_synthesis`` Rust extension accelerates
-the tokenisation/entity-matching primitive; the pure-Python path below is the
-documented fallback floor.
+Pure Python only. There is no ``remanentia_cross_session_synthesis`` crate in
+this repository (BACKLOG L1.3): earlier builds advertised an optional Rust
+import that could never load. Tokenisation and entity matching stay in this
+module so the public surface does not claim an accelerator that does not exist.
 """
 
 from __future__ import annotations
@@ -42,23 +43,6 @@ import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
-
-
-class _RustSynthesis(Protocol):
-    """Typed facade for the optional untyped Rust extension."""
-
-    def focus_entities(self, question: str, entities: list[str]) -> list[str]:
-        """Return the subset of *entities* the *question* grounds, in order."""
-
-
-try:
-    import remanentia_cross_session_synthesis as _rust_syn_raw  # pragma: no cover
-
-    _rust_syn: _RustSynthesis | None = _rust_syn_raw  # pragma: no cover
-    _HAVE_RUST = True  # pragma: no cover
-except ImportError:
-    _rust_syn = None
-    _HAVE_RUST = False
 
 
 # ─── Fact shape ───────────────────────────────────────────────────────
@@ -192,9 +176,6 @@ def focus_entities(question: str, entities: Iterable[str]) -> list[str]:
     summarising every entity the retriever happened to surface.
     """
     deduped = _dedupe_entities(entities)
-    if _HAVE_RUST:  # pragma: no cover
-        assert _rust_syn is not None
-        return _rust_syn.focus_entities(question, deduped)
     q_tokens = _significant_tokens(question)
     if not q_tokens:
         return []
