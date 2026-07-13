@@ -23,16 +23,18 @@ Run from the repo root (NICED, no API):
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
+from typing import cast
 
 _REPO = Path(__file__).resolve().parent.parent
 for _p in (str(_REPO), str(_REPO / "tools")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from discipline_impact import discipline_impact, worst_hit  # noqa: E402
+from discipline_impact import discipline_impact, impact_payload, worst_hit  # noqa: E402
 from retrieval_recall import (  # noqa: E402
     DEFAULT_DATASET,
     RECALL_NS,
@@ -53,12 +55,16 @@ def _recall_run(
     records: list[dict[str, object]] = []
     t0 = time.monotonic()
     for i, item in enumerate(data):
-        sessions = item["haystack_sessions"]
-        sid_to_idx = {sid: j for j, sid in enumerate(item["haystack_session_ids"])}
-        gold = [sid_to_idx.get(s) for s in item.get("answer_session_ids", [])]
-        dates = None if strip_timestamps else item.get("haystack_dates")
+        sessions = cast("list[list[dict[str, str]]]", item["haystack_sessions"])
+        session_ids = cast("list[str]", item["haystack_session_ids"])
+        sid_to_idx = {sid: j for j, sid in enumerate(session_ids)}
+        answer_ids = cast("list[str]", item.get("answer_session_ids", []))
+        gold = [sid_to_idx.get(s) for s in answer_ids]
+        dates = None if strip_timestamps else cast("list[str] | None", item.get("haystack_dates"))
         ar = ArcaneRetriever(sessions, session_dates=dates)
-        results = ar.retrieve(item["question"], item["question_type"], top_k=50, max_iterations=2)
+        results = ar.retrieve(
+            str(item["question"]), str(item["question_type"]), top_k=50, max_iterations=2
+        )
         ranked = rank_ordered_sessions(results)
         records.append(
             {
@@ -79,6 +85,7 @@ def main(argv: list[str]) -> int:
     dataset = DEFAULT_DATASET
     limit: int | None = None
     per_type: int | None = None
+    json_out: Path | None = None
     args = list(argv)
     if "--limit" in args:
         limit = int(args[args.index("--limit") + 1])
@@ -86,6 +93,8 @@ def main(argv: list[str]) -> int:
         per_type = int(args[args.index("--per-type") + 1])
     if "--dataset" in args:
         dataset = Path(args[args.index("--dataset") + 1])
+    if "--json-out" in args:
+        json_out = Path(args[args.index("--json-out") + 1])
 
     with open(dataset) as fh:
         data = json.load(fh)
@@ -120,6 +129,21 @@ def main(argv: list[str]) -> int:
         print(
             f"\nworst hit by missing timestamps: {worst.qtype} (-{worst.delta_at(10):.1%} recall@10)"
         )
+    if json_out is not None:
+        payload = impact_payload(
+            impacts,
+            metadata={
+                "dataset": Path(dataset).name,
+                "questions": len(data),
+                "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                "retrieval": "GPT-free ArcaneRetriever, canonical vs stripped timestamps",
+                "ce_rerank_sync": os.environ.get("REMANENTIA_ARCANE_CE_SYNC", "") == "1",
+                "ce_rerank_disabled": os.environ.get("REMANENTIA_ARCANE_CE_DISABLE", "") == "1",
+            },
+        )
+        json_out.parent.mkdir(parents=True, exist_ok=True)
+        json_out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        print(f"wrote discipline-ceiling artefact -> {json_out}")
     return 0
 
 

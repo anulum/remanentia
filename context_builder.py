@@ -30,7 +30,7 @@ class HierarchicalContext:
     stable_facts: list[AtomicFact] = field(default_factory=list)
     background: list[AtomicFact] = field(default_factory=list)
 
-    def to_prompt_string(self, budget_ratios: dict[str, float] = None) -> str:
+    def to_prompt_string(self, budget_ratios: dict[str, float] | None = None) -> str:
         """Convert layers into a formatted prompt section with budget constraints."""
         if budget_ratios is None:
             budget_ratios = {
@@ -96,7 +96,7 @@ class HierarchicalContext:
 def build_hierarchical_context(
     facts: list[AtomicFact],
     reference_date: Optional[str] = None,
-    session_dates: list[str] = None,
+    session_dates: list[str] | None = None,
 ) -> HierarchicalContext:
     """Organise facts into hierarchy based on age and confidence."""
     if reference_date:

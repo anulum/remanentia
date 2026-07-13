@@ -79,3 +79,41 @@ def worst_hit(impacts: Sequence[RecallDelta], n: int = 10) -> RecallDelta | None
     if not candidates:
         return None
     return max(candidates, key=lambda r: r.delta_at(n))
+
+
+def impact_payload(
+    impacts: Sequence[RecallDelta],
+    *,
+    worst_at: int = 10,
+    metadata: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    """Serialise *impacts* into the committable discipline-ceiling artefact.
+
+    The payload carries every per-qtype canonical/degraded/delta curve (keyed
+    by string cutoffs, JSON-safe), the worst-hit qtype at *worst_at*, and any
+    run *metadata* the harness supplies (dataset, question count, timestamps).
+    Deltas are rounded to 4 places; an empty impact list yields a payload with
+    ``worst_hit: None`` rather than a fabricated entry.
+    """
+    worst = worst_hit(impacts, n=worst_at)
+    return {
+        "schema_version": 1,
+        "benchmark": "longmemeval_write_discipline",
+        "metadata": dict(metadata) if metadata else {},
+        "impacts": [
+            {
+                "qtype": imp.qtype,
+                "canonical": {str(n): round(v, 4) for n, v in imp.canonical.items()},
+                "degraded": {str(n): round(v, 4) for n, v in imp.degraded.items()},
+                "delta": {str(n): round(v, 4) for n, v in imp.delta.items()},
+            }
+            for imp in impacts
+        ],
+        "worst_hit": {
+            "qtype": worst.qtype,
+            "at": worst_at,
+            "delta": round(worst.delta_at(worst_at), 4),
+        }
+        if worst is not None
+        else None,
+    }

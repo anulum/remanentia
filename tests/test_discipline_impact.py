@@ -8,9 +8,11 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
-from discipline_impact import discipline_impact, worst_hit
+from discipline_impact import discipline_impact, impact_payload, worst_hit
 
 
 def _agg(**qtypes: dict[int, float]) -> dict[str, dict[str, float]]:
@@ -69,3 +71,49 @@ class TestWorstHit:
         degraded = _agg(overall={10: 0.8})
         impacts = discipline_impact(canonical, degraded, ns=(10,))
         assert worst_hit(impacts) is None
+
+
+class TestImpactPayload:
+    def test_payload_carries_curves_worst_hit_and_metadata(self) -> None:
+        canonical = _agg(
+            overall={1: 0.5, 10: 0.9},
+            **{"temporal-reasoning": {1: 0.4, 10: 0.85}, "multi-session": {1: 0.6, 10: 0.95}},
+        )
+        degraded = _agg(
+            overall={1: 0.4, 10: 0.8},
+            **{"temporal-reasoning": {1: 0.2, 10: 0.6}, "multi-session": {1: 0.58, 10: 0.93}},
+        )
+        impacts = discipline_impact(canonical, degraded, ns=(1, 10))
+        payload = impact_payload(
+            impacts, metadata={"dataset": "longmemeval_s.json", "questions": 500}
+        )
+
+        assert payload["schema_version"] == 1
+        assert payload["benchmark"] == "longmemeval_write_discipline"
+        assert payload["metadata"] == {"dataset": "longmemeval_s.json", "questions": 500}
+        by_qtype = {entry["qtype"]: entry for entry in payload["impacts"]}
+        overall = by_qtype["overall"]
+        # Curves are keyed by string cutoffs (JSON-safe) and rounded.
+        assert overall["canonical"] == {"1": 0.5, "10": 0.9}
+        assert overall["degraded"] == {"1": 0.4, "10": 0.8}
+        assert overall["delta"]["10"] == pytest.approx(0.1)
+        assert payload["worst_hit"] == {
+            "qtype": "temporal-reasoning",
+            "at": 10,
+            "delta": pytest.approx(0.25),
+        }
+        json.dumps(payload)  # round-trippable without a custom encoder
+
+    def test_empty_impacts_yield_null_worst_hit_not_fabrication(self) -> None:
+        payload = impact_payload([])
+        assert payload["impacts"] == []
+        assert payload["worst_hit"] is None
+        assert payload["metadata"] == {}
+
+    def test_only_overall_yields_null_worst_hit(self) -> None:
+        canonical = _agg(overall={10: 0.9})
+        degraded = _agg(overall={10: 0.8})
+        impacts = discipline_impact(canonical, degraded, ns=(10,))
+        payload = impact_payload(impacts)
+        assert payload["worst_hit"] is None
+        assert [entry["qtype"] for entry in payload["impacts"]] == ["overall"]
