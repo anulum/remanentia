@@ -688,59 +688,57 @@ class TestMCPTelemetryAndCli:
 
         assert mcp_server._mcp_tok("Alpha be beta_42") == {"alpha", "beta_42"}
 
-    def test_recall_feedback_disabled_no_prior_and_recorded(self, monkeypatch):
-        import mcp_server
+    def test_recall_feedback_disabled_no_prior_and_recorded(self, monkeypatch, tmp_path):
+        from recall_ledger import RecallLedger
 
         monkeypatch.setenv("REMANENTIA_RECALL_LEDGER_DISABLE", "1")
         assert "disabled" in handle_recall_feedback("query", True)
         monkeypatch.delenv("REMANENTIA_RECALL_LEDGER_DISABLE")
 
-        class FakeLedger:
-            def __init__(self, event_id):
-                self.event_id = event_id
-                self.outcomes = []
+        ledger = RecallLedger(tmp_path / "feedback.jsonl")
+        assert "No prior recall" in handle_recall_feedback("query", True, ledger=ledger)
+        ledger.record("query", ["trace:one"], top_k=1, by="agent")
 
-            def latest_for(self, query, by=None):
-                return self.event_id
+        request = {
+            "jsonrpc": "2.0",
+            "id": "feedback",
+            "method": "tools/call",
+            "params": {
+                "name": "remanentia_recall_feedback",
+                "arguments": {"query": "query", "was_used": True},
+            },
+        }
+        response = handle_request(request, ledger=ledger)
 
-            def record_outcome(self, event_id, **kwargs):
-                self.outcomes.append((event_id, kwargs))
+        assert response is not None
+        assert "was_used=True" in response["result"]["content"][0]["text"]
+        assert list(ledger.queries())[0].was_used is True
 
-        missing = FakeLedger(None)
-        monkeypatch.setattr(mcp_server, "_get_recall_ledger", lambda: missing)
-        assert "No prior recall" in handle_recall_feedback("query", True)
-
-        ledger = FakeLedger("evt-1")
-        monkeypatch.setattr(mcp_server, "_get_recall_ledger", lambda: ledger)
-        assert "was_used=True" in handle_recall_feedback("query", True, by="agent")
-        assert ledger.outcomes == [("evt-1", {"was_used": True})]
-
-    def test_recall_correctness_disabled_no_prior_and_recorded(self, monkeypatch):
-        import mcp_server
+    def test_recall_correctness_disabled_no_prior_and_recorded(self, monkeypatch, tmp_path):
+        from recall_ledger import RecallLedger
 
         monkeypatch.setenv("REMANENTIA_RECALL_LEDGER_DISABLE", "1")
         assert "disabled" in handle_recall_correctness("query", False)
         monkeypatch.delenv("REMANENTIA_RECALL_LEDGER_DISABLE")
 
-        class FakeLedger:
-            def __init__(self, event_id):
-                self.event_id = event_id
-                self.outcomes = []
+        ledger = RecallLedger(tmp_path / "correctness.jsonl")
+        assert "No prior recall" in handle_recall_correctness("query", False, ledger=ledger)
+        ledger.record("query", ["trace:one"], top_k=1, by="agent")
 
-            def latest_for(self, query, by=None):
-                return self.event_id
+        request = {
+            "jsonrpc": "2.0",
+            "id": "correctness",
+            "method": "tools/call",
+            "params": {
+                "name": "remanentia_recall_correctness",
+                "arguments": {"query": "query", "was_correct": False},
+            },
+        }
+        response = handle_request(request, ledger=ledger)
 
-            def record_outcome(self, event_id, **kwargs):
-                self.outcomes.append((event_id, kwargs))
-
-        missing = FakeLedger(None)
-        monkeypatch.setattr(mcp_server, "_get_recall_ledger", lambda: missing)
-        assert "No prior recall" in handle_recall_correctness("query", False)
-
-        ledger = FakeLedger("evt-2")
-        monkeypatch.setattr(mcp_server, "_get_recall_ledger", lambda: ledger)
-        assert "was_correct=False" in handle_recall_correctness("query", False, by="agent")
-        assert ledger.outcomes == [("evt-2", {"was_correct": False})]
+        assert response is not None
+        assert "was_correct=False" in response["result"]["content"][0]["text"]
+        assert list(ledger.queries())[0].was_correct is False
 
     def test_parse_cli_sets_requested_environment(self, monkeypatch):
         import mcp_server

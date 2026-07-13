@@ -584,7 +584,13 @@ def handle_graph(entity: str = "", top: int = 10, *, graph_dir: Path | None = No
     return query_graph(graph_dir or GRAPH_DIR, entity=entity, top=top)
 
 
-def handle_recall_feedback(query: str, was_used: bool, by: str = "") -> str:
+def handle_recall_feedback(
+    query: str,
+    was_used: bool,
+    by: str = "",
+    *,
+    ledger: Any | None = None,
+) -> str:
     """Record whether a prior recall for *query* was used downstream.
 
     Attaches a ``was_used`` outcome to the most recent matching recall in the
@@ -597,18 +603,24 @@ def handle_recall_feedback(query: str, was_used: bool, by: str = "") -> str:
     if os.environ.get("REMANENTIA_RECALL_LEDGER_DISABLE"):
         return "Recall ledger disabled; feedback ignored."
     try:
-        ledger = _get_recall_ledger()
-        event_id = ledger.latest_for(query, by=by or None)
+        outcome_ledger = ledger if ledger is not None else _get_recall_ledger()
+        event_id = outcome_ledger.latest_for(query, by=by or None)
         if event_id is None:
             return f"No prior recall found for: {query}"
-        ledger.record_outcome(event_id, was_used=was_used)
+        outcome_ledger.record_outcome(event_id, was_used=was_used)
         return f"Recorded was_used={was_used} for recall of: {query}"
     except Exception as e:  # pragma: no cover — telemetry must never break recall
         log.debug("Recall feedback failed", exc_info=True)
         return f"Feedback error: {e}"
 
 
-def handle_recall_correctness(query: str, was_correct: bool, by: str = "") -> str:
+def handle_recall_correctness(
+    query: str,
+    was_correct: bool,
+    by: str = "",
+    *,
+    ledger: Any | None = None,
+) -> str:
     """Record whether a prior recall's memories were *correct* — the gate label.
 
     The seam a downstream verifier wires its verdict into: an answer that used a
@@ -621,11 +633,11 @@ def handle_recall_correctness(query: str, was_correct: bool, by: str = "") -> st
     if os.environ.get("REMANENTIA_RECALL_LEDGER_DISABLE"):
         return "Recall ledger disabled; correctness ignored."
     try:
-        ledger = _get_recall_ledger()
-        event_id = ledger.latest_for(query, by=by or None)
+        outcome_ledger = ledger if ledger is not None else _get_recall_ledger()
+        event_id = outcome_ledger.latest_for(query, by=by or None)
         if event_id is None:
             return f"No prior recall found for: {query}"
-        ledger.record_outcome(event_id, was_correct=was_correct)
+        outcome_ledger.record_outcome(event_id, was_correct=was_correct)
         return f"Recorded was_correct={was_correct} for recall of: {query}"
     except Exception as e:  # pragma: no cover — telemetry must never break recall
         log.debug("Recall correctness failed", exc_info=True)
@@ -633,7 +645,10 @@ def handle_recall_correctness(query: str, was_correct: bool, by: str = "") -> st
 
 
 def handle_request(
-    request: dict[str, Any], *, base: Path | None = None
+    request: dict[str, Any],
+    *,
+    base: Path | None = None,
+    ledger: Any | None = None,
 ) -> dict[str, Any] | None:
     """Dispatch one stdio JSON-RPC request through production tool handlers."""
     handlers = {
@@ -660,10 +675,10 @@ def handle_request(
             graph_dir=(base / "memory" / "graph") if base is not None else None,
         ),
         "remanentia_recall_feedback": lambda args: handle_recall_feedback(
-            args.get("query", ""), bool(args.get("was_used", False))
+            args.get("query", ""), bool(args.get("was_used", False)), ledger=ledger
         ),
         "remanentia_recall_correctness": lambda args: handle_recall_correctness(
-            args.get("query", ""), bool(args.get("was_correct", False))
+            args.get("query", ""), bool(args.get("was_correct", False)), ledger=ledger
         ),
     }
     return dispatch_request(
