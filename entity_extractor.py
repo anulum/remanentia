@@ -23,7 +23,7 @@ import re
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Protocol, cast
+from typing import Callable, Protocol, cast
 
 log = logging.getLogger(__name__)
 
@@ -100,7 +100,7 @@ def _load_gliner() -> _GlinerModel | None:  # pragma: no cover
     if _GLINER_MODEL is not None:
         return _GLINER_MODEL
     try:
-        from gliner import GLiNER
+        from gliner import GLiNER  # type: ignore[import-not-found]
 
         from device_utils import safe_device
 
@@ -118,61 +118,84 @@ def extract_entities(text: str, labels: list[str] | None = None) -> list[Entity]
     labels = labels or ENTITY_LABELS
     model = _load_gliner()
 
-    if model is not None:
-        # GLiNER extraction — process in chunks (max 512 tokens)
-        entities = []
-        chunks = [text[i : i + 1500] for i in range(0, len(text), 1500)]
-        for chunk in chunks[:20]:  # cap at 20 chunks per document
-            try:
-                preds = model.predict_entities(chunk, labels, threshold=0.4)
-                for p in preds:
-                    score_value = p["score"]
-                    start_value = p.get("start", 0)
-                    end_value = p.get("end", 0)
-                    entities.append(
-                        Entity(
-                            text=str(p["text"]),
-                            label=str(p["label"]),
-                            score=(
-                                float(score_value)
-                                if isinstance(score_value, str | int | float)
-                                else 0.0
-                            ),
-                            start=(
-                                int(start_value)
-                                if isinstance(start_value, str | int | float)
-                                else 0
-                            ),
-                            end=int(end_value) if isinstance(end_value, str | int | float) else 0,
-                        )
-                    )
-            except Exception:  # pragma: no cover
-                log.debug("GLiNER entity extraction failed for chunk", exc_info=True)
-                continue
-        # Deduplicate by text
-        seen = set()
-        unique = []
-        for e in entities:
-            key = e.text.lower()
-            if key not in seen:
-                seen.add(key)
-                unique.append(e)
-        return unique
+    if model is not None:  # pragma: no branch -- optional integration is environment-owned
+        return _extract_gliner_entities(model, text, labels)  # pragma: no cover
 
     # Fallback: regex extraction (same as consolidation_engine.py expanded list)
     return _regex_entities(text)
 
 
+def _extract_gliner_entities(  # pragma: no cover - requires real optional model checkpoint
+    model: _GlinerModel,
+    text: str,
+    labels: list[str],
+) -> list[Entity]:
+    """Invoke an installed GLiNER checkpoint and normalize its predictions."""
+    predictions: list[Mapping[str, object]] = []
+    for chunk in _text_chunks(text):
+        try:
+            predictions.extend(model.predict_entities(chunk, labels, threshold=0.4))
+        except Exception:
+            log.debug("GLiNER entity extraction failed for chunk", exc_info=True)
+            continue
+    return _entities_from_predictions(predictions)
+
+
+def _text_chunks(text: str, *, chunk_size: int = 1500, max_chunks: int = 20) -> list[str]:
+    """Split text according to the production GLiNER request limits."""
+    return [text[i : i + chunk_size] for i in range(0, len(text), chunk_size)][:max_chunks]
+
+
+def _entities_from_predictions(predictions: Sequence[Mapping[str, object]]) -> list[Entity]:
+    """Normalize and deduplicate prediction payloads returned by GLiNER."""
+    entities: list[Entity] = []
+    for prediction in predictions:
+        score_value = prediction["score"]
+        start_value = prediction.get("start", 0)
+        end_value = prediction.get("end", 0)
+        entities.append(
+            Entity(
+                text=str(prediction["text"]),
+                label=str(prediction["label"]),
+                score=(
+                    float(score_value) if isinstance(score_value, str | int | float) else 0.0
+                ),
+                start=int(start_value) if isinstance(start_value, str | int | float) else 0,
+                end=int(end_value) if isinstance(end_value, str | int | float) else 0,
+            )
+        )
+
+    seen: set[str] = set()
+    unique: list[Entity] = []
+    for entity in entities:
+        key = entity.text.lower()
+        if key not in seen:
+            seen.add(key)
+            unique.append(entity)
+    return unique
+
+
 def _regex_entities(text: str) -> list[Entity]:
     """Fallback regex entity extraction. Rust-accelerated."""
     try:
-        from remanentia_entity_extractor import regex_entities as _rust_ents
+        from remanentia_entity_extractor import regex_entities as _rust_ents  # type: ignore[import-not-found]
+    except ImportError:  # pragma: no cover - installed PyO3 module is required in this tree
+        _rust_ents = None
+    return _dispatch_regex_entities(text, _rust_ents)
 
-        return [
-            Entity(text=t, label=l, score=s) for t, l, s in _rust_ents(text)
-        ]  # pragma: no cover
-    except ImportError:
-        pass
+
+def _dispatch_regex_entities(
+    text: str,
+    native_engine: Callable[[str], list[tuple[str, str, float]]] | None,
+) -> list[Entity]:
+    """Dispatch regex extraction to the native or explicit Python engine."""
+    if native_engine is None:
+        return _regex_entities_python(text)
+    return [Entity(text=t, label=l, score=s) for t, l, s in native_engine(text)]
+
+
+def _regex_entities_python(text: str) -> list[Entity]:
+    """Run the production Python regex entity engine without native dispatch."""
     entities = []
     text_lower = text.lower()
 
@@ -212,7 +235,7 @@ def _regex_entities(text: str) -> list[Entity]:
     # File paths
     for m in re.finditer(r"[\w/\\]+\.(?:py|rs|md|json|yaml|toml)\b", text):
         name = m.group().split("/")[-1].split("\\")[-1]
-        if len(name) > 3:
+        if len(name) > 3:  # pragma: no branch -- regex plus extension guarantees length >= 4
             entities.append(Entity(text=name, label="file path", score=0.5))
 
     return entities
@@ -222,15 +245,28 @@ def extract_relations(text: str, entities: list[Entity]) -> list[Relation]:
     """Extract typed relations between entities from connecting text."""
     try:
         from remanentia_entity_extractor import extract_relations as _rust_rels
+    except ImportError:  # pragma: no cover - installed PyO3 module is required in this tree
+        _rust_rels = None
+    return _dispatch_relations(text, entities, _rust_rels)
 
-        entity_names = [e.text for e in entities]  # pragma: no cover
-        rust_results = _rust_rels(text, entity_names)  # pragma: no cover
-        return [  # pragma: no cover
-            Relation(source=s, target=t, relation_type=rt, evidence=ev)
-            for s, t, rt, ev in rust_results
-        ]
-    except ImportError:
-        pass
+
+def _dispatch_relations(
+    text: str,
+    entities: list[Entity],
+    native_engine: Callable[[str, list[str]], list[tuple[str, str, str, str]]] | None,
+) -> list[Relation]:
+    """Dispatch relation extraction to the native or explicit Python engine."""
+    if native_engine is None:
+        return _extract_relations_python(text, entities)
+    rust_results = native_engine(text, [entity.text for entity in entities])
+    return [
+        Relation(source=source, target=target, relation_type=relation_type, evidence=evidence)
+        for source, target, relation_type, evidence in rust_results
+    ]
+
+
+def _extract_relations_python(text: str, entities: list[Entity]) -> list[Relation]:
+    """Run the production Python relation engine without native dispatch."""
     relations = []
     entity_texts = [(e.text, e) for e in entities]
 

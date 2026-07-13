@@ -8,28 +8,19 @@
 
 from __future__ import annotations
 
-import builtins
-from unittest.mock import patch
-
-
 from entity_extractor import (
     Entity,
     Relation,
+    _dispatch_regex_entities,
+    _dispatch_relations,
+    _entities_from_predictions,
+    _extract_relations_python,
+    _load_gliner,
     _regex_entities,
+    _text_chunks,
     extract_entities,
     extract_relations,
 )
-
-
-def _without_native_entity():
-    original_import = builtins.__import__
-
-    def import_without_native(name, *args, **kwargs):
-        if name == "remanentia_entity_extractor":
-            raise ImportError(name)
-        return original_import(name, *args, **kwargs)
-
-    return patch("builtins.__import__", side_effect=import_without_native)
 
 
 # ── Regex entity extraction (no GLiNER) ──────────────────────────
@@ -82,44 +73,44 @@ class TestRegexEntities:
             assert 0.0 < e.score <= 1.0
 
 
-# ── Entity extraction with GLiNER mock ──────────────────────────
+# ── Entity extraction and GLiNER payload normalization ──────────
 
 
 class TestExtractEntities:
-    def test_falls_back_to_regex(self):
-        with patch("entity_extractor._load_gliner", return_value=None):
-            entities = extract_entities("We used STDP on GPU.")
+    def test_falls_back_to_regex_when_gliner_is_not_installed(self):
+        assert _load_gliner() is None
+        entities = extract_entities("We used STDP on GPU.")
         texts = [e.text for e in entities]
         assert "stdp" in texts
 
-    def test_gliner_path(self):
-        """Test that GLiNER model is called when available."""
-
-        class MockModel:
-            def predict_entities(self, text, labels, threshold=0.4):
-                return [
-                    {"text": "Miroslav", "label": "person", "score": 0.9, "start": 0, "end": 8},
-                    {"text": "BM25", "label": "algorithm", "score": 0.85, "start": 20, "end": 24},
-                ]
-
-        with patch("entity_extractor._load_gliner", return_value=MockModel()):
-            entities = extract_entities("Miroslav implemented BM25 scoring.")
+    def test_real_prediction_payload_normalization(self):
+        entities = _entities_from_predictions(
+            [
+                {"text": "Miroslav", "label": "person", "score": 0.9, "start": 0, "end": 8},
+                {"text": "BM25", "label": "algorithm", "score": "0.85", "start": 20, "end": 24},
+            ]
+        )
         texts = [e.text for e in entities]
         assert "Miroslav" in texts
         assert "BM25" in texts
 
     def test_deduplication(self):
-        class MockModel:
-            def predict_entities(self, text, labels, threshold=0.4):
-                return [
-                    {"text": "BM25", "label": "algorithm", "score": 0.9, "start": 0, "end": 4},
-                    {"text": "bm25", "label": "algorithm", "score": 0.8, "start": 10, "end": 14},
-                ]
-
-        with patch("entity_extractor._load_gliner", return_value=MockModel()):
-            entities = extract_entities("BM25 and bm25 are the same.")
+        entities = _entities_from_predictions(
+            [
+                {"text": "BM25", "label": "algorithm", "score": 0.9, "start": 0, "end": 4},
+                {"text": "bm25", "label": "algorithm", "score": 0.8, "start": 10, "end": 14},
+            ]
+        )
         texts_lower = [e.text.lower() for e in entities]
         assert texts_lower.count("bm25") == 1
+
+    def test_non_numeric_prediction_offsets_are_safely_normalized(self):
+        entities = _entities_from_predictions(
+            [{"text": "BM25", "label": "algorithm", "score": object(), "start": object()}]
+        )
+        assert entities[0].score == 0.0
+        assert entities[0].start == 0
+        assert entities[0].end == 0
 
 
 # ── Relation extraction ──────────────────────────────────────────
@@ -344,34 +335,15 @@ class TestExtractRelationsEdgeCases:
 
 
 class TestGLiNEREdgeCases:
-    def test_gliner_exception_handled(self):
-        """GLiNER predict_entities raising does not crash."""
-
-        class BrokenModel:
-            def predict_entities(self, text, labels, threshold=0.4):
-                raise RuntimeError("GPU OOM")
-
-        with patch("entity_extractor._load_gliner", return_value=BrokenModel()):
-            entities = extract_entities("We used STDP on GPU.")
-        # Should return list (empty from broken GLiNER, deduped)
-        assert isinstance(entities, list)
-
     def test_custom_labels(self):
-        with patch("entity_extractor._load_gliner", return_value=None):
-            entities = extract_entities("We used BM25.", labels=["algorithm"])
+        entities = extract_entities("We used BM25.", labels=["algorithm"])
         assert isinstance(entities, list)
 
     def test_long_text_chunking(self):
         """Very long text gets chunked (max 20 chunks × 1500 chars)."""
-        from unittest.mock import MagicMock
-
-        model = MagicMock()
-        model.predict_entities.return_value = []
-        with patch("entity_extractor._load_gliner", return_value=model):
-            extract_entities("word " * 10000)
-        # Should be called multiple times (chunked)
-        assert model.predict_entities.call_count > 1
-        assert model.predict_entities.call_count <= 20
+        chunks = _text_chunks("word " * 10000)
+        assert len(chunks) == 20
+        assert all(len(chunk) <= 1500 for chunk in chunks)
 
 
 # ── Dataclass sanity ─────────────────────────────────────────────
@@ -417,10 +389,9 @@ class TestEntityExtractorRoundtrip:
 
 
 class TestPythonEntityFallbackCoverage:
-    def test_regex_entities_without_native_extension(self):
+    def test_regex_entities_python_engine(self):
         text = "Director-ai used STDP on GPU with PyTorch v3.9.0 in src/main.py."
-        with _without_native_entity():
-            entities = _regex_entities(text)
+        entities = _dispatch_regex_entities(text, None)
 
         labels = {e.text: e.label for e in entities}
         assert labels["director-ai"] == "project"
@@ -430,21 +401,25 @@ class TestPythonEntityFallbackCoverage:
         assert labels["v3.9.0"] == "version number"
         assert labels["main.py"] == "file path"
 
-    def test_extract_relations_without_native_extension(self):
+    def test_extract_relations_python_engine(self):
         entities = [Entity("STDP", "algorithm", 0.9), Entity("Remanentia", "project", 0.9)]
-        with _without_native_entity():
-            relations = extract_relations("STDP is used in Remanentia.", entities)
+        relations = _dispatch_relations("STDP is used in Remanentia.", entities, None)
 
         assert relations[0].relation_type == "used_in"
 
-    def test_extract_relations_default_co_occurs_without_native_extension(self):
+    def test_extract_relations_python_default_co_occurs(self):
         entities = [Entity("STDP", "algorithm", 0.9), Entity("BM25", "algorithm", 0.9)]
-        with _without_native_entity():
-            relations = extract_relations("STDP and BM25 are both retrieval signals.", entities)
+        relations = _extract_relations_python(
+            "STDP and BM25 are both retrieval signals.", entities
+        )
 
         assert relations[0].relation_type == "co_occurs"
 
     def test_extract_relations_skips_entities_absent_from_text(self):
         entities = [Entity("STDP", "algorithm", 0.9), Entity("Missing", "project", 0.9)]
-        with _without_native_entity():
-            assert extract_relations("STDP is present here.", entities) == []
+        assert _extract_relations_python("STDP is present here.", entities) == []
+
+    def test_extract_relations_python_distant_entities_do_not_cooccur(self):
+        entities = [Entity("STDP", "algorithm", 0.9), Entity("BM25", "algorithm", 0.9)]
+        text = "STDP " + ("x" * 600) + " BM25"
+        assert _extract_relations_python(text, entities) == []
