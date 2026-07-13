@@ -168,6 +168,17 @@ except ImportError:
         load_entity_graph as _load_entity_graph,
     )
 
+try:
+    from .retrieval_live_service import (
+        load_live_service_config as _load_live_retrieval_config,
+        retrieve_via_live_service as _run_live_retrieval,
+    )
+except ImportError:
+    from retrieval_live_service import (
+        load_live_service_config as _load_live_retrieval_config,
+        retrieve_via_live_service as _run_live_retrieval,
+    )
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("ArcSap.Retrieve")
 
@@ -644,27 +655,14 @@ def _persist_embed_cache() -> None:
 
 
 def _live_service_config() -> dict | None:
-    state = _read_json(STATE_DIR / "current_state.json")
-    if not state or not state.get("live_retrieval_available"):
-        return None
-    timestamp = float(state.get("timestamp", 0.0) or 0.0)
-    if timestamp and time.time() - timestamp > _LIVE_SERVICE_STALE_S:
-        return None
-    request_dir = _resolve_path(str(state.get("live_retrieval_request_dir") or LIVE_REQUESTS_DIR))
-    response_dir = _resolve_path(
-        str(state.get("live_retrieval_response_dir") or LIVE_RESPONSES_DIR)
+    return _load_live_retrieval_config(
+        STATE_DIR / "current_state.json",
+        base_dir=BASE_DIR,
+        default_request_dir=LIVE_REQUESTS_DIR,
+        default_response_dir=LIVE_RESPONSES_DIR,
+        minimum_timeout_s=_LIVE_RETRIEVAL_TIMEOUT_S,
+        stale_after_s=_LIVE_SERVICE_STALE_S,
     )
-    if not request_dir.exists() or not response_dir.exists():
-        return None
-    advertised_timeout = float(state.get("live_retrieval_timeout_s", _LIVE_RETRIEVAL_TIMEOUT_S))
-    return {
-        "request_dir": request_dir,
-        "response_dir": response_dir,
-        "timeout_s": max(advertised_timeout, _LIVE_RETRIEVAL_TIMEOUT_S),
-        "transport": state.get("live_retrieval_transport", "filesystem"),
-        "cycle": state.get("cycle"),
-        "n_neurons": state.get("n_neurons"),
-    }
 
 
 def _retrieve_via_live_service(
@@ -675,48 +673,12 @@ def _retrieve_via_live_service(
     config = _live_service_config()
     if config is None:
         return None
-
-    request_id = hashlib.md5(
-        f"{query}:{top_k}:{include_content}:{time.time_ns()}".encode()
-    ).hexdigest()
-    request_path = config["request_dir"] / f"{request_id}.json"
-    response_path = config["response_dir"] / f"{request_id}.json"
-    payload = {
-        "id": request_id,
-        "query": query,
-        "top_k": int(top_k),
-        "include_content": bool(include_content),
-        "created_at": time.time(),
-    }
-    try:
-        _write_json_atomic(request_path, payload)
-    except OSError:
-        return None
-
-    deadline = time.time() + max(config["timeout_s"], 1.0)
-    while time.time() < deadline:
-        if response_path.exists():
-            try:
-                response = json.loads(response_path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                time.sleep(0.05)
-                continue
-            for path in (response_path, request_path):
-                try:
-                    path.unlink(missing_ok=True)
-                except OSError:
-                    pass
-            if response.get("status") == "ok" and isinstance(response.get("results"), list):
-                return response["results"]
-            return None
-        time.sleep(0.05)
-
-    for path in (request_path, response_path):
-        try:
-            path.unlink(missing_ok=True)
-        except OSError:
-            pass
-    return None
+    return _run_live_retrieval(
+        config,
+        query=query,
+        top_k=top_k,
+        include_content=include_content,
+    )
 
 
 def rebuild_caches(
