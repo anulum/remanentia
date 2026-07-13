@@ -19,7 +19,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
-from typing import Any, TextIO
+from typing import Any, TextIO, cast
 
 from vector_index import (
     EmbeddingProvider,
@@ -194,11 +194,14 @@ def search_memory_vector_index(
     source: str = "",
 ) -> list[VectorSearchResult]:
     """Search a persistent vector index produced from ``MemoryIndex``."""
-    return PersistentVectorIndex(index_dir).search(
-        query,
-        provider,
-        top_k=top_k,
-        source=source,
+    return cast(
+        list[VectorSearchResult],
+        PersistentVectorIndex(index_dir).search(
+            query,
+            provider,
+            top_k=top_k,
+            source=source,
+        ),
     )
 
 
