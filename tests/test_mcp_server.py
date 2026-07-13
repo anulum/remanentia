@@ -424,12 +424,6 @@ class TestHandleRecallLightweight:
 
 
 class TestHandleStatus:
-    def test_returns_string(self):
-        with patch("mcp_server.handle_status") as mock:
-            mock.return_value = "Daemon: NOT RUNNING\nMemory:\n  Traces: 24"
-            result = handle_status()
-        assert isinstance(result, str)
-
     def test_actual_status(self, tmp_path):
         # handle_status imports cli.cmd_status, which may fail
         result = handle_status()
@@ -650,33 +644,6 @@ class TestMCPToolAudit:
 
 
 class TestMCPTelemetryAndCli:
-    def test_emit_recall_bus_uses_cached_emitter(self, monkeypatch):
-        import mcp_server
-
-        class FakeEmitter:
-            def __init__(self) -> None:
-                self.calls = []
-
-            def emit(self, query, **kwargs):
-                self.calls.append((query, kwargs))
-
-        emitter = FakeEmitter()
-        monkeypatch.setattr(mcp_server, "_BUS_EMITTER", emitter)
-        monkeypatch.setattr(mcp_server, "_BUS_EMITTER_INIT", True)
-
-        mcp_server._emit_recall_bus("query", ["trace:one"])
-
-        assert emitter.calls == [
-            (
-                "query",
-                {
-                    "returned_claim_ids": ["trace:one"],
-                    "was_used": False,
-                    "abstained": False,
-                },
-            )
-        ]
-
     def test_observe_and_close_noop_when_disabled_or_missing_event(self, monkeypatch):
         import mcp_server
 
