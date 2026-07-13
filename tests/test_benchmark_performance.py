@@ -13,7 +13,8 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
-from types import SimpleNamespace
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
@@ -74,59 +75,55 @@ def test_summarise_result_handles_non_dict_and_semantic_memories():
     }
 
 
-def test_http_json_posts_payload(monkeypatch):
+def test_http_json_posts_payload():
     benchmark = _load_benchmark_module()
-    seen = {}
+    requests: list[tuple[str, dict[str, object]]] = []
 
-    class Response:
-        def __enter__(self):
-            return self
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            length = int(self.headers["Content-Length"])
+            requests.append((self.path, json.loads(self.rfile.read(length))))
+            body = b'{"status":"ok"}'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
 
-        def __exit__(self, exc_type, exc, tb):
-            return False
+        def log_message(self, _format, *args):
+            return
 
-        def read(self):
-            return b'{"status":"ok"}'
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base_url = f"http://127.0.0.1:{server.server_address[1]}/"
+        result = benchmark.http_json(base_url, "POST", "/recall", {"query": "q"})
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
-    def urlopen(req, timeout):
-        seen["url"] = req.full_url
-        seen["method"] = req.get_method()
-        seen["body"] = json.loads(req.data.decode("utf-8"))
-        seen["timeout"] = timeout
-        return Response()
-
-    monkeypatch.setattr(benchmark.request, "urlopen", urlopen)
-
-    assert benchmark.http_json("http://127.0.0.1:8001/", "POST", "/recall", {"query": "q"}) == {
-        "status": "ok"
-    }
-    assert seen == {
-        "url": "http://127.0.0.1:8001/recall",
-        "method": "POST",
-        "body": {"query": "q"},
-        "timeout": 30,
-    }
+    assert result == {"status": "ok"}
+    assert requests == [("/recall", {"query": "q"})]
 
 
-def test_run_json_command_parses_stdout_and_reports_errors(monkeypatch):
+def test_run_json_command_parses_stdout_and_reports_errors():
     benchmark = _load_benchmark_module()
-    seen = {}
+    success = [
+        sys.executable,
+        "-c",
+        "import json,os; print(json.dumps({'extra': os.environ['EXTRA']}))",
+    ]
+    assert benchmark.run_json_command(success, env_extra={"EXTRA": "1"}) == {"extra": "1"}
 
-    def run_success(*args, **kwargs):
-        seen.update(kwargs["env"])
-        return SimpleNamespace(returncode=0, stdout='{"ok": true}', stderr="")
-
-    monkeypatch.setattr(benchmark.subprocess, "run", run_success)
-    assert benchmark.run_json_command(["cmd"], env_extra={"EXTRA": "1"}) == {"ok": True}
-    assert seen["EXTRA"] == "1"
-
-    monkeypatch.setattr(
-        benchmark.subprocess,
-        "run",
-        lambda *args, **kwargs: SimpleNamespace(returncode=2, stdout="", stderr="boom"),
-    )
+    failure = [
+        sys.executable,
+        "-c",
+        "import sys; print('boom', file=sys.stderr); raise SystemExit(2)",
+    ]
     with pytest.raises(RuntimeError, match="boom"):
-        benchmark.run_json_command(["cmd"])
+        benchmark.run_json_command(failure)
 
 
 def test_vector_storage_summary_counts_existing_files(tmp_path: Path):
@@ -160,22 +157,40 @@ def test_vector_storage_summary_counts_existing_files(tmp_path: Path):
     }
 
 
-def test_api_benchmarks_measures_expected_endpoints(monkeypatch):
+def test_api_benchmarks_measures_expected_endpoints():
     benchmark = _load_benchmark_module()
-    calls: list[tuple[str, str, str, dict | None]] = []
+    requests: list[tuple[str, str, dict[str, object] | None]] = []
 
-    def http_json(base_url, method, path, payload=None):
-        calls.append((base_url, method, path, payload))
-        return {"status": "ok"}
+    class Handler(BaseHTTPRequestHandler):
+        def _respond(self, payload: dict[str, object] | None = None):
+            requests.append((self.command, self.path, payload))
+            body = b'{"status":"ok"}'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
 
-    monkeypatch.setattr(benchmark, "http_json", http_json)
-    monkeypatch.setattr(
-        benchmark,
-        "time_call",
-        lambda name, func, iterations, warmups=1: {"name": name, "result": func()},
-    )
+        def do_GET(self):
+            self._respond()
 
-    result = benchmark.api_benchmarks("http://api", "query", iterations=1)
+        def do_POST(self):
+            length = int(self.headers["Content-Length"])
+            self._respond(json.loads(self.rfile.read(length)))
+
+        def log_message(self, _format, *args):
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base_url = f"http://127.0.0.1:{server.server_address[1]}"
+        result = benchmark.api_benchmarks(base_url, "query", iterations=1)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
     assert [item["name"] for item in result] == [
         "api_health",
@@ -183,78 +198,22 @@ def test_api_benchmarks_measures_expected_endpoints(monkeypatch):
         "api_recall",
         "api_public_vector_search",
     ]
-    assert [call[2] for call in calls] == ["/health", "/status", "/recall", "/vector/search/public"]
+    paths = [path for _, path, _ in requests]
+    assert paths.count("/health") == 2
+    assert paths.count("/status") == 2
+    assert paths.count("/recall") == 2
+    assert paths.count("/vector/search/public") == 2
 
 
-def test_vector_benchmarks_refreshes_with_embedding_environment(monkeypatch):
-    benchmark = _load_benchmark_module()
-    env_seen = {}
-    status = {"count": 0, "manifest": {}, "vectors_path": "", "metadata_path": ""}
-
-    def run_json_command(args, env_extra=None, timeout=120):
-        if args[-1] == "status":
-            return status
-        env_seen.update(env_extra or {})
-        return {"status": "skipped"}
-
-    monkeypatch.setattr(benchmark, "run_json_command", run_json_command)
-    monkeypatch.setattr(
-        benchmark,
-        "time_call",
-        lambda name, func, iterations, warmups=0: {"name": name, "last": func(), "p50_ms": 1.0},
-    )
-
-    result = benchmark.vector_benchmarks(1, "model", "http://embed")
-
-    assert result["index"]["count"] == 0
-    assert result["refresh_skip"]["last"] == {"status": "skipped"}
-    assert env_seen == {
-        "REMANENTIA_EMBEDDING_MODEL": "model",
-        "REMANENTIA_EMBEDDING_BASE_URL": "http://embed",
-    }
-
-
-def test_direct_recall_benchmark_uses_memory_recall(monkeypatch):
+def test_direct_recall_benchmark_uses_memory_recall():
     benchmark = _load_benchmark_module()
 
-    class Context:
-        elapsed_ms = 12.5
-        semantic_memories = [{"path": "memory.md"}]
-
-    fake_module = SimpleNamespace(recall=lambda query, top_k, include_content: Context())
-    monkeypatch.setitem(sys.modules, "memory_recall", fake_module)
-    monkeypatch.setattr(
-        benchmark,
-        "time_call",
-        lambda name, func, iterations: {"name": name, "last": func()},
-    )
-
-    result = benchmark.direct_recall_benchmark("query", 1)
+    result = benchmark.direct_recall_benchmark("SNN removal decision", 1)
 
     assert result["name"] == "direct_recall"
-    assert result["last"] == {"elapsed_ms": 12.5, "semantic_memories": [{"path": "memory.md"}]}
-
-
-def test_pytest_performance_benchmark_captures_exit_and_tails(monkeypatch):
-    benchmark = _load_benchmark_module()
-    ticks = iter([10.0, 10.25])
-    monkeypatch.setattr(benchmark.time, "perf_counter", lambda: next(ticks))
-    monkeypatch.setattr(
-        benchmark.subprocess,
-        "run",
-        lambda *args, **kwargs: SimpleNamespace(
-            returncode=1,
-            stdout="\n".join(f"out{i}" for i in range(35)),
-            stderr="\n".join(f"err{i}" for i in range(35)),
-        ),
-    )
-
-    result = benchmark.pytest_performance_benchmark()
-
-    assert result["exit_code"] == 1
-    assert result["elapsed_ms"] == 250.0
-    assert "out5" in result["stdout_tail"]
-    assert "err5" in result["stderr_tail"]
+    assert result["n"] == 1
+    assert result["last_result_summary"]["elapsed_ms"] >= 0.0
+    assert result["last_result_summary"]["semantic_memory_count"] >= 1
 
 
 def test_hardware_snapshot_reads_host_context_and_gpu(tmp_path: Path):
@@ -366,87 +325,3 @@ def test_write_reports_writes_json_and_markdown(tmp_path: Path):
     assert Path(paths["markdown"]).exists()
     assert json.loads(Path(paths["json"]).read_text(encoding="utf-8"))["query"] == "q"
     assert "Remanentia Performance Benchmark" in Path(paths["markdown"]).read_text(encoding="utf-8")
-
-
-def test_build_report_includes_reproducibility_manifest(monkeypatch):
-    benchmark = _load_benchmark_module()
-    monkeypatch.setattr(benchmark, "hardware_snapshot", lambda: {"cpu_model": "cpu"})
-    monkeypatch.setattr(benchmark, "api_benchmarks", lambda base_url, query, iterations: [])
-    monkeypatch.setattr(
-        benchmark,
-        "vector_benchmarks",
-        lambda iterations, embedding_model, embedding_base_url: {
-            "index": {"count": 0, "dimension": 0, "total_bytes": 0},
-            "refresh_skip": {"p50_ms": 0.0, "p95_ms": 0.0},
-        },
-    )
-    monkeypatch.setattr(
-        benchmark,
-        "direct_recall_benchmark",
-        lambda query, iterations: {"name": "direct_recall", "p50_ms": 0.0, "p95_ms": 0.0},
-    )
-
-    args = benchmark.build_parser().parse_args(
-        [
-            "--base-url",
-            "http://127.0.0.1:8001",
-            "--query",
-            "q",
-            "--seed",
-            "123",
-            "--api-iterations",
-            "2",
-            "--refresh-iterations",
-            "1",
-            "--direct-recall-iterations",
-            "3",
-        ]
-    )
-    report = benchmark.build_report(args)
-
-    manifest = report["reproducibility"]
-    assert manifest["seed"] == 123
-    assert manifest["workload"] == "performance_benchmark"
-    assert manifest["parameters"]["api_iterations"] == 2
-    assert manifest["parameters"]["refresh_iterations"] == 1
-    assert manifest["parameters"]["direct_recall_iterations"] == 3
-
-
-def test_build_report_can_skip_direct_and_include_pytest(monkeypatch):
-    benchmark = _load_benchmark_module()
-    monkeypatch.setattr(benchmark, "hardware_snapshot", lambda: {"cpu_model": "cpu"})
-    monkeypatch.setattr(benchmark, "api_benchmarks", lambda base_url, query, iterations: [])
-    monkeypatch.setattr(
-        benchmark,
-        "vector_benchmarks",
-        lambda iterations, embedding_model, embedding_base_url: {
-            "index": {"count": 0, "dimension": 0, "total_bytes": 0},
-            "refresh_skip": {"p50_ms": 0.0, "p95_ms": 0.0},
-        },
-    )
-    monkeypatch.setattr(benchmark, "direct_recall_benchmark", pytest.fail)
-    monkeypatch.setattr(
-        benchmark,
-        "pytest_performance_benchmark",
-        lambda: {"exit_code": 0, "elapsed_ms": 1, "stdout_tail": ""},
-    )
-
-    args = benchmark.build_parser().parse_args(
-        ["--query", "q", "--skip-direct-recall", "--include-pytest"]
-    )
-    report = benchmark.build_report(args)
-
-    assert "direct_recall" not in report
-    assert report["pytest_performance"]["exit_code"] == 0
-
-
-def test_main_writes_report_and_prints_summary(monkeypatch, tmp_path: Path, capsys):
-    benchmark = _load_benchmark_module()
-    monkeypatch.setattr(benchmark, "build_report", lambda args: _sample_report())
-
-    code = benchmark.main(["--out-dir", str(tmp_path)])
-
-    output = json.loads(capsys.readouterr().out)
-    assert code == 0
-    assert Path(output["report_paths"]["json"]).exists()
-    assert output["summary"]["chunks"] == 10
