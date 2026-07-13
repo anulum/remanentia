@@ -299,34 +299,46 @@ def handle_recall(
     llm: bool = False,
     *,
     base: Path | None = None,
+    index: Any | None = None,
+    index_path: Path | None = None,
 ) -> str:
     """Memory recall via unified BM25 + embedding index + knowledge notes."""
     global _UNIFIED_INDEX
 
     workspace = (base or BASE).resolve()
-    if workspace != BASE.resolve():
+    default_workspace = workspace == BASE.resolve()
+    if not default_workspace and index is None and index_path is None:
         return _lightweight_recall(query, top_k, base=workspace)
 
     # Check prospective triggers
     trigger_lines = []
-    try:
-        ks = _get_knowledge_store()
-        matched_triggers = ks.check_triggers(query)
-        for t in matched_triggers:  # pragma: no cover
-            trigger_lines.append(f"[TRIGGER] {t.action}")
-    except Exception:  # pragma: no cover
-        log.debug("Prospective trigger check failed", exc_info=True)
+    if default_workspace:
+        try:
+            ks = _get_knowledge_store()
+            matched_triggers = ks.check_triggers(query)
+            for t in matched_triggers:  # pragma: no cover
+                trigger_lines.append(f"[TRIGGER] {t.action}")
+        except Exception:  # pragma: no cover
+            log.debug("Prospective trigger check failed", exc_info=True)
 
     try:
-        MemoryIndex = _runtime_attr("memory_index", "MemoryIndex")
-
-        if _UNIFIED_INDEX is None:
-            with _lock:
-                if _UNIFIED_INDEX is None:
-                    idx = MemoryIndex()
-                    if not idx.load():  # pragma: no cover
-                        return _lightweight_recall(query, top_k)
-                    _UNIFIED_INDEX = idx
+        active_index = index
+        if active_index is None and default_workspace:
+            active_index = _UNIFIED_INDEX
+        if active_index is None:
+            MemoryIndex = _runtime_attr("memory_index", "MemoryIndex")
+            if default_workspace:
+                with _lock:
+                    if _UNIFIED_INDEX is None:
+                        idx = MemoryIndex()
+                        if not idx.load(index_path):  # pragma: no cover
+                            return _lightweight_recall(query, top_k, base=workspace)
+                        _UNIFIED_INDEX = idx
+                    active_index = _UNIFIED_INDEX
+            else:
+                active_index = MemoryIndex()
+                if not active_index.load(index_path):
+                    return _lightweight_recall(query, top_k, base=workspace)
 
         use_llm = llm or bool(os.environ.get("REMANENTIA_LLM_ANSWERS"))
         if use_llm:
@@ -338,13 +350,14 @@ def handle_recall(
 
                 backend_name = os.environ.get("REMANENTIA_LLM_BACKEND", "auto")
                 set_llm_backend(resolve_backend(backend_name))
-        results = _UNIFIED_INDEX.search(
+        results = active_index.search(
             query, top_k=top_k, project=project, after=after, before=before, use_llm=use_llm
         )
         returned_ids = [f"{r.source}:{r.name}" for r in results]
         top_score = max((r.score for r in results), default=None)
         if not results and not trigger_lines:
-            _log_recall(query, returned_ids, top_k, project, top_score)
+            if default_workspace:
+                _log_recall(query, returned_ids, top_k, project, top_score)
             return f"No memories found for: {query}"
 
         # Guarded tier: when enabled and director-ai is available, check
@@ -383,20 +396,23 @@ def handle_recall(
         parts.extend(guard_log)
 
         # Knowledge store graph search — multi-hop traversal via prospective queries
-        try:
-            ks = _get_knowledge_store()
-            seen_snippets = {r.snippet[:100] for r in results}
-            ks_notes = ks.graph_search(query, top_k=top_k, hop_depth=2)
-            for note in ks_notes:
-                snippet = note.content[:300]
-                if snippet[:100] not in seen_snippets:
-                    seen_snippets.add(snippet[:100])
-                    parts.append(f"[knowledge] {note.title} (type={note.note_type})\n{snippet}")
-        except Exception:  # pragma: no cover
-            log.debug("Knowledge graph recall failed", exc_info=True)
+        if default_workspace:
+            try:
+                ks = _get_knowledge_store()
+                seen_snippets = {r.snippet[:100] for r in results}
+                ks_notes = ks.graph_search(query, top_k=top_k, hop_depth=2)
+                for note in ks_notes:
+                    snippet = note.content[:300]
+                    if snippet[:100] not in seen_snippets:
+                        seen_snippets.add(snippet[:100])
+                        parts.append(
+                            f"[knowledge] {note.title} (type={note.note_type})\n{snippet}"
+                        )
+            except Exception:  # pragma: no cover
+                log.debug("Knowledge graph recall failed", exc_info=True)
 
-        event_id = _log_recall(query, returned_ids, top_k, project, top_score)
-        _observe_recall(event_id, [r.snippet for r in results])
+            event_id = _log_recall(query, returned_ids, top_k, project, top_score)
+            _observe_recall(event_id, [r.snippet for r in results])
         return "\n\n".join(parts)
 
     except Exception:  # pragma: no cover
@@ -410,6 +426,7 @@ def handle_remember(
     trigger: str = "",
     *,
     base: Path | None = None,
+    index: Any | None = None,
 ) -> str:
     """Persist a memory as a reasoning trace and update the index.
 
@@ -454,10 +471,11 @@ def handle_remember(
 
     # Incremental index update if unified index is loaded
     global _UNIFIED_INDEX
-    if default_workspace and _UNIFIED_INDEX is not None and _UNIFIED_INDEX._built:
+    active_index = index if index is not None else (_UNIFIED_INDEX if default_workspace else None)
+    if active_index is not None and active_index._built:
         with _lock:
             try:
-                _UNIFIED_INDEX.add_file(path)
+                active_index.add_file(path)
             except Exception:  # pragma: no cover
                 log.debug("Incremental unified-index update failed", exc_info=True)
 
@@ -650,6 +668,8 @@ def handle_request(
     base: Path | None = None,
     ledger: Any | None = None,
     audit_logger: Any | None = None,
+    index: Any | None = None,
+    index_path: Path | None = None,
 ) -> dict[str, Any] | None:
     """Dispatch one stdio JSON-RPC request through production tool handlers."""
     handlers = {
@@ -661,6 +681,8 @@ def handle_request(
             before=args.get("before", ""),
             llm=args.get("llm", False),
             base=base,
+            index=index,
+            index_path=index_path,
         ),
         "remanentia_remember": lambda args: handle_remember(
             args.get("content", ""),
@@ -668,6 +690,7 @@ def handle_request(
             args.get("project", ""),
             args.get("trigger", ""),
             base=base,
+            index=index,
         ),
         "remanentia_status": lambda _args: handle_status(),
         "remanentia_graph": lambda args: handle_graph(

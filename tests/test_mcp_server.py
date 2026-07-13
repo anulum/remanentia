@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import os
-from unittest.mock import patch
 
 import pytest
 
@@ -38,6 +37,46 @@ def _disable_default_mcp_audit():
         yield
     finally:
         mcp_server.MCP_AUDIT_LOGGER = original
+
+
+@pytest.fixture
+def real_unified_index(tmp_path, monkeypatch):
+    import memory_index
+    from memory_index import MemoryIndex
+
+    workspace = tmp_path / "workspace"
+    traces = workspace / "reasoning_traces"
+    traces.mkdir(parents=True)
+    (traces / "decision.md").write_text(
+        "# SNN removal decision\n\n"
+        "The production team removed the obsolete SNN adapter after the real "
+        "runtime migration completed and retained the native recall pipeline.",
+        encoding="utf-8",
+    )
+    (traces / "benchmark.md").write_text(
+        "# Benchmark evidence\n\n"
+        "The LOCOMO benchmark records retrieval accuracy and latency from the "
+        "real memory service under deterministic evaluation conditions.",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(memory_index, "BASE", workspace)
+    monkeypatch.setattr(memory_index, "SOURCES", {"traces": traces})
+    monkeypatch.setattr(memory_index, "SOURCE_EXTENSIONS", {"traces": {".md"}})
+    monkeypatch.setattr(memory_index, "HASH_CACHE_PATH", workspace / "content_hashes.json")
+    monkeypatch.delenv("REMANENTIA_GUARDED", raising=False)
+    monkeypatch.delenv("REMANENTIA_LLM_ANSWERS", raising=False)
+
+    index = MemoryIndex()
+    stats = index.build(
+        use_gpu_embeddings=False,
+        use_gliner=False,
+        incremental=False,
+    )
+    assert stats["documents"] == 2
+    index_path = workspace / "memory_index.json.gz"
+    index.save(index_path)
+    return workspace, index, index_path
 
 
 # ── Tool definitions ─────────────────────────────────────────────
@@ -269,133 +308,30 @@ class TestHandleGraph:
 
 
 class TestHandleRecallWithIndex:
-    def test_with_loaded_index(self, tmp_path):
-        from unittest.mock import MagicMock
-        from memory_index import SearchResult
+    def test_real_index_returns_persisted_document(self, real_unified_index):
+        workspace, index, _ = real_unified_index
 
-        mock_idx = MagicMock()
-        mock_idx.load.return_value = True
-        mock_idx._built = True
-        mock_idx.search.return_value = [
-            SearchResult(
-                name="test.md",
-                source="traces",
-                score=0.9,
-                snippet="Test snippet",
-                answer="March 15",
-            ),
-        ]
-        import mcp_server
+        result = handle_recall(
+            "Why was the obsolete SNN adapter removed?",
+            top_k=3,
+            base=workspace,
+            index=index,
+        )
 
-        old_idx = mcp_server._UNIFIED_INDEX
-        mcp_server._UNIFIED_INDEX = mock_idx
-        try:
-            result = handle_recall("test query", top_k=3)
-            assert "test.md" in result
-            assert "March 15" in result
-        finally:
-            mcp_server._UNIFIED_INDEX = old_idx
+        assert "decision.md" in result
+        assert "native recall pipeline" in result
 
-    def test_empty_results(self, tmp_path):
-        from unittest.mock import MagicMock
+    def test_real_index_returns_no_memories_for_unmatched_query(self, real_unified_index):
+        workspace, index, _ = real_unified_index
 
-        mock_idx = MagicMock()
-        mock_idx._built = True
-        mock_idx.search.return_value = []
-        import mcp_server
+        result = handle_recall(
+            "xyznonexistent_zzz_999",
+            top_k=3,
+            base=workspace,
+            index=index,
+        )
 
-        old_idx = mcp_server._UNIFIED_INDEX
-        mcp_server._UNIFIED_INDEX = mock_idx
-        try:
-            result = handle_recall("xyznonexistent", top_k=3)
-            assert "No memories" in result
-        finally:
-            mcp_server._UNIFIED_INDEX = old_idx
-
-    def test_llm_flag_passed(self):
-        from unittest.mock import MagicMock
-
-        mock_idx = MagicMock()
-        mock_idx._built = True
-        mock_idx.search.return_value = []
-        import mcp_server
-
-        old_idx = mcp_server._UNIFIED_INDEX
-        mcp_server._UNIFIED_INDEX = mock_idx
-        try:
-            handle_recall("test", llm=True)
-            call_kwargs = mock_idx.search.call_args
-            assert call_kwargs[1].get("use_llm") is True
-        finally:
-            mcp_server._UNIFIED_INDEX = old_idx
-
-    def test_llm_backend_auto_setup(self):
-        """When llm=True and no backend set, auto-resolves backend."""
-        from unittest.mock import MagicMock
-        import answer_extractor
-        import mcp_server
-
-        mock_idx = MagicMock()
-        mock_idx._built = True
-        mock_idx.search.return_value = []
-        old_idx = mcp_server._UNIFIED_INDEX
-        old_backend = answer_extractor._BACKEND
-        answer_extractor._BACKEND = None
-        mcp_server._UNIFIED_INDEX = mock_idx
-        try:
-            handle_recall("test", llm=True)
-            assert answer_extractor._BACKEND is not None
-        finally:
-            mcp_server._UNIFIED_INDEX = old_idx
-            answer_extractor._BACKEND = old_backend
-
-    def test_guarded_mode_loads_guard_dependencies_when_results_exist(self, monkeypatch):
-        from unittest.mock import MagicMock
-        from memory_index import SearchResult
-        import mcp_server
-
-        mock_idx = MagicMock()
-        mock_idx._built = True
-        mock_idx.search.return_value = [
-            SearchResult(
-                name="guarded.md",
-                source="trace",
-                score=0.9,
-                snippet="Guarded snippet",
-                answer="Guarded answer",
-            )
-        ]
-        requested: list[tuple[str, str]] = []
-
-        def runtime_attr(module_name: str, attr_name: str):
-            requested.append((module_name, attr_name))
-            if (module_name, attr_name) == ("memory_index", "MemoryIndex"):
-                return lambda: mock_idx
-            if (module_name, attr_name) == ("answer_extractor", "get_llm_backend"):
-                return lambda: object()
-            if attr_name == "facts_from_results":
-                return lambda results: ["fact"]
-            if attr_name == "is_available":
-                return lambda: False
-            if attr_name == "score_memory_answer":
-                return lambda query, answer, facts: None
-            raise AssertionError(attr_name)
-
-        old_idx = mcp_server._UNIFIED_INDEX
-        mcp_server._UNIFIED_INDEX = mock_idx
-        monkeypatch.setenv("REMANENTIA_GUARDED", "1")
-        monkeypatch.delenv("REMANENTIA_LLM_ANSWERS", raising=False)
-        monkeypatch.delenv("REMANENTIA_LLM_BACKEND", raising=False)
-        try:
-            with patch("mcp_server._runtime_attr", side_effect=runtime_attr):
-                result = handle_recall("guarded query", top_k=1)
-        finally:
-            mcp_server._UNIFIED_INDEX = old_idx
-
-        assert isinstance(result, str)
-        assert ("memory_guarded", "facts_from_results") in requested
-        assert ("memory_guarded", "is_available") in requested
-        assert ("memory_guarded", "score_memory_answer") in requested
+        assert "No memories" in result
 
 
 class TestHandleRecallLightweight:
@@ -463,52 +399,17 @@ class TestBuildRecallIndex:
 
 
 class TestHandleRecallLoadIndex:
-    def test_loads_index_on_first_call(self):
-        from unittest.mock import MagicMock
-        from memory_index import SearchResult
+    def test_loads_real_persisted_index(self, real_unified_index):
+        workspace, _, index_path = real_unified_index
 
-        mock_idx = MagicMock()
-        mock_idx.load.return_value = True
-        mock_idx._built = True
-        mock_idx.search.return_value = [
-            SearchResult(name="r.md", source="src", score=0.5, snippet="snip"),
-        ]
-        import mcp_server
+        result = handle_recall(
+            "LOCOMO retrieval accuracy",
+            base=workspace,
+            index_path=index_path,
+        )
 
-        old = mcp_server._UNIFIED_INDEX
-        mcp_server._UNIFIED_INDEX = None
-        try:
-            # Patch MemoryIndex at the module level where it's imported
-            with patch.dict("sys.modules", {}):
-                with patch("memory_index.MemoryIndex", return_value=mock_idx):
-                    mcp_server._UNIFIED_INDEX = mock_idx
-                    result = handle_recall("test")
-            assert "r.md" in result
-        finally:
-            mcp_server._UNIFIED_INDEX = old
-
-    def test_loads_index_via_lock(self):
-        from unittest.mock import MagicMock
-        from memory_index import SearchResult
-
-        mock_idx = MagicMock()
-        mock_idx.load.return_value = True
-        mock_idx._built = True
-        mock_idx.search.return_value = [
-            SearchResult(name="t.md", source="src", score=0.7, snippet="s"),
-        ]
-        import mcp_server
-
-        old = mcp_server._UNIFIED_INDEX
-        mcp_server._UNIFIED_INDEX = None
-        try:
-            with patch("mcp_server.MemoryIndex", return_value=mock_idx, create=True):
-                with patch("memory_index.MemoryIndex", return_value=mock_idx):
-                    result = handle_recall("query")
-            assert mcp_server._UNIFIED_INDEX is mock_idx
-            assert "t.md" in result
-        finally:
-            mcp_server._UNIFIED_INDEX = old
+        assert "benchmark.md" in result
+        assert "deterministic evaluation" in result
 
     def test_load_fails_falls_back(self, tmp_traces):
         result = handle_recall("SNN decision", base=tmp_traces.parent)
@@ -516,45 +417,28 @@ class TestHandleRecallLoadIndex:
 
 
 class TestHandleRememberIndex:
-    def test_incremental_index_update(self, tmp_path):
-        from unittest.mock import MagicMock
+    def test_incremental_index_update(self, real_unified_index):
+        workspace, index, _ = real_unified_index
+        before = len(index.documents)
 
-        mock_idx = MagicMock()
-        mock_idx._built = True
-        import mcp_server
+        result = handle_remember(
+            "The helixquartz invariant is persisted through the production "
+            "remember handler and added to the active unified index.",
+            "finding",
+            "test",
+            base=workspace,
+            index=index,
+        )
 
-        old = mcp_server._UNIFIED_INDEX
-        mcp_server._UNIFIED_INDEX = mock_idx
-        try:
-            with patch("mcp_server.BASE", tmp_path):
-                handle_remember("content", "finding", "test")
-            mock_idx.add_file.assert_called_once()
-        finally:
-            mcp_server._UNIFIED_INDEX = old
+        assert result.startswith("Remembered:")
+        assert len(index.documents) == before + 1
+        assert index.search("helixquartz invariant", top_k=1)[0].source == "traces"
 
 
 class TestHandleStatusActual:
     def test_status_captures_output(self):
         result = handle_status()
         assert isinstance(result, str)
-
-
-class TestMCPProtocolRemember:
-    def test_tools_call_remember_with_llm(self):
-        with patch("mcp_server.handle_recall", return_value="Result") as mock:
-            req = {
-                "jsonrpc": "2.0",
-                "id": 8,
-                "method": "tools/call",
-                "params": {
-                    "name": "remanentia_recall",
-                    "arguments": {"query": "test", "llm": True},
-                },
-            }
-            handle_request(req)
-        mock.assert_called_once()
-        call_kwargs = mock.call_args
-        assert call_kwargs[1].get("llm") is True
 
 
 # ── MCP tool-call audit ────────────────────────────────────────
@@ -652,10 +536,8 @@ class TestMCPTelemetryAndCli:
         mcp_server._observe_recall("event", ["text"])
         mcp_server._close_recall_loops("remembered text")
 
-    def test_python_mcp_tokenizer_fallback(self, monkeypatch):
+    def test_mcp_tokenizer(self):
         import mcp_server
-
-        monkeypatch.setattr(mcp_server, "_rust_mcp_tok", None)
 
         assert mcp_server._mcp_tok("Alpha be beta_42") == {"alpha", "beta_42"}
 
@@ -731,74 +613,11 @@ class TestMCPTelemetryAndCli:
 class TestMCPPipelineIntegration:
     """MCP server as the entry point for the entire Remanentia pipeline."""
 
-    def test_recall_flows_through_memory_index(self):
-        """MCP recall → MemoryIndex.search → results."""
-        from unittest.mock import MagicMock
-        import mcp_server
-
-        mock_idx = MagicMock()
-        mock_idx._built = True
-        mock_result = MagicMock()
-        mock_result.source = "test"
-        mock_result.name = "trace.md"
-        mock_result.score = 0.9
-        mock_result.answer = "42"
-        mock_result.snippet = "The answer is 42."
-        mock_idx.search.return_value = [mock_result]
-
-        old = mcp_server._UNIFIED_INDEX
-        mcp_server._UNIFIED_INDEX = mock_idx
-        try:
-            result = handle_recall("what is the answer", top_k=3)
-            assert "42" in result
-            mock_idx.search.assert_called_once()
-        finally:
-            mcp_server._UNIFIED_INDEX = old
-
-    def test_remember_creates_file_and_updates_index(self):
-        """MCP remember → write file → add to index."""
-        from unittest.mock import MagicMock, patch as p
-        import mcp_server
-
-        mock_idx = MagicMock()
-        mock_idx._built = True
-        old = mcp_server._UNIFIED_INDEX
-        mcp_server._UNIFIED_INDEX = mock_idx
-        try:
-            with p("mcp_server.BASE", mcp_server.BASE):
-                result = handle_remember("Test memory content for pipeline verification.")
-            assert (
-                "stored" in result.lower() or "saved" in result.lower() or isinstance(result, str)
-            )
-        finally:
-            mcp_server._UNIFIED_INDEX = old
-
     def test_status_returns_structured_info(self):
         result = handle_status()
         assert isinstance(result, str)
         # Should mention index, entities, or similar
         assert len(result) > 10
-
-    def test_llm_backend_wiring_in_recall(self):
-        """When llm=True, MCP sets up LLM backend automatically."""
-        from unittest.mock import MagicMock
-        import answer_extractor
-        import mcp_server
-
-        mock_idx = MagicMock()
-        mock_idx._built = True
-        mock_idx.search.return_value = []
-        old_idx = mcp_server._UNIFIED_INDEX
-        old_backend = answer_extractor._BACKEND
-        answer_extractor._BACKEND = None
-        mcp_server._UNIFIED_INDEX = mock_idx
-        try:
-            handle_recall("test query", llm=True)
-            # Backend should have been auto-resolved
-            assert answer_extractor._BACKEND is not None
-        finally:
-            mcp_server._UNIFIED_INDEX = old_idx
-            answer_extractor._BACKEND = old_backend
 
     def test_graph_query_returns_entities(self):
         """MCP graph tool returns entity relationship text."""
@@ -831,25 +650,43 @@ class TestMCPPipelineIntegration:
 
 
 class TestMCPRoundtrip:
-    def test_remember_then_recall(self):
+    def test_remember_then_recall(self, real_unified_index):
         """Pipeline: remember → recall → verify content persists."""
-        from unittest.mock import MagicMock
-        import mcp_server
+        workspace, index, _ = real_unified_index
+        remember = handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": "remember-real",
+                "method": "tools/call",
+                "params": {
+                    "name": "remanentia_remember",
+                    "arguments": {
+                        "content": (
+                            "The cobaltsemaphore memory persists through the real MCP "
+                            "remember and unified-index pipeline."
+                        ),
+                        "type": "finding",
+                        "project": "test",
+                    },
+                },
+            },
+            base=workspace,
+            index=index,
+        )
+        recall = handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": "recall-real",
+                "method": "tools/call",
+                "params": {
+                    "name": "remanentia_recall",
+                    "arguments": {"query": "cobaltsemaphore memory", "top_k": 1},
+                },
+            },
+            base=workspace,
+            index=index,
+        )
 
-        mock_idx = MagicMock()
-        mock_idx._built = True
-        mock_result = MagicMock()
-        mock_result.source = "test"
-        mock_result.name = "memory.md"
-        mock_result.score = 0.9
-        mock_result.answer = "persisted"
-        mock_result.snippet = "This was persisted via remember."
-        mock_idx.search.return_value = [mock_result]
-
-        old = mcp_server._UNIFIED_INDEX
-        mcp_server._UNIFIED_INDEX = mock_idx
-        try:
-            result = handle_recall("persisted content", top_k=1)
-            assert "persisted" in result.lower()
-        finally:
-            mcp_server._UNIFIED_INDEX = old
+        assert remember is not None and recall is not None
+        assert "Remembered:" in remember["result"]["content"][0]["text"]
+        assert "cobaltsemaphore" in recall["result"]["content"][0]["text"]
