@@ -17,8 +17,11 @@ importer's state.
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -180,27 +183,57 @@ class TestLocalReaderSelection:
         # model/endpoint the reader actually queried is the resolved one — a
         # local score is attributable only if the backend was built from it.
         import bench_longmemeval as b
-        import llm_backend
+        requests: list[dict[str, object]] = []
 
-        captured: dict[str, object] = {}
+        class ReaderHandler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                assert self.path == "/v1/models"
+                body = json.dumps({"data": [{"id": "qwen2.5:7b"}]}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
 
-        class _FakeBackend:
-            def __init__(self, **kwargs):
-                captured.update(kwargs)
+            def do_POST(self):
+                assert self.path == "/v1/chat/completions"
+                length = int(self.headers["Content-Length"])
+                requests.append(json.loads(self.rfile.read(length)))
+                body = json.dumps(
+                    {"choices": [{"message": {"content": "answer"}}]}
+                ).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
 
-            def is_available(self):
-                return True
+            def log_message(self, _format, *args):
+                return
 
-            def complete(self, prompt, max_tokens=400):
-                return "answer"
-
-        monkeypatch.setattr(llm_backend, "LocalLLMBackend", _FakeBackend)
+        server = ThreadingHTTPServer(("127.0.0.1", 0), ReaderHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
         monkeypatch.setattr(b, "_USE_LOCAL_LLM", True)
         monkeypatch.setattr(b, "_LOCAL_MODEL", "qwen2.5:7b")
-        monkeypatch.setattr(b, "_LOCAL_URL", "http://localhost:9999/v1")
-
-        result = b._hypothesis_complete("q")
+        monkeypatch.setattr(
+            b,
+            "_LOCAL_URL",
+            f"http://127.0.0.1:{server.server_address[1]}/v1",
+        )
+        try:
+            result = b._hypothesis_complete("q", max_tokens=73)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
 
         assert result == "answer"
-        assert captured["model"] == "qwen2.5:7b"
-        assert captured["base_url"] == "http://localhost:9999/v1"
+        assert requests == [
+            {
+                "model": "qwen2.5:7b",
+                "messages": [{"role": "user", "content": "q"}],
+                "max_tokens": 73,
+                "temperature": 0.1,
+            }
+        ]
