@@ -9,7 +9,9 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import threading
+from collections.abc import Iterator
 from hashlib import sha256
 from io import StringIO
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -214,7 +216,25 @@ class TestPersistentVectorIndex:
 
 
 class _EmbeddingHandler(BaseHTTPRequestHandler):
-    def handle_embedding_post(self):
+    received_authorizations: list[str | None] = []
+
+    def handle_embedding_post(self) -> None:
+        self.received_authorizations.append(self.headers.get("Authorization"))
+        if self.path == "/error/embeddings":
+            body = b"provider down"
+            self.send_response(500)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if self.path == "/invalid/embeddings":
+            body = b"{"
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         length = int(self.headers["Content-Length"])
         payload = json.loads(self.rfile.read(length).decode("utf-8"))
         texts = payload["input"]
@@ -244,7 +264,8 @@ class _EmbeddingHandler(BaseHTTPRequestHandler):
 
 
 @pytest.fixture
-def embedding_server():
+def embedding_server() -> Iterator[str]:
+    _EmbeddingHandler.received_authorizations.clear()
     server = ThreadingHTTPServer(("127.0.0.1", 0), _EmbeddingHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -284,92 +305,32 @@ class TestHttpEmbeddingClient:
         with pytest.raises(VectorIndexError, match="empty"):
             client.embed_texts([])
 
-    def test_from_env_sends_authorization_header(self, monkeypatch):
-        class FakeResponse:
-            status = 200
-
-            def read(self):
-                return b'{"data":[{"index":0,"embedding":[1.0,0.0]}]}'
-
-        class FakeConnection:
-            request_headers: dict[str, str] = {}
-
-            def __init__(self, host, port, timeout):
-                self.host = host
-                self.port = port
-                self.timeout = timeout
-
-            def request(self, method, path, body, headers):
-                self.request_headers = headers
-                assert path == "/v1/embeddings"
-
-            def getresponse(self):
-                return FakeResponse()
-
-            def close(self):
-                return None
-
-        monkeypatch.setenv("TEST_EMBED_BASE_URL", "http://localhost:8080/v1")
+    def test_from_env_sends_authorization_header(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        embedding_server: str,
+    ) -> None:
+        monkeypatch.setenv("TEST_EMBED_BASE_URL", f"{embedding_server}/v1")
         monkeypatch.setenv("TEST_EMBED_MODEL", "local-test")
         monkeypatch.setenv("TEST_EMBED_API_KEY", "secret")
         monkeypatch.setenv("TEST_EMBED_TIMEOUT_S", "3.5")
-        monkeypatch.setattr(vector_index.http_client, "HTTPConnection", FakeConnection)
 
         client = HttpEmbeddingClient.from_env("TEST_EMBED")
         vectors = client.embed_texts(["alpha"])
 
-        assert vectors.shape == (1, 2)
+        assert vectors.shape == (1, 3)
         assert client.timeout_s == 3.5
         assert client.api_key == "secret"
+        assert _EmbeddingHandler.received_authorizations == ["Bearer secret"]
 
-    def test_client_reports_http_status_errors(self, monkeypatch):
-        class FakeResponse:
-            status = 500
-
-            def read(self):
-                return b"provider down"
-
-        class FakeConnection:
-            def __init__(self, *args, **kwargs):
-                return None
-
-            def request(self, *args, **kwargs):
-                return None
-
-            def getresponse(self):
-                return FakeResponse()
-
-            def close(self):
-                return None
-
-        monkeypatch.setattr(vector_index.http_client, "HTTPConnection", FakeConnection)
-        client = HttpEmbeddingClient(base_url="http://localhost", model="local-test")
+    def test_client_reports_http_status_errors(self, embedding_server: str) -> None:
+        client = HttpEmbeddingClient(base_url=f"{embedding_server}/error", model="local-test")
 
         with pytest.raises(VectorIndexError, match="HTTP 500"):
             client.embed_texts(["alpha"])
 
-    def test_client_wraps_invalid_json_response(self, monkeypatch):
-        class FakeResponse:
-            status = 200
-
-            def read(self):
-                return b"{"
-
-        class FakeConnection:
-            def __init__(self, *args, **kwargs):
-                return None
-
-            def request(self, *args, **kwargs):
-                return None
-
-            def getresponse(self):
-                return FakeResponse()
-
-            def close(self):
-                return None
-
-        monkeypatch.setattr(vector_index.http_client, "HTTPConnection", FakeConnection)
-        client = HttpEmbeddingClient(base_url="http://localhost", model="local-test")
+    def test_client_wraps_invalid_json_response(self, embedding_server: str) -> None:
+        client = HttpEmbeddingClient(base_url=f"{embedding_server}/invalid", model="local-test")
 
         with pytest.raises(VectorIndexError, match="embedding request failed"):
             client.embed_texts(["alpha"])
@@ -817,6 +778,22 @@ class TestIncrementalBuild:
         assert provider.embedded == []
         assert stats.reused == 3
         assert stats.embedded == 0
+
+    def test_rebuild_reembeds_metadata_row_with_invalid_vector_ordinal(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        provider = CountingEmbeddingProvider()
+        index = self._seed(tmp_path, provider)
+        with sqlite3.connect(index.metadata_path) as connection:
+            connection.execute("update chunks set ordinal = 99 where chunk_id = 'b'")
+
+        provider.embedded.clear()
+        stats = index.build([_ic("a", "alpha"), _ic("b", "beta"), _ic("c", "gamma")], provider)
+
+        assert provider.embedded == ["beta"]
+        assert stats.reused == 2
+        assert index.search("beta", provider, top_k=1)[0].chunk_id == "b"
 
     def test_edited_text_is_reembedded_others_reused(self, tmp_path: Path):
         provider = CountingEmbeddingProvider()
