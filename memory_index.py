@@ -36,9 +36,14 @@ import numpy as np
 
 import hashlib as _hashlib
 
+import memory_dates as _memory_dates
 from memory_sources import DEFAULT_TEXT_EXTENSIONS, load_source_config
 import text_chunking as _text_chunking
 
+_extract_date_context = _memory_dates.extract_date_context
+_has_date_expression = _memory_dates.has_date_expression
+_parse_date = _memory_dates.parse_document_date
+_recency_boost = _memory_dates.recency_boost
 MAX_CODE_CHUNK_CHARS = _text_chunking.MAX_CODE_CHUNK_CHARS
 MAX_CODE_CHUNKS = _text_chunking.MAX_CODE_CHUNKS
 MAX_FALLBACK_TEXT_CHARS = _text_chunking.MAX_FALLBACK_TEXT_CHARS
@@ -1750,62 +1755,6 @@ def _generate_prospective_queries(text: str, doc_name: str, para_type: str) -> l
             seen.add(q)
             unique.append(q)
     return unique[:20]
-
-
-_DATE_EXPR = re.compile(
-    r"\d{4}-\d{2}-\d{2}"  # ISO date
-    r"|(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}"  # English date
-    r"|\b(?:yesterday|today|last\s+(?:week|month|year))\b"  # Relative dates
-    r"|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\b",  # Abbreviated
-    re.IGNORECASE,
-)
-
-
-def _has_date_expression(text: str) -> bool:
-    """Check if text contains any date-like expression."""
-    return bool(_DATE_EXPR.search(text))
-
-
-def _recency_boost(date_str: str) -> float:
-    """Compute recency boost relative to today. More recent = higher boost."""
-    try:
-        from datetime import datetime, date
-
-        doc_date = datetime.strptime(date_str[:10], "%Y-%m-%d").date()
-        today = date.today()
-        days_ago = (today - doc_date).days
-        if days_ago <= 2:
-            return 1.8
-        elif days_ago <= 5:
-            return 1.4
-        elif days_ago <= 14:
-            return 1.2
-        return 1.0
-    except (ValueError, TypeError):
-        return 1.0
-
-
-def _extract_date_context(text: str) -> list[tuple[str, str]]:
-    """Extract dates with surrounding context from text."""
-    results = []
-    for m in re.finditer(r"(\d{4}-\d{2}-\d{2})", text):
-        start = max(0, m.start() - 50)
-        end = min(len(text), m.end() + 100)
-        context = text[start:end].strip()
-        results.append((m.group(1), context))
-    return results
-
-
-def _parse_date(text: str, filename: str) -> str:
-    """Extract date from filename or text content."""
-    m = re.search(r"(\d{4}-\d{2}-\d{2})", filename)
-    if m:
-        return m.group(1)
-    # From text content
-    m = re.search(r"(\d{4}-\d{2}-\d{2})", text[:500])
-    if m:
-        return m.group(1)
-    return ""
 
 
 def _tokenize(text: str) -> list[str]:

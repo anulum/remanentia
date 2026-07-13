@@ -91,6 +91,7 @@ Author = "https://www.anulum.li"
 py-modules = [
     "active_retrieval",
     "memory_index",
+    "memory_dates",
     "memory_sources",
     "text_chunking",
     "store_paths",
