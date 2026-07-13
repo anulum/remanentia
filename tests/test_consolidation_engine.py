@@ -15,6 +15,11 @@ from typing import Any, cast
 from unittest.mock import patch
 
 import consolidation_engine
+from consolidation_trace_analysis import (
+    cluster_traces_python,
+    extract_entities_python,
+    extract_key_lines_python,
+)
 import numpy as np
 import pytest
 
@@ -1133,18 +1138,7 @@ class TestSummaryDAG:
 
 
 class TestConsolidationPythonFallbackContracts:
-    def test_native_free_extraction_helpers_cover_dynamic_trace_features(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        real_import = cast(Any, consolidation_engine).import_module
-
-        def reject_native(name: str) -> Any:
-            if name == "remanentia_consolidation":
-                raise ImportError(name)
-            return real_import(name)
-
-        monkeypatch.setattr(consolidation_engine, "import_module", reject_native)
-
+    def test_explicit_python_extraction_helpers_cover_dynamic_trace_features(self) -> None:
         text = (
             "# Header\n\n"
             "We decided to fix compute_order_parameter in src/solver.py because BM25 "
@@ -1154,8 +1148,8 @@ class TestConsolidationPythonFallbackContracts:
             "ArcaneNeuron replaced OldRetriever and depends on FastAPI."
         )
 
-        entities = _extract_entities(text)
-        key_lines = _extract_key_lines(text)
+        entities = extract_entities_python(text)
+        key_lines = extract_key_lines_python(text)
         paragraphs = _extract_paragraphs(text)
         relations = _extract_typed_relations(text, ["ArcaneNeuron", "OldRetriever", "FastAPI"])
         depends_relations = _extract_typed_relations(
@@ -1175,17 +1169,7 @@ class TestConsolidationPythonFallbackContracts:
         assert depends_relations[("ArcaneNeuron", "FastAPI")] == "depends_on"
         assert co_occurs_relations[("ArcaneNeuron", "FastAPI")] == "co_occurs"
 
-    def test_native_free_clustering_splits_by_project_and_date_gap(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        real_import = cast(Any, consolidation_engine).import_module
-
-        def reject_native(name: str) -> Any:
-            if name == "remanentia_consolidation":
-                raise ImportError(name)
-            return real_import(name)
-
-        monkeypatch.setattr(consolidation_engine, "import_module", reject_native)
+    def test_explicit_python_clustering_splits_by_project_and_date_gap(self) -> None:
         traces = {
             "a.md": {"project": "remanentia", "date": "2026-03-01"},
             "b.md": {"project": "remanentia", "date": "2026-03-02"},
@@ -1194,7 +1178,7 @@ class TestConsolidationPythonFallbackContracts:
             "e.md": {"project": "director-ai", "date": ""},
         }
 
-        clusters = _cluster_traces(traces)
+        clusters = cluster_traces_python(traces)
 
         assert ["a.md", "b.md"] in clusters
         assert ["c.md"] in clusters
