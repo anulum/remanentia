@@ -91,7 +91,6 @@ except ImportError:
 try:
     from .retrieval_text import (
         STOPWORDS as _STOPWORDS,
-        build_idf as _build_idf,
         expand_query as _expand_query,
         stem as _stem,  # noqa: F401 - retained as a compatibility surface
         tfidf_score as _tfidf_score,
@@ -100,7 +99,6 @@ try:
 except ImportError:
     from retrieval_text import (
         STOPWORDS as _STOPWORDS,
-        build_idf as _build_idf,
         expand_query as _expand_query,
         stem as _stem,  # noqa: F401 - retained as a compatibility surface
         tfidf_score as _tfidf_score,
@@ -191,6 +189,11 @@ except ImportError:
         snn_affinity as _snn_affinity,  # noqa: F401 - private compatibility surface
         spike_feature as _spike_feature,
     )
+
+try:
+    from .retrieval_trace_index import build_trace_index as _build_trace_index_data
+except ImportError:
+    from retrieval_trace_index import build_trace_index as _build_trace_index_data
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("ArcSap.Retrieve")
@@ -338,60 +341,13 @@ def _persist_trace_index_cache(cache_key: str, payload: dict) -> None:
 
 
 def _build_trace_index(tdir: Path, data: dict) -> dict:
-    trace_files = sorted(tdir.glob("*.md"))
-    # Include semantic memories in search corpus
-    semantic_files = []
-    if SEMANTIC_DIR.exists():
-        semantic_files = sorted(SEMANTIC_DIR.rglob("*.md"))
-    all_files = trace_files + semantic_files
-    cache_key = (
-        f"{data['_state_signature']}:{data['_encoding_backend']}:{_trace_fingerprint(all_files)}"
+    return _build_trace_index_data(
+        tdir,
+        SEMANTIC_DIR,
+        TRACE_INDEX_CACHE_PATH,
+        data,
+        _TRACE_INDEX_CACHE,
     )
-    cached = _TRACE_INDEX_CACHE.get(cache_key)
-    if cached is not None:
-        return cached
-
-    trace_texts: dict[str, str] = {}
-    for tf in trace_files:
-        trace_texts[tf.name] = tf.read_text(encoding="utf-8")
-    for sf in semantic_files:
-        rel = str(sf.relative_to(SEMANTIC_DIR))
-        trace_texts[f"[semantic] {rel}"] = sf.read_text(encoding="utf-8")
-
-    disk_cached = _load_trace_index_cache(cache_key)
-    if disk_cached is not None:
-        cached = {
-            "trace_files": trace_files,
-            "trace_texts": trace_texts,
-            "trace_spikes": disk_cached["trace_spikes"],
-            "trace_names_lower": disk_cached["trace_names_lower"],
-            "idf": disk_cached["idf"],
-        }
-        _TRACE_INDEX_CACHE.clear()
-        _TRACE_INDEX_CACHE[cache_key] = cached
-        return cached
-
-    n = len(data["v"])
-    w = data["w"]
-    trace_spikes: dict[str, np.ndarray] = {}
-    trace_names_lower: dict[str, str] = {}
-
-    for trace_name, text in trace_texts.items():
-        stimulus = _encode(text, n)
-        trace_spikes[trace_name] = _spike_feature(w, stimulus)
-        trace_names_lower[trace_name] = trace_name.lower().replace("-", " ").replace("_", " ")
-
-    cached = {
-        "trace_files": trace_files,
-        "trace_texts": trace_texts,
-        "trace_spikes": trace_spikes,
-        "trace_names_lower": trace_names_lower,
-        "idf": _build_idf(trace_texts),
-    }
-    _persist_trace_index_cache(cache_key, cached)
-    _TRACE_INDEX_CACHE.clear()
-    _TRACE_INDEX_CACHE[cache_key] = cached
-    return cached
 
 
 def _load_query_feature_cache() -> None:
