@@ -21,10 +21,41 @@ from __future__ import annotations
 
 import time
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import date
-from unittest.mock import patch, MagicMock
+from pathlib import Path
 
 import numpy as np
+
+
+@contextmanager
+def _consolidation_workspace(root: Path) -> Iterator[None]:
+    import consolidation_engine
+
+    consolidation_dir = root / "consolidation"
+    graph_dir = root / "graph"
+    replacements = {
+        "TRACES_DIR": root / "traces",
+        "SEMANTIC_DIR": root / "semantic",
+        "GRAPH_DIR": graph_dir,
+        "CONSOLIDATION_DIR": consolidation_dir,
+        "PENDING_PATH": consolidation_dir / "pending.json",
+        "LAST_RUN_PATH": consolidation_dir / "last_consolidation.json",
+        "CONFLICTS_PATH": consolidation_dir / "conflicts.json",
+        "ENTITIES_PATH": graph_dir / "entities.jsonl",
+        "RELATIONS_PATH": graph_dir / "relations.jsonl",
+        "CLUSTERS_PATH": graph_dir / "trace_clusters.json",
+        "SUMMARY_DAG_PATH": consolidation_dir / "summary_dag.json",
+    }
+    originals = {name: getattr(consolidation_engine, name) for name in replacements}
+    for name, value in replacements.items():
+        setattr(consolidation_engine, name, value)
+    try:
+        yield
+    finally:
+        for name, value in originals.items():
+            setattr(consolidation_engine, name, value)
 
 
 # ── 1. BM25 improvements ────────────────────────────────────────
@@ -400,11 +431,7 @@ class TestTypedRelationsInGraph:
     def test_update_graph_with_typed_relations(self, tmp_path):
         from consolidation_engine import _update_graph, _load_relations
 
-        with (
-            patch("consolidation_engine.GRAPH_DIR", tmp_path),
-            patch("consolidation_engine.ENTITIES_PATH", tmp_path / "entities.jsonl"),
-            patch("consolidation_engine.RELATIONS_PATH", tmp_path / "relations.jsonl"),
-        ):
+        with _consolidation_workspace(tmp_path):
             _update_graph(
                 "test_trace.md",
                 ["stdp", "miroslav"],
@@ -472,23 +499,39 @@ class TestAsyncConsolidation:
         finally:
             mcp_server._consolidation_last = original_last
 
-    def test_consolidation_runs_after_debounce(self):
+    def test_consolidation_runs_after_debounce(self, tmp_path: Path):
+        import consolidation_engine
         import mcp_server
 
         original_last = mcp_server._consolidation_last
+        original_pending = mcp_server._consolidation_pending
+        original_index = mcp_server._RECALL_INDEX
         try:
-            # Set last consolidation to long ago
-            mcp_server._consolidation_last = 0.0
-            mock_consolidate = MagicMock(return_value={"status": "ok"})
-            with patch("consolidation_engine.consolidate", mock_consolidate):
+            with _consolidation_workspace(tmp_path):
+                trace_dir = consolidation_engine.TRACES_DIR
+                trace_dir.mkdir(parents=True)
+                (trace_dir / "2026-07-13-remanentia-finding.md").write_text(
+                    "# REMANENTIA finding\n\nBM25 retrieval measured 88 percent.",
+                    encoding="utf-8",
+                )
+                mcp_server._consolidation_last = 0.0
+                mcp_server._consolidation_pending = False
+                mcp_server._RECALL_INDEX = {"stale": ({"index"}, "value")}
                 mcp_server._schedule_consolidation()
-                for _ in range(20):
-                    if mock_consolidate.called:
+                for _ in range(100):
+                    if (
+                        consolidation_engine.LAST_RUN_PATH.exists()
+                        and mcp_server._RECALL_INDEX is None
+                    ):
                         break
-                    time.sleep(0.1)
-            assert mock_consolidate.called
+                    time.sleep(0.02)
+                assert consolidation_engine.LAST_RUN_PATH.exists()
+                assert mcp_server._RECALL_INDEX is None
+                assert list(consolidation_engine.SEMANTIC_DIR.rglob("*.md"))
         finally:
             mcp_server._consolidation_last = original_last
+            mcp_server._consolidation_pending = original_pending
+            mcp_server._RECALL_INDEX = original_index
 
 
 class TestThreadSafety:
