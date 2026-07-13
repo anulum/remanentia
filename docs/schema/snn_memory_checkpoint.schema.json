@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://remanentia.com/schemas/snn_memory_checkpoint.v1.schema.json",
+  "title": "Remanentia Temporal SNN Memory Checkpoint Manifest",
+  "description": "Manifest emitted by the public train CLI for an immutable NPZ checkpoint bundle. Recall loads this bundle without enabling plasticity.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "orientation", "plasticity", "array_digest", "model", "labels", "metadata"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "orientation": {"const": "row-pre-column-post"},
+    "plasticity": {"const": "online-pair-stdp-e-to-e"},
+    "array_digest": {"$ref": "#/$defs/sha256"},
+    "model": {"$ref": "#/$defs/model"},
+    "labels": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seed", "epochs_completed", "encoder", "encoder_digest", "python"],
+      "properties": {
+        "seed": {"$ref": "#/$defs/seed"},
+        "epochs_completed": {"type": "integer", "minimum": 1},
+        "encoder": {"$ref": "#/$defs/encoder"},
+        "encoder_digest": {"$ref": "#/$defs/sha256"},
+        "python": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+(?:\\.[0-9]+)?"}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "seed": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["n_neurons", "excitatory_fraction", "dt_ms", "tau_m_ms", "v_rest_mv", "v_reset_mv", "v_threshold_mv", "refractory_ms", "tau_plus_ms", "tau_minus_ms", "a_plus", "a_minus", "weight_min", "weight_max", "connectivity"],
+      "properties": {
+        "n_neurons": {"type": "integer", "minimum": 2},
+        "excitatory_fraction": {"type": "number", "exclusiveMinimum": 0.0, "exclusiveMaximum": 1.0},
+        "dt_ms": {"type": "number", "exclusiveMinimum": 0.0},
+        "tau_m_ms": {"type": "number", "exclusiveMinimum": 0.0},
+        "v_rest_mv": {"type": "number"},
+        "v_reset_mv": {"type": "number"},
+        "v_threshold_mv": {"type": "number"},
+        "refractory_ms": {"type": "number", "minimum": 0.0},
+        "tau_plus_ms": {"type": "number", "exclusiveMinimum": 0.0},
+        "tau_minus_ms": {"type": "number", "exclusiveMinimum": 0.0},
+        "a_plus": {"type": "number", "minimum": 0.0},
+        "a_minus": {"type": "number", "minimum": 0.0},
+        "weight_min": {"type": "number", "minimum": 0.0},
+        "weight_max": {"type": "number", "exclusiveMinimum": 0.0},
+        "connectivity": {"type": "number", "exclusiveMinimum": 0.0, "maximum": 1.0}
+      }
+    },
+    "encoder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["feature_dim", "packet_ms", "silent_ms", "active_fraction", "projection_seed"],
+      "properties": {
+        "feature_dim": {"type": "integer", "minimum": 8},
+        "packet_ms": {"type": "integer", "minimum": 2},
+        "silent_ms": {"type": "integer", "minimum": 0},
+        "active_fraction": {"type": "number", "exclusiveMinimum": 0.0, "maximum": 1.0},
+        "projection_seed": {"$ref": "#/$defs/seed"}
+      }
+    }
+  },
+  "x-remanentia-frozen-semantics": {
+    "checkpoint_arrays": ["weights", "topology", "signatures", "labels"],
+    "probe_plasticity_enabled": false,
+    "digest_must_remain_unchanged": true
+  }
+}

@@ -58,6 +58,8 @@ all = [
 dev = [
     "pytest>=9.0.3",
     "pytest-cov>=5.0",
+    "hypothesis>=6.100",
+    "jsonschema>=4.20",
     "httpx>=0.25",
     "synapse-channel>=0.66.0",
     "scpn-studio-platform>=0.10,<0.11; python_version >= '3.12'",
@@ -77,6 +79,7 @@ remanentia-full-s-diagnostics = "full_s_diagnostics:main"
 remanentia-recall-calibration = "recall_calibration:main"
 remanentia-store-manifest = "store_manifest:main"
 remanentia-store-sources = "store_sources:main"
+remanentia-snn-memory = "snn_memory.cli:main"
 
 [project.urls]
 Homepage = "https://www.remanentia.com"
@@ -88,6 +91,7 @@ Discussions = "https://github.com/anulum/remanentia/discussions"
 Author = "https://www.anulum.li"
 
 [tool.setuptools]
+packages = ["snn_memory"]
 py-modules = [
     "active_retrieval",
     "memory_index",
@@ -232,6 +236,14 @@ omit = [
     # local model; its pure statistics live in judge_agreement.py (unit-tested,
     # 100 %), the runner itself is an un-imported I/O harness.
     "tools/local_judge_agreement.py",
+    # Standalone research SNN-memory harnesses that require the git-ignored
+    # 175 MB .snn_models/ sentence checkpoint. Their model-free maths is
+    # unit-tested at 100 % (tests/test_snn_memory_encoder.py plus the reference/
+    # state/trainer/probe/experiment suites); the pinned-model train/probe/
+    # benchmark paths are exercised end to end by the local installed-wheel E2E
+    # tests (tests/test_snn_memory_cli_e2e.py, test_snn_memory_benchmark_e2e.py).
+    "snn_memory/cli.py",
+    "snn_memory/sentence_encoder.py",
     # Test files themselves
     "tests/test_*.py",
     "tests/conftest.py",
