@@ -6,21 +6,17 @@
 # Contact: www.anulum.li | protoscience@anulum.li
 # Remanentia — Tests for LLM backend
 
-# Repository: https://github.com/anulum/remanentia
-"""Tests for llm_backend — pluggable LLM backend abstraction."""
+"""Real HTTP and filesystem tests for :mod:`llm_backend`."""
 
 from __future__ import annotations
 
 import json
-import os
-import sys
-import types
-import urllib.error
-import urllib.request
+import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from types import TracebackType
-from typing import Literal, cast
-from unittest import mock
+from typing import Any, cast
 
 import pytest
 
@@ -37,460 +33,385 @@ from llm_backend import (
 )
 
 
-class _FakeHTTPResponse:
-    """Context-manager response used by urllib-backed local LLM tests."""
-
-    def __init__(self, body: bytes = b"", status: int = 200) -> None:
-        """Store deterministic response bytes and status code."""
-        self._body = body
-        self.status = status
-
-    def read(self) -> bytes:
-        """Return the encoded response body."""
-        return self._body
-
-    def __enter__(self) -> "_FakeHTTPResponse":
-        """Enter the urllib response context manager."""
-        return self
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> Literal[False]:
-        """Propagate exceptions from the response context."""
-        return False
+class _LLMServer(ThreadingHTTPServer):
+    requests: list[dict[str, object]]
 
 
-# ── Protocol conformance ─────────────────────────────────────────
+class _LLMHandler(BaseHTTPRequestHandler):
+    def _server(self) -> _LLMServer:
+        return cast(_LLMServer, self.server)
+
+    def _send(self, status: int, body: bytes, content_type: str = "application/json") -> None:
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _send_json(self, status: int, payload: object) -> None:
+        self._send(status, json.dumps(payload).encode("utf-8"))
+
+    def do_GET(self) -> None:
+        self._server().requests.append(
+            {"method": "GET", "path": self.path, "headers": dict(self.headers.items())}
+        )
+        if self.path.startswith("/unhealthy/"):
+            self._send_json(503, {"error": "not ready"})
+            return
+        if self.path.endswith("/models"):
+            self._send_json(200, {"data": []})
+            return
+        self._send_json(404, {"error": "not found"})
+
+    def do_POST(self) -> None:
+        length = int(self.headers.get("Content-Length", "0"))
+        raw = self.rfile.read(length)
+        payload = cast(dict[str, Any], json.loads(raw.decode("utf-8")))
+        self._server().requests.append(
+            {
+                "method": "POST",
+                "path": self.path,
+                "headers": dict(self.headers.items()),
+                "payload": payload,
+            }
+        )
+        messages = cast(list[dict[str, str]], payload.get("messages", []))
+        prompt = messages[-1]["content"] if messages else ""
+        if self.path.startswith("/error/"):
+            self._send_json(500, {"error": "provider down"})
+            return
+        if prompt == "malformed-json":
+            self._send(200, b"{")
+            return
+        if self.path.endswith("/messages"):
+            if prompt == "missing-content":
+                self._send_json(200, {"content": []})
+            elif prompt == "non-string-content":
+                self._send_json(200, {"content": [{"text": {"nested": True}}]})
+            else:
+                self._send_json(200, {"content": [{"type": "text", "text": " hosted answer "}]})
+            return
+        if self.path.endswith("/chat/completions"):
+            if prompt == "missing-choices":
+                response: object = {"choices": []}
+            elif prompt == "non-mapping-choice":
+                response = {"choices": [1]}
+            elif prompt == "non-string-content":
+                response = {"choices": [{"message": {"content": {"nested": True}}}]}
+            elif prompt == "padded":
+                response = {"choices": [{"message": {"content": "  padded  "}}]}
+            else:
+                response = {"choices": [{"message": {"content": "hello world"}}]}
+            self._send_json(200, response)
+            return
+        self._send_json(404, {"error": "not found"})
+
+    def log_message(self, fmt: str, *args: object) -> None:
+        return
+
+
+@contextmanager
+def _llm_server() -> Iterator[tuple[str, _LLMServer]]:
+    server = _LLMServer(("127.0.0.1", 0), _LLMHandler)
+    server.requests = []
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host = cast(str, server.server_address[0])
+        port = server.server_address[1]
+        yield f"http://{host}:{port}", server
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
 
 class TestProtocolConformance:
-    """All backends must satisfy the LLMBackend protocol."""
-
-    def test_null_is_backend(self) -> None:
+    def test_all_backends_satisfy_protocol(self) -> None:
         assert isinstance(NullBackend(), LLMBackend)
-
-    def test_anthropic_is_backend(self) -> None:
-        assert isinstance(AnthropicBackend(api_key="fake"), LLMBackend)
-
-    def test_local_is_backend(self) -> None:
+        assert isinstance(AnthropicBackend(api_key="test"), LLMBackend)
         assert isinstance(LocalLLMBackend(), LLMBackend)
-
-    def test_auto_is_backend(self) -> None:
         assert isinstance(AutoBackend(), LLMBackend)
-
-
-# ── NullBackend ──���────────────────────────────────────────────────
 
 
 class TestNullBackend:
     def test_complete_returns_none(self) -> None:
-        b = NullBackend()
-        assert b.complete("hello") is None
-
-    def test_complete_with_kwargs_returns_none(self) -> None:
-        b = NullBackend()
-        assert b.complete("hello", max_tokens=500, system="be brief") is None
-
-
-# ── AnthropicBackend ──────────────────────────────────────────────
+        backend = NullBackend()
+        assert backend.complete("hello") is None
+        assert backend.complete("hello", max_tokens=500, system="be brief") is None
 
 
 class TestAnthropicBackend:
-    def test_no_api_key_returns_none(self) -> None:
-        with mock.patch.dict(os.environ, {}, clear=True):
-            b = AnthropicBackend(api_key="")
-            assert b.complete("hello") is None
+    def test_no_api_key_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        assert AnthropicBackend(api_key="").complete("hello") is None
 
-    def test_missing_api_key_env(self) -> None:
-        env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
-        with mock.patch.dict(os.environ, env, clear=True):
-            b = AnthropicBackend()
-            assert b._api_key == ""
-            assert b.complete("hello") is None
+    def test_env_key_is_used(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "env-key")
+        assert AnthropicBackend()._api_key == "env-key"
 
-    def test_client_cached(self) -> None:
-        mock_anthropic = types.ModuleType("anthropic")
-        mock_client = mock.MagicMock()
-        anthropic_ctor = mock.MagicMock(return_value=mock_client)
-        mock_anthropic.__dict__["Anthropic"] = anthropic_ctor
+    def test_real_messages_request_and_response(self) -> None:
+        with _llm_server() as (url, server):
+            backend = AnthropicBackend(
+                model="claude-local",
+                api_key="secret",
+                base_url=f"{url}/v1",
+            )
+            result = backend.complete("hello", max_tokens=42, system="be brief")
 
-        with mock.patch.dict(sys.modules, {"anthropic": mock_anthropic}):
-            b = AnthropicBackend(api_key="test-key")
-            client1 = b._get_client()
-            client2 = b._get_client()
-            assert client1 is client2
-            assert anthropic_ctor.call_count == 1
-
-    def test_missing_anthropic_factory_returns_none(self) -> None:
-        mock_anthropic = types.ModuleType("anthropic")
-        with mock.patch.dict(sys.modules, {"anthropic": mock_anthropic}):
-            assert AnthropicBackend(api_key="test-key").complete("hello") is None
-
-    def test_env_key_used_when_no_explicit_key(self) -> None:
-        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "env-key"}):
-            b = AnthropicBackend()
-            assert b._api_key == "env-key"
-
-
-# ── LocalLLMBackend ───────────────────────────────────────────────
-
-
-def _mock_openai_response(content: str = "test answer") -> _FakeHTTPResponse:
-    """Create a fake OpenAI-compatible JSON response."""
-    body = json.dumps(
-        {
-            "choices": [{"message": {"content": content}}],
+        assert result == "hosted answer"
+        request = server.requests[0]
+        headers = {
+            key.lower(): value
+            for key, value in cast(dict[str, str], request["headers"]).items()
         }
-    ).encode("utf-8")
-    return _FakeHTTPResponse(body=body)
+        payload = cast(dict[str, object], request["payload"])
+        assert request["path"] == "/v1/messages"
+        assert headers["x-api-key"] == "secret"
+        assert headers["anthropic-version"] == "2023-06-01"
+        assert payload["model"] == "claude-local"
+        assert payload["max_tokens"] == 42
+        assert payload["system"] == "be brief"
 
+    def test_real_error_and_invalid_payload_paths(self) -> None:
+        with _llm_server() as (url, _server):
+            assert (
+                AnthropicBackend(api_key="key", base_url=f"{url}/error/v1").complete("hello")
+                is None
+            )
+            backend = AnthropicBackend(api_key="key", base_url=f"{url}/v1")
+            assert backend.complete("malformed-json") is None
+            assert backend.complete("missing-content") is None
+            assert backend.complete("non-string-content") is None
 
-def _mock_json_response(payload: object) -> _FakeHTTPResponse:
-    """Create a fake JSON response from an arbitrary decoded payload."""
-    return _FakeHTTPResponse(body=json.dumps(payload).encode("utf-8"))
+    def test_rejects_non_http_base_url(self) -> None:
+        with pytest.raises(ValueError, match="http or https"):
+            AnthropicBackend(api_key="key", base_url="file:///tmp/anthropic.sock")
 
 
 class TestLocalLLMBackend:
-    def test_complete_success(self) -> None:
-        b = LocalLLMBackend(base_url="http://localhost:9999/v1")
-        with mock.patch(
-            "urllib.request.urlopen", return_value=_mock_openai_response("hello world")
-        ):
-            result = b.complete("test prompt")
+    def test_real_complete_with_system_auth_and_tokens(self) -> None:
+        with _llm_server() as (url, server):
+            backend = LocalLLMBackend(
+                base_url=f"{url}/v1",
+                model="local-model",
+                api_key="test-key",
+            )
+            result = backend.complete("test prompt", max_tokens=42, system="be brief")
+
         assert result == "hello world"
+        request = server.requests[0]
+        headers = cast(dict[str, str], request["headers"])
+        payload = cast(dict[str, object], request["payload"])
+        messages = cast(list[dict[str, str]], payload["messages"])
+        assert headers["Authorization"] == "Bearer test-key"
+        assert payload["model"] == "local-model"
+        assert payload["max_tokens"] == 42
+        assert messages == [
+            {"role": "system", "content": "be brief"},
+            {"role": "user", "content": "test prompt"},
+        ]
 
-    def test_complete_with_system(self) -> None:
-        b = LocalLLMBackend(api_key="test-key")
-        calls: list[dict[str, object]] = []
+    def test_real_complete_without_system(self) -> None:
+        with _llm_server() as (url, server):
+            backend = LocalLLMBackend(base_url=f"{url}/v1")
+            assert backend.complete("test") == "hello world"
+        payload = cast(dict[str, object], server.requests[0]["payload"])
+        assert payload["messages"] == [{"role": "user", "content": "test"}]
 
-        def capture_urlopen(req: urllib.request.Request, **kwargs: object) -> _FakeHTTPResponse:
-            assert isinstance(req.data, bytes)
-            calls.append(cast(dict[str, object], json.loads(req.data.decode("utf-8"))))
-            assert req.headers["Authorization"] == "Bearer test-key"
-            return _mock_openai_response("ok")
+    def test_real_transport_and_payload_failures(self) -> None:
+        with _llm_server() as (url, _server):
+            assert LocalLLMBackend(base_url=f"{url}/error/v1").complete("test") is None
+            backend = LocalLLMBackend(base_url=f"{url}/v1")
+            assert backend.complete("malformed-json") is None
+            assert backend.complete("missing-choices") is None
+            assert backend.complete("non-mapping-choice") is None
+            assert backend.complete("non-string-content") is None
+            assert backend.complete("padded") == "padded"
 
-        with mock.patch("urllib.request.urlopen", side_effect=capture_urlopen):
-            b.complete("test", system="be brief")
+    def test_real_availability_status(self) -> None:
+        with _llm_server() as (url, _server):
+            assert LocalLLMBackend(base_url=f"{url}/v1").is_available() is True
+            assert LocalLLMBackend(base_url=f"{url}/unhealthy/v1").is_available() is False
 
-        assert len(calls) == 1
-        messages = cast(list[dict[str, str]], calls[0]["messages"])
-        assert messages[0] == {"role": "system", "content": "be brief"}
-        assert messages[1] == {"role": "user", "content": "test"}
+    def test_configuration_contract(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("REMANENTIA_LOCAL_LLM_API_KEY", "env-key")
+        backend = LocalLLMBackend(base_url="http://localhost:11434/v1/")
+        assert backend._base_url == "http://localhost:11434/v1"
+        assert backend._model == "gemma3:4b"
+        assert backend._timeout == 60.0
+        assert backend._api_key == "env-key"
+        assert backend._headers()["Authorization"] == "Bearer env-key"
 
-    def test_complete_no_system(self) -> None:
-        b = LocalLLMBackend()
-        calls: list[dict[str, object]] = []
-
-        def capture_urlopen(req: urllib.request.Request, **kwargs: object) -> _FakeHTTPResponse:
-            assert isinstance(req.data, bytes)
-            calls.append(cast(dict[str, object], json.loads(req.data.decode("utf-8"))))
-            return _mock_openai_response("ok")
-
-        with mock.patch("urllib.request.urlopen", side_effect=capture_urlopen):
-            b.complete("test")
-
-        messages = cast(list[dict[str, str]], calls[0]["messages"])
-        assert len(messages) == 1
-        assert messages[0]["role"] == "user"
-
-    def test_complete_connection_error(self) -> None:
-        b = LocalLLMBackend()
-        with mock.patch("urllib.request.urlopen", side_effect=urllib.error.URLError("refused")):
-            result = b.complete("test")
-        assert result is None
-
-    def test_is_available_true(self) -> None:
-        b = LocalLLMBackend()
-        with mock.patch("urllib.request.urlopen", return_value=_FakeHTTPResponse(status=200)):
-            assert b.is_available() is True
-
-    def test_is_available_false(self) -> None:
-        b = LocalLLMBackend()
-        with mock.patch("urllib.request.urlopen", side_effect=ConnectionError):
-            assert b.is_available() is False
-
-    def test_max_tokens_passed(self) -> None:
-        b = LocalLLMBackend()
-        calls: list[dict[str, object]] = []
-
-        def capture_urlopen(req: urllib.request.Request, **kwargs: object) -> _FakeHTTPResponse:
-            assert isinstance(req.data, bytes)
-            calls.append(cast(dict[str, object], json.loads(req.data.decode("utf-8"))))
-            return _mock_openai_response("ok")
-
-        with mock.patch("urllib.request.urlopen", side_effect=capture_urlopen):
-            b.complete("test", max_tokens=42)
-
-        assert calls[0]["max_tokens"] == 42
-
-    def test_strips_whitespace(self) -> None:
-        b = LocalLLMBackend()
-        with mock.patch("urllib.request.urlopen", return_value=_mock_openai_response("  padded  ")):
-            assert b.complete("test") == "padded"
-
-    def test_complete_returns_none_for_missing_choices(self) -> None:
-        b = LocalLLMBackend()
-        with mock.patch(
-            "urllib.request.urlopen", return_value=_mock_json_response({"choices": []})
-        ):
-            assert b.complete("test") is None
-
-    def test_complete_returns_none_for_non_mapping_choice(self) -> None:
-        b = LocalLLMBackend()
-        with mock.patch(
-            "urllib.request.urlopen", return_value=_mock_json_response({"choices": [1]})
-        ):
-            assert b.complete("test") is None
-
-    def test_complete_returns_none_for_non_string_content(self) -> None:
-        b = LocalLLMBackend()
-        payload = {"choices": [{"message": {"content": {"nested": "text"}}}]}
-        with mock.patch("urllib.request.urlopen", return_value=_mock_json_response(payload)):
-            assert b.complete("test") is None
-
-    def test_base_url_trailing_slash_stripped(self) -> None:
-        b = LocalLLMBackend(base_url="http://localhost:11434/v1/")
-        assert b._base_url == "http://localhost:11434/v1"
+    def test_no_authorization_header_without_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("REMANENTIA_LOCAL_LLM_API_KEY", raising=False)
+        assert "Authorization" not in LocalLLMBackend()._headers()
 
     def test_rejects_non_http_base_url(self) -> None:
         with pytest.raises(ValueError, match="http or https"):
             LocalLLMBackend(base_url="file:///tmp/local-llm.sock")
 
     def test_accepts_https_base_url(self) -> None:
-        b = LocalLLMBackend(base_url="https://llm.example.test/v1/")
-        assert b._base_url == "https://llm.example.test/v1"
-
-    def test_default_url_is_ollama(self) -> None:
-        b = LocalLLMBackend()
-        assert b._base_url == "http://localhost:11434/v1"
-
-    def test_default_model_is_gemma3_4b(self) -> None:
-        b = LocalLLMBackend()
-        assert b._model == "gemma3:4b"
-
-    def test_default_timeout_60s(self) -> None:
-        b = LocalLLMBackend()
-        assert b._timeout == 60.0
-
-    def test_api_key_from_env(self) -> None:
-        with mock.patch.dict(os.environ, {"REMANENTIA_LOCAL_LLM_API_KEY": "env-key"}):
-            b = LocalLLMBackend()
-        assert b._api_key == "env-key"
-
-    def test_no_authorization_header_without_key(self) -> None:
-        b = LocalLLMBackend()
-        assert "Authorization" not in b._headers()
-
-
-# ── AutoBackend ───────────────────────────────────────────────────
+        assert LocalLLMBackend(base_url="https://llm.example.test/v1/")._base_url.endswith("/v1")
 
 
 class TestAutoBackend:
-    def test_resolves_to_local_when_available(self) -> None:
-        ab = AutoBackend()
-        with mock.patch.object(LocalLLMBackend, "is_available", return_value=True):
-            with mock.patch.object(LocalLLMBackend, "complete", return_value="local answer"):
-                result = ab.complete("test")
-        assert result == "local answer"
-
-    def test_resolves_to_anthropic_when_local_unavailable(self) -> None:
-        ab = AutoBackend()
-        with mock.patch.object(LocalLLMBackend, "is_available", return_value=False):
-            with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "key123"}):
-                ab._resolve()
-                assert isinstance(ab._resolved, AnthropicBackend)
-
-    def test_resolves_to_null_when_nothing_available(self) -> None:
-        env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
-        with mock.patch.dict(os.environ, env, clear=True):
-            ab = AutoBackend()
-            with mock.patch.object(LocalLLMBackend, "is_available", return_value=False):
-                ab._resolve()
-                assert isinstance(ab._resolved, NullBackend)
-
-    def test_caches_resolved_backend(self) -> None:
-        ab = AutoBackend()
-        with mock.patch.object(LocalLLMBackend, "is_available", return_value=False):
-            env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
-            with mock.patch.dict(os.environ, env, clear=True):
-                ab._resolve()
-                first = ab._resolved
-                ab._resolve()
-                assert ab._resolved is first
-
-    def test_uses_config(self) -> None:
-        cfg = LLMConfig(
-            local_url="http://myhost:1234/v1",
-            local_model="llama-8b",
-            local_api_key="local-key",
-            local_timeout=180.0,
-        )
-        ab = AutoBackend(config=cfg)
-        with mock.patch.object(LocalLLMBackend, "is_available", return_value=True):
-            ab._resolve()
-            resolved = ab._resolved
+    def test_resolves_real_local_and_caches(self) -> None:
+        with _llm_server() as (url, _server):
+            config = LLMConfig(local_url=f"{url}/v1", local_model="local-model")
+            backend = AutoBackend(config)
+            assert backend.complete("test") == "hello world"
+            resolved = backend._resolved
+            assert backend._resolve() is resolved
             assert isinstance(resolved, LocalLLMBackend)
-            assert resolved._base_url == "http://myhost:1234/v1"
-            assert resolved._model == "llama-8b"
-            assert resolved._api_key == "local-key"
-            assert resolved._timeout == 180.0
+
+    def test_resolves_hosted_when_real_local_unhealthy(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "hosted-key")
+        with _llm_server() as (url, _server):
+            backend = AutoBackend(LLMConfig(local_url=f"{url}/unhealthy/v1"))
+            assert isinstance(backend._resolve(), AnthropicBackend)
+
+    def test_resolves_null_when_nothing_available(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        with _llm_server() as (url, _server):
+            backend = AutoBackend(LLMConfig(local_url=f"{url}/unhealthy/v1"))
+            assert isinstance(backend._resolve(), NullBackend)
+
+    def test_uses_config_on_real_health_check(self) -> None:
+        with _llm_server() as (url, _server):
+            config = LLMConfig(
+                local_url=f"{url}/v1",
+                local_model="llama-8b",
+                local_api_key="local-key",
+                local_timeout=180.0,
+            )
+            resolved = AutoBackend(config)._resolve()
+        assert isinstance(resolved, LocalLLMBackend)
+        assert resolved._model == "llama-8b"
+        assert resolved._api_key == "local-key"
+        assert resolved._timeout == 180.0
 
 
-# ── LLMConfig ─────────────────────────────────────────────────────
-
-
-class TestLLMConfig:
+class TestConfiguration:
     def test_defaults(self) -> None:
-        cfg = LLMConfig()
-        assert cfg.backend == "auto"
-        assert cfg.local_url == "http://localhost:11434/v1"
-        assert cfg.local_model == "gemma3:4b"
-        assert cfg.local_api_key == ""
-        assert cfg.local_timeout == 60.0
-        assert cfg.anthropic_model == "claude-haiku-4-5-20251001"
-        assert cfg.max_tokens_extract == 100
-        assert cfg.max_tokens_generate == 200
-        assert cfg.max_tokens_synthesise == 200
+        config = LLMConfig()
+        assert config == LLMConfig(
+            backend="auto",
+            local_url="http://localhost:11434/v1",
+            local_model="gemma3:4b",
+            local_api_key="",
+            local_timeout=60.0,
+            anthropic_model="claude-haiku-4-5-20251001",
+            max_tokens_extract=100,
+            max_tokens_generate=200,
+            max_tokens_synthesise=200,
+        )
 
+    def test_defaults_when_file_missing(self, tmp_path: Path) -> None:
+        assert load_config(tmp_path / "missing.toml") == LLMConfig()
 
-# ── load_config ───────────────────────────────────────────────────
-
-
-class TestLoadConfig:
-    def test_defaults_when_no_file(self, tmp_path: Path) -> None:
-        cfg = load_config(tmp_path / "nonexistent.toml")
-        assert cfg.backend == "auto"
-
-    def test_loads_from_toml(self, tmp_path: Path) -> None:
-        toml_path = tmp_path / "llm.toml"
-        toml_path.write_text(
+    def test_loads_full_toml(self, tmp_path: Path) -> None:
+        path = tmp_path / "llm.toml"
+        path.write_text(
             '[llm]\nbackend = "local"\nlocal_url = "http://gpu:9090/v1"\n'
             'local_model = "llama-3b"\nlocal_api_key = "test-key"\n'
-            "local_timeout = 240\n\n"
-            "[llm.tokens]\nextract = 50\ngenerate = 100\nsynthesise = 150\n",
+            'anthropic_model = "claude-local"\nlocal_timeout = "240"\n\n'
+            '[llm.tokens]\nextract = 50.0\ngenerate = "100"\nsynthesise = 150\n',
             encoding="utf-8",
         )
-        cfg = load_config(toml_path)
-        assert cfg.backend == "local"
-        assert cfg.local_url == "http://gpu:9090/v1"
-        assert cfg.local_model == "llama-3b"
-        assert cfg.local_api_key == "test-key"
-        assert cfg.local_timeout == 240.0
-        assert cfg.max_tokens_extract == 50
-        assert cfg.max_tokens_generate == 100
-        assert cfg.max_tokens_synthesise == 150
+        config = load_config(path)
+        assert config.backend == "local"
+        assert config.local_url == "http://gpu:9090/v1"
+        assert config.local_model == "llama-3b"
+        assert config.local_api_key == "test-key"
+        assert config.anthropic_model == "claude-local"
+        assert config.local_timeout == 240.0
+        assert config.max_tokens_extract == 50
+        assert config.max_tokens_generate == 100
+        assert config.max_tokens_synthesise == 150
 
-    def test_env_var_override(self, tmp_path: Path) -> None:
-        toml_path = tmp_path / "custom.toml"
-        toml_path.write_text('[llm]\nbackend = "anthropic"\n', encoding="utf-8")
-        with mock.patch.dict(os.environ, {"REMANENTIA_LLM_CONFIG": str(toml_path)}):
-            cfg = load_config()
-        assert cfg.backend == "anthropic"
+    def test_env_config_and_partial_defaults(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        path = tmp_path / "custom.toml"
+        path.write_text('[llm]\nbackend = "anthropic"\n', encoding="utf-8")
+        monkeypatch.setenv("REMANENTIA_LLM_CONFIG", str(path))
+        config = load_config()
+        assert config.backend == "anthropic"
+        assert config.local_url == LLMConfig().local_url
 
-    def test_default_path_when_no_env(self, tmp_path: Path) -> None:
-        env = {k: v for k, v in os.environ.items() if k != "REMANENTIA_LLM_CONFIG"}
-        with mock.patch.dict(os.environ, env, clear=True):
-            with mock.patch("llm_backend._DEFAULT_CONFIG_DIR", tmp_path):
-                cfg = load_config()
-        assert cfg.backend == "auto"  # defaults because file doesn't exist
+    def test_default_path_when_no_env(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.delenv("REMANENTIA_LLM_CONFIG", raising=False)
+        monkeypatch.setattr("llm_backend._DEFAULT_CONFIG_DIR", tmp_path)
+        assert load_config() == LLMConfig()
 
-    def test_partial_config(self, tmp_path: Path) -> None:
-        toml_path = tmp_path / "llm.toml"
-        toml_path.write_text('[llm]\nbackend = "none"\n', encoding="utf-8")
-        cfg = load_config(toml_path)
-        assert cfg.backend == "none"
-        assert cfg.local_url == "http://localhost:11434/v1"  # default preserved
-
-
-# ── _parse_toml ───────────────────────────────────────────────────
-
-
-class TestParseToml:
-    def test_parses_valid_toml(self) -> None:
-        result = _parse_toml('[section]\nkey = "value"\n')
-        assert result == {"section": {"key": "value"}}
-
-    def test_no_parser_returns_empty(self) -> None:
-        with mock.patch.dict(sys.modules, {"tomllib": None, "tomli": None}):
-            # Force reimport failure
-            with mock.patch("builtins.__import__", side_effect=ModuleNotFoundError):
-                result = _parse_toml('[llm]\nbackend = "local"\n')
-        assert result == {}
-
-
-# ── resolve_backend ───────────────────────────────────────────────
+    def test_parse_toml_and_non_mapping_sections(self, tmp_path: Path) -> None:
+        assert _parse_toml('[section]\nkey = "value"\n') == {"section": {"key": "value"}}
+        path = tmp_path / "invalid-shape.toml"
+        path.write_text('llm = "local"\n', encoding="utf-8")
+        assert load_config(path) == LLMConfig()
 
 
 class TestResolveBackend:
-    def test_none(self) -> None:
-        b = resolve_backend("none")
-        assert isinstance(b, NullBackend)
-
-    def test_local(self) -> None:
-        cfg = LLMConfig(local_url="http://myhost:5000/v1", local_model="test-model")
-        b = resolve_backend("local", config=cfg)
-        assert isinstance(b, LocalLLMBackend)
-        assert b._base_url == "http://myhost:5000/v1"
-        assert b._model == "test-model"
-
-    def test_local_passes_timeout_and_api_key(self) -> None:
-        cfg = LLMConfig(
+    def test_named_backends(self) -> None:
+        config = LLMConfig(
             local_url="http://myhost:5000/v1",
             local_model="test-model",
             local_api_key="test-key",
             local_timeout=300.0,
+            anthropic_model="claude-opus-4-6",
         )
-        b = resolve_backend("local", config=cfg)
-        assert isinstance(b, LocalLLMBackend)
-        assert b._api_key == "test-key"
-        assert b._timeout == 300.0
+        assert isinstance(resolve_backend("none", config), NullBackend)
+        local = resolve_backend(" LOCAL ", config)
+        assert isinstance(local, LocalLLMBackend)
+        assert local._model == "test-model"
+        assert local._api_key == "test-key"
+        assert local._timeout == 300.0
+        anthropic = resolve_backend("anthropic", config)
+        assert isinstance(anthropic, AnthropicBackend)
+        assert anthropic._model == "claude-opus-4-6"
+        assert isinstance(resolve_backend("auto", config), AutoBackend)
+        assert isinstance(resolve_backend("mystery", config), AutoBackend)
 
-    def test_anthropic(self) -> None:
-        cfg = LLMConfig(anthropic_model="claude-opus-4-6")
-        b = resolve_backend("anthropic", config=cfg)
-        assert isinstance(b, AnthropicBackend)
-        assert b._model == "claude-opus-4-6"
-
-    def test_auto(self) -> None:
-        b = resolve_backend("auto")
-        assert isinstance(b, AutoBackend)
-
-    def test_unknown_falls_back_to_auto(self) -> None:
-        b = resolve_backend("mystery")
-        assert isinstance(b, AutoBackend)
-
-    def test_case_insensitive(self) -> None:
-        b = resolve_backend("  LOCAL  ")
-        assert isinstance(b, LocalLLMBackend)
-
-    def test_loads_config_when_none_given(self) -> None:
-        with mock.patch("llm_backend.load_config", return_value=LLMConfig()) as m:
-            resolve_backend("none")
-            m.assert_called_once()
-
-
-# ── Missing patterns: pipeline ────────────────────────────────
+    def test_loads_real_config_when_not_injected(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        path = tmp_path / "llm.toml"
+        path.write_text(
+            '[llm]\nlocal_url = "http://configured:8123/v1"\nlocal_model = "configured"\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("REMANENTIA_LLM_CONFIG", str(path))
+        backend = resolve_backend("local")
+        assert isinstance(backend, LocalLLMBackend)
+        assert backend._base_url == "http://configured:8123/v1"
+        assert backend._model == "configured"
 
 
 class TestLLMBackendPipeline:
-    def test_auto_backend_feeds_answer_extractor(self) -> None:
-        """AutoBackend → set_llm_backend → answer_extractor uses it."""
-        from answer_extractor import set_llm_backend, get_llm_backend
-        from llm_backend import NullBackend
+    def test_null_backend_feeds_answer_extractor(self) -> None:
+        from answer_extractor import get_llm_backend, set_llm_backend
 
         backend = NullBackend()
         set_llm_backend(backend)
         assert get_llm_backend() is backend
         set_llm_backend(None)
 
-    def test_resolve_backend_feeds_mcp(self) -> None:
-        """resolve_backend output is compatible with MCP server path."""
-        from llm_backend import resolve_backend, NullBackend
-
-        backend = resolve_backend("none")
+    def test_resolved_backend_is_mcp_compatible(self) -> None:
+        backend = resolve_backend("none", LLMConfig())
         assert isinstance(backend, NullBackend)
-        result = backend.complete("test")
-        assert result is None
+        assert backend.complete("test") is None

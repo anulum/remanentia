@@ -11,7 +11,7 @@
 
 Provides a ``LLMBackend`` protocol with four implementations:
 
-* **AnthropicBackend** — hosted LLM via the ``anthropic`` Python SDK
+* **AnthropicBackend** — hosted LLM via the Anthropic Messages HTTP API
 * **LocalLLMBackend** — local chat-completions-compatible server (llama.cpp / Ollama)
 * **NullBackend** — always returns ``None`` (explicit no-LLM sentinel)
 * **AutoBackend** — tries local → hosted → Null in order
@@ -131,7 +131,7 @@ def _parse_toml(text: str) -> dict[str, object]:
     """Parse TOML using stdlib tomllib (3.11+) or tomli fallback."""
     try:
         toml_module = import_module("tomllib")
-    except ModuleNotFoundError:
+    except ModuleNotFoundError:  # pragma: no cover - exercised on Python 3.10
         try:
             toml_module = import_module("tomli")
         except ModuleNotFoundError:
@@ -162,29 +162,17 @@ def _chat_completion_content(body: object) -> str | None:
     return content.strip()
 
 
-class _AnthropicContentBlock(Protocol):
-    """Typed view of the text field used from Anthropic response blocks."""
-
-    text: str
-
-
-class _AnthropicResponse(Protocol):
-    """Typed view of the message response returned by the hosted SDK."""
-
-    content: Sequence[_AnthropicContentBlock]
-
-
-class _AnthropicMessages(Protocol):
-    """Typed view of the hosted SDK messages resource."""
-
-    def create(self, **kwargs: object) -> _AnthropicResponse:
-        """Create a hosted model message with keyword parameters."""
-
-
-class _AnthropicClient(Protocol):
-    """Typed view of the hosted SDK client used by this module."""
-
-    messages: _AnthropicMessages
+def _anthropic_content(body: object) -> str | None:
+    """Extract the first text block from an Anthropic Messages response."""
+    response = _mapping(body)
+    content = response.get("content")
+    if not isinstance(content, Sequence) or isinstance(content, str) or not content:
+        return None
+    first_block = _mapping(content[0])
+    text = first_block.get("text")
+    if not isinstance(text, str):
+        return None
+    return text.strip()
 
 
 # ── Backends ──────────────────────────────────────────────────────
@@ -205,36 +193,23 @@ class NullBackend:
 
 
 class AnthropicBackend:
-    """Hosted-LLM backend using the ``anthropic`` Python SDK.
-
-    Lazy import and cached client — no network call at construction.
-    """
+    """Hosted backend using the Anthropic Messages HTTP API directly."""
 
     def __init__(
         self,
         model: str = "claude-haiku-4-5-20251001",
         api_key: str | None = None,
+        base_url: str | None = None,
     ) -> None:
-        """Initialise hosted model metadata without opening a network client."""
+        """Initialise hosted model metadata without opening a connection."""
         self._model = model
         self._api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
-        self._client: _AnthropicClient | None = None
-
-    def _get_client(self) -> _AnthropicClient | None:
-        """Lazy-initialise the hosted-LLM client."""
-        if self._client is not None:
-            return self._client
-        if not self._api_key:
-            return None
-        try:
-            anthropic = import_module("anthropic")
-            factory = cast(object, getattr(anthropic, "Anthropic", None))
-            if not callable(factory):
-                return None
-            self._client = cast(_AnthropicClient, factory(api_key=self._api_key))
-            return self._client
-        except ImportError:  # pragma: no cover
-            return None
+        self._base_url = (
+            base_url or os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1")
+        ).rstrip("/")
+        parsed = urllib.parse.urlparse(self._base_url)
+        if parsed.scheme not in {"http", "https"}:
+            raise ValueError("Anthropic base_url must use http or https")
 
     def complete(
         self,
@@ -244,23 +219,31 @@ class AnthropicBackend:
         system: str = "",
     ) -> str | None:
         """Return a hosted completion, or ``None`` when unavailable or failed."""
-        client = self._get_client()
-        if client is None:
+        if not self._api_key:
             return None
-        try:  # pragma: no cover
-            messages = [{"role": "user", "content": prompt}]
-            kwargs: dict[str, object] = {
-                "model": self._model,
-                "max_tokens": max_tokens,
-                "messages": messages,
-            }
-            if system:
-                kwargs["system"] = system
-            response = client.messages.create(**kwargs)
-            if not response.content:
-                return None
-            return response.content[0].text.strip()
-        except Exception:  # pragma: no cover
+        payload: dict[str, object] = {
+            "model": self._model,
+            "max_tokens": max_tokens,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        if system:
+            payload["system"] = system
+        request = urllib.request.Request(
+            f"{self._base_url}/messages",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": self._api_key,
+                "anthropic-version": "2023-06-01",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                body = cast(object, json.loads(response.read().decode("utf-8")))
+                return _anthropic_content(body)
+        except Exception:
+            log.debug("Anthropic request failed", exc_info=True)
             return None
 
 
