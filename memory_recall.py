@@ -296,15 +296,14 @@ def _cross_project_insights(
                         other = rel["target"] if rel["source"] == r["entity"] else rel["source"]
                         if other in entities:
                             shared.append(other)
-                if shared:
-                    insights.append(
-                        {
-                            "project": r["entity"],
-                            "shared_concepts": shared,
-                            "insight": f"{r['entity']} shares concepts: {', '.join(shared[:5])}",
-                            "weight": r["weight"],
-                        }
-                    )
+                insights.append(
+                    {
+                        "project": r["entity"],
+                        "shared_concepts": shared,
+                        "insight": f"{r['entity']} shares concepts: {', '.join(shared[:5])}",
+                        "weight": r["weight"],
+                    }
+                )
 
     insights.sort(key=lambda x: -x["weight"])
     return insights[:5]
@@ -365,6 +364,7 @@ def recall(
         idx = MemoryIndex()
         if not idx.load():
             idx.build(use_gpu_embeddings=False, use_gliner=False)
+            idx.save()
         results = idx.search(query, top_k=1)
         if results:
             ctx.trace = results[0].name

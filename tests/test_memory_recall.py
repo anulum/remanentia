@@ -12,8 +12,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import pytest
-
 from memory_recall import (
     JsonMap,
     MemoryContext,
@@ -220,6 +218,29 @@ class TestSearchSemantic:
             results = _search_semantic("anything", top_k=5)
         assert results == []
 
+    def test_searches_plain_and_unterminated_frontmatter_documents(self, tmp_path: Path) -> None:
+        semantic_dir = tmp_path / "memory" / "semantic"
+        semantic_dir.mkdir(parents=True)
+        (semantic_dir / "plain.md").write_text(
+            "# Plain memory\n\n- oriole migration finding\n",
+            encoding="utf-8",
+        )
+        (semantic_dir / "unterminated.md").write_text(
+            "---\nproject: remanentia\n\n- kingfisher nesting finding\n",
+            encoding="utf-8",
+        )
+
+        with (
+            patch("memory_recall.SEMANTIC_DIR", semantic_dir),
+            patch("memory_recall.BASE", tmp_path),
+            patch("memory_recall.import_module", side_effect=ImportError),
+        ):
+            plain = _search_semantic("oriole migration", top_k=1)
+            unterminated = _search_semantic("kingfisher nesting", top_k=1)
+
+        assert plain[0]["path"] == "memory/semantic/plain.md"
+        assert unterminated[0]["path"] == "memory/semantic/unterminated.md"
+
     def test_parses_frontmatter(self, tmp_semantic: Path) -> None:
         with (
             patch("memory_recall.SEMANTIC_DIR", tmp_semantic),
@@ -392,6 +413,19 @@ class TestLoadEntities:
         with patch("memory_recall.GRAPH_DIR", tmp_path):
             assert _load_entities() == {}
 
+    def test_load_entities_ignores_blank_jsonl_rows(self, tmp_graph: Path) -> None:
+        entities_path = tmp_graph / "entities.jsonl"
+        rows = entities_path.read_text(encoding="utf-8").splitlines()
+        entities_path.write_text(
+            "\n".join([rows[0], "", *rows[1:]]) + "\n",
+            encoding="utf-8",
+        )
+
+        with patch("memory_recall.GRAPH_DIR", tmp_graph):
+            entities = _load_entities()
+
+        assert set(entities) == {"stdp", "bm25", "remanentia", "embedding"}
+
     def test_load_relations(self, tmp_graph: Path) -> None:
         with patch("memory_recall.GRAPH_DIR", tmp_graph):
             relations = _load_relations()
@@ -445,41 +479,35 @@ class TestRecall:
         tmp_traces: Path,
         tmp_graph: Path,
         tmp_semantic: Path,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        class FakeMemoryIndex:
-            def __init__(self) -> None:
-                self.build_kwargs: dict[str, bool] | None = None
-
-            def load(self) -> bool:
-                return False
-
-            def build(self, **kwargs: bool) -> None:
-                self.build_kwargs = kwargs
-
-            def search(self, query: str, top_k: int) -> list[SimpleNamespace]:
-                return [
-                    SimpleNamespace(
-                        name="2026-03-15_decision_stdp_removal.md",
-                        score=0.91,
-                        snippet="SNN removal and embedding weight changed.",
-                    )
-                ]
-
-        fake = FakeMemoryIndex()
-        monkeypatch.setattr("memory_index.MemoryIndex", lambda: fake)
+        index_path = tmp_traces.parent / "state" / "memory_index.json.gz"
+        hash_path = tmp_traces.parent / "state" / "content_hashes.json"
 
         with (
             patch("memory_recall.TRACES_DIR", tmp_traces),
             patch("memory_recall.SEMANTIC_DIR", tmp_semantic),
             patch("memory_recall.GRAPH_DIR", tmp_graph),
             patch("memory_recall.BASE", tmp_traces.parent),
+            patch("memory_index.BASE", tmp_traces.parent),
+            patch("memory_index.SOURCES", {"trace": tmp_traces}),
+            patch("memory_index.INDEX_PATH", index_path),
+            patch("memory_index._LEGACY_INDEX_PATH", index_path.with_suffix(".pkl")),
+            patch("memory_index.HASH_CACHE_PATH", hash_path),
         ):
-            ctx = recall("unrelated wording", top_k=1)
+            assert not index_path.exists()
+            ctx = recall("SNN removal embedding", top_k=1)
+            loaded_ctx = recall("bm25 embedding", top_k=1)
 
-        assert fake.build_kwargs == {"use_gpu_embeddings": False, "use_gliner": False}
+        assert hash_path.exists()
+        assert index_path.exists()
         assert ctx.trace == "2026-03-15_decision_stdp_removal.md"
         assert "embedding" in ctx.entities
+        remanentia = next(
+            relation
+            for relation in loaded_ctx.related_entities
+            if relation["entity"] == "remanentia"
+        )
+        assert remanentia["weight"] == 5
 
 
 # ── MemoryContext summary/llm with cross-project ────────────────
