@@ -158,10 +158,16 @@ def extract_notes_from_file(path: Path) -> list[dict[str, str]]:
 def observe_once(
     state: ObserverState,
     watched_dirs: dict[str, Path] | None = None,
+    *,
+    notes_path: Path | None = None,
+    triggers_path: Path | None = None,
+    unified_index: Any | None = None,
 ) -> dict[str, Any]:
     """Scan all watched directories, create notes for new/changed files.
 
-    Returns stats: files_scanned, files_new, notes_created.
+    Optional paths isolate the production note store, while ``unified_index``
+    selects an already-built index for incremental updates. Returns scan and
+    persistence counts.
     """
     dirs = watched_dirs or WATCHED_DIRS
     files_scanned = 0
@@ -194,7 +200,7 @@ def observe_once(
             knowledge_module = import_module("knowledge_store")
             knowledge_store_cls = cast(Any, knowledge_module).KnowledgeStore
             store = knowledge_store_cls()
-            store.load()
+            store.load(notes_path, triggers_path)
         except Exception:
             # Store unavailable: leave every scanned-new file un-marked so the
             # next cycle re-observes and retries (at-least-once), rather than
@@ -209,7 +215,7 @@ def observe_once(
         for nd in pending_notes:
             store.add_note(nd["content"], source=nd["source"])
         notes_created = len(pending_notes)
-        store.save()
+        store.save(notes_path, triggers_path)
 
     # Notes are now durably stored (or there were none) — safe to advance the
     # cursor over every scanned-new file.
@@ -220,10 +226,10 @@ def observe_once(
     if new_files:
         try:
             mcp_module = import_module("mcp_server")
-            unified_index = getattr(mcp_module, "_UNIFIED_INDEX", None)
-            if unified_index is not None and getattr(unified_index, "_built", False):
+            active_index = unified_index or getattr(mcp_module, "_UNIFIED_INDEX", None)
+            if active_index is not None and getattr(active_index, "_built", False):
                 for f, source_name in new_files:
-                    unified_index.add_file(f, source=source_name)
+                    active_index.add_file(f, source=source_name)
         except Exception:  # pragma: no cover
             _LOGGER.debug("Unified index incremental update failed", exc_info=True)
 

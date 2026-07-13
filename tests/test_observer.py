@@ -8,7 +8,9 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from collections.abc import Iterator
+from contextlib import contextmanager
+from pathlib import Path
 
 
 from observer import (
@@ -19,6 +21,35 @@ from observer import (
     heartbeat,
     observe_once,
 )
+
+
+@contextmanager
+def _consolidation_workspace(root: Path) -> Iterator[None]:
+    import consolidation_engine as engine
+
+    consolidation_dir = root / "consolidation"
+    graph_dir = root / "graph"
+    replacements = {
+        "TRACES_DIR": root / "consolidation-traces",
+        "SEMANTIC_DIR": root / "semantic",
+        "GRAPH_DIR": graph_dir,
+        "CONSOLIDATION_DIR": consolidation_dir,
+        "PENDING_PATH": consolidation_dir / "pending.json",
+        "LAST_RUN_PATH": consolidation_dir / "last.json",
+        "CONFLICTS_PATH": consolidation_dir / "conflicts.json",
+        "ENTITIES_PATH": graph_dir / "entities.jsonl",
+        "RELATIONS_PATH": graph_dir / "relations.jsonl",
+        "CLUSTERS_PATH": graph_dir / "clusters.json",
+        "SUMMARY_DAG_PATH": consolidation_dir / "dag.json",
+    }
+    originals = {name: getattr(engine, name) for name in replacements}
+    for name, value in replacements.items():
+        setattr(engine, name, value)
+    try:
+        yield
+    finally:
+        for name, value in originals.items():
+            setattr(engine, name, value)
 
 
 class TestHasSignal:
@@ -128,13 +159,13 @@ class TestObserveOnce:
         store_path = tmp_path / "notes.jsonl"
         triggers_path = tmp_path / "triggers.jsonl"
 
-        with (
-            patch("observer.WATCHED_DIRS", {"traces": traces_dir}),
-            patch("knowledge_store.STORE_PATH", store_path),
-            patch("knowledge_store.TRIGGERS_PATH", triggers_path),
-        ):
-            state = ObserverState()
-            result = observe_once(state, {"traces": traces_dir})
+        state = ObserverState()
+        result = observe_once(
+            state,
+            {"traces": traces_dir},
+            notes_path=store_path,
+            triggers_path=triggers_path,
+        )
 
         assert result["files_scanned"] >= 1
         assert result["files_new"] >= 1
@@ -150,14 +181,19 @@ class TestObserveOnce:
         store_path = tmp_path / "notes.jsonl"
         triggers_path = tmp_path / "triggers.jsonl"
 
-        with (
-            patch("observer.WATCHED_DIRS", {"traces": traces_dir}),
-            patch("knowledge_store.STORE_PATH", store_path),
-            patch("knowledge_store.TRIGGERS_PATH", triggers_path),
-        ):
-            state = ObserverState()
-            r1 = observe_once(state, {"traces": traces_dir})
-            r2 = observe_once(state, {"traces": traces_dir})
+        state = ObserverState()
+        r1 = observe_once(
+            state,
+            {"traces": traces_dir},
+            notes_path=store_path,
+            triggers_path=triggers_path,
+        )
+        r2 = observe_once(
+            state,
+            {"traces": traces_dir},
+            notes_path=store_path,
+            triggers_path=triggers_path,
+        )
 
         assert r1["files_new"] >= 1
         assert r2["files_new"] == 0  # already processed
@@ -182,20 +218,33 @@ class TestObserveOnce:
         store_path = tmp_path / "notes.jsonl"
         triggers_path = tmp_path / "triggers.jsonl"
 
-        mock_index = MagicMock()
-        mock_index._built = True
+        import memory_index
+        from memory_index import MemoryIndex
 
-        with (
-            patch("observer.WATCHED_DIRS", {"traces": traces_dir}),
-            patch("knowledge_store.STORE_PATH", store_path),
-            patch("knowledge_store.TRIGGERS_PATH", triggers_path),
-            patch("mcp_server._UNIFIED_INDEX", mock_index),
-        ):
-            state = ObserverState()
-            result = observe_once(state, {"traces": traces_dir})
+        seed_dir = tmp_path / "seed"
+        seed_dir.mkdir()
+        (seed_dir / "seed.md").write_text("Initial retrieval finding measured accurately.")
+        index = MemoryIndex()
+        original_sources = memory_index.SOURCES
+        original_hash_path = memory_index.HASH_CACHE_PATH
+        memory_index.SOURCES = {"seed": seed_dir}
+        memory_index.HASH_CACHE_PATH = tmp_path / "content_hashes.json"
+        try:
+            index.build(use_gpu_embeddings=False, use_gliner=False, incremental=False)
+        finally:
+            memory_index.SOURCES = original_sources
+            memory_index.HASH_CACHE_PATH = original_hash_path
+        state = ObserverState()
+        result = observe_once(
+            state,
+            {"traces": traces_dir},
+            notes_path=store_path,
+            triggers_path=triggers_path,
+            unified_index=index,
+        )
 
         assert result["notes_created"] >= 1
-        mock_index.add_file.assert_called()
+        assert any(document.name == "2026-03-25_metric.md" for document in index.documents)
 
 
 # ── Additional edge cases ────────────────────────────────────────
@@ -352,12 +401,13 @@ class TestObserveOnceEdgeCases:
         )
         store_path = tmp_path / "notes.jsonl"
         triggers_path = tmp_path / "triggers.jsonl"
-        with (
-            patch("knowledge_store.STORE_PATH", store_path),
-            patch("knowledge_store.TRIGGERS_PATH", triggers_path),
-        ):
-            state = ObserverState()
-            result = observe_once(state, {"d1": d1, "d2": d2})
+        state = ObserverState()
+        result = observe_once(
+            state,
+            {"d1": d1, "d2": d2},
+            notes_path=store_path,
+            triggers_path=triggers_path,
+        )
         assert result["files_scanned"] >= 2
 
     def test_mixed_file_types(self, tmp_path):
@@ -371,12 +421,13 @@ class TestObserveOnceEdgeCases:
         (d / "data.json").write_text("{}", encoding="utf-8")
         store_path = tmp_path / "notes.jsonl"
         triggers_path = tmp_path / "triggers.jsonl"
-        with (
-            patch("knowledge_store.STORE_PATH", store_path),
-            patch("knowledge_store.TRIGGERS_PATH", triggers_path),
-        ):
-            state = ObserverState()
-            result = observe_once(state, {"traces": d})
+        state = ObserverState()
+        result = observe_once(
+            state,
+            {"traces": d},
+            notes_path=store_path,
+            triggers_path=triggers_path,
+        )
         assert result["files_scanned"] >= 1
 
 
@@ -416,19 +467,21 @@ class TestObserverErrors:
             encoding="utf-8",
         )
 
-        failing_store = MagicMock()
-        failing_store.load.side_effect = RuntimeError("store offline")
-
-        with patch("knowledge_store.KnowledgeStore", return_value=failing_store):
-            state = ObserverState()
-            result = observe_once(state, {"traces": traces_dir})
+        invalid_store_path = tmp_path / "notes-path-is-a-directory"
+        invalid_store_path.mkdir()
+        state = ObserverState()
+        result = observe_once(
+            state,
+            {"traces": traces_dir},
+            notes_path=invalid_store_path,
+            triggers_path=tmp_path / "triggers.jsonl",
+        )
 
         assert result["files_new"] >= 1
         assert result["notes_created"] == 0
         assert result["error"] == "store load failed"
         # Nothing was persisted, so the file must remain observable for retry.
         assert state.is_new_or_changed(f) is True
-        failing_store.add_note.assert_not_called()
 
 
 # ── Heartbeat (observe + consolidate + age + capacity) ──────────
@@ -552,20 +605,19 @@ class TestHeartbeat:
             ce.RELATIONS_PATH = orig_relations
             ce.SUMMARY_DAG_PATH = orig_dag
 
-    def test_heartbeat_reports_no_pending_traces(self):
+    def test_heartbeat_reports_no_pending_traces(self, tmp_path: Path):
         state = ObserverState()
-        with (
-            patch("observer.observe_once", return_value={"files_scanned": 1}),
-            patch("consolidation_engine.get_pending_traces", return_value=[]),
-            patch("consolidation_engine.consolidate") as consolidate,
-            patch("consolidation_engine.age_memories", return_value={"aged": 0}),
-            patch("consolidation_engine.capacity_report", return_value={}),
-        ):
-            result = heartbeat(state, {"traces": MagicMock()})
+        watched = tmp_path / "watched"
+        watched.mkdir()
+        (watched / "ordinary.md").write_text(
+            "This ordinary paragraph is intentionally long enough to scan but has no signal word.",
+            encoding="utf-8",
+        )
+        with _consolidation_workspace(tmp_path):
+            result = heartbeat(state, {"sessions": watched})
 
-        consolidate.assert_not_called()
         assert result["consolidate"] == {"status": "nothing_to_consolidate", "pending": 0}
-        assert result["aging"] == {"aged": 0}
+        assert result["aging"]["scanned"] == 0
         assert result["capacity"] == {
             "categories_checked": 0,
             "categories_over_threshold": 0,
