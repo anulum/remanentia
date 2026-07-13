@@ -44,6 +44,11 @@ from pathlib import Path
 from typing import Any
 
 from api_security import TokenBucketLimiter
+from mcp_protocol import (
+    MCP_RATE_LIMIT_ERROR_CODE as _PROTOCOL_RATE_LIMIT_ERROR_CODE,
+    TOOLS as _PROTOCOL_TOOLS,
+    dispatch_request,
+)
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -64,7 +69,8 @@ _consolidation_last = 0.0
 _CONSOLIDATION_DEBOUNCE_S = 10
 DEFAULT_MCP_RATE_PER_MINUTE = 600.0
 DEFAULT_MCP_BURST = 120
-MCP_RATE_LIMIT_ERROR_CODE = -32029
+MCP_RATE_LIMIT_ERROR_CODE = _PROTOCOL_RATE_LIMIT_ERROR_CODE
+TOOLS = _PROTOCOL_TOOLS
 
 
 def _runtime_attr(module_name: str, attr_name: str) -> Any:
@@ -138,19 +144,6 @@ def _mcp_rate_limiter() -> TokenBucketLimiter | None:
 def _mcp_rate_limit_key() -> str:
     """Return the token-bucket key for the current MCP client/session."""
     return os.environ.get("REMANENTIA_MCP_CLIENT_ID", "stdio")
-
-
-def _mcp_rate_limit_response(rid: object, retry_after: str) -> dict[str, Any]:
-    """Build the JSON-RPC error response for a throttled MCP tool call."""
-    return {
-        "jsonrpc": "2.0",
-        "id": rid,
-        "error": {
-            "code": MCP_RATE_LIMIT_ERROR_CODE,
-            "message": "MCP tool rate limit exceeded",
-            "data": {"retry_after_seconds": retry_after},
-        },
-    }
 
 
 def _get_recall_ledger() -> Any:
@@ -664,231 +657,41 @@ def handle_recall_correctness(query: str, was_correct: bool, by: str = "") -> st
         return f"Correctness error: {e}"
 
 
-# ── MCP Protocol (stdio JSON-RPC) ────────────────────────────────
-
-TOOLS = [
-    {
-        "name": "remanentia_recall",
-        "description": "Deep memory recall. Returns matched trace, consolidated knowledge, entity graph connections, temporal context (before/after), and cross-project insights. Use this when you need context about past work, decisions, or findings.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "What to recall"},
-                "top_k": {"type": "integer", "description": "Number of results", "default": 3},
-                "project": {
-                    "type": "string",
-                    "description": "Filter by project/source name",
-                    "default": "",
-                },
-                "after": {
-                    "type": "string",
-                    "description": "Only docs after date (YYYY-MM-DD)",
-                    "default": "",
-                },
-                "before": {
-                    "type": "string",
-                    "description": "Only docs before date (YYYY-MM-DD)",
-                    "default": "",
-                },
-                "llm": {
-                    "type": "boolean",
-                    "description": "Use LLM for answer extraction (costs API credits)",
-                    "default": False,
-                },
-            },
-            "required": ["query"],
-        },
-    },
-    {
-        "name": "remanentia_remember",
-        "description": "Persist a memory for future recall. Optionally set a trigger condition for prospective memory — the memory will be surfaced automatically when a future query matches the trigger.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "content": {"type": "string", "description": "What to remember"},
-                "type": {
-                    "type": "string",
-                    "description": "Memory type: decision, finding, metric, context",
-                    "default": "context",
-                },
-                "project": {
-                    "type": "string",
-                    "description": "Project name (optional)",
-                    "default": "",
-                },
-                "trigger": {
-                    "type": "string",
-                    "description": "Prospective trigger: when future queries match this condition, surface this memory automatically",
-                    "default": "",
-                },
-            },
-            "required": ["content"],
-        },
-    },
-    {
-        "name": "remanentia_status",
-        "description": "Check Remanentia system status: daemon, memory counts, disk usage.",
-        "inputSchema": {"type": "object", "properties": {}},
-    },
-    {
-        "name": "remanentia_graph",
-        "description": "Query the entity relationship graph. Optionally filter by entity name.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "entity": {
-                    "type": "string",
-                    "description": "Entity to query (empty = top relationships)",
-                    "default": "",
-                },
-                "top": {"type": "integer", "description": "Number of results", "default": 10},
-            },
-        },
-    },
-    {
-        "name": "remanentia_recall_feedback",
-        "description": "Report whether a prior recall was actually used, so memory can calibrate recall quality against real outcomes. Call after acting (or not) on a remanentia_recall result for the same query.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The query of the recall being rated",
-                },
-                "was_used": {
-                    "type": "boolean",
-                    "description": "Whether the recalled memories were used",
-                },
-            },
-            "required": ["query", "was_used"],
-        },
-    },
-    {
-        "name": "remanentia_recall_correctness",
-        "description": "Report whether a prior recall's memories were correct, from a downstream verifier's verdict. This is the safety/calibration label the abstention gate trains on (distinct from was_used). Call with the verifier verdict for the recalled memory's query.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The query of the recall being rated",
-                },
-                "was_correct": {
-                    "type": "boolean",
-                    "description": "Whether the recalled memories were correct (verifier clean pass)",
-                },
-            },
-            "required": ["query", "was_correct"],
-        },
-    },
-]
-
-
 def handle_request(request: dict[str, Any]) -> dict[str, Any] | None:
-    """Dispatch one stdio JSON-RPC request."""
-    method = request.get("method", "")
-    rid = request.get("id")
-
-    if method == "initialize":
-        return {
-            "jsonrpc": "2.0",
-            "id": rid,
-            "result": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {"tools": {}},
-                "serverInfo": {"name": "remanentia", "version": "0.5.0"},
-            },
-        }
-
-    if method == "tools/list":
-        return {"jsonrpc": "2.0", "id": rid, "result": {"tools": TOOLS}}
-
-    if method == "tools/call":
-        started = _time.monotonic()
-        params = request.get("params", {})
-        if not isinstance(params, dict):
-            params = {}
-        tool_name = params.get("name", "")
-        args = params.get("arguments", {})
-        if not isinstance(args, dict):
-            args = {}
-        outcome = "ok"
-        error_type = ""
-
-        try:
-            limiter = _mcp_rate_limiter()
-            if limiter is not None and not limiter.allow(_mcp_rate_limit_key()):
-                outcome = "rate_limited"
-                return _mcp_rate_limit_response(rid, limiter.retry_after_seconds())
-
-            if tool_name == "remanentia_recall":
-                text = handle_recall(
-                    args.get("query", ""),
-                    args.get("top_k", 3),
-                    project=args.get("project", ""),
-                    after=args.get("after", ""),
-                    before=args.get("before", ""),
-                    llm=args.get("llm", False),
-                )
-            elif tool_name == "remanentia_remember":
-                text = handle_remember(
-                    args.get("content", ""),
-                    args.get("type", "context"),
-                    args.get("project", ""),
-                    args.get("trigger", ""),
-                )
-            elif tool_name == "remanentia_status":
-                text = handle_status()
-            elif tool_name == "remanentia_graph":
-                text = handle_graph(args.get("entity", ""), args.get("top", 10))
-            elif tool_name == "remanentia_recall_feedback":
-                text = handle_recall_feedback(
-                    args.get("query", ""),
-                    bool(args.get("was_used", False)),
-                )
-            elif tool_name == "remanentia_recall_correctness":
-                text = handle_recall_correctness(
-                    args.get("query", ""),
-                    bool(args.get("was_correct", False)),
-                )
-            else:
-                outcome = "unknown_tool"
-                text = f"Unknown tool: {tool_name}"
-
-            return {
-                "jsonrpc": "2.0",
-                "id": rid,
-                "result": {"content": [{"type": "text", "text": text}]},
-            }
-        except Exception as exc:
-            outcome = "error"
-            error_type = type(exc).__name__
-            log.exception("MCP tool call failed: %s", tool_name)
-            return {
-                "jsonrpc": "2.0",
-                "id": rid,
-                "error": {"code": -32000, "message": "Tool call failed"},
-            }
-        finally:
-            MCP_AUDIT_LOGGER.record(
-                server="mcp",
-                method="tools/call",
-                tool=tool_name,
-                request_id=str(rid),
-                argument_keys=list(args),
-                outcome=outcome,
-                duration_ms=(_time.monotonic() - started) * 1000.0,
-                error_type=error_type,
-            )
-
-    if method == "notifications/initialized":
-        return None
-
-    return {
-        "jsonrpc": "2.0",
-        "id": rid,
-        "error": {"code": -32601, "message": f"Unknown method: {method}"},
+    """Dispatch one stdio JSON-RPC request through production tool handlers."""
+    handlers = {
+        "remanentia_recall": lambda args: handle_recall(
+            args.get("query", ""),
+            args.get("top_k", 3),
+            project=args.get("project", ""),
+            after=args.get("after", ""),
+            before=args.get("before", ""),
+            llm=args.get("llm", False),
+        ),
+        "remanentia_remember": lambda args: handle_remember(
+            args.get("content", ""),
+            args.get("type", "context"),
+            args.get("project", ""),
+            args.get("trigger", ""),
+        ),
+        "remanentia_status": lambda _args: handle_status(),
+        "remanentia_graph": lambda args: handle_graph(
+            args.get("entity", ""), args.get("top", 10)
+        ),
+        "remanentia_recall_feedback": lambda args: handle_recall_feedback(
+            args.get("query", ""), bool(args.get("was_used", False))
+        ),
+        "remanentia_recall_correctness": lambda args: handle_recall_correctness(
+            args.get("query", ""), bool(args.get("was_correct", False))
+        ),
     }
+    return dispatch_request(
+        request,
+        handlers=handlers,
+        audit_logger=MCP_AUDIT_LOGGER,
+        limiter_factory=_mcp_rate_limiter,
+        rate_key=_mcp_rate_limit_key,
+    )
 
 
 def _parse_cli(argv: list[str] | None = None) -> None:

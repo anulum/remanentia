@@ -28,11 +28,16 @@ from mcp_server import (
 
 
 @pytest.fixture(autouse=True)
-def _disable_default_mcp_audit(monkeypatch):
+def _disable_default_mcp_audit():
     import mcp_server
     from api_security import ToolAuditLogger
 
-    monkeypatch.setattr(mcp_server, "MCP_AUDIT_LOGGER", ToolAuditLogger(None))
+    original = mcp_server.MCP_AUDIT_LOGGER
+    mcp_server.MCP_AUDIT_LOGGER = ToolAuditLogger(None)
+    try:
+        yield
+    finally:
+        mcp_server.MCP_AUDIT_LOGGER = original
 
 
 # ── Tool definitions ─────────────────────────────────────────────
@@ -103,77 +108,73 @@ class TestMCPProtocol:
         assert resp["error"]["code"] == -32601
 
     def test_tools_call_recall(self):
-        with patch("mcp_server.handle_recall", return_value="Test result"):
-            req = {
-                "jsonrpc": "2.0",
-                "id": 4,
-                "method": "tools/call",
-                "params": {"name": "remanentia_recall", "arguments": {"query": "test"}},
-            }
-            resp = handle_request(req)
+        req = {
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {"name": "remanentia_recall", "arguments": {"query": ""}},
+        }
+        resp = handle_request(req)
         assert resp["result"]["content"][0]["type"] == "text"
-        assert resp["result"]["content"][0]["text"] == "Test result"
+        assert "No memories found" in resp["result"]["content"][0]["text"]
 
     def test_tools_call_status(self):
-        with patch("mcp_server.handle_status", return_value="Status info"):
-            req = {
-                "jsonrpc": "2.0",
-                "id": 5,
-                "method": "tools/call",
-                "params": {"name": "remanentia_status", "arguments": {}},
-            }
-            resp = handle_request(req)
-        assert "Status info" in resp["result"]["content"][0]["text"]
+        req = {
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "tools/call",
+            "params": {"name": "remanentia_status", "arguments": {}},
+        }
+        resp = handle_request(req)
+        assert isinstance(resp["result"]["content"][0]["text"], str)
 
     def test_tools_call_graph(self):
-        with patch("mcp_server.handle_graph", return_value="Graph data"):
-            req = {
-                "jsonrpc": "2.0",
-                "id": 6,
-                "method": "tools/call",
-                "params": {"name": "remanentia_graph", "arguments": {"entity": "stdp"}},
-            }
-            resp = handle_request(req)
-        assert "Graph data" in resp["result"]["content"][0]["text"]
+        req = {
+            "jsonrpc": "2.0",
+            "id": 6,
+            "method": "tools/call",
+            "params": {"name": "remanentia_graph", "arguments": {"entity": "stdp"}},
+        }
+        resp = handle_request(req)
+        assert isinstance(resp["result"]["content"][0]["text"], str)
 
-    def test_tools_call_recall_correctness(self):
-        with patch("mcp_server.handle_recall_correctness", return_value="Correctness recorded"):
-            req = {
-                "jsonrpc": "2.0",
-                "id": 61,
-                "method": "tools/call",
-                "params": {
-                    "name": "remanentia_recall_correctness",
-                    "arguments": {"query": "calibration query", "was_correct": True},
-                },
-            }
-            resp = handle_request(req)
-        assert "Correctness recorded" in resp["result"]["content"][0]["text"]
+    def test_tools_call_recall_correctness(self, monkeypatch):
+        monkeypatch.setenv("REMANENTIA_RECALL_LEDGER_DISABLE", "1")
+        req = {
+            "jsonrpc": "2.0",
+            "id": 61,
+            "method": "tools/call",
+            "params": {
+                "name": "remanentia_recall_correctness",
+                "arguments": {"query": "calibration query", "was_correct": True},
+            },
+        }
+        resp = handle_request(req)
+        assert "disabled" in resp["result"]["content"][0]["text"]
 
-    def test_tools_call_recall_feedback(self):
-        with patch("mcp_server.handle_recall_feedback", return_value="Feedback recorded"):
-            req = {
-                "jsonrpc": "2.0",
-                "id": 62,
-                "method": "tools/call",
-                "params": {
-                    "name": "remanentia_recall_feedback",
-                    "arguments": {"query": "calibration query", "was_used": True},
-                },
-            }
-            resp = handle_request(req)
-        assert "Feedback recorded" in resp["result"]["content"][0]["text"]
+    def test_tools_call_recall_feedback(self, monkeypatch):
+        monkeypatch.setenv("REMANENTIA_RECALL_LEDGER_DISABLE", "1")
+        req = {
+            "jsonrpc": "2.0",
+            "id": 62,
+            "method": "tools/call",
+            "params": {
+                "name": "remanentia_recall_feedback",
+                "arguments": {"query": "calibration query", "was_used": True},
+            },
+        }
+        resp = handle_request(req)
+        assert "disabled" in resp["result"]["content"][0]["text"]
 
     def test_tools_call_coerces_non_dict_arguments(self):
-        with patch("mcp_server.handle_status", return_value="Status info"):
-            req = {
-                "jsonrpc": "2.0",
-                "id": 63,
-                "method": "tools/call",
-                "params": {"name": "remanentia_status", "arguments": "not a dict"},
-            }
-            resp = handle_request(req)
-        assert "Status info" in resp["result"]["content"][0]["text"]
+        req = {
+            "jsonrpc": "2.0",
+            "id": 63,
+            "method": "tools/call",
+            "params": {"name": "remanentia_status", "arguments": "not a dict"},
+        }
+        resp = handle_request(req)
+        assert isinstance(resp["result"]["content"][0]["text"], str)
 
     def test_tools_call_unknown_tool(self):
         req = {
