@@ -37,6 +37,15 @@ import numpy as np
 import hashlib as _hashlib
 
 import memory_dates as _memory_dates
+from memory_entity_scoring import (
+    Entity,
+    EntityGraph,
+    build_relation_neighbors as _build_relation_neighbors,
+    entity_boost_score as _entity_boost_score,
+    extract_query_names as _extract_query_names,
+    is_person_centric as _is_person_centric,
+    query_entity_ids as _query_entity_ids,
+)
 from memory_sources import DEFAULT_TEXT_EXTENSIONS, load_source_config
 import text_chunking as _text_chunking
 
@@ -64,8 +73,6 @@ _SOURCE_CONFIG = load_source_config(BASE)
 SOURCES = dict(_SOURCE_CONFIG.sources)
 SOURCE_EXTENSIONS = {label: set(suffixes) for label, suffixes in _SOURCE_CONFIG.extensions.items()}
 AnswerExtractor = Callable[[str, str], str | None]
-Entity = dict[str, Any]
-EntityGraph = dict[str, Any]
 
 SKIP_PATH_PARTS = (
     ".venv",
@@ -1441,118 +1448,6 @@ def _load_entity_graph() -> EntityGraph:
     }
     _ENTITY_GRAPH_SIGNATURE = signature
     return _ENTITY_GRAPH
-
-
-def _build_relation_neighbors(
-    entities: dict[str, Entity], relations: list[Entity]
-) -> dict[str, list[tuple[str, str, str]]]:
-    neighbors: dict[str, list[tuple[str, str, str]]] = {}
-    for rel in relations:
-        rel_type = str(rel.get("type", "co_occurs"))
-        src = str(rel.get("source", ""))
-        tgt = str(rel.get("target", ""))
-        if not src or not tgt:
-            continue
-        src_label = str(entities.get(src, {}).get("label", src)).lower()
-        tgt_label = str(entities.get(tgt, {}).get("label", tgt)).lower()
-        neighbors.setdefault(src, []).append((tgt, tgt_label, rel_type))
-        neighbors.setdefault(tgt, []).append((src, src_label, rel_type))
-    return neighbors
-
-
-def _query_entity_ids(query: str, graph: EntityGraph) -> set[str]:
-    """Find entity IDs mentioned in query text."""
-    q_lower = query.lower()
-    q_tokens = set(re.findall(r"[a-z0-9][a-z0-9_-]{2,}", q_lower))
-    matched: set[str] = set()
-    entities = cast(dict[str, Entity], graph["entities"])
-    for eid, e in entities.items():
-        label = str(e.get("label", eid)).lower()
-        if label in q_lower or label in q_tokens:
-            matched.add(eid)
-    return matched
-
-
-def _entity_boost_score(para_text: str, query_entities: set[str], graph: EntityGraph) -> float:
-    """Score how many query-related entities appear in paragraph text.
-
-    Typed relations (caused_by, fixed_by, etc.) get 2x the boost of co_occurs,
-    since they carry stronger semantic signal.
-    """
-    if not query_entities:
-        return 0.0
-    p_lower = para_text.lower()
-    boost = 0.0
-    entities = cast(dict[str, Entity], graph["entities"])
-    for eid in query_entities:
-        label = str(entities.get(eid, {}).get("label", eid)).lower()
-        if label in p_lower:
-            boost += 0.1
-    # Extra boost for typed relations between query entities and paragraph entities.
-    relation_neighbors = graph.get("relation_neighbors")
-    if relation_neighbors is None:
-        relation_neighbors = _build_relation_neighbors(
-            cast(dict[str, Entity], graph.get("entities", {})),
-            cast(list[Entity], graph.get("relations", [])),
-        )
-        graph["relation_neighbors"] = relation_neighbors
-    for eid in query_entities:
-        for _, neighbor_label, rel_type in relation_neighbors.get(eid, []):
-            if rel_type != "co_occurs" and neighbor_label and neighbor_label in p_lower:
-                boost += 0.15
-    return boost
-
-
-# ── Entity-centric boosting (ported from bench_locomo.py) ────────
-
-_PERSON_CENTRIC_RE = re.compile(
-    r"\b(relationship|hobby|hobbies|interest|interests|career|job|status|"
-    r"personality|feel|feeling|prefer|favorite|partake|destress|self-care|"
-    r"political|leaning|member|community)\b",
-    re.IGNORECASE,
-)
-
-_POSSESSIVE_RE = re.compile(
-    r"\b(his|her|their|'s)\s+(hobby|hobbies|interest|interests|career|"
-    r"relationship|status|personality|feeling|preference|activity|activities)\b",
-    re.IGNORECASE,
-)
-
-
-def _extract_query_names(query: str) -> set[str]:
-    names = set()
-    for m in re.finditer(r"\b([A-Z][a-z]{2,})\b", query):
-        word = m.group(1).lower()
-        if word not in {
-            "what",
-            "when",
-            "where",
-            "who",
-            "how",
-            "why",
-            "would",
-            "could",
-            "does",
-            "did",
-            "has",
-            "have",
-            "the",
-            "which",
-            "likely",
-            "yes",
-            "not",
-        }:
-            names.add(word)
-    return names
-
-
-def _is_person_centric(query: str) -> bool:
-    if _PERSON_CENTRIC_RE.search(query):
-        return True
-    if _POSSESSIVE_RE.search(query):
-        return True
-    q_lower = query.lower()
-    return any(w in q_lower for w in ["would ", "could ", "likely "])
 
 
 # ── Query intelligence ────────────────────────────────────────────
