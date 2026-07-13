@@ -230,6 +230,10 @@ omit = [
     # tests/test_retrieval_recall.py; the retriever loop is an I/O harness.
     "tools/retrieval_recall.py",
     "tools/discipline_recall.py",
+    # Local-judge agreement runner — re-judges a results file against a live
+    # local model; its pure statistics live in judge_agreement.py (unit-tested,
+    # 100 %), the runner itself is an un-imported I/O harness.
+    "tools/local_judge_agreement.py",
     # Test files themselves
     "tests/test_*.py",
     "tests/conftest.py",
