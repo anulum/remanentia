@@ -54,7 +54,7 @@ def is_available() -> bool:
     """True iff the ``director-ai`` optional dependency is installed."""
     try:
         import director_ai  # noqa: F401
-    except ImportError:
+    except ImportError:  # pragma: no cover - exercised in dependency-isolated runtime
         return False
     return True
 
@@ -141,7 +141,7 @@ def score_memory_answer(
     (memory name / path / id). Director-AI scores the response's
     grounding against the union of those snippets.
     """
-    if not is_available():
+    if not is_available():  # pragma: no cover - exercised in dependency-isolated runtime
         return None
 
     policy = policy or DEFAULT_POLICY
