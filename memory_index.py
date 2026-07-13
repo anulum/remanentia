@@ -28,7 +28,7 @@ import time
 from collections import Counter
 from importlib import import_module
 from pathlib import Path
-from typing import Any, Callable, Iterator, cast
+from typing import Any, Callable, Iterator, Mapping, cast
 
 import numpy as np
 
@@ -141,7 +141,16 @@ _RUST_BM25_IMPORT_ATTEMPTED = False
 
 
 class MemoryIndex:
-    def __init__(self, *, compiled_facts_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        compiled_facts_path: Path | None = None,
+        compiled_refresh_repo: Path = BASE,
+        compiled_output_dir: Path = BASE / "memory" / "compiled",
+        sources: Mapping[str, Path] | None = None,
+        source_extensions: Mapping[str, set[str]] | None = None,
+        hash_cache_path: Path = HASH_CACHE_PATH,
+    ) -> None:
         self.documents: list[Document] = []
         self.paragraph_index: list[tuple[int, int]] = []  # (doc_idx, para_idx)
         self.paragraph_tokens: list[set[str]] = []
@@ -169,6 +178,15 @@ class MemoryIndex:
         self._hash_hits = 0  # files skipped because hash unchanged
         self._hash_misses = 0  # files (re-)indexed because new or changed
         self.compiled_facts_path = compiled_facts_path
+        self.compiled_refresh_repo = compiled_refresh_repo
+        self.compiled_output_dir = compiled_output_dir
+        self.sources = dict(sources) if sources is not None else None
+        self.source_extensions = (
+            {name: set(extensions) for name, extensions in source_extensions.items()}
+            if source_extensions is not None
+            else None
+        )
+        self.hash_cache_path = hash_cache_path
 
     def build(
         self,
@@ -202,23 +220,31 @@ class MemoryIndex:
         try:
             from compiled_memory import compile_facts
 
-            compile_facts(BASE)
+            compile_facts(self.compiled_refresh_repo, self.compiled_output_dir)
         except Exception:
             log.debug("Compiled memory refresh failed", exc_info=True)
 
         # Load previous content hashes for incremental builds
         old_hashes: dict[str, str] = {}
         if incremental:
-            old_hashes = self._load_content_hashes()
+            old_hashes = self._load_content_hashes(self.hash_cache_path)
         new_hashes: dict[str, str] = {}
         self._hash_hits = 0
         self._hash_misses = 0
 
         # Scan all sources
-        for source_name, source_dir in SOURCES.items():
+        active_sources = SOURCES if self.sources is None else self.sources
+        active_extensions = (
+            SOURCE_EXTENSIONS if self.source_extensions is None else self.source_extensions
+        )
+        for source_name, source_dir in active_sources.items():
             if not source_dir.exists():  # pragma: no cover
                 continue
-            for f in _iter_source_files(source_name, source_dir):
+            for f in _iter_source_files(
+                source_name,
+                source_dir,
+                source_extensions=active_extensions,
+            ):
                 try:
                     text = f.read_text(encoding="utf-8")
                 except (OSError, UnicodeDecodeError):  # pragma: no cover
@@ -330,7 +356,7 @@ class MemoryIndex:
 
         # Persist content hashes for next incremental build
         self._content_hashes = new_hashes
-        self._save_content_hashes(new_hashes)
+        self._save_content_hashes(new_hashes, self.hash_cache_path)
 
         elapsed = time.monotonic() - t0
 
@@ -345,7 +371,7 @@ class MemoryIndex:
             "hash_misses": self._hash_misses,
             "sources": {
                 s: sum(1 for d in self.documents if d.source == s)
-                for s in SOURCES
+                for s in active_sources
                 if any(d.source == s for d in self.documents)
             },
         }
@@ -1373,8 +1399,13 @@ def _source_roots(source_name: str, source_dir: Path) -> list[Path]:
     return [source_dir]
 
 
-def _iter_source_files(source_name: str, source_dir: Path) -> Iterator[Path]:
-    exts = SOURCE_EXTENSIONS.get(source_name, set(DEFAULT_TEXT_EXTENSIONS))
+def _iter_source_files(
+    source_name: str,
+    source_dir: Path,
+    *,
+    source_extensions: Mapping[str, set[str]] = SOURCE_EXTENSIONS,
+) -> Iterator[Path]:
+    exts = source_extensions.get(source_name, set(DEFAULT_TEXT_EXTENSIONS))
     files: list[Path] = []
     for root in _source_roots(source_name, source_dir):
         for ext in exts:

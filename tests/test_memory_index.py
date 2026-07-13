@@ -406,18 +406,20 @@ class TestMemoryIndex:
         assert stats["has_embeddings"] is False
         assert idx._built is True
 
-    def test_build_continues_when_compiled_fact_refresh_fails(self, tmp_path, monkeypatch):
+    def test_build_continues_when_compiled_fact_refresh_hits_real_filesystem_failure(
+        self, tmp_path
+    ):
         docs_dir = self._build_mini_index(tmp_path)
-
-        def fail_compile(_repo: Path) -> list[object]:
-            raise RuntimeError("compiled memory unavailable")
-
-        monkeypatch.setattr("compiled_memory.compile_facts", fail_compile)
-
-        idx = MemoryIndex()
-        with patch("memory_index.SOURCES", {"test": docs_dir}):
-            with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md", ".py"}}):
-                stats = idx.build(use_gpu_embeddings=False, use_gliner=False)
+        blocked_output = tmp_path / "compiled-output"
+        blocked_output.write_text("a file cannot be used as an output directory", encoding="utf-8")
+        idx = MemoryIndex(
+            compiled_refresh_repo=tmp_path,
+            compiled_output_dir=blocked_output,
+            sources={"test": docs_dir},
+            source_extensions={"test": {".md", ".py"}},
+            hash_cache_path=tmp_path / "content_hashes.json",
+        )
+        stats = idx.build(use_gpu_embeddings=False, use_gliner=False)
 
         assert stats["documents"] >= 3
         assert idx._built is True
