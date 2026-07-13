@@ -60,13 +60,35 @@ import hashlib
 import json
 import logging
 import gzip
-import re
 import sys
 import time
 import zipfile
 from pathlib import Path
 
 import numpy as np
+
+try:
+    from .retrieval_catalog import (
+        append_history as _append_history,
+        chunk_trace_catalog as _chunk_trace_catalog,
+        classify_trace_tier as _classify_trace_tier,
+        find_related_traces as _find_related_traces,
+        read_history as _read_history,
+        suggest_queries as _suggest_queries,
+        summarize_traces as _summarize_traces,
+        tier_boost as _tier_boost,
+    )
+except ImportError:
+    from retrieval_catalog import (
+        append_history as _append_history,
+        chunk_trace_catalog as _chunk_trace_catalog,
+        classify_trace_tier as _classify_trace_tier,
+        find_related_traces as _find_related_traces,
+        read_history as _read_history,
+        suggest_queries as _suggest_queries,
+        summarize_traces as _summarize_traces,
+        tier_boost as _tier_boost,
+    )
 
 try:
     from .retrieval_text import (
@@ -589,28 +611,12 @@ def _get_query_features(query: str, data: dict) -> dict:
 
 def _log_retrieval(query: str, results: list[dict]) -> None:
     """Append query and results to retrieval history."""
-    HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
-    entry = {
-        "query": query,
-        "timestamp": time.time(),
-        "results": [{"trace": r["trace"], "score": r["score"]} for r in results[:5]],
-    }
-    with open(HISTORY_PATH, "a") as f:
-        f.write(json.dumps(entry) + "\n")
+    _append_history(HISTORY_PATH, query, results)
 
 
 def retrieval_history(limit: int = 50) -> list[dict]:
     """Read recent retrieval history."""
-    if not HISTORY_PATH.exists():
-        return []
-    rows = []
-    for line in HISTORY_PATH.read_text().strip().split("\n"):
-        if line.strip():
-            try:
-                rows.append(json.loads(line))
-            except json.JSONDecodeError:
-                pass
-    return rows[-limit:]
+    return _read_history(HISTORY_PATH, limit)
 
 
 def trace_summaries(traces_dir: Path | None = None) -> list[dict]:
@@ -618,54 +624,14 @@ def trace_summaries(traces_dir: Path | None = None) -> list[dict]:
 
     Takes the first non-heading, non-empty line after the title.
     """
-    tdir = traces_dir or TRACES_DIR
-    if not tdir.exists():
-        return []
-
-    summaries = []
-    for f in sorted(tdir.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True):
-        text = f.read_text(encoding="utf-8")
-        summary = ""
-        past_heading = False
-        for line in text.split("\n"):
-            stripped = line.strip()
-            if stripped.startswith("#"):
-                past_heading = True
-                continue
-            if not past_heading or not stripped or stripped.startswith("---"):
-                continue
-            # Skip bold key-value frontmatter: **Key:** value
-            if stripped.startswith("**") and ":**" in stripped:
-                continue
-            # Skip bare metadata lines
-            if stripped.startswith("- **") and ":**" in stripped:
-                continue
-            summary = stripped.lstrip("- ").strip()
-            break
-        summaries.append({"name": f.name, "summary": summary or "(no summary)"})
-    return summaries
+    return _summarize_traces(traces_dir or TRACES_DIR)
 
 
 # ── Tiered memory (hot/warm/cold) ─────────────────────────────────
 
-_TIER_HOT_HOURS = 24
-_TIER_WARM_DAYS = 7
-_TIER_WEIGHTS = {"hot": 1.02, "warm": 1.0, "cold": 0.98}
-
-
 def _trace_tier(path: Path) -> str:
     """Classify trace into hot/warm/cold based on modification time."""
-    age_hours = (time.time() - path.stat().st_mtime) / 3600
-    if age_hours <= _TIER_HOT_HOURS:
-        return "hot"
-    if age_hours <= _TIER_WARM_DAYS * 24:
-        return "warm"
-    return "cold"
-
-
-def _tier_boost(tier: str) -> float:
-    """Recency boost factor for tiered retrieval. All tiers persist forever."""
-    return _TIER_WEIGHTS.get(tier, 1.0)
+    return _classify_trace_tier(path)
 
 
 # ── Entity graph signal ──────────────────────────────────────────
@@ -776,71 +742,12 @@ def related_traces(trace_name: str, top_k: int = 3, traces_dir: Path | None = No
     unintended file access, the resolved path is constrained to the
     traces directory before being used.
     """
-    # Resolve the base traces directory
-    tdir = (traces_dir or TRACES_DIR).resolve()
-
-    # Allowlist: only alphanumeric, hyphens, underscores, dots, ending in .md
-    if not trace_name or not re.fullmatch(r"[A-Za-z0-9_.\-]+\.md", trace_name):
-        return []
-
-    # Construct path from validated name (no separators possible after regex)
-    target = (tdir / trace_name).resolve()
-    try:
-        # Ensure the target is within the traces directory.
-        target.relative_to(tdir)
-    except ValueError:
-        return []
-
-    if not target.exists() or not target.is_file():
-        return []
-
-    target_text = target.read_text(encoding="utf-8")
-    target_tokens = set(
-        _tokenize(target_text + " " + trace_name.replace("-", " ").replace("_", " "))
-    )
-    if not target_tokens:
-        return []
-
-    scored = []
-    for f in tdir.glob("*.md"):
-        if f.name == trace_name:
-            continue
-        text = f.read_text(encoding="utf-8")
-        tokens = set(_tokenize(text + " " + f.name.replace("-", " ").replace("_", " ")))
-        overlap = target_tokens & tokens
-        if not overlap:
-            continue
-        jaccard = len(overlap) / len(target_tokens | tokens)
-        scored.append(
-            {"trace": f.name, "similarity": round(jaccard, 4), "shared_terms": len(overlap)}
-        )
-
-    scored.sort(key=lambda x: x["similarity"], reverse=True)
-    return scored[:top_k]
+    return _find_related_traces(traces_dir or TRACES_DIR, trace_name, top_k)
 
 
 def query_suggestions(prefix: str, limit: int = 8) -> list[str]:
     """Autocomplete suggestions from retrieval history."""
-    if not HISTORY_PATH.exists() or len(prefix) < 2:
-        return []
-
-    prefix_lower = prefix.lower()
-    seen = set()
-    suggestions = []
-    for line in reversed(HISTORY_PATH.read_text().strip().split("\n")):
-        if not line.strip():
-            continue
-        try:
-            entry = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        q = entry.get("query", "")
-        if q.lower().startswith(prefix_lower) and q not in seen:
-            seen.add(q)
-            suggestions.append(q)
-            if len(suggestions) >= limit:
-                break
-    return suggestions
+    return _suggest_queries(HISTORY_PATH, prefix, limit)
 
 
 # ── Trace chunking ───────────────────────────────────────────────
@@ -852,43 +759,7 @@ def chunk_traces(traces_dir: Path | None = None) -> list[dict]:
     Returns list of chunks:
         {"name": "scpn-control 2026-03-17", "traces": [...], "summary": "..."}
     """
-    tdir = traces_dir or TRACES_DIR
-    if not tdir.exists():
-        return []
-
-    # Group by project prefix and date
-    groups: dict[str, list[Path]] = {}
-    for f in sorted(tdir.glob("*.md")):
-        name = f.stem
-        # Extract date and project from filename patterns
-        # e.g., "2026-03-17T0519_scpn-control_dimits-convergence"
-        parts = name.split("_", 2)
-        date = parts[0].split("T")[0] if parts else "unknown"
-        project = parts[1] if len(parts) > 1 else "general"
-        key = f"{project} {date}"
-        groups.setdefault(key, []).append(f)
-
-    chunks = []
-    for key, files in groups.items():
-        traces = [f.name for f in files]
-        # Auto-summary: project + date + count
-        parts = key.split(" ", 1)
-        project = parts[0]
-        date = parts[1] if len(parts) > 1 else ""
-        summary = f"{project}: {len(files)} trace{'s' if len(files) > 1 else ''} ({date})"
-        chunks.append(
-            {
-                "name": key,
-                "project": project,
-                "date": date,
-                "traces": traces,
-                "count": len(files),
-                "summary": summary,
-            }
-        )
-
-    chunks.sort(key=lambda c: c["date"], reverse=True)
-    return chunks
+    return _chunk_trace_catalog(traces_dir or TRACES_DIR)
 
 
 # ── Embedding content similarity ─────────────────────────────────
