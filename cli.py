@@ -77,60 +77,9 @@ def _cli_store_paths() -> StorePaths:
 
 def cmd_recall(args: argparse.Namespace) -> None:
     """Deep memory recall."""
-    # Use filtered search if filters are specified
-    has_filters = (
-        getattr(args, "project", "") or getattr(args, "after", "") or getattr(args, "before", "")
-    )
-    if has_filters:
-        auto_rebuild_if_needed = _runtime_attr("memory_index", "auto_rebuild_if_needed")
+    from cli_recall import run_recall_command
 
-        idx = auto_rebuild_if_needed(use_gpu=False)
-        use_llm = getattr(args, "llm", False) or bool(os.environ.get("REMANENTIA_LLM_ANSWERS"))
-        if use_llm:
-            _setup_llm_backend(getattr(args, "llm_backend", "auto"))
-        results = idx.search(
-            args.query,
-            top_k=args.top,
-            project=getattr(args, "project", ""),
-            after=getattr(args, "after", ""),
-            before=getattr(args, "before", ""),
-            use_llm=use_llm,
-        )
-        for r in results:
-            print(f"[{r.source}] {r.name} (score={r.score:.3f})")
-            if r.answer:
-                print(f"  Answer: {r.answer}")
-            print(f"  {r.snippet[:200]}")
-            print()
-        return
-
-    recall = _runtime_attr("memory_recall", "recall")
-
-    ctx = recall(args.query, top_k=args.top, include_content=args.content)
-
-    if args.format == "summary":
-        print(ctx.summary)
-    elif args.format == "context":
-        print(ctx.to_llm_context())
-    elif args.format == "json":
-        print(
-            json.dumps(
-                {
-                    "query": ctx.query,
-                    "trace": ctx.trace,
-                    "score": ctx.trace_score,
-                    "entities": ctx.entities,
-                    "related": ctx.related_entities,
-                    "semantic_memories": len(ctx.semantic_memories),
-                    "before": ctx.before,
-                    "after": ctx.after,
-                    "cross_project": ctx.cross_project,
-                    "novelty": ctx.novelty_score,
-                    "elapsed_ms": ctx.elapsed_ms,
-                },
-                indent=2,
-            )
-        )
+    run_recall_command(args, setup_llm_backend=_setup_llm_backend)
 
 
 def cmd_consolidate(args: argparse.Namespace) -> None:

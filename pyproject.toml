@@ -141,6 +141,7 @@ py-modules = [
     "entity_extractor",
     "mcp_server",
     "cli",
+    "cli_recall",
     "api",
     "api_security",
     "answer_extractor",

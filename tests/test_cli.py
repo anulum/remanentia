@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -21,7 +21,6 @@ from cli import (
     cmd_entities,
     cmd_graph,
     cmd_init,
-    cmd_recall,
     cmd_serve,
     cmd_status,
     main,
@@ -393,140 +392,6 @@ class TestCmdServe:
         run.assert_called_once_with("api:app", host="127.0.0.1", port=8765)
 
 
-# ── cmd_recall ──────────────────────────────────────────────────
-
-
-class TestCmdRecall:
-    def test_recall_with_filters(self, tmp_path, capsys):
-        from memory_index import SearchResult
-
-        mock_idx = MagicMock()
-        mock_idx._built = True
-        mock_idx.search.return_value = [
-            SearchResult(name="test.md", source="test", score=0.9, snippet="snippet", answer="42"),
-        ]
-        with patch("memory_index.auto_rebuild_if_needed", return_value=mock_idx):
-            args = type(
-                "Args",
-                (),
-                {
-                    "query": "test query",
-                    "top": 3,
-                    "format": "summary",
-                    "content": False,
-                    "project": "test",
-                    "after": "",
-                    "before": "",
-                    "llm": False,
-                },
-            )()
-            cmd_recall(args)
-        out = capsys.readouterr().out
-        assert "test.md" in out
-        assert "42" in out
-
-    def test_recall_with_llm_flag(self, tmp_path, capsys):
-        mock_idx = MagicMock()
-        mock_idx._built = True
-        mock_idx.search.return_value = []
-        with patch("memory_index.auto_rebuild_if_needed", return_value=mock_idx):
-            args = type(
-                "Args",
-                (),
-                {
-                    "query": "test",
-                    "top": 3,
-                    "format": "summary",
-                    "content": False,
-                    "project": "p",
-                    "after": "",
-                    "before": "",
-                    "llm": True,
-                },
-            )()
-            cmd_recall(args)
-        call_kwargs = mock_idx.search.call_args
-        assert call_kwargs[1].get("use_llm") is True
-
-    def test_recall_no_filters(self, capsys):
-        mock_ctx = MagicMock()
-        mock_ctx.summary = "Summary text"
-        mock_ctx.to_llm_context.return_value = "LLM context"
-        with patch("memory_recall.recall", return_value=mock_ctx):
-            args = type(
-                "Args",
-                (),
-                {
-                    "query": "test query",
-                    "top": 3,
-                    "format": "summary",
-                    "content": False,
-                    "project": "",
-                    "after": "",
-                    "before": "",
-                    "llm": False,
-                },
-            )()
-            cmd_recall(args)
-        out = capsys.readouterr().out
-        assert "Summary" in out
-
-    def test_recall_context_format(self, capsys):
-        mock_ctx = MagicMock()
-        mock_ctx.to_llm_context.return_value = "LLM context output"
-        with patch("memory_recall.recall", return_value=mock_ctx):
-            args = type(
-                "Args",
-                (),
-                {
-                    "query": "test",
-                    "top": 3,
-                    "format": "context",
-                    "content": False,
-                    "project": "",
-                    "after": "",
-                    "before": "",
-                    "llm": False,
-                },
-            )()
-            cmd_recall(args)
-        out = capsys.readouterr().out
-        assert "LLM context" in out
-
-    def test_recall_json_format(self, capsys):
-        mock_ctx = MagicMock()
-        mock_ctx.query = "test"
-        mock_ctx.trace = "t.md"
-        mock_ctx.trace_score = 0.8
-        mock_ctx.entities = ["a"]
-        mock_ctx.related_entities = []
-        mock_ctx.semantic_memories = []
-        mock_ctx.before = []
-        mock_ctx.after = []
-        mock_ctx.cross_project = []
-        mock_ctx.novelty_score = 0.5
-        mock_ctx.elapsed_ms = 10
-        with patch("memory_recall.recall", return_value=mock_ctx):
-            args = type(
-                "Args",
-                (),
-                {
-                    "query": "test",
-                    "top": 3,
-                    "format": "json",
-                    "content": False,
-                    "project": "",
-                    "after": "",
-                    "before": "",
-                    "llm": False,
-                },
-            )()
-            cmd_recall(args)
-        out = capsys.readouterr().out
-        data = json.loads(out)
-        assert data["query"] == "test"
-
-
 # ── cmd_consolidate ─────────────────────────────────────────────
 
 
@@ -769,23 +634,6 @@ class TestCmdStatusStale:
 class TestCLIEdgeCases:
     """Empty inputs, error handling, pipeline flow."""
 
-    def test_empty_query_recall(self, capsys):
-        from unittest.mock import MagicMock, patch
-
-        mock_ctx = MagicMock()
-        mock_ctx.summary = "No direct match."
-
-        with (
-            patch("sys.argv", ["remanentia", "recall", "", "--top", "1"]),
-            patch("memory_recall.recall", return_value=mock_ctx) as recall,
-        ):
-            from cli import main
-
-            main()
-
-        recall.assert_called_once_with("", top_k=1, include_content=False)
-        assert "No direct match." in capsys.readouterr().out
-
     def test_nonexistent_command(self, capsys):
         from unittest.mock import patch
 
@@ -797,54 +645,6 @@ class TestCLIEdgeCases:
 
         assert exc.value.code == 2
         assert "invalid choice" in capsys.readouterr().err
-
-    def test_recall_with_llm_backend_flag(self, capsys):
-        """Pipeline: --llm-backend wires through to answer_extractor."""
-        from unittest.mock import patch, MagicMock
-
-        mock_idx = MagicMock()
-        result = MagicMock()
-        result.source = "memory"
-        result.name = "trace.md"
-        result.score = 0.75
-        result.answer = "answer"
-        result.snippet = "snippet text"
-        mock_idx.search.return_value = [result]
-
-        with (
-            patch(
-                "sys.argv",
-                [
-                    "remanentia",
-                    "recall",
-                    "test query",
-                    "--project",
-                    "remanentia",
-                    "--llm",
-                    "--llm-backend",
-                    "none",
-                ],
-            ),
-            patch("memory_index.auto_rebuild_if_needed", return_value=mock_idx) as rebuild,
-            patch("llm_backend.resolve_backend", return_value="backend") as resolve_backend,
-            patch("answer_extractor.set_llm_backend") as set_llm_backend,
-        ):
-            from cli import main
-
-            main()
-
-        rebuild.assert_called_once_with(use_gpu=False)
-        resolve_backend.assert_called_once_with("none")
-        set_llm_backend.assert_called_once_with("backend")
-        mock_idx.search.assert_called_once_with(
-            "test query",
-            top_k=3,
-            project="remanentia",
-            after="",
-            before="",
-            use_llm=True,
-        )
-        assert "trace.md" in capsys.readouterr().out
 
     def test_status_command_runs(self, tmp_path, capsys):
         from unittest.mock import patch
