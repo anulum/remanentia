@@ -62,7 +62,6 @@ import logging
 import gzip
 import sys
 import time
-import zipfile
 from pathlib import Path
 
 import numpy as np
@@ -109,6 +108,29 @@ except ImportError:
         stem as _stem,  # noqa: F401 - retained as a compatibility surface
         tfidf_score as _tfidf_score,
         tokenize as _tokenize,
+    )
+
+try:
+    from .retrieval_network_io import (
+        NetworkPaths as _NetworkPaths,
+        load_checkpoint as _load_checkpoint_from_disk,
+        load_network as _load_network_from_disk,
+        normalize_backend as _normalize_network_backend,
+        read_json as _read_json_file,
+        resolve_network_config as _resolve_network_configuration,
+        resolve_path as _resolve_network_path,
+        write_json_atomic as _write_json_file_atomic,
+    )
+except ImportError:
+    from retrieval_network_io import (
+        NetworkPaths as _NetworkPaths,
+        load_checkpoint as _load_checkpoint_from_disk,
+        load_network as _load_network_from_disk,
+        normalize_backend as _normalize_network_backend,
+        read_json as _read_json_file,
+        resolve_network_config as _resolve_network_configuration,
+        resolve_path as _resolve_network_path,
+        write_json_atomic as _write_json_file_atomic,
     )
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -232,32 +254,19 @@ def _encode(text: str, n_neurons: int) -> np.ndarray:
 
 
 def _read_json(path: Path) -> dict | None:
-    if not path.exists():
-        return None
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
+    return _read_json_file(path)
 
 
 def _normalize_backend(backend: str | None) -> str:
-    if backend in {"hash", "lsh", "embedding"}:
-        return backend
-    return "lsh"
+    return _normalize_network_backend(backend)
 
 
 def _resolve_path(path_text: str) -> Path:
-    path = Path(path_text)
-    if not path.is_absolute():
-        path = (BASE_DIR / path).resolve()
-    return path
+    return _resolve_network_path(path_text, base_dir=BASE_DIR)
 
 
 def _write_json_atomic(path: Path, payload: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_suffix(path.suffix + ".tmp")
-    tmp_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    tmp_path.replace(path)
+    _write_json_file_atomic(path, payload)
 
 
 def _infer_backend_from_path(path: Path) -> str:
@@ -275,112 +284,37 @@ def _activate_backend(backend: str) -> None:
 
 
 def _resolve_network_config(state_path: Path | None = None) -> dict:
-    if state_path is not None:
-        path = _resolve_path(str(state_path))
-        if not path.exists():
-            raise FileNotFoundError(f"No SNN state at {path}.")
-        return {
-            "checkpoint_path": path,
-            "encoding_backend": _infer_backend_from_path(path),
-            "source": "explicit",
-        }
-
-    manifest = _read_json(RETRIEVAL_STATE_PATH)
-    if manifest:
-        raw_path = manifest.get("checkpoint_path")
-        if raw_path:
-            path = _resolve_path(str(raw_path))
-            if path.exists():
-                return {
-                    "checkpoint_path": path,
-                    "encoding_backend": _normalize_backend(manifest.get("encoding_backend")),
-                    "source": manifest.get("source", "retrieval_state"),
-                }
-
-    current_state = _read_json(STATE_DIR / "current_state.json")
-    if current_state:
-        raw_path = current_state.get("retrieval_checkpoint_path")
-        if raw_path:
-            path = _resolve_path(str(raw_path))
-            if path.exists():
-                return {
-                    "checkpoint_path": path,
-                    "encoding_backend": _normalize_backend(current_state.get("retrieval_backend")),
-                    "source": "current_state",
-                }
-
-    if EMBED_NETWORK_PATH.exists():
-        return {
-            "checkpoint_path": EMBED_NETWORK_PATH.resolve(),
-            "encoding_backend": "embedding",
-            "source": "embedding_checkpoint_fallback",
-        }
-
-    if DEFAULT_NETWORK_PATH.exists():
-        current_state = current_state or {}
-        return {
-            "checkpoint_path": DEFAULT_NETWORK_PATH.resolve(),
-            "encoding_backend": _normalize_backend(
-                current_state.get("retrieval_backend")
-                or current_state.get("encoding_backend")
-                or _infer_backend_from_path(DEFAULT_NETWORK_PATH)
-            ),
-            "source": "legacy_checkpoint_fallback",
-        }
-
-    raise FileNotFoundError(
-        "No compatible SNN checkpoint found. "
-        "Expected retrieval_state.json, identity_net_embedding_trained.pkl, "
-        "or identity_net.pkl."
+    return _resolve_network_configuration(
+        _NetworkPaths(
+            base_dir=BASE_DIR,
+            state_dir=STATE_DIR,
+            retrieval_state_path=RETRIEVAL_STATE_PATH,
+            default_network_path=DEFAULT_NETWORK_PATH,
+            embedding_network_path=EMBED_NETWORK_PATH,
+        ),
+        state_path,
     )
 
 
 def _load_checkpoint(path: Path) -> dict:
     """Load network checkpoint from npz. Legacy pickle no longer accepted."""
-    npz_path = path.with_suffix(".npz") if path.suffix != ".npz" else path
-    for candidate in (npz_path, path):
-        if not candidate.exists():
-            continue
-        if zipfile.is_zipfile(candidate):
-            data = np.load(candidate, allow_pickle=False)
-            return dict(data)
-    if path.exists():
-        raise ValueError(
-            f"{path}: unsupported legacy pickle checkpoint. "
-            f"Run `python tools/migrate_pickle_to_npz.py --path {path.parent}` "
-            "to convert pre-0.4 checkpoints to npz."
-        )
-    raise FileNotFoundError(f"No checkpoint at {npz_path} or {path}")
+    return _load_checkpoint_from_disk(path)
 
 
 def _load_network(state_path: Path | None = None) -> dict:
-    config = _resolve_network_config(state_path)
-    path = config["checkpoint_path"]
-    stat = path.stat()
-    cache_key = (
-        str(path),
-        stat.st_mtime_ns,
-        stat.st_size,
-        config["encoding_backend"],
+    data = _load_network_from_disk(
+        _NetworkPaths(
+            base_dir=BASE_DIR,
+            state_dir=STATE_DIR,
+            retrieval_state_path=RETRIEVAL_STATE_PATH,
+            default_network_path=DEFAULT_NETWORK_PATH,
+            embedding_network_path=EMBED_NETWORK_PATH,
+        ),
+        _NETWORK_CACHE,
+        state_path,
     )
-    cached = _NETWORK_CACHE.get(cache_key)
-    if cached is None:
-        data = _load_checkpoint(path)
-        if not isinstance(data, dict):
-            raise ValueError(f"Unexpected network payload in {path}")
-        signature = hashlib.md5(
-            f"{path}:{stat.st_mtime_ns}:{stat.st_size}:{config['encoding_backend']}".encode()
-        ).hexdigest()
-        cached = dict(data)
-        cached["_checkpoint_path"] = str(path)
-        cached["_encoding_backend"] = config["encoding_backend"]
-        cached["_state_signature"] = signature
-        cached["_retrieval_source"] = config["source"]
-        _NETWORK_CACHE.clear()
-        _NETWORK_CACHE[cache_key] = cached
-
-    _activate_backend(config["encoding_backend"])
-    return cached
+    _activate_backend(str(data["_encoding_backend"]))
+    return data
 
 
 def _cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
