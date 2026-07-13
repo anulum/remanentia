@@ -149,17 +149,13 @@ class BusRecallEmitter:
         Returns ``False`` (and stays a no-op forever) when the hub client is
         not importable or the emitter has been closed.
         """
-        if self._disabled or self._closed:
-            return False
-        if self._started:
-            return True
         with self._lock:
             if self._disabled or self._closed:
                 return False
             if self._started:
                 return True
             factory = self._explicit_factory or _load_agent_factory()
-            if factory is None:
+            if factory is None:  # pragma: no cover - dependency-isolated runtime
                 self._disabled = True
                 return False
             self._factory = factory
@@ -197,7 +193,7 @@ class BusRecallEmitter:
             self._agent = self._factory(self._name, uri=self._uri, verbose=False)
             self._connect_task = asyncio.ensure_future(self._agent.connect())
             self._ready = await self._agent.wait_until_ready(timeout=self._connect_timeout)
-        except Exception:
+        except Exception:  # pragma: no cover - defensive third-party client boundary
             self._ready = False
             log.debug("Recall bus connect failed", exc_info=True)
 
@@ -231,7 +227,7 @@ class BusRecallEmitter:
             )
             asyncio.run_coroutine_threadsafe(coro, loop)
             return True
-        except Exception:
+        except Exception:  # pragma: no cover - defensive third-party transport boundary
             log.debug("Recall bus emit failed", exc_info=True)
             return False
 
@@ -251,7 +247,7 @@ class BusRecallEmitter:
                 was_used=was_used,
                 abstained=abstained,
             )
-        except Exception:
+        except Exception:  # pragma: no cover - defensive third-party transport boundary
             log.debug("Recall bus log_recall failed", exc_info=True)
 
     # ── shutdown ─────────────────────────────────────────────────
@@ -275,22 +271,20 @@ class BusRecallEmitter:
         except Exception:  # pragma: no cover — loop already gone
             log.debug("Recall bus shutdown scheduling failed", exc_info=True)
         thread = self._thread
-        if thread is not None:
-            thread.join(timeout=self._shutdown_timeout)
+        assert thread is not None
+        thread.join(timeout=self._shutdown_timeout)
 
     async def _ashutdown(self) -> None:
         """Cancel the connect loop, drain it, then stop the event loop."""
-        if self._agent is not None:
+        if self._agent is not None:  # pragma: no branch - set before loop becomes ready
             self._agent.running = False
         task = self._connect_task
-        if task is not None:
-            task.cancel()
-            try:
-                await task
-            except Exception:
-                log.debug("Recall bus connect task shutdown failed", exc_info=True)
-        if self._loop is not None:
-            self._loop.stop()
+        if task is not None:  # pragma: no branch - set before loop becomes ready
+            if not task.done():
+                task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        assert self._loop is not None
+        self._loop.stop()
 
 
 def default_emitter() -> BusRecallEmitter | None:

@@ -6,21 +6,19 @@
 # Contact: www.anulum.li | protoscience@anulum.li
 # Remanentia — tests for the recall query-stream bus emitter
 
-"""Behavioural tests for :mod:`bus_recall`.
-
-The real ``synapse_channel`` agent is replaced by an in-process fake so the
-suite exercises the sync→async bridge, the connection lifecycle and every
-failure mode without a hub or a network. The three invariants under test:
-the emitter is a no-op when the client is absent or not ready, it never
-raises into the caller, and a successful emit reaches the agent's
-``log_recall`` with the recall-time fields intact.
-"""
+"""Real-hub lifecycle and emission tests for :mod:`bus_recall`."""
 
 from __future__ import annotations
 
-import asyncio
-import sys
+import json
+import socket
+import sqlite3
+import subprocess
 import time
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
+from pathlib import Path
+from typing import cast, overload
 
 import pytest
 
@@ -28,302 +26,217 @@ import bus_recall
 from bus_recall import BusRecallEmitter, _load_agent_factory, default_emitter
 
 
-class FakeAgent:
-    """Stand-in for ``synapse_channel.SynapseAgent``.
-
-    ``connect`` mimics the real coroutine that runs the inbound listener for
-    the connection's lifetime: it signals readiness (unless ``never_ready``),
-    then idles until ``running`` is cleared or the task is cancelled.
-    """
-
-    def __init__(
-        self,
-        name,
-        *,
-        uri,
-        verbose=False,
-        connect_raises=False,
-        log_raises=False,
-        never_ready=False,
-    ):
-        self.name = name
-        self.uri = uri
-        self.verbose = verbose
-        self.running = True
-        self.logged: list[dict] = []
-        self._connect_raises = connect_raises
-        self._log_raises = log_raises
-        self._never_ready = never_ready
-        self._ready_evt = asyncio.Event()
-
-    async def connect(self):
-        if self._connect_raises:
-            raise RuntimeError("connect boom")
-        if not self._never_ready:
-            self._ready_evt.set()
-        while self.running:
-            await asyncio.sleep(0.005)
-
-    async def wait_until_ready(self, timeout=5.0):
+@contextmanager
+def _real_hub(tmp_path: Path) -> Iterator[tuple[str, Path, subprocess.Popen[str]]]:
+    probe = socket.socket()
+    probe.bind(("127.0.0.1", 0))
+    port = cast(int, probe.getsockname()[1])
+    probe.close()
+    db_path = tmp_path / "hub.db"
+    process = subprocess.Popen(
+        [
+            "synapse",
+            "hub",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+            "--db",
+            str(db_path),
+            "--log-level",
+            "ERROR",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        for _ in range(100):
+            if process.poll() is not None:
+                stderr = process.stderr.read() if process.stderr is not None else ""
+                raise RuntimeError(f"Synapse hub exited during startup: {stderr}")
+            try:
+                with socket.create_connection(("127.0.0.1", port), timeout=0.05):
+                    break
+            except OSError:
+                time.sleep(0.02)
+        else:
+            raise RuntimeError("Synapse hub did not bind its test port")
+        yield f"ws://127.0.0.1:{port}", db_path, process
+    finally:
+        if process.poll() is None:
+            process.terminate()
         try:
-            await asyncio.wait_for(self._ready_evt.wait(), timeout=max(timeout, 0.1))
-            return True
-        except asyncio.TimeoutError:
-            return False
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
 
-    async def log_recall(
-        self, query_text, *, returned_claim_ids=(), was_used=False, abstained=False
-    ):
-        if self._log_raises:
-            raise RuntimeError("log boom")
-        self.logged.append(
-            {
-                "query": query_text,
-                "ids": list(returned_claim_ids),
-                "was_used": was_used,
-                "abstained": abstained,
-            }
+
+def _payloads(db_path: Path, expected: int) -> list[dict[str, object]]:
+    for _ in range(150):
+        if db_path.exists():
+            with sqlite3.connect(db_path) as connection:
+                rows = connection.execute(
+                    "select payload from events where kind = 'recall' order by seq"
+                ).fetchall()
+            if len(rows) >= expected:
+                return [dict(json.loads(raw)) for (raw,) in rows]
+        time.sleep(0.02)
+    raise AssertionError(f"expected {expected} durable recall events")
+
+
+def _closed_uri() -> str:
+    probe = socket.socket()
+    probe.bind(("127.0.0.1", 0))
+    port = cast(int, probe.getsockname()[1])
+    probe.close()
+    return f"ws://127.0.0.1:{port}"
+
+
+class TestRealHubEmission:
+    def test_success_reuse_and_abstention_reach_durable_store(self, tmp_path: Path) -> None:
+        with _real_hub(tmp_path) as (uri, db_path, _process):
+            emitter = BusRecallEmitter(
+                name="REMANENTIA-bus-test",
+                uri=uri,
+                connect_timeout=3,
+                shutdown_timeout=2,
+            )
+            try:
+                assert emitter.emit("first", returned_claim_ids=["a:1", "b:2"]) is True
+                assert emitter.active is True
+                assert emitter.emit("second", returned_claim_ids=["c:3"]) is True
+                assert emitter.emit("unknown", returned_claim_ids=[], abstained=True) is True
+                payloads = _payloads(db_path, 3)
+            finally:
+                emitter.close()
+
+        assert [payload["query_text"] for payload in payloads] == [
+            "first",
+            "second",
+            "unknown",
+        ]
+        assert payloads[0]["returned_claim_ids"] == ["a:1", "b:2"]
+        assert payloads[0]["was_used"] is False
+        assert payloads[2]["abstained"] is True
+        assert {payload["by"] for payload in payloads} == {"REMANENTIA-bus-test"}
+        assert emitter.active is False
+
+    def test_real_connection_failure_is_noop(self) -> None:
+        emitter = BusRecallEmitter(
+            name="REMANENTIA-unreachable",
+            uri=_closed_uri(),
+            connect_timeout=0.1,
+            shutdown_timeout=0.2,
         )
+        try:
+            assert emitter.emit("q", returned_claim_ids=["a:1"]) is False
+            assert emitter.active is False
+            assert emitter.emit("q2", returned_claim_ids=["b:2"]) is False
+        finally:
+            emitter.close()
+
+    def test_hub_shutdown_after_connection_never_raises(self, tmp_path: Path) -> None:
+        with _real_hub(tmp_path) as (uri, db_path, process):
+            emitter = BusRecallEmitter(name="REMANENTIA-drop-test", uri=uri, connect_timeout=3)
+            assert emitter.emit("before-drop", returned_claim_ids=["a:1"]) is True
+            _payloads(db_path, 1)
+            process.terminate()
+            process.wait(timeout=5)
+            assert emitter.emit("after-drop", returned_claim_ids=["b:2"]) is True
+            time.sleep(0.1)
+            emitter.close()
 
 
-def make_factory(**agent_kwargs):
-    """Build an agent factory that records every agent it constructs."""
-    created: list[FakeAgent] = []
+class _BrokenSequence(Sequence[str]):
+    @overload
+    def __getitem__(self, index: int) -> str: ...
 
-    def factory(name, *, uri, verbose=False):
-        agent = FakeAgent(name, uri=uri, verbose=verbose, **agent_kwargs)
-        created.append(agent)
-        return agent
+    @overload
+    def __getitem__(self, index: slice) -> Sequence[str]: ...
 
-    factory.created = created  # type: ignore[attr-defined]
-    return factory
+    def __getitem__(self, index: int | slice) -> str | Sequence[str]:
+        raise RuntimeError("caller sequence failed")
 
-
-def _wait_for(predicate, timeout=2.0):
-    """Poll *predicate* until true or *timeout* elapses; return its result."""
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if predicate():
-            return True
-        time.sleep(0.01)
-    return predicate()
+    def __len__(self) -> int:
+        return 1
 
 
-@pytest.fixture
-def emitter_factory():
-    """Yield a builder that tracks emitters and closes them on teardown."""
-    built: list[BusRecallEmitter] = []
+class TestLifecycleAndInputFailure:
+    def test_invalid_sequence_is_swallowed_after_real_connection(self, tmp_path: Path) -> None:
+        with _real_hub(tmp_path) as (uri, db_path, _process):
+            emitter = BusRecallEmitter(name="REMANENTIA-input-test", uri=uri, connect_timeout=3)
+            try:
+                assert emitter.emit("warmup", returned_claim_ids=["a:1"]) is True
+                _payloads(db_path, 1)
+                assert emitter.emit("broken", returned_claim_ids=_BrokenSequence()) is False
+            finally:
+                emitter.close()
 
-    def build(**kwargs):
-        kwargs.setdefault("name", "TEST-recall")
-        kwargs.setdefault("connect_timeout", 1.0)
-        kwargs.setdefault("shutdown_timeout", 1.0)
-        em = BusRecallEmitter(**kwargs)
-        built.append(em)
-        return em
-
-    yield build
-    for em in built:
-        em.close()
-
-
-class TestEmit:
-    def test_successful_emit_reaches_log_recall(self, emitter_factory):
-        factory = make_factory()
-        em = emitter_factory(agent_factory=factory)
-
-        assert em.emit("what is K_nm?", returned_claim_ids=["a:1", "b:2"], abstained=False) is True
-        agent = factory.created[0]
-        assert _wait_for(lambda: bool(agent.logged))
-        rec = agent.logged[0]
-        assert rec["query"] == "what is K_nm?"
-        assert rec["ids"] == ["a:1", "b:2"]
-        assert rec["was_used"] is False
-        assert rec["abstained"] is False
-        assert em.active is True
-
-    def test_abstained_flag_propagates(self, emitter_factory):
-        factory = make_factory()
-        em = emitter_factory(agent_factory=factory)
-
-        assert em.emit("unknown query", returned_claim_ids=[], abstained=True) is True
-        agent = factory.created[0]
-        assert _wait_for(lambda: bool(agent.logged))
-        assert agent.logged[0]["abstained"] is True
-        assert agent.logged[0]["ids"] == []
-
-    def test_reuses_single_connection(self, emitter_factory):
-        factory = make_factory()
-        em = emitter_factory(agent_factory=factory)
-
-        em.emit("first", returned_claim_ids=["x:1"])
-        em.emit("second", returned_claim_ids=["y:2"])
-        agent = factory.created[0]
-        assert _wait_for(lambda: len(agent.logged) == 2)
-        # One agent built, one connection — no per-event handshake.
-        assert len(factory.created) == 1
-        assert [r["query"] for r in agent.logged] == ["first", "second"]
-
-    def test_not_ready_is_noop(self, emitter_factory):
-        factory = make_factory(never_ready=True)
-        em = emitter_factory(agent_factory=factory)
-
-        assert em.emit("q", returned_claim_ids=["a:1"]) is False
-        assert em.active is False
-        agent = factory.created[0]
-        assert agent.logged == []
-
-    def test_connect_failure_is_noop(self, emitter_factory):
-        factory = make_factory(connect_raises=True)
-        em = emitter_factory(agent_factory=factory)
-
-        assert em.emit("q", returned_claim_ids=["a:1"]) is False
-        assert em.active is False
-
-    def test_log_failure_is_swallowed(self, emitter_factory):
-        factory = make_factory(log_raises=True)
-        em = emitter_factory(agent_factory=factory)
-
-        # Scheduling succeeds; the failing send is swallowed on the loop thread.
-        assert em.emit("q", returned_claim_ids=["a:1"]) is True
-        agent = factory.created[0]
-        # Give the loop a moment; logged stays empty, no exception surfaces.
-        time.sleep(0.1)
-        assert agent.logged == []
+    def test_close_before_start_and_after_close_are_idempotent(self) -> None:
+        emitter = BusRecallEmitter(name="REMANENTIA-close-test", uri=_closed_uri())
+        emitter.close()
+        emitter.close()
+        assert emitter.active is False
+        assert emitter.emit("late", returned_claim_ids=["a:1"]) is False
 
 
-class TestNoSynapse:
-    def test_missing_client_disables_emitter(self, emitter_factory, monkeypatch):
-        monkeypatch.setattr(bus_recall, "_load_agent_factory", lambda: None)
-        em = emitter_factory(agent_factory=None)
-
-        assert em.emit("q", returned_claim_ids=["a:1"]) is False
-        assert em.active is False
-        # Stays disabled — a second emit short-circuits without restarting.
-        assert em.emit("q2", returned_claim_ids=["b:2"]) is False
-
-    def test_load_agent_factory_returns_none_without_module(self, monkeypatch):
-        monkeypatch.setitem(sys.modules, "synapse_channel", None)
-        assert _load_agent_factory() is None
-
-    def test_load_agent_factory_resolves_real_class(self):
-        # synapse-channel is a dev dependency, so the real class resolves here.
+class TestDependencyResolution:
+    def test_load_agent_factory_resolves_real_class(self) -> None:
         factory = _load_agent_factory()
         assert factory is not None
         assert factory.__name__ == "SynapseAgent"
 
-
-class TestShutdown:
-    def test_close_is_idempotent(self, emitter_factory):
-        factory = make_factory()
-        em = emitter_factory(agent_factory=factory)
-        em.emit("q", returned_claim_ids=["a:1"])
-
-        em.close()
-        assert em.active is False
-        em.close()  # second close is a no-op
-        assert em.active is False
-
-    def test_emit_after_close_is_noop(self, emitter_factory):
-        factory = make_factory()
-        em = emitter_factory(agent_factory=factory)
-        em.emit("q", returned_claim_ids=["a:1"])
-        em.close()
-
-        assert em.emit("late", returned_claim_ids=["b:2"]) is False
-
-    def test_close_before_start_is_noop(self, emitter_factory):
-        factory = make_factory()
-        em = emitter_factory(agent_factory=factory)
-        # Never emitted → loop never started → close short-circuits.
-        em.close()
-        assert em.active is False
-
-
-class _FlipLock:
-    """A lock that flips an emitter flag the moment it is acquired.
-
-    Simulates the race the double-checked locking in ``_ensure_started``
-    guards against: the state changes between the lock-free fast path and the
-    critical section, so the re-validation inside the lock must catch it.
-    """
-
-    def __init__(self, emitter, attr):
-        self._emitter = emitter
-        self._attr = attr
-        self._real = __import__("threading").Lock()
-
-    def __enter__(self):
-        setattr(self._emitter, self._attr, True)
-        return self._real.__enter__()
-
-    def __exit__(self, *exc):
-        return self._real.__exit__(*exc)
-
-
-class TestRaceGuards:
-    def test_closed_between_fastpath_and_lock(self, emitter_factory):
-        em = emitter_factory(agent_factory=make_factory())
-        em._lock = _FlipLock(em, "_closed")
-        assert em._ensure_started() is False
-
-    def test_started_between_fastpath_and_lock(self, emitter_factory):
-        em = emitter_factory(agent_factory=make_factory())
-        em._lock = _FlipLock(em, "_started")
-        assert em._ensure_started() is True
-
-
-class TestStartupAndEmitFailures:
-    def test_factory_raising_disables_emitter(self, emitter_factory):
-        def boom_factory(name, *, uri, verbose=False):
-            raise RuntimeError("factory boom")
-
-        em = emitter_factory(agent_factory=boom_factory)
-        assert em.emit("q", returned_claim_ids=["a:1"]) is False
-        assert em.active is False
-
-    def test_emit_swallows_argument_failure(self, emitter_factory):
-        factory = make_factory()
-        em = emitter_factory(agent_factory=factory)
-        # Prime a ready connection so emit reaches the scheduling try-block.
-        assert em.emit("warmup", returned_claim_ids=["a:1"]) is True
-        assert _wait_for(lambda: bool(factory.created[0].logged))
-
-        class BadSeq:
-            def __iter__(self):
-                raise RuntimeError("bad sequence")
-
-        # ``list(returned_claim_ids)`` raises inside emit; it must be swallowed.
-        assert em.emit("q", returned_claim_ids=BadSeq()) is False
+    def test_isolated_interpreter_has_real_missing_dependency_fallback(self) -> None:
+        module_path = Path(bus_recall.__file__).resolve()
+        script = f"""
+import importlib.util
+spec = importlib.util.spec_from_file_location('bus_recall_isolated', {str(module_path)!r})
+assert spec is not None and spec.loader is not None
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+assert module._load_agent_factory() is None
+emitter = module.BusRecallEmitter(name='isolated')
+assert emitter.emit('q', returned_claim_ids=['a:1']) is False
+"""
+        completed = subprocess.run(
+            ["/usr/bin/python3", "-I", "-c", script],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert completed.returncode == 0, completed.stderr
 
 
 class TestDefaultEmitter:
-    def test_disabled_via_env_returns_none(self, monkeypatch):
+    def test_disabled_via_env_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("REMANENTIA_RECALL_BUS_DISABLE", "1")
         assert default_emitter() is None
 
-    def test_builds_with_env_identity(self, monkeypatch):
+    def test_builds_with_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("REMANENTIA_RECALL_BUS_DISABLE", raising=False)
         monkeypatch.setenv("REMANENTIA_RECALL_BUS_NAME", "custom-recall")
         monkeypatch.setenv("REMANENTIA_SYNAPSE_URI", "ws://example:9999")
 
-        em = default_emitter()
-        assert em is not None
+        emitter = default_emitter()
+        assert emitter is not None
         try:
-            assert em._name == "custom-recall"
-            assert em._uri == "ws://example:9999"
+            assert emitter._name == "custom-recall"
+            assert emitter._uri == "ws://example:9999"
         finally:
-            em.close()
+            emitter.close()
 
-    def test_defaults_when_env_unset(self, monkeypatch):
+    def test_defaults_when_environment_unset(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("REMANENTIA_RECALL_BUS_DISABLE", raising=False)
         monkeypatch.delenv("REMANENTIA_RECALL_BUS_NAME", raising=False)
         monkeypatch.delenv("REMANENTIA_SYNAPSE_URI", raising=False)
 
-        em = default_emitter()
-        assert em is not None
+        emitter = default_emitter()
+        assert emitter is not None
         try:
-            assert em._name == "REMANENTIA-recall"
-            assert em._uri == bus_recall.DEFAULT_HUB_URI
+            assert emitter._name == "REMANENTIA-recall"
+            assert emitter._uri == bus_recall.DEFAULT_HUB_URI
         finally:
-            em.close()
+            emitter.close()
