@@ -525,6 +525,14 @@ coverage report before publishing exact module-level coverage counts.
 
 AGPL-3.0-or-later | Commercial license available
 
+The AGPL path is **USD 0** when its terms fit the deployment. A REMANENTIA
+commercial self-hosted licence is **USD 299/month** or **USD 2,990/year**.
+Implementation starts at **USD 12,000** and managed operations start at
+**USD 999/month**; both are separately scoped services, not bundled into the
+software licence. No commercial right or service begins until it is recorded
+in an accepted order. See the canonical product-family pricing at
+<https://www.remanentia.com/pricing.html>.
+
 ## Author
 
 Miroslav Šotek ([Anulum](https://www.anulum.li)) | ORCID: [0009-0009-3560-0851](https://orcid.org/0009-0009-3560-0851)
