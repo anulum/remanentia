@@ -256,23 +256,19 @@ class TestHandleRemember:
 
 class TestHandleGraph:
     def test_no_relations_file(self, tmp_path):
-        with patch("mcp_server.GRAPH_DIR", tmp_path):
-            result = handle_graph()
+        result = handle_graph(graph_dir=tmp_path)
         assert "No relations" in result
 
     def test_top_relationships(self, tmp_graph):
-        with patch("mcp_server.GRAPH_DIR", tmp_graph):
-            result = handle_graph(top=3)
+        result = handle_graph(top=3, graph_dir=tmp_graph)
         assert "entity relationships" in result.lower() or "Top" in result
 
     def test_entity_filter(self, tmp_graph):
-        with patch("mcp_server.GRAPH_DIR", tmp_graph):
-            result = handle_graph(entity="stdp", top=5)
+        result = handle_graph(entity="stdp", top=5, graph_dir=tmp_graph)
         assert "stdp" in result.lower()
 
     def test_entity_not_found(self, tmp_graph):
-        with patch("mcp_server.GRAPH_DIR", tmp_graph):
-            result = handle_graph(entity="nonexistent_entity", top=5)
+        result = handle_graph(entity="nonexistent_entity", top=5, graph_dir=tmp_graph)
         assert "Connections" in result or "nonexistent" in result
 
 
@@ -445,8 +441,7 @@ class TestHandleRecallLightweight:
     def test_lightweight_fallback(self, tmp_traces):
         from mcp_server import _lightweight_recall
 
-        with patch("mcp_server.BASE", tmp_traces.parent):
-            result = _lightweight_recall("SNN removal decision", top_k=3)
+        result = _lightweight_recall("SNN removal decision", top_k=3, base=tmp_traces.parent)
         assert isinstance(result, str)
 
     def test_lightweight_empty_query(self):
@@ -458,11 +453,12 @@ class TestHandleRecallLightweight:
     def test_lightweight_no_match(self, tmp_traces):
         from mcp_server import _lightweight_recall
 
-        with patch("mcp_server.BASE", tmp_traces.parent):
-            import mcp_server
+        import mcp_server
 
-            mcp_server._RECALL_INDEX = None
-            result = _lightweight_recall("xyznonexistent_zzz_999", top_k=3)
+        mcp_server._RECALL_INDEX = None
+        result = _lightweight_recall(
+            "xyznonexistent_zzz_999", top_k=3, base=tmp_traces.parent
+        )
         assert "No memories" in result
 
 
@@ -480,13 +476,23 @@ class TestHandleStatus:
 
 
 class TestBuildRecallIndex:
+    def test_missing_workspace_is_empty(self, tmp_path):
+        from mcp_storage import build_recall_index
+
+        assert build_recall_index(tmp_path / "missing", lambda text: set(text.split())) == {}
+
+    def test_empty_existing_trace_directory(self, tmp_path):
+        from mcp_storage import build_recall_index
+
+        (tmp_path / "reasoning_traces").mkdir()
+        assert build_recall_index(tmp_path, lambda text: set(text.split())) == {}
+
     def test_builds_index(self, tmp_traces, tmp_semantic):
         from mcp_server import _build_recall_index
         import mcp_server
 
         mcp_server._RECALL_INDEX = None
-        with patch("mcp_server.BASE", tmp_traces.parent):
-            index = _build_recall_index()
+        index = _build_recall_index(tmp_traces.parent)
         assert len(index) > 0
         mcp_server._RECALL_INDEX = None
 
@@ -495,9 +501,8 @@ class TestBuildRecallIndex:
         import mcp_server
 
         mcp_server._RECALL_INDEX = None
-        with patch("mcp_server.BASE", tmp_traces.parent):
-            idx1 = _build_recall_index()
-            idx2 = _build_recall_index()
+        idx1 = _build_recall_index(tmp_traces.parent)
+        idx2 = _build_recall_index(tmp_traces.parent)
         assert idx1 is idx2
         mcp_server._RECALL_INDEX = None
 

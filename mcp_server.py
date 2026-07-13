@@ -41,7 +41,7 @@ import threading
 import time as _time
 from importlib import import_module
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from api_security import TokenBucketLimiter
 from mcp_protocol import (
@@ -49,6 +49,7 @@ from mcp_protocol import (
     TOOLS as _PROTOCOL_TOOLS,
     dispatch_request,
 )
+from mcp_storage import build_recall_index, query_graph, recall_from_index
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -491,6 +492,7 @@ def _schedule_consolidation() -> None:
 
 
 _RECALL_INDEX: dict[str, tuple[set[str], str]] | None = None
+_RECALL_INDEX_BASE: Path | None = None
 
 _rust_mcp_tok: Any | None = None
 try:
@@ -508,64 +510,32 @@ def _mcp_tok(text: str) -> set[str]:
     return set(re.findall(r"\w{3,}", text.lower()))
 
 
-def _build_recall_index() -> dict[str, tuple[set[str], str]]:
+def _build_recall_index(base: Path | None = None) -> dict[str, tuple[set[str], str]]:
     """Build in-memory token index of all traces and semantic memories.
 
     Called once, cached for the process lifetime.
     Uses Rust (remanentia_search) when available.
     """
-    global _RECALL_INDEX
-    if _RECALL_INDEX is not None:
+    global _RECALL_INDEX, _RECALL_INDEX_BASE
+    workspace = (base or BASE).resolve()
+    if _RECALL_INDEX is not None and workspace == _RECALL_INDEX_BASE:
         return _RECALL_INDEX
-
-    index: dict[str, tuple[set[str], str]] = {}
-    traces_dir = BASE / "reasoning_traces"
-    semantic_dir = BASE / "memory" / "semantic"
-
-    if traces_dir.exists():
-        for f in traces_dir.glob("*.md"):
-            text = f.read_text(encoding="utf-8")
-            tokens = _mcp_tok(text)
-            index[f.name] = (tokens, text[:500])
-
-    if semantic_dir.exists():
-        for f in semantic_dir.rglob("*.md"):
-            text = f.read_text(encoding="utf-8")
-            tokens = _mcp_tok(text)
-            rel = str(f.relative_to(semantic_dir))
-            index[f"[semantic] {rel}"] = (tokens, text[:500])
-
-    _RECALL_INDEX = index
-    return index
+    _RECALL_INDEX = build_recall_index(workspace, _mcp_tok)
+    _RECALL_INDEX_BASE = workspace
+    return _RECALL_INDEX
 
 
-def _lightweight_recall(query: str, top_k: int = 3) -> str:
+def _lightweight_recall(query: str, top_k: int = 3, *, base: Path | None = None) -> str:
     """Fast recall from cached in-memory index.
 
     First call: ~2s (reads files). Subsequent calls: <50ms.
     """
-    q_tokens = _mcp_tok(query)
-    if not q_tokens:
-        return "Empty query."
-
-    index = _build_recall_index()
-    scored = []
-    for name, (t_tokens, snippet) in index.items():
-        overlap = len(q_tokens & t_tokens) / max(len(q_tokens), 1)
-        if overlap > 0:
-            scored.append((name, overlap, snippet))
-
-    scored.sort(key=lambda x: -x[1])
-    top = scored[:top_k]
-
-    if not top:
-        return f"No memories found for: {query}"
-
-    parts = []
-    for name, score, snippet in top:
-        parts.append(f"[{name} (score={score:.2f})]\n{snippet}")
-
-    return "\n\n".join(parts)
+    return recall_from_index(
+        query,
+        top_k=top_k,
+        index=_build_recall_index(base),
+        tokenizer=_mcp_tok,
+    )
 
 
 def handle_status() -> str:
@@ -585,28 +555,9 @@ def handle_status() -> str:
         sys.stdout = old_stdout
 
 
-def handle_graph(entity: str = "", top: int = 10) -> str:
+def handle_graph(entity: str = "", top: int = 10, *, graph_dir: Path | None = None) -> str:
     """Entity graph query."""
-    relations_path = GRAPH_DIR / "relations.jsonl"
-    if not relations_path.exists():
-        return "No relations. Run consolidation first."
-
-    rels = [json.loads(l) for l in relations_path.read_text().strip().split("\n") if l.strip()]
-
-    if entity:
-        matches = [r for r in rels if r["source"] == entity or r["target"] == entity]
-        matches.sort(key=lambda r: -r.get("weight", 0))
-        lines = [f"Connections for '{entity}':"]
-        for r in matches[:top]:
-            other = r["target"] if r["source"] == entity else r["source"]
-            lines.append(f"  {other} (weight={r['weight']}, {len(r.get('evidence', []))} traces)")
-        return "\n".join(lines)
-
-    top_rels = sorted(rels, key=lambda r: -r.get("weight", 0))[:top]
-    lines = [f"Top {len(top_rels)} entity relationships:"]
-    for r in top_rels:
-        lines.append(f"  {r['source']} <-> {r['target']} weight={r['weight']}")
-    return "\n".join(lines)
+    return query_graph(graph_dir or GRAPH_DIR, entity=entity, top=top)
 
 
 def handle_recall_feedback(query: str, was_used: bool, by: str = "") -> str:
@@ -685,12 +636,15 @@ def handle_request(request: dict[str, Any]) -> dict[str, Any] | None:
             args.get("query", ""), bool(args.get("was_correct", False))
         ),
     }
-    return dispatch_request(
-        request,
-        handlers=handlers,
-        audit_logger=MCP_AUDIT_LOGGER,
-        limiter_factory=_mcp_rate_limiter,
-        rate_key=_mcp_rate_limit_key,
+    return cast(
+        dict[str, Any] | None,
+        dispatch_request(
+            request,
+            handlers=handlers,
+            audit_logger=MCP_AUDIT_LOGGER,
+            limiter_factory=_mcp_rate_limiter,
+            rate_key=_mcp_rate_limit_key,
+        ),
     )
 
 
