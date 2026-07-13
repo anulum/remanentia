@@ -17,13 +17,12 @@ const TAU_M: f64 = 10.0;
 
 /// Deterministic LIF simulation returning spike counts.
 ///
-/// Uses a seeded uniform init for v (matching Python's default_rng(0)).
-/// Parameters match the Python implementation exactly.
+/// Uses the xorshift64 sequence shared by the portable Python implementation.
+/// Parameters and floating-point accumulation match the Python path exactly.
 fn spike_feature_impl(w: &ArrayView2<f64>, stim: &ArrayView1<f64>, steps: usize) -> Array1<f32> {
     let n = stim.len();
 
-    // Deterministic init matching numpy default_rng(0).uniform(-70, -55, n)
-    // We use a simple LCG with seed 0 for reproducibility
+    // Deterministic xorshift64 initialization shared with the Python fallback.
     let mut v: Vec<f64> = Vec::with_capacity(n);
     let mut rng_state: u64 = 0x12345678_9abcdef0; // deterministic seed
     for _ in 0..n {

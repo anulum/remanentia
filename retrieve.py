@@ -91,7 +91,6 @@ except ImportError:
 try:
     from .retrieval_text import (
         STOPWORDS as _STOPWORDS,
-        bigrams as _bigrams,
         build_idf as _build_idf,
         expand_query as _expand_query,
         stem as _stem,  # noqa: F401 - retained as a compatibility surface
@@ -101,7 +100,6 @@ try:
 except ImportError:
     from retrieval_text import (
         STOPWORDS as _STOPWORDS,
-        bigrams as _bigrams,
         build_idf as _build_idf,
         expand_query as _expand_query,
         stem as _stem,  # noqa: F401 - retained as a compatibility surface
@@ -179,6 +177,21 @@ except ImportError:
         retrieve_via_live_service as _run_live_retrieval,
     )
 
+try:
+    from .retrieval_spiking import (
+        cosine_similarity as _cosine_sim,
+        encode_text as _encode,
+        snn_affinity as _snn_affinity,  # noqa: F401 - private compatibility surface
+        spike_feature as _spike_feature,
+    )
+except ImportError:
+    from retrieval_spiking import (
+        cosine_similarity as _cosine_sim,
+        encode_text as _encode,
+        snn_affinity as _snn_affinity,  # noqa: F401 - private compatibility surface
+        spike_feature as _spike_feature,
+    )
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("ArcSap.Retrieve")
 
@@ -238,51 +251,11 @@ _WEIGHT_EMB = 0.45  # best-paragraph embedding is the strongest signal
 _LIVE_RETRIEVAL_TIMEOUT_S = 30.0
 _LIVE_SERVICE_STALE_S = 300.0
 
-_HASH_PRIMES = [7919, 104729, 15485863, 32452843, 49979687, 67867967, 86028121]
 _NETWORK_CACHE: dict[tuple[str, int, int, str], dict] = {}
 _TRACE_INDEX_CACHE: dict[str, dict] = {}
 _QUERY_FEATURE_CACHE: dict[tuple[str, str], dict] = {}
 _EMBED_CACHE_LOADED = False
 _QUERY_FEATURE_CACHE_LOADED = False
-
-def _encode(text: str, n_neurons: int) -> np.ndarray:
-    """Encode text to neuron activation pattern.
-
-    Uses the active backend from encoding.py. Retrieval activates the backend
-    declared by the selected checkpoint before any text is encoded.
-    """
-    try:
-        from encoding import encode_text
-
-        return encode_text(text, n_neurons)
-    except ImportError:
-        pass
-    # Rust hash encoding (identical logic, 3-10x faster)
-    try:
-        from remanentia_retrieve import hash_encode as _rust_enc
-
-        return _rust_enc(text, n_neurons, list(_HASH_PRIMES), _STOPWORDS)  # pragma: no cover
-    except ImportError:
-        pass
-    # Fallback to inline Python hash encoding
-    import hashlib
-
-    pattern = np.zeros(n_neurons)
-    tokens = _tokenize(text)
-
-    for word in tokens:
-        h = int(hashlib.md5(word.encode()).hexdigest(), 16)
-        for p in _HASH_PRIMES:
-            idx = (h + p) % n_neurons
-            pattern[idx] = min(pattern[idx] + 0.15, 1.0)
-
-    for bg in _bigrams(tokens):
-        h = int(hashlib.md5(bg.encode()).hexdigest(), 16)
-        for p in _HASH_PRIMES[:5]:
-            idx = (h + p) % n_neurons
-            pattern[idx] = min(pattern[idx] + 0.25, 1.0)
-
-    return pattern
 
 
 # ── Network I/O ───────────────────────────────────────────────────
@@ -350,65 +323,6 @@ def _load_network(state_path: Path | None = None) -> dict:
     )
     _activate_backend(str(data["_encoding_backend"]))
     return data
-
-
-def _cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
-    try:
-        from remanentia_retrieve import cosine_sim as _rust_cos
-
-        return _rust_cos(a.astype(np.float64), b.astype(np.float64))  # pragma: no cover
-    except ImportError:
-        pass
-    na = np.linalg.norm(a)
-    nb = np.linalg.norm(b)
-    if na < 1e-12 or nb < 1e-12:
-        return 0.0
-    return float(np.dot(a, b) / (na * nb))
-
-
-def _spike_feature(w: np.ndarray, stim: np.ndarray, steps: int = 50) -> np.ndarray:
-    """Deterministic spike-count feature for a stimulus under fixed weights."""
-    try:
-        from remanentia_retrieve import spike_feature as _rust_sf
-
-        return _rust_sf(  # pragma: no cover
-            w.astype(np.float64), stim.astype(np.float64), steps
-        )
-    except ImportError:
-        pass
-    n = len(stim)
-    dt_ms = 1.0
-    v_rest, v_thresh, v_reset, tau_m = -65.0, -55.0, -70.0, 10.0
-
-    v = np.random.default_rng(0).uniform(-70.0, -55.0, n)
-    i_ext = 0.3 + stim * 2.0
-    spike_count = np.zeros(n, dtype=np.float32)
-
-    for _ in range(steps):
-        fired = (v >= v_thresh).astype(np.float32)
-        i_syn = w.dot(fired) if hasattr(w, "dot") else (w @ fired)
-        dv = (-(v - v_rest) / tau_m + i_ext + i_syn * 0.5) * dt_ms
-        v += dv
-        spiked = v >= v_thresh
-        spike_count += spiked.astype(np.float32)
-        v[spiked] = v_reset
-
-    return spike_count
-
-
-def _snn_affinity(w: np.ndarray, query_stim: np.ndarray, trace_stim: np.ndarray) -> float:
-    """Compare deterministic query/trace spike-count features."""
-    try:
-        from remanentia_retrieve import snn_affinity as _rust_aff
-
-        return _rust_aff(  # pragma: no cover
-            w.astype(np.float64),
-            query_stim.astype(np.float64),
-            trace_stim.astype(np.float64),
-        )
-    except ImportError:
-        pass
-    return _cosine_sim(_spike_feature(w, query_stim), _spike_feature(w, trace_stim))
 
 
 def _trace_fingerprint(trace_files: list[Path]) -> str:
