@@ -16,7 +16,7 @@ from unittest.mock import patch
 import memory_index
 import numpy as np
 
-from compiled_memory import CompiledFact
+from compiled_memory import CompiledFact, write_compiled_facts
 from memory_query_intelligence import classify_paragraph_python
 from memory_index import (
     Document,
@@ -974,53 +974,33 @@ class TestDataclasses:
 
 
 class TestCompiledFactPriorityResults:
-    def test_compiled_fact_results_import_failure(self, monkeypatch):
-        real_import = __import__
-
-        def reject_compiled(name, globals=None, locals=None, fromlist=(), level=0):
-            if name == "compiled_memory":
-                raise ImportError(name)
-            return real_import(name, globals, locals, fromlist, level)
-
-        monkeypatch.setattr("builtins.__import__", reject_compiled)
-
-        assert memory_index._compiled_fact_results("vector worker", top_k=3) == []
-
-    def test_compiled_fact_results_search_failure(self, monkeypatch):
-        import compiled_memory
-
-        monkeypatch.setattr(compiled_memory, "load_compiled_facts", lambda: [])
-
-        def fail_search(*_args):
-            raise RuntimeError("compiled facts unavailable")
-
-        monkeypatch.setattr(compiled_memory, "search_compiled_facts", fail_search)
-
-        assert memory_index._compiled_fact_results("vector worker", top_k=3) == []
-
-    def test_compiled_fact_results_filters_low_scores_and_formats_hits(self, monkeypatch):
-        import compiled_memory
-
-        fact = CompiledFact(
+    def test_compiled_fact_results_load_score_filter_and_format_real_facts(self, tmp_path):
+        low_score_fact = CompiledFact(
+            fact_id="service.worker_refresh",
+            fact_type="continuity",
+            subject="Worker refresh",
+            fact="The vector worker refreshes an index.",
+            source="ops.md",
+        )
+        priority_fact = CompiledFact(
             fact_id="service.vector_worker",
             fact_type="continuity",
-            subject="Vector worker",
+            subject="vector worker",
             fact="The vector worker refreshes durable memory indexes.",
             source="ops.md",
         )
-        monkeypatch.setattr(compiled_memory, "load_compiled_facts", lambda: [fact])
-        monkeypatch.setattr(
-            compiled_memory,
-            "search_compiled_facts",
-            lambda *_args, **_kwargs: [(fact, 7.5), (fact, 9.25)],
-        )
+        compiled_dir = tmp_path / "compiled"
+        write_compiled_facts([low_score_fact, priority_fact], compiled_dir)
 
-        results = memory_index._compiled_fact_results("vector worker", top_k=3)
+        results = memory_index._compiled_fact_results(
+            "vector worker", top_k=3, facts_path=compiled_dir / "facts.jsonl"
+        )
 
         assert len(results) == 1
         assert results[0].name == "service.vector_worker.fact"
         assert results[0].source == "compiled"
-        assert results[0].score == 1009.25
+        assert results[0].score == 1009.0
+        assert results[0].answer == priority_fact.fact
 
     def test_merge_priority_results_deduplicates_and_respects_top_k(self):
         priority = SearchResult(name="a.md", source="compiled", score=10, snippet="same")

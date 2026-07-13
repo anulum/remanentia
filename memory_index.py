@@ -161,13 +161,15 @@ class SearchResult:
     confidence: float = 0.0  # 0.0-1.0, computed from score distribution
 
 
-def _compiled_fact_results(query: str, top_k: int) -> list[SearchResult]:
+def _compiled_fact_results(
+    query: str, top_k: int, facts_path: Path | None = None
+) -> list[SearchResult]:
     try:
         from compiled_memory import load_compiled_facts, search_compiled_facts
     except Exception:
         return []
     try:
-        matches = search_compiled_facts(query, load_compiled_facts(), top_k=top_k)
+        matches = search_compiled_facts(query, load_compiled_facts(facts_path), top_k=top_k)
     except Exception:
         log.debug("Compiled memory search failed", exc_info=True)
         return []
