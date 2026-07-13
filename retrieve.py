@@ -59,16 +59,35 @@ import argparse
 import hashlib
 import json
 import logging
-import math
 import gzip
 import re
 import sys
 import time
 import zipfile
-from collections import Counter
 from pathlib import Path
 
 import numpy as np
+
+try:
+    from .retrieval_text import (
+        STOPWORDS as _STOPWORDS,
+        bigrams as _bigrams,
+        build_idf as _build_idf,
+        expand_query as _expand_query,
+        stem as _stem,  # noqa: F401 - retained as a compatibility surface
+        tfidf_score as _tfidf_score,
+        tokenize as _tokenize,
+    )
+except ImportError:
+    from retrieval_text import (
+        STOPWORDS as _STOPWORDS,
+        bigrams as _bigrams,
+        build_idf as _build_idf,
+        expand_query as _expand_query,
+        stem as _stem,  # noqa: F401 - retained as a compatibility surface
+        tfidf_score as _tfidf_score,
+        tokenize as _tokenize,
+    )
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("ArcSap.Retrieve")
@@ -147,204 +166,6 @@ _QUERY_FEATURE_CACHE: dict[tuple[str, str], dict] = {}
 _EMBED_CACHE_LOADED = False
 _QUERY_FEATURE_CACHE_LOADED = False
 
-# Common words that carry no discriminating signal
-_STOPWORDS = frozenset(
-    [
-        "the",
-        "a",
-        "an",
-        "and",
-        "or",
-        "but",
-        "in",
-        "on",
-        "at",
-        "to",
-        "for",
-        "of",
-        "is",
-        "it",
-        "by",
-        "as",
-        "with",
-        "from",
-        "was",
-        "were",
-        "be",
-        "been",
-        "have",
-        "has",
-        "had",
-        "this",
-        "that",
-        "these",
-        "those",
-        "are",
-        "not",
-        "no",
-        "its",
-        "the",
-        "into",
-        "can",
-        "will",
-        "would",
-        "should",
-        "could",
-        "may",
-        "also",
-        "so",
-        "if",
-        "when",
-        "then",
-        "than",
-        "more",
-        "most",
-        "all",
-        "any",
-        "each",
-        "every",
-        "both",
-        "few",
-        "many",
-        "much",
-        "some",
-        "such",
-        "only",
-        "just",
-        "about",
-        "over",
-        "after",
-        "before",
-        "between",
-        "through",
-        "during",
-        "up",
-        "down",
-        "out",
-        "off",
-        "did",
-        "do",
-        "does",
-        "how",
-        "what",
-        "which",
-        "who",
-        "whom",
-        "where",
-        "why",
-        "here",
-        "there",
-        "their",
-        "them",
-        "they",
-        "we",
-        "our",
-        "us",
-        "you",
-        "your",
-        "he",
-        "she",
-        "his",
-        "her",
-        "i",
-        "me",
-        "my",
-        "we",
-        "us",
-        "being",
-        "now",
-        "very",
-    ]
-)
-
-
-def _tokenize(text: str) -> list[str]:
-    """Split text into lowercase word tokens, stripping stopwords."""
-    try:
-        from remanentia_retrieve import tokenize as _rust_tok
-
-        return _rust_tok(text, _STOPWORDS)  # pragma: no cover
-    except ImportError:
-        pass
-    return [
-        w for w in re.findall(r"[a-z0-9_]+", text.lower()) if w not in _STOPWORDS and len(w) > 1
-    ]
-
-
-_STEM_SUFFIXES = [
-    "ation",
-    "tion",
-    "sion",
-    "meant",
-    "ness",
-    "ity",
-    "ous",
-    "ive",
-    "ing",
-    "ical",
-    "ally",
-    "able",
-    "ible",
-    "full",
-    "less",
-    "ized",
-    "ise",
-    "ize",
-    "ed",
-    "ly",
-    "er",
-    "est",
-    "al",
-    "es",
-    "s",
-]
-
-
-def _stem(word: str) -> str:
-    """Minimal suffix-stripping stemmer."""
-    try:
-        from remanentia_retrieve import stem as _rust_stem
-
-        return _rust_stem(word)  # pragma: no cover
-    except ImportError:
-        pass
-    for suffix in _STEM_SUFFIXES:
-        if word.endswith(suffix) and len(word) - len(suffix) >= 3:
-            return word[: -len(suffix)]
-    return word
-
-
-def _expand_query(query: str) -> str:
-    """Expand query with stems for broader matching.
-
-    "gyrokinetic transport saturation" →
-    "gyrokinetic transport saturation gyrokinet transport saturat"
-    """
-    try:
-        from remanentia_retrieve import expand_query as _rust_eq
-
-        return _rust_eq(query, _STOPWORDS)  # pragma: no cover
-    except ImportError:
-        pass
-    tokens = _tokenize(query)
-    stems = {_stem(t) for t in tokens}
-    extra = stems - set(tokens)
-    if extra:
-        return query + " " + " ".join(sorted(extra))
-    return query
-
-
-def _bigrams(tokens: list[str]) -> list[str]:
-    """Generate bigrams from token list."""
-    try:
-        from remanentia_retrieve import bigrams as _rust_bg
-
-        return _rust_bg(tokens)  # pragma: no cover
-    except ImportError:
-        pass
-    return [f"{tokens[i]}_{tokens[i + 1]}" for i in range(len(tokens) - 1)]
-
-
 def _encode(text: str, n_neurons: int) -> np.ndarray:
     """Encode text to neuron activation pattern.
 
@@ -383,72 +204,6 @@ def _encode(text: str, n_neurons: int) -> np.ndarray:
             pattern[idx] = min(pattern[idx] + 0.25, 1.0)
 
     return pattern
-
-
-# ── TF-IDF machinery ──────────────────────────────────────────────
-
-
-def _build_idf(trace_texts: dict[str, str]) -> dict[str, float]:
-    """Compute inverse document frequency over unigrams + bigrams.
-
-    IDF(term) = log(N / (1 + df(term)))
-    Terms appearing in every document get IDF ≈ 0 (no discrimination).
-    Terms unique to one document get IDF ≈ log(N) (high discrimination).
-    """
-    try:
-        from remanentia_retrieve import build_idf as _rust_idf
-
-        return _rust_idf(trace_texts, _STOPWORDS)  # pragma: no cover
-    except ImportError:
-        pass
-    n_docs = len(trace_texts)
-    df: Counter[str] = Counter()
-    for name, text in trace_texts.items():
-        tokens = _tokenize(text + " " + name.replace("-", " ").replace("_", " "))
-        terms = set(tokens) | set(_bigrams(tokens))
-        for t in terms:
-            df[t] += 1
-    return {t: math.log(1 + n_docs / (1 + count)) for t, count in df.items()}
-
-
-def _tfidf_score(query: str, doc_name: str, doc_text: str, idf: dict[str, float]) -> float:
-    """TF-IDF with sublinear TF, bigrams, and filename boosting.
-
-    score = Σ_{t ∈ query_terms ∩ doc_terms} (1 + log(tf)) × idf(t)
-
-    Filename terms get 3x boost (the filename is the most condensed
-    description of a trace's topic).
-    """
-    try:
-        from remanentia_retrieve import tfidf_score as _rust_tfidf
-
-        return _rust_tfidf(query, doc_name, doc_text, idf, _STOPWORDS)  # pragma: no cover
-    except ImportError:
-        pass
-    q_tokens = _tokenize(query)
-    if not q_tokens:
-        return 0.0
-    q_terms = set(q_tokens) | set(_bigrams(q_tokens))
-
-    # Document terms: body + filename (filename boosted)
-    name_tokens = _tokenize(doc_name.replace("-", " ").replace("_", " "))
-    doc_tokens = _tokenize(doc_text)
-    all_tokens = doc_tokens + name_tokens * 3  # filename 3x weight
-    doc_tf: Counter[str] = Counter(all_tokens)
-    # Add bigrams
-    for bg in _bigrams(doc_tokens):
-        doc_tf[bg] += 1
-    for bg in _bigrams(name_tokens):
-        doc_tf[bg] += 3  # filename bigrams boosted too
-
-    score = 0.0
-    for t in q_terms:
-        if t in doc_tf:
-            tf = 1.0 + math.log(doc_tf[t])  # sublinear TF
-            score += tf * idf.get(t, 0.0)
-
-    # Normalize by query length to make scores comparable
-    return score / len(q_terms)
 
 
 # ── Network I/O ───────────────────────────────────────────────────
