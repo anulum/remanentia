@@ -903,6 +903,11 @@ def run_benchmark() -> None:
             # inflates ~30 %). Stamping every row means a downstream consumer never
             # has to infer the setting from a filename or an operator's memory.
             "setting": "full_s" if _USE_FULL else "oracle",
+            # Multi-seed reproducibility marker: the effective RNG seed of this
+            # run, so the reproducibility manifest can prove which committed runs
+            # are independent seeds and refuse a single-seed headline (roadmap
+            # "never a single run").
+            "seed": _EFFECTIVE_SEED,
         }
         if retrieval_diagnostics:
             hypothesis_record["retrieval_diagnostics"] = retrieval_diagnostics

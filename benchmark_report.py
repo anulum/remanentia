@@ -164,11 +164,17 @@ def _summarise_rows(
     latencies: list[float] = []
     prompt_hashes: set[str] = set()
     models: set[str] = set()
+    seeds: set[int] = set()
     prompt_token_estimate = 0
     completion_tokens = 0
     unjudged = 0
 
     for row in rows:
+        # Seed provenance is run metadata, not correctness evidence, so it is
+        # collected from every row — judged or not.
+        seed = _int_from_value(row.get("seed"))
+        if seed is not None:
+            seeds.add(seed)
         if "judge_label" not in row:
             unjudged += 1
             continue
@@ -236,7 +242,27 @@ def _summarise_rows(
             "models": sorted(models),
             "prompt_sha256": sorted(prompt_hashes),
         },
+        "seeds": sorted(seeds),
     }
+
+
+def _seeds_from_payload(payload: Mapping[str, object]) -> list[int]:
+    """Extract distinct RNG seeds from a JSON summary payload.
+
+    Accepts either a ``seeds`` list (multi-run summary) or a single ``seed``
+    value; anything non-integral is ignored rather than fabricated.
+    """
+    seeds: set[int] = set()
+    raw_list = payload.get("seeds")
+    if isinstance(raw_list, list):
+        for value in raw_list:
+            parsed = _int_from_value(value)
+            if parsed is not None:
+                seeds.add(parsed)
+    single = _int_from_value(payload.get("seed"))
+    if single is not None:
+        seeds.add(single)
+    return sorted(seeds)
 
 
 def _summarise_json_summary(
@@ -286,6 +312,7 @@ def _summarise_json_summary(
         "runtime": runtime,
         "tokens": {"judge_prompt_estimate": 0, "judge_completion": 0},
         "judge": {"models": [], "prompt_sha256": []},
+        "seeds": _seeds_from_payload(payload),
     }
     method = payload.get("method")
     if isinstance(method, str):

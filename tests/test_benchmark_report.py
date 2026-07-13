@@ -373,3 +373,62 @@ def test_main_writes_report_json(tmp_path: Path, capsys: pytest.CaptureFixture[s
     persisted = json.loads(report_path.read_text(encoding="utf-8"))
     assert persisted["score"] == {"correct": 1, "total": 1, "accuracy": 100.0}
     assert str(report_path) in capsys.readouterr().out
+
+
+def test_jsonl_rows_aggregate_distinct_seeds_including_unjudged(tmp_path: Path) -> None:
+    """Row seeds land in the report — distinct, sorted, and from unjudged rows too."""
+    path = tmp_path / "results.jsonl"
+    _write_jsonl(
+        path,
+        [
+            {"question_id": "q1", "judge_label": True, "judge_model": "j", "seed": 43},
+            {"question_id": "q2", "judge_label": False, "judge_model": "j", "seed": 17},
+            {"question_id": "q3", "seed": 99},  # unjudged: seed still provenance
+            {"question_id": "q4", "judge_label": True, "judge_model": "j", "seed": 17},
+            {"question_id": "q5", "judge_label": True, "judge_model": "j"},  # no seed
+        ],
+    )
+
+    report = report_from_path(path, benchmark="longmemeval", generated_at="t")
+
+    assert report["seeds"] == [17, 43, 99]
+
+
+def test_json_summary_accepts_single_seed_and_seed_list(tmp_path: Path) -> None:
+    """LOCOMO-style summaries surface seed / seeds fields; malformed entries drop."""
+    path = tmp_path / "summary.json"
+    path.write_text(
+        json.dumps(
+            {
+                "total_correct": 1,
+                "total_tested": 2,
+                "by_category": {"c": {"correct": 1, "total": 2}},
+                "seed": 7,
+                "seeds": [7, 9, "x", True],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = report_from_path(path, benchmark="locomo", generated_at="t")
+
+    assert report["seeds"] == [7, 9]
+
+
+def test_json_summary_without_seed_reports_empty_list(tmp_path: Path) -> None:
+    """No seed metadata means an empty list — the manifest marks it ineligible."""
+    path = tmp_path / "summary.json"
+    path.write_text(
+        json.dumps(
+            {
+                "total_correct": 1,
+                "total_tested": 2,
+                "by_category": {"c": {"correct": 1, "total": 2}},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = report_from_path(path, benchmark="locomo", generated_at="t")
+
+    assert report["seeds"] == []

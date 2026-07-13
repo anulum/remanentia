@@ -373,3 +373,161 @@ def test_main_writes_manifest(tmp_path: Path, capsys: pytest.CaptureFixture[str]
         "remanentia-benchmark-report report.json --benchmark longmemeval"
     ]
     assert "wrote benchmark manifest" in capsys.readouterr().out
+
+
+def _seeded_report(
+    path: Path,
+    *,
+    benchmark: str = "longmemeval",
+    seeds: list[int] | None = None,
+    accuracy: float = 50.0,
+) -> None:
+    """Create a manifest-compatible evidence report carrying seed metadata."""
+    _write_json(
+        path,
+        {
+            "schema_version": 1,
+            "benchmark": benchmark,
+            "source_path": "data/results.jsonl",
+            "source_format": "jsonl",
+            "generated_at": "2026-07-13T02:00:00+00:00",
+            "n_records": 2,
+            "score": {"correct": 1, "total": 2, "accuracy": accuracy},
+            "runtime": {},
+            "tokens": {},
+            "judge": {},
+            "seeds": seeds if seeds is not None else [],
+        },
+    )
+
+
+def test_headline_eligible_with_two_distinct_seeds_and_variance_band(tmp_path: Path) -> None:
+    """Two runs with distinct seeds make a headline; accuracy is a band, not a point."""
+    a = tmp_path / "run_a.json"
+    b = tmp_path / "run_b.json"
+    _seeded_report(a, seeds=[17], accuracy=50.0)
+    _seeded_report(b, seeds=[43], accuracy=54.0)
+
+    manifest = build_benchmark_manifest(report_paths=[a, b], repo_root=tmp_path)
+    (headline,) = manifest["headlines"]
+
+    assert headline["benchmark"] == "longmemeval"
+    assert headline["runs"] == 2
+    assert headline["seeds"] == [17, 43]
+    assert headline["headline_eligible"] is True
+    assert headline["reason"] == "ok"
+    assert headline["variance_band"] == [50.0, 54.0]
+    assert headline["accuracy"]["n"] == 2
+    assert headline["accuracy"]["mean"] == 52.0
+    assert headline["accuracy"]["stdev"] == round(2.8284, 4)
+
+
+def test_headline_single_seed_and_no_seed_reasons(tmp_path: Path) -> None:
+    """One distinct seed (even across runs) or no seed metadata blocks the headline."""
+    a = tmp_path / "a.json"
+    b = tmp_path / "b.json"
+    c = tmp_path / "c.json"
+    _seeded_report(a, benchmark="locomo", seeds=[7], accuracy=80.0)
+    _seeded_report(b, benchmark="locomo", seeds=[7], accuracy=82.0)
+    _seeded_report(c, benchmark="longmemeval", seeds=[], accuracy=56.6)
+
+    manifest = build_benchmark_manifest(report_paths=[a, b, c], repo_root=tmp_path)
+    by_name = {h["benchmark"]: h for h in manifest["headlines"]}
+
+    locomo = by_name["locomo"]
+    assert locomo["headline_eligible"] is False
+    assert locomo["reason"] == "single_seed"
+    assert locomo["seeds"] == [7]
+    lme = by_name["longmemeval"]
+    assert lme["headline_eligible"] is False
+    assert lme["reason"] == "no_seed_metadata"
+    assert lme["accuracy"]["stdev"] is None
+    assert lme["variance_band"] == [56.6, 56.6]
+
+
+def test_headline_without_accuracies_has_null_band(tmp_path: Path) -> None:
+    """Runs whose score carries no accuracy yield a null band, not a fabricated one."""
+    a = tmp_path / "a.json"
+    _write_json(
+        a,
+        {
+            "schema_version": 1,
+            "benchmark": "longmemeval",
+            "source_path": "data/results.jsonl",
+            "source_format": "jsonl",
+            "generated_at": "2026-07-13T02:00:00+00:00",
+            "n_records": 0,
+            "score": {"correct": None, "total": None, "accuracy": None},
+            "seeds": [1, 2],
+        },
+    )
+
+    manifest = build_benchmark_manifest(report_paths=[a], repo_root=tmp_path)
+    (headline,) = manifest["headlines"]
+
+    assert headline["headline_eligible"] is True
+    assert headline["variance_band"] is None
+    assert headline["accuracy"]["n"] == 0
+    assert headline["accuracy"]["mean"] is None
+
+
+def test_seed_list_ignores_malformed_values(tmp_path: Path) -> None:
+    """Non-integral seed entries are dropped, never coerced or fabricated."""
+    a = tmp_path / "a.json"
+    _write_json(
+        a,
+        {
+            "schema_version": 1,
+            "benchmark": "longmemeval",
+            "source_path": "data/results.jsonl",
+            "source_format": "jsonl",
+            "generated_at": "2026-07-13T02:00:00+00:00",
+            "n_records": 1,
+            "score": {"correct": 1, "total": 1, "accuracy": 100.0},
+            "seeds": [3, "x", True, 3.0, 2.5, None],
+        },
+    )
+
+    manifest = build_benchmark_manifest(report_paths=[a], repo_root=tmp_path)
+
+    assert manifest["reports"][0]["seeds"] == [3]
+    assert manifest["headlines"][0]["seeds"] == [3]
+
+
+def test_main_require_multi_seed_gate(tmp_path: Path, capsys: object) -> None:
+    """--require-multi-seed exits 1 on single-seed benchmarks and 0 when eligible."""
+    import benchmark_manifest as module
+
+    single = tmp_path / "single.json"
+    _seeded_report(single, seeds=[7])
+    out = tmp_path / "manifest.json"
+
+    code = module.main(
+        [
+            "--report",
+            str(single),
+            "--output",
+            str(out),
+            "--repo-root",
+            str(tmp_path),
+            "--require-multi-seed",
+        ]
+    )
+    assert code == 1
+
+    second = tmp_path / "second.json"
+    _seeded_report(second, seeds=[8], accuracy=52.0)
+    code = module.main(
+        [
+            "--report",
+            str(single),
+            "--report",
+            str(second),
+            "--output",
+            str(out),
+            "--repo-root",
+            str(tmp_path),
+            "--require-multi-seed",
+        ]
+    )
+    assert code == 0

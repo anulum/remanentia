@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-27T14:00:41+02:00",
+  "generated_at": "2026-07-13T01:00:33.529925+00:00",
   "git": {
-    "head": "6aced0d81fda94ae38c2622591b73e5feeb0f310"
+    "head": "18f9e7ec2f5282de730fd93a19f3fb11c3ebe345"
   },
   "environment": {
     "python_version": "3.12.3",
@@ -49,7 +49,8 @@
       "judge": {
         "models": [],
         "prompt_sha256": []
-      }
+      },
+      "seeds": []
     },
     {
       "benchmark": "locomo",
@@ -83,7 +84,8 @@
       "judge": {
         "models": [],
         "prompt_sha256": []
-      }
+      },
+      "seeds": []
     }
   ],
   "artifacts": [
@@ -92,6 +94,44 @@
       "exists": true,
       "bytes": 1834,
       "sha256": "f86591f3b566d59f8db300e2617a251384eea033099467063a1d2b0ed623a4e6"
+    }
+  ],
+  "headlines": [
+    {
+      "benchmark": "locomo",
+      "runs": 1,
+      "seeds": [],
+      "accuracy": {
+        "n": 1,
+        "mean": 83.1,
+        "min": 83.1,
+        "max": 83.1,
+        "stdev": null
+      },
+      "variance_band": [
+        83.1,
+        83.1
+      ],
+      "headline_eligible": false,
+      "reason": "no_seed_metadata"
+    },
+    {
+      "benchmark": "longmemeval",
+      "runs": 1,
+      "seeds": [],
+      "accuracy": {
+        "n": 1,
+        "mean": 72.2,
+        "min": 72.2,
+        "max": 72.2,
+        "stdev": null
+      },
+      "variance_band": [
+        72.2,
+        72.2
+      ],
+      "headline_eligible": false,
+      "reason": "no_seed_metadata"
     }
   ]
 }

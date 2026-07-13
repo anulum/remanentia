@@ -6,7 +6,15 @@
 # Contact: www.anulum.li | protoscience@anulum.li
 # Remanentia — benchmark reproducibility manifests
 
-"""Build reproducibility manifests for committed benchmark evidence artefacts."""
+"""Build reproducibility manifests for committed benchmark evidence artefacts.
+
+Beyond hashing the evidence files, the manifest aggregates a per-benchmark
+``headlines`` section: how many runs exist, which distinct RNG seeds they used,
+and the run-to-run accuracy variance band. A benchmark is *headline-eligible*
+only when at least two distinct seeds back it (roadmap "never a single run");
+``--require-multi-seed`` turns that eligibility into a hard exit-code gate so a
+docs or CI lane can refuse single-seed headline claims.
+"""
 
 from __future__ import annotations
 
@@ -14,6 +22,7 @@ import argparse
 import hashlib
 import json
 import platform
+import statistics
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -77,6 +86,7 @@ def build_benchmark_manifest(
         "commands": commands or [],
         "reports": reports,
         "artifacts": artifacts,
+        "headlines": _headline_entries(reports),
     }
 
 
@@ -131,7 +141,71 @@ def _report_entry(path: Path, repo_root: Path) -> JsonObject:
         "runtime": _optional_object(payload.get("runtime")) or {},
         "tokens": _optional_object(payload.get("tokens")) or {},
         "judge": _optional_object(payload.get("judge")) or {},
+        "seeds": _seed_list(payload.get("seeds")),
     }
+
+
+def _seed_list(value: object) -> list[int]:
+    """Return the report's distinct integral seeds, sorted; never fabricated."""
+    if not isinstance(value, list):
+        return []
+    seeds = {seed for seed in (_optional_int(item) for item in value) if seed is not None}
+    return sorted(seeds)
+
+
+def _headline_entries(reports: list[JsonObject]) -> list[JsonObject]:
+    """Aggregate per-benchmark headline eligibility and accuracy variance.
+
+    Groups the manifest's report entries by benchmark name. A benchmark is
+    headline-eligible only when its runs carry at least two distinct RNG
+    seeds; a single run — or runs without seed metadata (every pre-L6.5
+    artefact) — is honestly marked ineligible instead of being presented as
+    a settled number. Accuracy is reported as a variance band across runs,
+    not a point estimate.
+    """
+    grouped: dict[str, list[JsonObject]] = {}
+    for report in reports:
+        grouped.setdefault(cast(str, report["benchmark"]), []).append(report)
+
+    headlines: list[JsonObject] = []
+    for benchmark in sorted(grouped):
+        entries = grouped[benchmark]
+        seeds = sorted({seed for entry in entries for seed in cast(list[int], entry["seeds"])})
+        accuracies = [
+            accuracy
+            for entry in entries
+            if (accuracy := cast(JsonObject, entry["score"]).get("accuracy")) is not None
+            and isinstance(accuracy, float)
+        ]
+        eligible = len(seeds) >= 2
+        if eligible:
+            reason = "ok"
+        elif not seeds:
+            reason = "no_seed_metadata"
+        else:
+            reason = "single_seed"
+        headlines.append(
+            {
+                "benchmark": benchmark,
+                "runs": len(entries),
+                "seeds": seeds,
+                "accuracy": {
+                    "n": len(accuracies),
+                    "mean": round(statistics.fmean(accuracies), 4) if accuracies else None,
+                    "min": round(min(accuracies), 4) if accuracies else None,
+                    "max": round(max(accuracies), 4) if accuracies else None,
+                    "stdev": round(statistics.stdev(accuracies), 4)
+                    if len(accuracies) >= 2
+                    else None,
+                },
+                "variance_band": [round(min(accuracies), 4), round(max(accuracies), 4)]
+                if accuracies
+                else None,
+                "headline_eligible": eligible,
+                "reason": reason,
+            }
+        )
+    return headlines
 
 
 def _file_record(path: Path, repo_root: Path) -> JsonObject:
@@ -277,6 +351,11 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--git-sha", default=None, help="Git SHA override for deterministic reports"
     )
+    parser.add_argument(
+        "--require-multi-seed",
+        action="store_true",
+        help="exit 1 when any benchmark lacks >=2 distinct seeds (single-seed headline gate)",
+    )
     return parser
 
 
@@ -284,7 +363,7 @@ def main(argv: list[str] | None = None) -> int:
     """Run the benchmark-manifest CLI."""
     args = _build_parser().parse_args(argv)
     output = cast(Path, args.output)
-    write_benchmark_manifest(
+    manifest = write_benchmark_manifest(
         output,
         report_paths=cast(list[Path], args.report),
         artifact_paths=cast(list[Path], args.artifact),
@@ -294,6 +373,20 @@ def main(argv: list[str] | None = None) -> int:
         git_sha=cast(str | None, args.git_sha),
     )
     print(f"wrote benchmark manifest -> {output}")
+    if cast(bool, args.require_multi_seed):
+        ineligible = [
+            headline
+            for headline in cast(list[JsonObject], manifest["headlines"])
+            if not headline["headline_eligible"]
+        ]
+        if ineligible:
+            for headline in ineligible:
+                print(
+                    f"single-seed headline gate: {headline['benchmark']} "
+                    f"({headline['reason']}, runs={headline['runs']}, "
+                    f"seeds={headline['seeds']})"
+                )
+            return 1
     return 0
 
 
