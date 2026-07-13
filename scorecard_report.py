@@ -25,6 +25,8 @@ resolves to a record whose chain reaches an originating write) additionally
 requires a real provenance store; a results file alone cannot prove
 queryability, so without one the axis reports ``not measured`` rather than
 score citations against a store synthesised from the citations themselves.
+The fleet-fed recall axis (:mod:`fleet_recall_scorer`) requires the recall
+query-stream ledger and follows the same rule: no ledger, no score.
 """
 
 from __future__ import annotations
@@ -36,6 +38,7 @@ from pathlib import Path
 from typing import Literal
 
 from coverage_accuracy import Outcome, risk_coverage
+from fleet_recall_scorer import FleetRecallReport, report_from_ledger
 from lineage_completeness import AnswerLineage, ProvenanceNode, lineage_completeness
 from no_egress_audit import audit_endpoints
 
@@ -169,6 +172,7 @@ class RunReport:
     lineage_completeness: (
         float  # fraction of answers with queryable provenance (0 when not measured)
     )
+    fleet: FleetRecallReport | None = None  # fleet-fed recall axis (None = not measured)
 
     def as_dict(self) -> dict[str, object]:
         """Return a JSON-serialisable view of the run report."""
@@ -188,6 +192,7 @@ class RunReport:
             "citation_presence": round(self.citation_presence, 4),
             "lineage_measured": self.lineage_measured,
             "lineage_completeness": round(self.lineage_completeness, 4),
+            "fleet_recall": self.fleet.as_dict() if self.fleet else {"measured": False},
         }
 
 
@@ -199,6 +204,7 @@ def build_run_report(
     reader_endpoints: Sequence[object],
     accuracy_target: float = 0.90,
     provenance_store: Mapping[str, ProvenanceNode] | None = None,
+    recall_ledger: str | Path | None = None,
 ) -> RunReport:
     """Build the comparable run report from a results file and the reader endpoints.
 
@@ -209,6 +215,9 @@ def build_run_report(
     it the lineage axis stays honestly dark: scoring citations against a store
     built from the citations themselves would mark every cited id an origin and
     the axis could never fail, so a dangling citation would go undetected.
+    The fleet-fed recall axis likewise needs *recall_ledger* — the query-stream
+    JSONL the production recall path appends to; without it (or when the ledger
+    holds no query records) the axis reports ``measured: false``.
     """
     summary = parse_results(results_path)
     egress = audit_endpoints(reader_endpoints)
@@ -234,6 +243,11 @@ def build_run_report(
         assert provenance_store is not None  # narrowed by lineage_measured
         lineage_value = lineage_completeness(summary.lineages, provenance_store).completeness
 
+    fleet: FleetRecallReport | None = None
+    if recall_ledger is not None:
+        candidate = report_from_ledger(recall_ledger)
+        fleet = candidate if candidate.measured else None
+
     return RunReport(
         setting=setting,
         reader=reader,
@@ -250,6 +264,7 @@ def build_run_report(
         citation_presence=citation_presence,
         lineage_measured=lineage_measured,
         lineage_completeness=lineage_value,
+        fleet=fleet,
     )
 
 
@@ -276,6 +291,11 @@ def main() -> int:  # pragma: no cover - CLI entry point
         default=None,
         help="provenance-node JSONL to verify cited ids against (enables the lineage axis)",
     )
+    parser.add_argument(
+        "--recall-ledger",
+        default=None,
+        help="recall query-stream JSONL (recall_ledger) enabling the fleet-fed recall axis",
+    )
     args = parser.parse_args()
     endpoints = args.reader_endpoint or ["https://api.openai.com/v1"]
     store = load_provenance_store(args.provenance_store) if args.provenance_store else None
@@ -286,6 +306,7 @@ def main() -> int:  # pragma: no cover - CLI entry point
         reader_endpoints=endpoints,
         accuracy_target=args.accuracy_target,
         provenance_store=store,
+        recall_ledger=args.recall_ledger,
     )
     print(json.dumps(report.as_dict(), indent=2))
     return 0

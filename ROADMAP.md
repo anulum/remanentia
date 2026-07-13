@@ -23,7 +23,7 @@ full-S** convention (never the oracle setting); see `VALIDATION.md` and
 - [x] Docker deployment (non-root, digest-pinned, healthcheck, hash-pinned install)
   + OpenAPI export
 - [x] 16 Rust acceleration crates (PyO3 + maturin, Python fallback)
-- [x] 100 % product-module coverage gate; 73 API reference pages; ADR log; model
+- [x] 100 % product-module coverage gate; 74 API reference pages; ADR log; model
   cards; CycloneDX SBOM + sigstore + SLSA provenance release pipeline
 
 ## In progress — World-Class Hardening (2026-07)

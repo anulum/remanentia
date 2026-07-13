@@ -286,3 +286,58 @@ class TestLoadProvenanceStore:
         p.write_text('{"id": "n", "parent": 7}\n', encoding="utf-8")
         with pytest.raises(ValueError, match="parent must be a string or null"):
             load_provenance_store(p)
+
+
+class TestFleetRecallAxis:
+    def test_axis_dark_without_ledger(self, tmp_path: Path) -> None:
+        p = tmp_path / "r.jsonl"
+        _write(p, _basic_rows())
+        r = build_run_report(
+            p,
+            setting="full_s",
+            reader="gpt-4o-mini",
+            reader_endpoints=["https://api.openai.com/v1"],
+        )
+        assert r.fleet is None
+        assert r.as_dict()["fleet_recall"] == {"measured": False}
+
+    def test_axis_dark_with_empty_ledger(self, tmp_path: Path) -> None:
+        p = tmp_path / "r.jsonl"
+        _write(p, _basic_rows())
+        r = build_run_report(
+            p,
+            setting="full_s",
+            reader="gpt-4o-mini",
+            reader_endpoints=["https://api.openai.com/v1"],
+            recall_ledger=tmp_path / "absent_ledger.jsonl",
+        )
+        assert r.fleet is None
+        assert r.as_dict()["fleet_recall"] == {"measured": False}
+
+    def test_axis_scores_from_production_ledger(self, tmp_path: Path) -> None:
+        from recall_ledger import RecallLedger
+
+        p = tmp_path / "r.jsonl"
+        _write(p, _basic_rows())
+        ledger_path = tmp_path / "ledger.jsonl"
+        ledger = RecallLedger(ledger_path)
+        event = ledger.record("who owns portal", ["src:a"], top_k=5, by="claude")
+        ledger.record("pin floor", ["src:b"], top_k=5, by="codex")
+        ledger.record_outcome(event, was_used=True, was_correct=True)
+
+        r = build_run_report(
+            p,
+            setting="full_s",
+            reader="gpt-4o-mini",
+            reader_endpoints=["https://api.openai.com/v1"],
+            recall_ledger=ledger_path,
+        )
+
+        assert r.fleet is not None
+        assert r.fleet.measured is True
+        assert r.fleet.agents == 2
+        assert r.fleet.fleet_fed is True
+        d = r.as_dict()["fleet_recall"]
+        assert isinstance(d, dict)
+        assert d["queries"] == 2
+        assert d["fleet_accuracy"] == 1.0

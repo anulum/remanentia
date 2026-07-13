@@ -120,6 +120,7 @@ nav:
     - coverage_accuracy: api/coverage_accuracy.md
     - no_egress_audit: api/no_egress_audit.md
     - lineage_completeness: api/lineage_completeness.md
+    - fleet_recall_scorer: api/fleet_recall_scorer.md
     - provenance_export: api/provenance_export.md
     - world_class_scorecard: api/world_class_scorecard.md
     - lean_context: api/lean_context.md

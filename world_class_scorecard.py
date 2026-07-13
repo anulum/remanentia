@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from coverage_accuracy import Outcome, risk_coverage
+from fleet_recall_scorer import FleetRecallReport
 from lineage_completeness import LineageReport
 from no_egress_audit import EgressVerdict
 
@@ -66,6 +67,7 @@ class Scorecard:
     pure_local: bool
     cloud_calls: int
     lineage_completeness: float
+    fleet: FleetRecallReport | None = None
 
     def as_dict(self) -> dict[str, object]:
         """Return a JSON-serialisable view of the scorecard."""
@@ -81,6 +83,7 @@ class Scorecard:
             "pure_local": self.pure_local,
             "cloud_calls": self.cloud_calls,
             "lineage_completeness": round(self.lineage_completeness, 4),
+            "fleet_recall": self.fleet.as_dict() if self.fleet else {"measured": False},
         }
 
 
@@ -91,8 +94,27 @@ def build_scorecard(
     lineage: LineageReport,
     *,
     accuracy_target: float = 0.90,
+    fleet: FleetRecallReport | None = None,
 ) -> Scorecard:
-    """Fold accuracy + calibrated abstention + no-egress + lineage into a scorecard."""
+    """Fold accuracy + calibrated abstention + no-egress + lineage + fleet recall.
+
+    Parameters
+    ----------
+    config
+        The comparability pin (setting, reader, judge).
+    outcomes
+        Per-question outcomes for the risk-coverage curve.
+    egress
+        The sovereign no-egress verdict for the run.
+    lineage
+        The lineage-of-belief completeness report.
+    accuracy_target
+        Accuracy level at which retained coverage is reported.
+    fleet
+        The fleet-fed recall axis (:func:`fleet_recall_scorer.score_fleet_recall`),
+        or ``None`` when no query stream was captured — the axis then reports
+        ``measured: false`` instead of a fabricated score.
+    """
     rc = risk_coverage(outcomes)
     return Scorecard(
         config=config,
@@ -104,4 +126,5 @@ def build_scorecard(
         pure_local=egress.pure_local,
         cloud_calls=egress.cloud_calls,
         lineage_completeness=lineage.completeness,
+        fleet=fleet,
     )

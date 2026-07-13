@@ -66,3 +66,53 @@ class TestBuildScorecard:
         assert d["pure_local"] is True
         assert d["lineage_completeness"] == 0.5
         assert d["accuracy"] == 1.0
+
+
+class TestFleetRecallFold:
+    def test_axis_dark_by_default(self) -> None:
+        config = RunConfig("full_s", "gpt-4o-mini", "gpt-4o")
+        egress = audit_endpoints(["https://api.openai.com/v1"])
+        lineage = LineageReport(total=3, visible=3, completeness=1.0, incomplete_answers=())
+        card = build_scorecard(config, _outcomes(), egress, lineage)
+        assert card.fleet is None
+        assert card.as_dict()["fleet_recall"] == {"measured": False}
+
+    def test_axis_folds_when_supplied(self) -> None:
+        from fleet_recall_scorer import score_fleet_recall
+        from recall_ledger import RecallQuery
+
+        records = [
+            RecallQuery(
+                event_id="e1",
+                ts=1.0,
+                by="claude",
+                query="q",
+                top_k=5,
+                project="",
+                returned_ids=("src:a",),
+                found=True,
+                was_used=True,
+                was_correct=True,
+            ),
+            RecallQuery(
+                event_id="e2",
+                ts=2.0,
+                by="codex",
+                query="q2",
+                top_k=5,
+                project="",
+                returned_ids=(),
+                found=False,
+            ),
+        ]
+        fleet = score_fleet_recall(records)
+        config = RunConfig("full_s", "qwen3:8b", "gpt-4o")
+        egress = audit_endpoints(["http://localhost:11434/v1"])
+        lineage = LineageReport(total=2, visible=2, completeness=1.0, incomplete_answers=())
+        card = build_scorecard(config, _outcomes(), egress, lineage, fleet=fleet)
+        d = card.as_dict()["fleet_recall"]
+        assert isinstance(d, dict)
+        assert d["measured"] is True
+        assert d["fleet_fed"] is True
+        assert d["answered_rate"] == 0.5
+        assert d["fleet_accuracy"] == 1.0
