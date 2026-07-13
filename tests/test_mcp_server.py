@@ -215,39 +215,38 @@ class TestHandleRecall:
 
 class TestHandleRemember:
     def test_writes_trace_file(self, tmp_path):
-        with (
-            patch("mcp_server.BASE", tmp_path),
-            patch("mcp_server._RECALL_INDEX", None),
-            patch("mcp_server._UNIFIED_INDEX", None),
-        ):
-            result = handle_remember("We decided to use BM25.", "decision", "remanentia")
+        result = handle_remember(
+            "We decided to use BM25.", "decision", "remanentia", base=tmp_path
+        )
         assert "Remembered:" in result
         traces = list((tmp_path / "reasoning_traces").glob("*.md"))
         assert len(traces) == 1
         content = traces[0].read_text(encoding="utf-8")
         assert "We decided to use BM25." in content
         assert "remanentia" in content
+        notes_path = tmp_path / "memory" / "knowledge_notes.jsonl"
+        assert notes_path.exists()
+        assert "We decided to use BM25." in notes_path.read_text(encoding="utf-8")
+        assert not (tmp_path / "consolidation").exists()
 
     def test_invalidates_recall_cache(self, tmp_path):
         import mcp_server
 
         mcp_server._RECALL_INDEX = {"old": "data"}
-        with patch("mcp_server.BASE", tmp_path), patch("mcp_server._UNIFIED_INDEX", None):
-            handle_remember("test content", "context", "")
+        handle_remember("test content", "context", "", base=tmp_path)
         assert mcp_server._RECALL_INDEX is None
 
     def test_mcp_protocol_remember(self, tmp_path):
-        with patch("mcp_server.BASE", tmp_path), patch("mcp_server._UNIFIED_INDEX", None):
-            req = {
-                "jsonrpc": "2.0",
-                "id": 10,
-                "method": "tools/call",
-                "params": {
-                    "name": "remanentia_remember",
-                    "arguments": {"content": "Test memory", "type": "finding", "project": "test"},
-                },
-            }
-            resp = handle_request(req)
+        req = {
+            "jsonrpc": "2.0",
+            "id": 10,
+            "method": "tools/call",
+            "params": {
+                "name": "remanentia_remember",
+                "arguments": {"content": "Test memory", "type": "finding", "project": "test"},
+            },
+        }
+        resp = handle_request(req, base=tmp_path)
         assert "Remembered:" in resp["result"]["content"][0]["text"]
 
 

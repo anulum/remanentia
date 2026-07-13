@@ -41,7 +41,7 @@ import threading
 import time as _time
 from importlib import import_module
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from api_security import TokenBucketLimiter
 from mcp_protocol import (
@@ -398,7 +398,12 @@ def handle_recall(
 
 
 def handle_remember(
-    content: str, memory_type: str = "context", project: str = "", trigger: str = ""
+    content: str,
+    memory_type: str = "context",
+    project: str = "",
+    trigger: str = "",
+    *,
+    base: Path | None = None,
 ) -> str:
     """Persist a memory as a reasoning trace and update the index.
 
@@ -415,7 +420,9 @@ def handle_remember(
 
     content = redact(content).text
 
-    traces_dir = BASE / "reasoning_traces"
+    workspace = (base or BASE).resolve()
+    default_workspace = workspace == BASE.resolve()
+    traces_dir = workspace / "reasoning_traces"
     traces_dir.mkdir(parents=True, exist_ok=True)
 
     ts = datetime.now().strftime("%Y-%m-%dT%H%M")
@@ -441,7 +448,7 @@ def handle_remember(
 
     # Incremental index update if unified index is loaded
     global _UNIFIED_INDEX
-    if _UNIFIED_INDEX is not None and _UNIFIED_INDEX._built:
+    if default_workspace and _UNIFIED_INDEX is not None and _UNIFIED_INDEX._built:
         with _lock:
             try:
                 _UNIFIED_INDEX.add_file(path)
@@ -450,19 +457,30 @@ def handle_remember(
 
     # Create knowledge note
     try:
-        ks = _get_knowledge_store()
+        if default_workspace:
+            ks = _get_knowledge_store()
+            notes_path = None
+            triggers_path = None
+        else:
+            KnowledgeStore = _runtime_attr("knowledge_store", "KnowledgeStore")
+            ks = KnowledgeStore()
+            notes_path = workspace / "memory" / "knowledge_notes.jsonl"
+            triggers_path = workspace / "memory" / "triggers.jsonl"
+            ks.load(notes_path=notes_path, triggers_path=triggers_path)
         ks.add_note(content, source=filename)
         if trigger:  # pragma: no cover
             ks.add_trigger(trigger, content)
-        ks.save()
+        ks.save(notes_path=notes_path, triggers_path=triggers_path)
     except Exception:  # pragma: no cover
         log.debug("Knowledge note persistence failed", exc_info=True)
 
     # Close any recall→use loops this new memory echoes (auto-derive was_used)
-    _close_recall_loops(content)
+    if default_workspace:
+        _close_recall_loops(content)
 
     # Async consolidation with debounce
-    _schedule_consolidation()
+    if default_workspace:
+        _schedule_consolidation()
 
     return f"Remembered: {filename} ({len(content)} chars)"
 
@@ -608,7 +626,9 @@ def handle_recall_correctness(query: str, was_correct: bool, by: str = "") -> st
         return f"Correctness error: {e}"
 
 
-def handle_request(request: dict[str, Any]) -> dict[str, Any] | None:
+def handle_request(
+    request: dict[str, Any], *, base: Path | None = None
+) -> dict[str, Any] | None:
     """Dispatch one stdio JSON-RPC request through production tool handlers."""
     handlers = {
         "remanentia_recall": lambda args: handle_recall(
@@ -624,10 +644,13 @@ def handle_request(request: dict[str, Any]) -> dict[str, Any] | None:
             args.get("type", "context"),
             args.get("project", ""),
             args.get("trigger", ""),
+            base=base,
         ),
         "remanentia_status": lambda _args: handle_status(),
         "remanentia_graph": lambda args: handle_graph(
-            args.get("entity", ""), args.get("top", 10)
+            args.get("entity", ""),
+            args.get("top", 10),
+            graph_dir=(base / "memory" / "graph") if base is not None else None,
         ),
         "remanentia_recall_feedback": lambda args: handle_recall_feedback(
             args.get("query", ""), bool(args.get("was_used", False))
@@ -636,15 +659,12 @@ def handle_request(request: dict[str, Any]) -> dict[str, Any] | None:
             args.get("query", ""), bool(args.get("was_correct", False))
         ),
     }
-    return cast(
-        dict[str, Any] | None,
-        dispatch_request(
-            request,
-            handlers=handlers,
-            audit_logger=MCP_AUDIT_LOGGER,
-            limiter_factory=_mcp_rate_limiter,
-            rate_key=_mcp_rate_limit_key,
-        ),
+    return dispatch_request(
+        request,
+        handlers=handlers,
+        audit_logger=MCP_AUDIT_LOGGER,
+        limiter_factory=_mcp_rate_limiter,
+        rate_key=_mcp_rate_limit_key,
     )
 
 
