@@ -11,17 +11,22 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from collections.abc import Generator
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from threading import Thread
 from typing import Any
 from unittest.mock import patch
 
-import numpy as np
 import pytest
 
 import api
+import consolidation_engine
+import memory_index
+import memory_recall
 from api import app
 from api_security import BearerAuth, RequestAuditLogger, TokenBucketLimiter
-from vector_index import VectorSearchResult
+from vector_index import HttpEmbeddingClient, PersistentVectorIndex, VectorChunk
 
 try:
     from fastapi import Request
@@ -45,6 +50,107 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Any:
     )
     monkeypatch.setattr(api, "AUDIT_LOGGER", RequestAuditLogger(None), raising=False)
     return TestClient(app)
+
+
+@pytest.fixture  # type: ignore[untyped-decorator]
+def real_recall_store(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    tmp_traces: Path,
+    tmp_semantic: Path,
+    tmp_graph: Path,
+) -> None:
+    state_dir = tmp_path / "snn_state"
+    state_dir.mkdir()
+    monkeypatch.setattr(memory_index, "SOURCES", {"test": tmp_traces})
+    monkeypatch.setattr(memory_index, "SOURCE_EXTENSIONS", {"test": {".md"}})
+    monkeypatch.setattr(memory_index, "INDEX_PATH", state_dir / "memory_index.json.gz")
+    monkeypatch.setattr(memory_index, "_LEGACY_INDEX_PATH", state_dir / "legacy.pkl")
+    monkeypatch.setattr(memory_index, "HASH_CACHE_PATH", state_dir / "content_hashes.json")
+    monkeypatch.setattr(memory_index, "GRAPH_DIR", tmp_graph)
+    monkeypatch.setattr(memory_recall, "BASE", tmp_path)
+    monkeypatch.setattr(memory_recall, "TRACES_DIR", tmp_traces)
+    monkeypatch.setattr(memory_recall, "SEMANTIC_DIR", tmp_semantic)
+    monkeypatch.setattr(memory_recall, "GRAPH_DIR", tmp_graph)
+    monkeypatch.setattr(memory_recall, "HISTORY_PATH", state_dir / "retrieval_history.jsonl")
+
+
+class _EmbeddingHandler(BaseHTTPRequestHandler):
+    def do_POST(self) -> None:
+        length = int(self.headers.get("Content-Length", "0"))
+        payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        vectors = []
+        for index, text in enumerate(payload["input"]):
+            lower = str(text).lower()
+            vectors.append(
+                {
+                    "index": index,
+                    "embedding": [
+                        1.0 if "alpha" in lower else 0.0,
+                        1.0 if "beta" in lower else 0.0,
+                        0.25,
+                    ],
+                }
+            )
+        body = json.dumps({"data": vectors}).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, format: str, *args: Any) -> None:
+        return
+
+
+@pytest.fixture  # type: ignore[untyped-decorator]
+def embedding_endpoint() -> Generator[str, None, None]:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _EmbeddingHandler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def _build_public_vector_index(
+    index_dir: Path,
+    embedding_endpoint: str,
+    *,
+    text: str,
+    source: str,
+    path: str,
+) -> None:
+    provider = HttpEmbeddingClient(embedding_endpoint, "test-model")
+    PersistentVectorIndex(index_dir).build(
+        [
+            VectorChunk(
+                chunk_id="one",
+                text=text,
+                source=source,
+                metadata={
+                    "document": Path(path).name,
+                    "document_type": source,
+                    "paragraph_idx": 0,
+                    "path": path,
+                },
+            )
+        ],
+        provider,
+    )
+
+
+def _configure_embedding_environment(
+    monkeypatch: pytest.MonkeyPatch,
+    embedding_endpoint: str,
+    index_dir: Path,
+) -> None:
+    monkeypatch.setenv("REMANENTIA_EMBEDDING_BASE_URL", embedding_endpoint)
+    monkeypatch.setenv("REMANENTIA_EMBEDDING_MODEL", "test-model")
+    monkeypatch.setenv("REMANENTIA_VECTOR_INDEX_DIR", str(index_dir))
 
 
 # ── Health ───────────────────────────────────────────────────────
@@ -362,113 +468,85 @@ class TestGraph:
         data = resp.json()
         assert "error" in data
 
+    def test_entity_detail_handles_missing_graph_files(self, client: Any, tmp_path: Path) -> None:
+        graph_dir = tmp_path / "graph"
+        graph_dir.mkdir()
+
+        with patch("api.GRAPH_DIR", graph_dir):
+            resp = client.get("/graph/entity/stdp")
+
+        assert resp.json() == {"error": "Entity 'stdp' not found"}
+
+    def test_entity_detail_handles_blank_rows_and_missing_relations(
+        self, client: Any, tmp_path: Path
+    ) -> None:
+        graph_dir = tmp_path / "graph"
+        graph_dir.mkdir()
+        (graph_dir / "entities.jsonl").write_text(
+            '{"id":"other","label":"Other"}\n\n'
+            '{"id":"stdp","label":"STDP"}\n',
+            encoding="utf-8",
+        )
+
+        with patch("api.GRAPH_DIR", graph_dir):
+            without_relations = client.get("/graph/entity/stdp")
+
+        assert without_relations.json()["connections"] == []
+
+        (graph_dir / "relations.jsonl").write_text(
+            '{"source":"other","target":"third","type":"related","weight":1}\n\n'
+            '{"source":"stdp","target":"other","type":"uses","weight":2}\n',
+            encoding="utf-8",
+        )
+        with patch("api.GRAPH_DIR", graph_dir):
+            with_relations = client.get("/graph/entity/stdp")
+
+        assert with_relations.json()["connections"] == [
+            {"entity": "other", "weight": 2, "relation": "uses", "evidence": []}
+        ]
+
 
 # ── Recall ───────────────────────────────────────────────────────
 
 
 class TestRecall:
-    def test_recall_basic(self, client: Any) -> None:
-        mock_ctx = type(
-            "Ctx",
-            (),
-            {
-                "query": "test",
-                "trace": "trace.md",
-                "trace_score": 0.8,
-                "trace_snippet": "Some snippet content here",
-                "semantic_memories": [
-                    {"path": "memory/semantic/test.md", "key_point": "Stored fact"}
-                ],
-                "entities": ["stdp"],
-                "related_entities": [],
-                "before": [],
-                "after": [],
-                "cross_project": [],
-                "novelty_score": 0.3,
-                "elapsed_ms": 15.0,
-                "to_llm_context": lambda self: "context string",
+    def test_recall_summary_uses_real_memory_pipeline(
+        self, client: Any, real_recall_store: None
+    ) -> None:
+        resp = client.post(
+            "/recall",
+            json={"query": "STDP retrieval", "top_k": 2, "include_content": True},
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["query"] == "STDP retrieval"
+        assert data["trace"] == "2026-03-15_decision_stdp_removal.md"
+        assert data["score"] > 0
+        assert "Decision: Remove SNN" in data["snippet"]
+        assert data["semantic_memories"][0]["path"].endswith(
+            "2026-03-15_remanentia-decision.md"
+        )
+        assert "stdp" in data["entities"]
+        assert data["elapsed_ms"] >= 0
+
+    def test_recall_context_uses_real_memory_pipeline(
+        self, client: Any, real_recall_store: None
+    ) -> None:
+        resp = client.post(
+            "/recall",
+            json={
+                "query": "STDP retrieval",
+                "format": "context",
+                "include_content": True,
             },
-        )()
-
-        with patch("memory_recall.recall", return_value=mock_ctx) as mock_recall:
-            resp = client.post(
-                "/recall",
-                json={"query": "test", "top_k": 2, "include_content": True},
-            )
-
-        mock_recall.assert_called_once_with("test", top_k=2, include_content=True)
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["query"] == "test"
-        assert data["trace"] == "trace.md"
-        assert data["score"] == pytest.approx(0.8)
-        assert data["snippet"] == "Some snippet content here"
-        assert data["semantic_memories"] == [
-            {"path": "memory/semantic/test.md", "key_point": "Stored fact"}
-        ]
-        assert data["entities"] == ["stdp"]
-        assert data["elapsed_ms"] == 15.0
-
-    def test_recall_summary_format(self, client: Any, tmp_traces: Path, tmp_path: Path) -> None:
-        from unittest.mock import MagicMock
-
-        mock_ctx = MagicMock()
-        mock_ctx.query = "test"
-        mock_ctx.trace = "trace.md"
-        mock_ctx.trace_score = 0.8
-        mock_ctx.trace_snippet = "Some snippet"
-        mock_ctx.semantic_memories = []
-        mock_ctx.entities = ["stdp"]
-        mock_ctx.related_entities = []
-        mock_ctx.before = []
-        mock_ctx.after = []
-        mock_ctx.cross_project = []
-        mock_ctx.novelty_score = 0.3
-        mock_ctx.elapsed_ms = 15.0
-        with patch("memory_recall.recall", return_value=mock_ctx):
-            resp = client.post("/recall", json={"query": "test", "format": "summary"})
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["query"] == "test"
-        assert data["trace"] == "trace.md"
-
-    def test_recall_context_format(self, client: Any) -> None:
-        from unittest.mock import MagicMock
-
-        mock_ctx = MagicMock()
-        mock_ctx.to_llm_context.return_value = "LLM context here"
-        mock_ctx.elapsed_ms = 10.0
-        with patch("memory_recall.recall", return_value=mock_ctx):
-            resp = client.post("/recall", json={"query": "test", "format": "context"})
-        assert resp.status_code == 200
-        data = resp.json()
-        assert "context" in data
-        assert data["context"] == "LLM context here"
-
-    def test_recall_serializes_numpy_scalars(self, client: Any) -> None:
-        from unittest.mock import MagicMock
-
-        mock_ctx = MagicMock()
-        mock_ctx.query = "test"
-        mock_ctx.trace = "trace.md"
-        mock_ctx.trace_score = np.float32(0.8)
-        mock_ctx.trace_snippet = "Some snippet"
-        mock_ctx.semantic_memories = []
-        mock_ctx.entities = ["stdp"]
-        mock_ctx.related_entities = [{"entity": "graph", "weight": np.float32(0.5)}]
-        mock_ctx.before = []
-        mock_ctx.after = []
-        mock_ctx.cross_project = []
-        mock_ctx.novelty_score = np.float32(0.3)
-        mock_ctx.elapsed_ms = np.float32(15.0)
-        with patch("memory_recall.recall", return_value=mock_ctx):
-            resp = client.post("/recall", json={"query": "test", "format": "summary"})
+        )
 
         assert resp.status_code == 200
         data = resp.json()
-        assert data["score"] == pytest.approx(0.8)
-        assert data["related"][0]["weight"] == pytest.approx(0.5)
-        assert data["novelty"] == pytest.approx(0.3)
+        assert "[Matched trace: 2026-03-15_decision_stdp_removal.md]" in data["context"]
+        assert "[Consolidated:" in data["context"]
+        assert data["elapsed_ms"] >= 0
 
 
 class TestPublicVectorSearch:
@@ -483,57 +561,54 @@ class TestPublicVectorSearch:
         assert resp.status_code == 200
         assert resp.json() == {"query": "beta", "results": []}
 
-    def test_public_vector_search_no_allowlist_returns_no_results(self, client: Any) -> None:
-        raw_result = VectorSearchResult(
-            chunk_id="one",
+    def test_public_vector_search_no_allowlist_returns_no_results(
+        self,
+        client: Any,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        embedding_endpoint: str,
+    ) -> None:
+        index_dir = tmp_path / "vector"
+        _build_public_vector_index(
+            index_dir,
+            embedding_endpoint,
             text="beta public paragraph",
             source="paper",
-            score=0.8,
-            metadata={"path": "paper/remanentia.md"},
+            path="paper/remanentia.md",
         )
+        _configure_embedding_environment(monkeypatch, embedding_endpoint, index_dir)
+        monkeypatch.delenv("REMANENTIA_PUBLIC_VECTOR_SOURCES", raising=False)
+        monkeypatch.delenv("REMANENTIA_PUBLIC_VECTOR_PATH_PREFIXES", raising=False)
+        monkeypatch.delenv("REMANENTIA_PUBLIC_VECTOR_REDACTION_FILE", raising=False)
 
-        with (
-            patch.dict("os.environ", {}, clear=True),
-            patch("vector_index.HttpEmbeddingClient.from_env", return_value=object()),
-            patch("vector_pipeline.search_memory_vector_index", return_value=[raw_result]),
-        ):
-            resp = client.post("/vector/search/public", json={"query": "beta", "top_k": 1})
+        resp = client.post("/vector/search/public", json={"query": "beta", "top_k": 1})
 
         assert resp.status_code == 200
         assert resp.json()["results"] == []
 
     def test_public_vector_search_uses_server_policy_and_redaction(
-        self, client: Any, tmp_path: Path
+        self,
+        client: Any,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        embedding_endpoint: str,
     ) -> None:
         redaction_file = tmp_path / "terms.txt"
         redaction_file.write_text("private-token\n", encoding="utf-8")
-        raw_result = VectorSearchResult(
-            chunk_id="one",
+        index_dir = tmp_path / "vector"
+        _build_public_vector_index(
+            index_dir,
+            embedding_endpoint,
             text="beta private-token public paragraph",
             source="paper",
-            score=0.8,
-            metadata={
-                "document": "private-token-paper.md",
-                "document_type": "paper",
-                "paragraph_idx": 0,
-                "path": "paper/private-token-paper.md",
-            },
+            path="paper/private-token-paper.md",
         )
+        _configure_embedding_environment(monkeypatch, embedding_endpoint, index_dir)
+        monkeypatch.setenv("REMANENTIA_PUBLIC_VECTOR_SOURCES", "paper")
+        monkeypatch.setenv("REMANENTIA_PUBLIC_VECTOR_PATH_PREFIXES", "paper")
+        monkeypatch.setenv("REMANENTIA_PUBLIC_VECTOR_REDACTION_FILE", str(redaction_file))
 
-        with (
-            patch.dict(
-                "os.environ",
-                {
-                    "REMANENTIA_PUBLIC_VECTOR_SOURCES": "paper",
-                    "REMANENTIA_PUBLIC_VECTOR_PATH_PREFIXES": "paper",
-                    "REMANENTIA_PUBLIC_VECTOR_REDACTION_FILE": str(redaction_file),
-                },
-                clear=True,
-            ),
-            patch("vector_index.HttpEmbeddingClient.from_env", return_value=object()),
-            patch("vector_pipeline.search_memory_vector_index", return_value=[raw_result]),
-        ):
-            resp = client.post("/vector/search/public", json={"query": "beta", "top_k": 1})
+        resp = client.post("/vector/search/public", json={"query": "beta", "top_k": 1})
 
         assert resp.status_code == 200
         payload = resp.json()
@@ -541,17 +616,15 @@ class TestPublicVectorSearch:
         assert payload["results"][0]["metadata"]["document"] == "[redacted]-paper.md"
         assert payload["results"][0]["redactions"] == 3
 
-    def test_public_vector_search_backend_error_returns_503(self, client: Any) -> None:
-        with (
-            patch.dict("os.environ", {}, clear=True),
-            patch(
-                "vector_index.HttpEmbeddingClient.from_env", side_effect=ValueError("no endpoint")
-            ),
-        ):
-            resp = client.post("/vector/search/public", json={"query": "beta", "top_k": 1})
+    def test_public_vector_search_backend_error_returns_503(
+        self, client: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("REMANENTIA_EMBEDDING_BASE_URL", raising=False)
+        monkeypatch.delenv("REMANENTIA_EMBEDDING_MODEL", raising=False)
+        resp = client.post("/vector/search/public", json={"query": "beta", "top_k": 1})
 
         assert resp.status_code == 503
-        assert resp.json()["detail"] == "no endpoint"
+        assert "base_url must not be empty" in resp.json()["detail"]
 
     def test_missing_redaction_file_is_rejected(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -566,12 +639,52 @@ class TestPublicVectorSearch:
         assert api._json_number("not-a-number", default=12.0) == 12.0
         assert api._json_number(["not", "scalar"], default=7.0) == 7.0
 
-    def test_consolidate_endpoint(self, client: Any) -> None:
-        mock_result = {"status": "ok", "traces_processed": 5}
-        with patch("consolidation_engine.consolidate", return_value=mock_result):
-            resp = client.post("/consolidate", json={"force": False})
+    def test_consolidate_endpoint_runs_real_store_pipeline(
+        self,
+        client: Any,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        tmp_traces: Path,
+    ) -> None:
+        semantic_dir = tmp_path / "memory" / "semantic"
+        graph_dir = tmp_path / "memory" / "graph"
+        consolidation_dir = tmp_path / "consolidation"
+        monkeypatch.setattr(consolidation_engine, "TRACES_DIR", tmp_traces)
+        monkeypatch.setattr(consolidation_engine, "SEMANTIC_DIR", semantic_dir)
+        monkeypatch.setattr(consolidation_engine, "GRAPH_DIR", graph_dir)
+        monkeypatch.setattr(consolidation_engine, "CONSOLIDATION_DIR", consolidation_dir)
+        monkeypatch.setattr(consolidation_engine, "PENDING_PATH", consolidation_dir / "pending.json")
+        monkeypatch.setattr(
+            consolidation_engine,
+            "LAST_RUN_PATH",
+            consolidation_dir / "last_consolidation.json",
+        )
+        monkeypatch.setattr(
+            consolidation_engine,
+            "CONFLICTS_PATH",
+            consolidation_dir / "conflicts.json",
+        )
+        monkeypatch.setattr(consolidation_engine, "ENTITIES_PATH", graph_dir / "entities.jsonl")
+        monkeypatch.setattr(consolidation_engine, "RELATIONS_PATH", graph_dir / "relations.jsonl")
+        monkeypatch.setattr(
+            consolidation_engine,
+            "CLUSTERS_PATH",
+            graph_dir / "trace_clusters.json",
+        )
+        monkeypatch.setattr(
+            consolidation_engine,
+            "SUMMARY_DAG_PATH",
+            consolidation_dir / "summary_dag.json",
+        )
+
+        resp = client.post("/consolidate", json={"force": False})
+
         assert resp.status_code == 200
-        assert resp.json()["status"] == "ok"
+        payload = resp.json()
+        assert payload["traces_processed"] == 3
+        assert payload["memories_written"] > 0
+        assert list(semantic_dir.rglob("*.md"))
+        assert (consolidation_dir / "last_consolidation.json").exists()
 
     def test_status_with_daemon_state(self, client: Any, tmp_path: Path) -> None:
         import time
