@@ -37,6 +37,7 @@ import hashlib as _hashlib
 
 import memory_dates as _memory_dates
 import memory_index_storage as _index_storage
+import memory_sparse_scoring as _sparse_scoring
 from memory_entity_scoring import (
     Entity,
     EntityGraph,
@@ -1084,66 +1085,33 @@ class MemoryIndex:
 
         weight_index = self._bm25_weight_index
         if weight_index:
-            candidate_scores: dict[int, float] = {}
-            for qt in q_tokens:
-                for para_idx, weight in weight_index.get(qt, ()):
-                    if para_idx in filtered_out:
-                        continue
-                    candidate_scores[para_idx] = candidate_scores.get(para_idx, 0.0) + weight
-            return candidate_scores
+            return _sparse_scoring.score_weight_index(q_tokens, filtered_out, weight_index)
 
         return self._score_python_bm25_uncached(q_tokens, filtered_out)
 
     def _build_bm25_weight_index(self) -> dict[str, list[tuple[int, float]]]:
-        k1, b = 1.5, 0.75
-        avg_dl = self._avg_dl if self._avg_dl > 0 else 1.0
-        para_lengths = self._para_lengths
-        token_counts = self.paragraph_token_counts
-        weight_index: dict[str, list[tuple[int, float]]] = {}
-
-        for token, posting in self._inverted_index.items():
-            idf_val = self.idf.get(token, 0.0)
-            if idf_val == 0:
-                continue
-            weighted_posting: list[tuple[int, float]] = []
-            for para_idx in posting:
-                if para_idx >= len(para_lengths):
-                    continue
-                tf = token_counts[para_idx].get(token, 1) if para_idx < len(token_counts) else 1
-                dl_ratio = float(para_lengths[para_idx]) / avg_dl
-                weight = idf_val * tf * (k1 + 1) / (tf + k1 * (1 - b + b * dl_ratio))
-                weighted_posting.append((para_idx, weight))
-            if weighted_posting:
-                weight_index[token] = weighted_posting
-
-        self._bm25_weight_index = weight_index
+        self._bm25_weight_index = _sparse_scoring.build_weight_index(
+            self._inverted_index,
+            self.idf,
+            self.paragraph_token_counts,
+            self._para_lengths,
+            self._avg_dl,
+        )
         self._bm25_weight_dirty = False
-        return weight_index
+        return self._bm25_weight_index
 
     def _score_python_bm25_uncached(
         self, q_tokens: set[str], filtered_out: set[int]
     ) -> dict[int, float]:
-        k1, b = 1.5, 0.75
-        avg_dl = self._avg_dl if self._avg_dl > 0 else 1.0
-        candidate_scores: dict[int, float] = {}
-        para_lengths = self._para_lengths
-        token_counts = self.paragraph_token_counts
-        for qt in q_tokens:
-            posting = self._inverted_index.get(qt)
-            if not posting:
-                continue
-            idf_val = self.idf.get(qt, 0)
-            if idf_val == 0:  # pragma: no cover — defensive: idf should never be exactly zero
-                continue
-            for i in posting:
-                if i in filtered_out:
-                    continue
-                tf = token_counts[i].get(qt, 1) if i < len(token_counts) else 1
-                dl_ratio = para_lengths[i] / avg_dl
-                candidate_scores[i] = candidate_scores.get(i, 0.0) + (
-                    idf_val * tf * (k1 + 1) / (tf + k1 * (1 - b + b * dl_ratio))
-                )
-        return candidate_scores
+        return _sparse_scoring.score_uncached(
+            q_tokens,
+            filtered_out,
+            self._inverted_index,
+            self.idf,
+            self.paragraph_token_counts,
+            self._para_lengths,
+            self._avg_dl,
+        )
 
     def _search_rust_bm25(self, q_tokens: set[str], top_k: int) -> dict[int, float] | None:
         bm25 = self._ensure_rust_bm25()
