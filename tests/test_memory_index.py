@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-import sys
 import json
 import shutil
 from pathlib import Path
@@ -601,39 +600,59 @@ class TestMemoryIndex:
         assert idx.paragraph_index == []
 
     def test_cross_encoder_rerank(self, tmp_path):
-        """Cross-encoder reranking reorders candidates by relevance score."""
+        """A real local BERT cross-encoder scores production index candidates."""
+        import torch
+        from sentence_transformers import CrossEncoder
+        from transformers import BertConfig, BertForSequenceClassification, BertTokenizer
+
         docs_dir = self._build_mini_index(tmp_path)
         idx = MemoryIndex()
         with patch("memory_index.SOURCES", {"test": docs_dir}):
             with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md", ".py"}}):
                 idx.build(use_gpu_embeddings=False, use_gliner=False)
 
-        # Mock cross-encoder to return known scores
-        class MockCrossEncoder:
-            def predict(self, pairs, show_progress_bar=False):
-                # Score higher for pairs where query terms appear in text
-                scores = []
-                for q, t in pairs:
-                    score = sum(1 for w in q.lower().split() if w in t.lower())
-                    scores.append(float(score))
-                return scores
+        model_dir = tmp_path / "cross-encoder"
+        model_dir.mkdir()
+        vocabulary = [
+            "[PAD]",
+            "[UNK]",
+            "[CLS]",
+            "[SEP]",
+            "[MASK]",
+            "snn",
+            "removal",
+            "decision",
+            "embedding",
+            "benchmark",
+        ]
+        vocab_path = model_dir / "vocab.txt"
+        vocab_path.write_text("\n".join(vocabulary) + "\n", encoding="utf-8")
+        tokenizer = BertTokenizer(vocab_file=str(vocab_path), do_lower_case=True)
+        torch.manual_seed(7)
+        model = BertForSequenceClassification(
+            BertConfig(
+                vocab_size=len(vocabulary),
+                hidden_size=8,
+                num_hidden_layers=1,
+                num_attention_heads=2,
+                intermediate_size=16,
+                max_position_embeddings=64,
+                num_labels=1,
+                hidden_dropout_prob=0.0,
+                attention_probs_dropout_prob=0.0,
+            )
+        )
+        model.eval()
+        tokenizer.save_pretrained(model_dir)
+        model.save_pretrained(model_dir)
 
-        idx._cross_encoder = MockCrossEncoder()
-        results = idx.search("SNN removal decision embedding", top_k=3)
-        assert len(results) > 0
+        idx._cross_encoder = CrossEncoder(str(model_dir), device="cpu")
+        candidates = [(i, float(len(idx.paragraph_index) - i)) for i in range(3)]
+        reranked = idx._cross_encoder_rerank("SNN removal decision", candidates)
 
-    def test_cross_encoder_graceful_fallback(self, tmp_path):
-        """Search works when cross-encoder import fails."""
-        docs_dir = self._build_mini_index(tmp_path)
-        idx = MemoryIndex()
-        with patch("memory_index.SOURCES", {"test": docs_dir}):
-            with patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md", ".py"}}):
-                idx.build(use_gpu_embeddings=False, use_gliner=False)
-
-        # Cross-encoder rerank returns None on failure
-        with patch.object(idx, "_cross_encoder_rerank", return_value=None):
-            results = idx.search("benchmark accuracy", top_k=3)
-        assert len(results) > 0
+        assert reranked is not None
+        assert {para_idx for para_idx, _ in reranked} == {0, 1, 2}
+        assert all(isinstance(score, float) for _, score in reranked)
 
 
 class TestAddFile:
@@ -1924,205 +1943,64 @@ class TestMultiHopSearch:
 
 
 class TestRustBm25Paths:
-    def test_search_rust_bm25_success(self, tmp_path):
-        """Covers lines 950-955: _search_rust_bm25 successful path."""
-        from unittest.mock import MagicMock
-
-        traces = tmp_path / "traces"
-        traces.mkdir()
-        (traces / "doc.md").write_text("# Doc\n\nAlpha beta gamma delta.", encoding="utf-8")
-
-        import memory_index
-
-        original_sources = memory_index.SOURCES
-        memory_index.SOURCES = {"test": traces}
-        try:
-            idx = MemoryIndex()
-            idx.build(use_gpu_embeddings=False, use_gliner=False)
-
-            mock_bm25 = MagicMock()
-            mock_bm25.search.return_value = [(0, 5.0)]
-            idx._rust_bm25 = mock_bm25
-            idx._rust_bm25_dirty = False
-
-            result = idx._search_rust_bm25({"alpha", "beta"}, top_k=10)
-            assert result == {0: 5.0}
-        finally:
-            memory_index.SOURCES = original_sources
-
-    def test_search_rust_bm25_exception(self, tmp_path):
-        """Covers lines 956-959: _search_rust_bm25 exception path."""
-        from unittest.mock import MagicMock
-
-        traces = tmp_path / "traces"
-        traces.mkdir()
-        (traces / "doc.md").write_text("# Doc\n\nAlpha beta gamma.", encoding="utf-8")
-
-        import memory_index
-
-        original_sources = memory_index.SOURCES
-        memory_index.SOURCES = {"test": traces}
-        try:
-            idx = MemoryIndex()
-            idx.build(use_gpu_embeddings=False, use_gliner=False)
-
-            mock_bm25 = MagicMock()
-            mock_bm25.search.side_effect = RuntimeError("rust crash")
-            idx._rust_bm25 = mock_bm25
-            idx._rust_bm25_dirty = False
-
-            result = idx._search_rust_bm25({"alpha"}, top_k=10)
-            assert result is None
-            assert idx._rust_bm25 is False
-        finally:
-            memory_index.SOURCES = original_sources
-
-    def test_ensure_rust_bm25_disabled(self):
-        """Covers lines 968-969: _ensure_rust_bm25 when disabled."""
-        idx = MemoryIndex()
-        idx._rust_bm25 = False
-        assert idx._ensure_rust_bm25() is None
-
-    def test_ensure_rust_bm25_cached(self):
-        """Covers lines 970-971: _ensure_rust_bm25 returns cached."""
-        from unittest.mock import MagicMock
-
-        idx = MemoryIndex()
-        mock_bm25 = MagicMock()
-        idx._rust_bm25 = mock_bm25
-        idx._rust_bm25_dirty = False
-        assert idx._ensure_rust_bm25() is mock_bm25
-
-    def test_ensure_rust_bm25_no_rust_class(self):
-        """Covers lines 973-977: _ensure_rust_bm25 when Rust class unavailable."""
-        idx = MemoryIndex()
-        idx._rust_bm25 = None
-        idx._rust_bm25_dirty = True
-        with patch("memory_index._get_rust_bm25_class", return_value=None):
-            result = idx._ensure_rust_bm25()
-        assert result is None
-        assert idx._rust_bm25 is False
-
-    def test_ensure_rust_bm25_build_success(self, tmp_path):
-        """Covers lines 979-987: _ensure_rust_bm25 builds successfully."""
-        from unittest.mock import MagicMock
-
-        traces = tmp_path / "traces"
-        traces.mkdir()
-        (traces / "doc.md").write_text("# Doc\n\nAlpha beta gamma.", encoding="utf-8")
-
-        import memory_index
-
-        original_sources = memory_index.SOURCES
-        memory_index.SOURCES = {"test": traces}
-        try:
-            idx = MemoryIndex()
-            idx.build(use_gpu_embeddings=False, use_gliner=False)
-            idx._rust_bm25 = None
-            idx._rust_bm25_dirty = True
-
-            mock_cls = MagicMock()
-            mock_instance = MagicMock()
-            mock_cls.return_value = mock_instance
-            with patch("memory_index._get_rust_bm25_class", return_value=mock_cls):
-                result = idx._ensure_rust_bm25()
-            assert result is mock_instance
-            mock_instance.build.assert_called_once()
-        finally:
-            memory_index.SOURCES = original_sources
-
-    def test_ensure_rust_bm25_build_exception(self, tmp_path):
-        """Covers lines 988-991: _ensure_rust_bm25 build fails."""
-        from unittest.mock import MagicMock
-
-        traces = tmp_path / "traces"
-        traces.mkdir()
-        (traces / "doc.md").write_text("# Doc\n\nAlpha beta gamma.", encoding="utf-8")
-
-        import memory_index
-
-        original_sources = memory_index.SOURCES
-        memory_index.SOURCES = {"test": traces}
-        try:
-            idx = MemoryIndex()
-            idx.build(use_gpu_embeddings=False, use_gliner=False)
-            idx._rust_bm25 = None
-            idx._rust_bm25_dirty = True
-
-            mock_cls = MagicMock()
-            mock_cls.return_value.build.side_effect = RuntimeError("build fail")
-            with patch("memory_index._get_rust_bm25_class", return_value=mock_cls):
-                result = idx._ensure_rust_bm25()
-            assert result is None
-            assert idx._rust_bm25 is False
-        finally:
-            memory_index.SOURCES = original_sources
-
-    def test_get_rust_bm25_class_import_fail(self):
-        """Covers lines 1711-1719: _get_rust_bm25_class import failure."""
-        from memory_index import _get_rust_bm25_class
-        import memory_index
-        from unittest.mock import patch
-
-        old_attempted = memory_index._RUST_BM25_IMPORT_ATTEMPTED
-        old_cls = memory_index._RUST_BM25_CLASS
-        memory_index._RUST_BM25_IMPORT_ATTEMPTED = False
-        memory_index._RUST_BM25_CLASS = None
-        try:
-            with patch.dict("sys.modules", {"remanentia_search": None}):
-                result = _get_rust_bm25_class()
-            # Without the actual Rust extension, import fails u2192 returns None
-            assert result is None
-        finally:
-            memory_index._RUST_BM25_IMPORT_ATTEMPTED = old_attempted
-            memory_index._RUST_BM25_CLASS = old_cls
-
-    def test_get_rust_bm25_class_already_attempted(self):
-        """Covers early return when import already attempted."""
-        import memory_index
-        from memory_index import _get_rust_bm25_class
-
-        old_attempted = memory_index._RUST_BM25_IMPORT_ATTEMPTED
-        old_cls = memory_index._RUST_BM25_CLASS
-        memory_index._RUST_BM25_IMPORT_ATTEMPTED = True
-        memory_index._RUST_BM25_CLASS = False
-        try:
-            result = _get_rust_bm25_class()
-            assert result is None
-        finally:
-            memory_index._RUST_BM25_IMPORT_ATTEMPTED = old_attempted
-            memory_index._RUST_BM25_CLASS = old_cls
-
-    def test_search_uses_rust_bm25(self, tmp_path):
-        """Covers line 563: search delegates to Rust BM25 when available."""
-        from unittest.mock import MagicMock
-
+    @staticmethod
+    def _real_index(tmp_path):
         traces = tmp_path / "traces"
         traces.mkdir()
         (traces / "doc.md").write_text(
             "# Doc\n\nSome content about alpha beta gamma for searching.",
             encoding="utf-8",
         )
-
-        import memory_index
-
         original_sources = memory_index.SOURCES
+        original_extensions = memory_index.SOURCE_EXTENSIONS
+        original_hash_cache = memory_index.HASH_CACHE_PATH
         memory_index.SOURCES = {"test": traces}
         try:
+            memory_index.SOURCE_EXTENSIONS = {"test": {".md"}}
+            memory_index.HASH_CACHE_PATH = tmp_path / "content_hashes.json"
             idx = MemoryIndex()
-            idx.build(use_gpu_embeddings=False, use_gliner=False)
-
-            mock_bm25 = MagicMock()
-            mock_bm25.search.return_value = [(0, 3.5)]
-            idx._rust_bm25 = mock_bm25
-            idx._rust_bm25_dirty = False
-
-            with patch.object(idx, "_should_use_rust_bm25", return_value=True):
-                results = idx.search("alpha beta", top_k=3)
-            assert isinstance(results, list)
-            mock_bm25.search.assert_called()
+            idx.build(
+                use_gpu_embeddings=False,
+                use_gliner=False,
+                incremental=False,
+            )
+            return idx
         finally:
             memory_index.SOURCES = original_sources
+            memory_index.SOURCE_EXTENSIONS = original_extensions
+            memory_index.HASH_CACHE_PATH = original_hash_cache
+
+    def test_search_rust_bm25_success(self, tmp_path):
+        idx = self._real_index(tmp_path)
+
+        result = idx._search_rust_bm25({"alpha", "beta"}, top_k=10)
+
+        assert result is not None
+        assert list(result) == [0]
+        assert result[0] > 0.0
+
+    def test_ensure_rust_bm25_builds_and_caches_real_extension(self, tmp_path):
+        import remanentia_search
+
+        idx = self._real_index(tmp_path)
+        first = idx._ensure_rust_bm25()
+        second = idx._ensure_rust_bm25()
+
+        assert isinstance(first, remanentia_search.BM25Index)
+        assert second is first
+        assert first.num_paragraphs() == len(idx.paragraph_index)
+
+    def test_search_uses_real_rust_bm25(self, tmp_path, monkeypatch):
+        import remanentia_search
+
+        idx = self._real_index(tmp_path)
+        monkeypatch.setenv("REMANENTIA_USE_RUST_BM25", "1")
+
+        results = idx.search("alpha beta", top_k=3)
+
+        assert results
+        assert results[0].name == "doc.md"
+        assert isinstance(idx._rust_bm25, remanentia_search.BM25Index)
 
 
 # ── Code splitting edge cases ────────────────────────────────────
@@ -2410,23 +2288,16 @@ class TestRustBm25NoneReturn:
 
 class TestGetRustBm25ClassSuccessImport:
     def test_successful_import(self):
-        """Covers line 1716: _RUST_BM25_CLASS = BM25Index."""
-        from unittest.mock import MagicMock
+        import remanentia_search
         import memory_index
 
         old_attempted = memory_index._RUST_BM25_IMPORT_ATTEMPTED
         old_cls = memory_index._RUST_BM25_CLASS
         memory_index._RUST_BM25_IMPORT_ATTEMPTED = False
         memory_index._RUST_BM25_CLASS = None
-
-        mock_bm25_cls = MagicMock()
-
-        fake_module = type(sys)("remanentia_search")
-        fake_module.BM25Index = mock_bm25_cls
         try:
-            with patch.dict("sys.modules", {"remanentia_search": fake_module}):
-                result = memory_index._get_rust_bm25_class()
-            assert result is mock_bm25_cls
+            result = memory_index._get_rust_bm25_class()
+            assert result is remanentia_search.BM25Index
         finally:
             memory_index._RUST_BM25_IMPORT_ATTEMPTED = old_attempted
             memory_index._RUST_BM25_CLASS = old_cls
