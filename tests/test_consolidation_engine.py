@@ -11,17 +11,15 @@ from __future__ import annotations
 import json
 from contextlib import ExitStack
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 from unittest.mock import patch
 
-import consolidation_engine
 from consolidation_trace_analysis import (
     cluster_traces_python,
     extract_entities_python,
     extract_key_lines_python,
 )
 import numpy as np
-import pytest
 
 from consolidation_engine import (
     _cluster_traces,
@@ -31,6 +29,7 @@ from consolidation_engine import (
     _extract_paragraphs,
     _extract_typed_relations,
     _parse_frontmatter,
+    _parse_frontmatter_python,
     _trace_hash,
     _update_frontmatter_field,
     _update_graph,
@@ -43,6 +42,7 @@ from consolidation_engine import (
     get_pending_traces,
     search_summary_dag,
 )
+from consolidation_summary_dag import build_summary_dag_python
 
 
 # ── Metadata extraction ──────────────────────────────────────────
@@ -1184,17 +1184,9 @@ class TestConsolidationPythonFallbackContracts:
         assert ["c.md"] in clusters
         assert {"d.md", "e.md"} in [set(cluster) for cluster in clusters]
 
-    def test_native_free_summary_dag_builds_hierarchy_and_frontmatter_parses(
-        self, monkeypatch: pytest.MonkeyPatch
+    def test_explicit_python_summary_dag_builds_hierarchy_and_frontmatter_parses(
+        self,
     ) -> None:
-        real_import = cast(Any, consolidation_engine).import_module
-
-        def reject_native(name: str) -> Any:
-            if name == "remanentia_consolidation":
-                raise ImportError(name)
-            return real_import(name)
-
-        monkeypatch.setattr(consolidation_engine, "import_module", reject_native)
         trace_data = {
             f"trace_{idx}.md": {
                 "date": f"2026-03-{idx + 1:02d}",
@@ -1206,15 +1198,15 @@ class TestConsolidationPythonFallbackContracts:
             for idx in range(9)
         }
 
-        dag = build_summary_dag(trace_data)
+        dag = build_summary_dag_python(trace_data)
         parent_nodes = [node for node in dag if node["level"] > 0]
 
         assert len(dag) > len(trace_data)
         assert parent_nodes
         assert parent_nodes[0]["date_range"][0] <= parent_nodes[0]["date_range"][1]
-        assert _parse_frontmatter("plain text") is None
-        assert _parse_frontmatter("---\nmissing end") is None
-        assert _parse_frontmatter("---\nvalidity_state: active\n- ignored\n---\nbody") == {
+        assert _parse_frontmatter_python("plain text") is None
+        assert _parse_frontmatter_python("---\nmissing end") is None
+        assert _parse_frontmatter_python("---\nvalidity_state: active\n- ignored\n---\nbody") == {
             "validity_state": "active"
         }
 
