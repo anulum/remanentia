@@ -69,7 +69,7 @@ class _RustAggregatePrecompute(Protocol):
 
 
 try:
-    import remanentia_aggregate_precompute as _rust_agg_raw  # type: ignore[import-untyped]  # pragma: no cover
+    import remanentia_aggregate_precompute as _rust_agg_raw  # type: ignore[import-not-found]  # pragma: no cover
 
     _rust_agg: _RustAggregatePrecompute | None = cast(  # pragma: no cover
         "_RustAggregatePrecompute",

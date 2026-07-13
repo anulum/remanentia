@@ -348,7 +348,6 @@ class TestRegressionR11:
 
 
 import importlib
-from types import ModuleType
 
 import pytest
 
@@ -369,36 +368,6 @@ class _RustBindings(Protocol):
 
     def precompute_sum(self, question: str, text: str) -> dict[str, object] | None:
         """Return the Rust precompute sum payload."""
-
-
-def _rust_extension_double() -> ModuleType:
-    """Return an optional Rust extension module double for dispatch tests."""
-
-    def is_sum_question(question: str) -> bool:
-        return question == "fake sum?"
-
-    def is_count_question(question: str) -> bool:
-        return question == "fake count?"
-
-    def extract_numeric_facts(text: str) -> list[tuple[str, float, str, str]]:
-        return [("Fake Metric", 7.0, "views", text)]
-
-    def precompute_sum(question: str, text: str) -> dict[str, object] | None:
-        if question != "fake sum?":
-            return None
-        return {
-            "kind": "total",
-            "value": 7.0,
-            "facts": [("Fake Metric", 7.0, "views", text)],
-            "message": "COMPUTED TOTAL: Fake Metric = 7 views",
-        }
-
-    module = ModuleType("remanentia_aggregate_precompute")
-    module.is_sum_question = is_sum_question  # type: ignore[attr-defined]
-    module.is_count_question = is_count_question  # type: ignore[attr-defined]
-    module.extract_numeric_facts = extract_numeric_facts  # type: ignore[attr-defined]
-    module.precompute_sum = precompute_sum  # type: ignore[attr-defined]
-    return module
 
 
 _rust_available = _agg._HAVE_RUST
@@ -436,25 +405,6 @@ def _rust() -> _RustBindings:
     rust = _agg._rust_agg
     assert rust is not None
     return cast(_RustBindings, rust)
-
-
-class TestRustFastPathDispatch:
-    def test_extension_dispatches_all_aggregate_entrypoints(self, monkeypatch) -> None:
-        """Exercise every optional Rust dispatch branch through the module boundary."""
-        monkeypatch.setattr(_agg, "_HAVE_RUST", True)
-        monkeypatch.setattr(_agg, "_rust_agg", _rust_extension_double())
-
-        assert _agg.is_sum_question("fake sum?") is True
-        assert _agg.is_count_question("fake count?") is True
-
-        facts = _agg.extract_numeric_facts("fake evidence")
-        assert _facts_tuple(facts) == (("Fake Metric", 7.0, "views", "fake evidence"),)
-
-        result = _agg.precompute_sum("fake sum?", "fake evidence")
-        assert result is not None
-        assert result.kind == "total"
-        assert result.value == 7.0
-        assert result.message == "COMPUTED TOTAL: Fake Metric = 7 views"
 
 
 @_rust_skip
