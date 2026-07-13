@@ -11,94 +11,56 @@
 from __future__ import annotations
 
 import json
-import sys
-from dataclasses import dataclass, field
+import threading
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from types import ModuleType
-from typing import Any
+from collections.abc import Iterator
 
 import pytest
 
 import bench_longmemeval as bench
 
 
-@dataclass
-class _Fact:
-    """Minimal retrieved fact carrying the production session-index contract."""
+@contextmanager
+def _local_reader(answer: str) -> Iterator[tuple[str, list[dict[str, object]]]]:
+    requests: list[dict[str, object]] = []
 
-    session_idx: int
-    text: str = "retrieved fact"
-    date_mentions: list[str] = field(default_factory=list)
-    # Fields the cross-session synthesiser reads off each fact. Left empty so
-    # synthesis is a no-op here and the diagnostics assertions are unchanged.
-    entities: list[str] = field(default_factory=list)
-    valid_from: str = ""
-    session_date: str = ""
+    class ReaderHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            assert self.path == "/v1/models"
+            body = json.dumps({"data": [{"id": "diagnostic-reader"}]}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
 
+        def do_POST(self):
+            assert self.path == "/v1/chat/completions"
+            length = int(self.headers["Content-Length"])
+            requests.append(json.loads(self.rfile.read(length)))
+            body = json.dumps(
+                {"choices": [{"message": {"content": answer}}]}
+            ).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
 
-@dataclass
-class _Result:
-    """Minimal retrieval result exposing ``fact``/``rrf_score`` like ``FusedResult``."""
+        def log_message(self, _format, *args):
+            return
 
-    fact: _Fact
-    rrf_score: float = 0.05
-
-
-class _FakeArcaneRetriever:
-    """Deterministic ArcaneRetriever replacement for benchmark writer tests."""
-
-    def __init__(
-        self,
-        sessions: list[list[dict[str, Any]]],
-        session_dates: list[str] | None = None,
-    ) -> None:
-        self.sessions = sessions
-        self.session_dates = session_dates
-
-    def retrieve(
-        self,
-        question: str,
-        qtype: str,
-        *,
-        top_k: int,
-        max_iterations: int,
-    ) -> list[_Result]:
-        """Return three distinct ranked sessions so the cap excludes one gold."""
-        assert question
-        assert qtype == "multi-session"
-        assert top_k >= 3
-        assert max_iterations == 2
-        return [_Result(_Fact(0)), _Result(_Fact(2)), _Result(_Fact(3))]
-
-    def build_context(
-        self,
-        question: str,
-        results: list[_Result],
-        *,
-        max_facts: int,
-        sort_chronologically: bool,
-    ) -> str:
-        """Return the ranked-fact context consumed by the real prompt builder."""
-        assert question
-        assert len(results) == 3
-        assert max_facts == 15
-        assert not sort_chronologically
-        return "ranked fact context"
-
-
-def _install_fake_arcane(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Install a fake ``arcane_retriever`` module for the import inside the runner."""
-    module = ModuleType("arcane_retriever")
-    module.__dict__["ArcaneRetriever"] = _FakeArcaneRetriever
-    monkeypatch.setitem(sys.modules, "arcane_retriever", module)
-
-
-def _answer(prompt: str, max_tokens: int = 400) -> str:
-    """Return a deterministic answer after asserting the full prompt boundary."""
-    assert max_tokens == 400
-    assert "FULL CONVERSATION HISTORY:" in prompt
-    assert "ranked fact context" in prompt
-    return "The selected answer is in session s2."
+    server = ThreadingHTTPServer(("127.0.0.1", 0), ReaderHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_address[1]}/v1", requests
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
 
 def test_full_s_arcane_run_writes_retrieval_diagnostics(
@@ -107,7 +69,6 @@ def test_full_s_arcane_run_writes_retrieval_diagnostics(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """The full-S benchmark JSONL records selected and missing answer sessions."""
-    _install_fake_arcane(monkeypatch)
     dataset = tmp_path / "longmemeval_s.json"
     output = tmp_path / "longmemeval_hypotheses.jsonl"
     dataset.write_text(
@@ -127,10 +88,43 @@ def test_full_s_arcane_run_writes_retrieval_diagnostics(
                         "2024-01-04",
                     ],
                     "haystack_sessions": [
-                        [{"role": "user", "content": "opening context"}],
-                        [{"role": "user", "content": "unused middle context"}],
-                        [{"role": "user", "content": "first answer session"}],
-                        [{"role": "user", "content": "second answer session"}],
+                        [
+                            {
+                                "role": "user",
+                                "content": (
+                                    "Medical visit counting protocol medical visit count "
+                                    "includes clinic appointments and hospital visits. Which "
+                                    "medical visits should be counted?"
+                                ),
+                            }
+                        ],
+                        [
+                            {
+                                "role": "user",
+                                "content": (
+                                    "The garden contains blue flowers and a wooden bench "
+                                    "unrelated to healthcare."
+                                ),
+                            }
+                        ],
+                        [
+                            {
+                                "role": "user",
+                                "content": (
+                                    "First answer: count the cardiology medical visit and "
+                                    "clinic appointment in the visit total."
+                                ),
+                            }
+                        ],
+                        [
+                            {
+                                "role": "user",
+                                "content": (
+                                    "Second answer: count the dermatology medical visit in "
+                                    "the visit total."
+                                ),
+                            }
+                        ],
                     ],
                 }
             ]
@@ -148,9 +142,13 @@ def test_full_s_arcane_run_writes_retrieval_diagnostics(
     monkeypatch.setattr(bench, "_FULL_CHAR_BUDGET", 20_000)
     monkeypatch.setattr(bench, "_FULL_RETRIEVE_K", 50)
     monkeypatch.setattr(bench, "_PROGRESS_EVERY", 1)
-    monkeypatch.setattr(bench, "_hypothesis_complete", _answer)
-
-    bench.run_benchmark()
+    monkeypatch.setattr(bench, "_EMIT_CONFIDENCE", False)
+    monkeypatch.setattr(bench, "_USE_LOCAL_LLM", True)
+    monkeypatch.setattr(bench, "_LOCAL_MODEL", "diagnostic-reader")
+    monkeypatch.setenv("REMANENTIA_ARCANE_CE_DISABLE", "1")
+    with _local_reader("The selected answer is in session s2.") as (url, requests):
+        monkeypatch.setattr(bench, "_LOCAL_URL", url)
+        bench.run_benchmark()
 
     capsys.readouterr()
     rows = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
@@ -165,13 +163,12 @@ def test_full_s_arcane_run_writes_retrieval_diagnostics(
     assert diagnostics["missing_answer_session_ids"] == ["s3"]
     assert diagnostics["session_limited_answer_session_ids"] == ["s3"]
     assert diagnostics["budget_dropped_answer_session_ids"] == []
-
-
-def _confident_answer(prompt: str, max_tokens: int = 400) -> str:
-    """Return an answer carrying the elicited trailing confidence rating."""
-    assert max_tokens == 400
-    assert "CONFIDENCE:" in prompt  # the suffix instruction reached the reader
-    return "The selected answer is in session s2.\nCONFIDENCE: 0.8"
+    assert len(requests) == 1
+    assert requests[0]["model"] == "diagnostic-reader"
+    assert requests[0]["max_tokens"] == 400
+    prompt = requests[0]["messages"][0]["content"]
+    assert "FULL CONVERSATION HISTORY:" in prompt
+    assert "cardiology medical visit" in prompt
 
 
 def test_full_s_arcane_confidence_run_stamps_abstention_fields(
@@ -185,7 +182,6 @@ def test_full_s_arcane_confidence_run_stamps_abstention_fields(
     ``rrf_score``) — an AttributeError that would have crashed every question
     of the first confidence-bearing sovereign run.
     """
-    _install_fake_arcane(monkeypatch)
     dataset = tmp_path / "longmemeval_s.json"
     output = tmp_path / "longmemeval_hypotheses.jsonl"
     dataset.write_text(
@@ -205,10 +201,43 @@ def test_full_s_arcane_confidence_run_stamps_abstention_fields(
                         "2024-01-04",
                     ],
                     "haystack_sessions": [
-                        [{"role": "user", "content": "opening context"}],
-                        [{"role": "user", "content": "unused middle context"}],
-                        [{"role": "user", "content": "first answer session"}],
-                        [{"role": "user", "content": "second answer session"}],
+                        [
+                            {
+                                "role": "user",
+                                "content": (
+                                    "Medical visit counting protocol medical visit count "
+                                    "includes clinic appointments and hospital visits. Which "
+                                    "medical visits should be counted?"
+                                ),
+                            }
+                        ],
+                        [
+                            {
+                                "role": "user",
+                                "content": (
+                                    "The garden contains blue flowers and a wooden bench "
+                                    "unrelated to healthcare."
+                                ),
+                            }
+                        ],
+                        [
+                            {
+                                "role": "user",
+                                "content": (
+                                    "First answer: count the cardiology medical visit and "
+                                    "clinic appointment in the visit total."
+                                ),
+                            }
+                        ],
+                        [
+                            {
+                                "role": "user",
+                                "content": (
+                                    "Second answer: count the dermatology medical visit in "
+                                    "the visit total."
+                                ),
+                            }
+                        ],
                     ],
                 }
             ]
@@ -228,9 +257,14 @@ def test_full_s_arcane_confidence_run_stamps_abstention_fields(
     monkeypatch.setattr(bench, "_FULL_RETRIEVE_K", 50)
     monkeypatch.setattr(bench, "_PROGRESS_EVERY", 1)
     monkeypatch.setattr(bench, "_EMIT_CONFIDENCE", True)
-    monkeypatch.setattr(bench, "_hypothesis_complete", _confident_answer)
-
-    bench.run_benchmark()
+    monkeypatch.setattr(bench, "_USE_LOCAL_LLM", True)
+    monkeypatch.setattr(bench, "_LOCAL_MODEL", "diagnostic-reader")
+    monkeypatch.setenv("REMANENTIA_ARCANE_CE_DISABLE", "1")
+    with _local_reader(
+        "The selected answer is in session s2.\nCONFIDENCE: 0.8"
+    ) as (url, requests):
+        monkeypatch.setattr(bench, "_LOCAL_URL", url)
+        bench.run_benchmark()
 
     capsys.readouterr()
     rows = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
@@ -241,9 +275,12 @@ def test_full_s_arcane_confidence_run_stamps_abstention_fields(
     assert row["confidence"] == pytest.approx(0.8)
     # rrf_score 0.05 through the logistic squash — a monotone retrieval proxy.
     assert 0.5 < row["retrieval_confidence"] < 0.6
-    assert len(row["cited_ids"]) == 3  # one 12-hex id per retrieved fact
+    assert len(row["cited_ids"]) == 4  # one 12-hex id per real retrieved fact
     assert all(len(cid) == 12 for cid in row["cited_ids"])
     # Run-provenance stamps for the manifest headline gates.
     assert row["reader"] == bench._READER_MODEL
     assert row["setting"] == "full_s"
     assert row["seed"] == bench._EFFECTIVE_SEED
+    assert len(requests) == 1
+    prompt = requests[0]["messages"][0]["content"]
+    assert "CONFIDENCE:" in prompt
