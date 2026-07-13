@@ -157,6 +157,17 @@ except ImportError:
         trace_fingerprint as _fingerprint_trace_files,
     )
 
+try:
+    from .retrieval_entity_graph import (
+        entity_graph_score as _score_entity_graph,
+        load_entity_graph as _load_entity_graph,
+    )
+except ImportError:
+    from retrieval_entity_graph import (
+        entity_graph_score as _score_entity_graph,
+        load_entity_graph as _load_entity_graph,
+    )
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("ArcSap.Retrieve")
 
@@ -528,20 +539,7 @@ def _load_graph_once():
     global _GRAPH_ENTITIES, _GRAPH_RELATIONS
     if _GRAPH_ENTITIES is not None:
         return
-    graph_dir = BASE_DIR / "memory" / "graph"
-    _GRAPH_ENTITIES = {}
-    _GRAPH_RELATIONS = []
-    ent_path = graph_dir / "entities.jsonl"
-    rel_path = graph_dir / "relations.jsonl"
-    if ent_path.exists():
-        for line in ent_path.read_text(encoding="utf-8").strip().split("\n"):
-            if line.strip():
-                e = json.loads(line)
-                _GRAPH_ENTITIES[e["id"]] = e
-    if rel_path.exists():
-        for line in rel_path.read_text(encoding="utf-8").strip().split("\n"):
-            if line.strip():
-                _GRAPH_RELATIONS.append(json.loads(line))
+    _GRAPH_ENTITIES, _GRAPH_RELATIONS = _load_entity_graph(BASE_DIR / "memory" / "graph")
 
 
 def _entity_graph_score(query: str, trace_name: str) -> float:
@@ -554,40 +552,7 @@ def _entity_graph_score(query: str, trace_name: str) -> float:
     if not _GRAPH_ENTITIES or not _GRAPH_RELATIONS:
         return 0.0
 
-    q_lower = query.lower()
-    q_entities = [eid for eid in _GRAPH_ENTITIES if eid in q_lower]
-    if not q_entities:
-        return 0.0
-
-    t_lower = trace_name.lower().replace("-", " ").replace("_", " ")
-    t_entities = [eid for eid in _GRAPH_ENTITIES if eid in t_lower]
-    if not t_entities:
-        return 0.0
-
-    try:
-        from remanentia_retrieve import entity_graph_score as _rust_egs
-
-        rels = [
-            (r.get("source", ""), r.get("target", ""), float(r.get("weight", 1)))
-            for r in _GRAPH_RELATIONS
-        ]
-        return _rust_egs(q_entities, t_entities, rels)  # pragma: no cover
-    except ImportError:
-        pass
-
-    # Count weighted connections between query entities and trace entities
-    score = 0.0
-    for r in _GRAPH_RELATIONS:
-        src, tgt = r.get("source", ""), r.get("target", "")
-        w = r.get("weight", 1)
-        if (src in q_entities and tgt in t_entities) or (tgt in q_entities and src in t_entities):
-            score += w
-        elif src in q_entities and src in t_entities or tgt in q_entities and tgt in t_entities:
-            score += w * 0.5
-
-    # Normalize by max possible
-    max_w = max((r.get("weight", 1) for r in _GRAPH_RELATIONS), default=1)
-    return min(score / max(max_w * len(q_entities), 1), 1.0)
+    return _score_entity_graph(query, trace_name, _GRAPH_ENTITIES, _GRAPH_RELATIONS)
 
 
 def _filename_bonus(query: str, name_lower: str, idf: dict[str, float]) -> float:
