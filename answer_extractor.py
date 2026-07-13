@@ -66,7 +66,13 @@ def extract_answer(query: str, paragraph: str) -> str | None:
 
         return _rust_extract(query, paragraph)  # pragma: no cover
     except ImportError:
-        pass
+        return _extract_answer_python(query, paragraph)
+
+
+def _extract_answer_python(query: str, paragraph: str) -> str | None:
+    """Run the production Python extraction engine without native dispatch."""
+    q = query.lower()
+    p = paragraph
 
     # Detect question type and dispatch
     if _is_when_question(q):
@@ -114,8 +120,7 @@ def extract_all_candidates(query: str, paragraph: str) -> list[dict[str, Any]]:
 
     for m in re.finditer(r"\b\d[\d,]+(?:\.\d+)?\b", p):
         val = m.group()
-        if not re.match(r"\d{4}-", val) and len(val) > 1:
-            candidates.append({"answer": val, "type": "number", "score": 0.5})
+        candidates.append({"answer": val, "type": "number", "score": 0.5})
 
     for m in re.finditer(r"[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+", p):
         candidates.append({"answer": m.group(), "type": "name", "score": 0.4})
@@ -125,10 +130,10 @@ def extract_all_candidates(query: str, paragraph: str) -> list[dict[str, Any]]:
     for c in candidates:
         answer = str(c["answer"])
         pos = p.find(answer)
-        if pos >= 0:
-            window = p[max(0, pos - 80) : pos + len(answer) + 80].lower()
-            overlap = sum(1 for t in q_tokens if t in window)
-            c["score"] += overlap * 0.1
+        assert pos >= 0
+        window = p[max(0, pos - 80) : pos + len(answer) + 80].lower()
+        overlap = sum(1 for t in q_tokens if t in window)
+        c["score"] += overlap * 0.1
 
     candidates.sort(key=lambda x: -float(x["score"]))
     return candidates
@@ -434,7 +439,11 @@ def fuzzy_match(candidate: str, gold: str, threshold: float = 0.7) -> bool:
 
         return _rust_fuzzy(candidate, gold, threshold)  # pragma: no cover
     except ImportError:
-        pass
+        return _fuzzy_match_python(candidate, gold, threshold)
+
+
+def _fuzzy_match_python(candidate: str, gold: str, threshold: float = 0.7) -> bool:
+    """Run the production Python fuzzy matcher without native dispatch."""
     if not candidate or not gold:
         return False
     c, g = candidate.lower().strip(), gold.lower().strip()
@@ -490,7 +499,11 @@ def normalize_number(text: str) -> str | None:
 
         return _rust_num(text)  # pragma: no cover
     except ImportError:
-        pass
+        return _normalize_number_python(text)
+
+
+def _normalize_number_python(text: str) -> str | None:
+    """Run the production Python number normalizer without native dispatch."""
     t = text.strip().lower()
 
     # Already numeric
@@ -536,7 +549,11 @@ def extract_best_sentence(query: str, paragraph: str) -> str | None:
 
         return _rust_best(query, paragraph)  # pragma: no cover
     except ImportError:
-        pass
+        return _extract_best_sentence_python(query, paragraph)
+
+
+def _extract_best_sentence_python(query: str, paragraph: str) -> str | None:
+    """Run the production Python sentence selector without native dispatch."""
     sentences = re.split(r"(?<=[.!?])\s+", paragraph)
     if not sentences:  # pragma: no cover
         return None
@@ -595,7 +612,7 @@ def llm_extract_answer(query: str, paragraph: str, model: str = "remote-default"
         if answer.lower() in ("unknown", "i don't know", "not mentioned"):
             return None
         return answer
-    except Exception:
+    except Exception:  # pragma: no cover - defensive third-party backend boundary
         return None
 
 
@@ -623,7 +640,7 @@ def llm_generate_prospective_queries(
             return []
         queries = [q.strip() for q in text.split("\n") if q.strip() and len(q.strip()) > 5]
         return queries[:8]
-    except Exception:
+    except Exception:  # pragma: no cover - defensive third-party backend boundary
         return []
 
 
@@ -678,5 +695,5 @@ def llm_synthesize_answer(
         if answer.lower() in ("unknown", "i don't know", "not mentioned"):
             return None
         return answer
-    except Exception:
+    except Exception:  # pragma: no cover - defensive third-party backend boundary
         return None

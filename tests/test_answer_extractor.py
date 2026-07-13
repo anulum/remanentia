@@ -8,12 +8,19 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any
-from unittest.mock import patch
+import json
+import socket
+import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Any, cast
 
+import pytest
 
 from answer_extractor import (
+    _extract_answer_python,
+    _extract_best_sentence_python,
     extract_all_candidates,
     extract_answer,
     extract_best_sentence,
@@ -25,16 +32,15 @@ from answer_extractor import (
     _extract_percentage_answer,
     _extract_version_answer,
     _extract_yes_no,
+    _fuzzy_match_python,
     _is_how_many_question,
     _is_version_question,
     _is_when_question,
     _is_who_question,
     _is_yes_no_question,
+    _normalize_number_python,
 )
-
-
-def _without_native() -> Any:
-    return patch("answer_extractor.import_module", side_effect=ImportError)
+from llm_backend import LocalLLMBackend
 
 
 # ── Question type detection ──────────────────────────────────────
@@ -94,26 +100,31 @@ class TestExtractDate:
 
         assert _extract_date_answer(text, query="when did release candidate ship") == "2026-02-03"
 
+    def test_equal_query_scores_keep_first_date(self) -> None:
+        text = "Started 2026-03-10 and finished 2026-03-15."
+        assert _extract_date_answer(text, query="unrelated token") == "2026-03-10"
+
 
 class TestPythonFallbackDispatch:
+    def test_duration_without_dates_continues_to_standard_engine(self) -> None:
+        assert extract_answer("how many days did it take", "No dates or numbers here.") is None
+
     def test_extract_answer_dispatches_question_types_without_native_extension(self) -> None:
-        with _without_native():
-            assert extract_answer("when did it ship", "It shipped on 2026-02-03.") == "2026-02-03"
-            assert extract_answer("how many tests passed", "Exactly 42 tests passed.") == "42"
-            assert extract_answer("what version shipped", "Release v1.2.3 is live.") == "v1.2.3"
-            assert extract_answer("who approved it", "Alice approved the release.") == "Alice"
-            assert extract_answer("did it pass", "Yes, the suite passed.") == "Yes"
-            assert extract_answer("what percent passed", "Coverage reached 99.5%.") == "99.5%"
-            assert extract_answer("how long did it take", "The run took 14 days.") == "14"
-            assert extract_answer("what percentage passed", "Coverage reached 98%.") == "98%"
+        assert _extract_answer_python("when did it ship", "It shipped on 2026-02-03.") == "2026-02-03"
+        assert _extract_answer_python("how many tests passed", "Exactly 42 tests passed.") == "42"
+        assert _extract_answer_python("what version shipped", "Release v1.2.3 is live.") == "v1.2.3"
+        assert _extract_answer_python("who approved it", "Alice approved the release.") == "Alice"
+        assert _extract_answer_python("did it pass", "Yes, the suite passed.") == "Yes"
+        assert _extract_answer_python("what percent passed", "Coverage reached 99.5%.") == "99.5%"
+        assert _extract_answer_python("how long did it take", "The run took 14 days.") == "14"
+        assert _extract_answer_python("what percentage passed", "Coverage reached 98%.") == "98%"
 
     def test_extract_answer_generic_fallback_order_without_native_extension(self) -> None:
-        with _without_native():
-            assert extract_answer("tell me the metric", "Coverage reached 88%.") == "88%"
-            assert extract_answer("tell me the version", "Release v2.0 is live.") == "v2.0"
-            assert extract_answer("tell me the date", "Shipped on 2026-03-04.") == "2026-03-04"
-            assert extract_answer("tell me the number", "There were 123 failures.") == "123"
-            assert extract_answer("tell me something", "No extractable answer here.") is None
+        assert _extract_answer_python("tell me the metric", "Coverage reached 88%.") == "88%"
+        assert _extract_answer_python("tell me the version", "Release v2.0 is live.") == "v2.0"
+        assert _extract_answer_python("tell me the date", "Shipped on 2026-03-04.") == "2026-03-04"
+        assert _extract_answer_python("tell me the number", "There were 123 failures.") == "123"
+        assert _extract_answer_python("tell me something", "No extractable answer here.") is None
 
     def test_number_extraction_empty_and_queryless_paths(self) -> None:
         assert _extract_number_answer("No digits here.", "how many") is None
@@ -127,27 +138,24 @@ class TestPythonFallbackDispatch:
         )
 
     def test_fuzzy_match_python_fallback_paths(self) -> None:
-        with _without_native():
-            assert fuzzy_match("", "gold") is False
-            assert fuzzy_match("March 15", "march 15") is True
-            assert fuzzy_match("answer", "the answer was used") is True
-            assert fuzzy_match("kitten", "sitting", threshold=0.5) is True
-            assert fuzzy_match("alpha", "omega", threshold=0.9) is False
+        assert _fuzzy_match_python("", "gold") is False
+        assert _fuzzy_match_python("March 15", "march 15") is True
+        assert _fuzzy_match_python("answer", "the answer was used") is True
+        assert _fuzzy_match_python("kitten", "sitting", threshold=0.5) is True
+        assert _fuzzy_match_python("alpha", "omega", threshold=0.9) is False
 
     def test_normalize_number_python_fallback_paths(self) -> None:
-        with _without_native():
-            assert normalize_number("1,234%") == "1234"
-            assert normalize_number("one hundred and five") == "105"
-            assert normalize_number("forty-two") == "42"
-            assert normalize_number("no number") is None
+        assert _normalize_number_python("1,234%") == "1234"
+        assert _normalize_number_python("one hundred and five") == "105"
+        assert _normalize_number_python("forty-two") == "42"
+        assert _normalize_number_python("no number") is None
 
     def test_extract_best_sentence_python_fallback(self) -> None:
         paragraph = "Alpha is unrelated. Beta retrieval passed all checks."
-        with _without_native():
-            assert extract_best_sentence("retrieval checks", paragraph) == (
-                "Beta retrieval passed all checks."
-            )
-            assert extract_best_sentence("missing terms", paragraph) is None
+        assert _extract_best_sentence_python("retrieval checks", paragraph) == (
+            "Beta retrieval passed all checks."
+        )
+        assert _extract_best_sentence_python("missing terms", paragraph) is None
 
 
 # ── Number extraction ────────────────────────────────────────────
@@ -399,6 +407,10 @@ class TestExtractNameSingleWord:
         result = _extract_name_answer("The project lead is Miroslav.", "who is leading the project")
         assert result is not None
 
+    def test_unrelated_capitalized_word_is_ignored(self) -> None:
+        text = "London is distant. " + "x" * 100 + " the project lead is Miroslav."
+        assert _extract_name_answer(text, "who leads project") == "Miroslav"
+
 
 # ── _is_what_percent_question ───────────────────────────────────
 
@@ -423,276 +435,186 @@ class TestNormalizeNumberEdge:
         assert normalize_number("twenty and one") == "21"
 
 
-# ── FakeBackend for LLM tests ─────────────────────────────────
+# ── Real local HTTP LLM integration ────────────────────────────
 
 
-class _FakeBackend:
-    """Simple LLM backend stub for testing."""
-
-    def __init__(self, response: str | None | Callable[[str], str | None]) -> None:
-        self._response = response
-        self.last_prompt = ""
-        self.last_kwargs: dict[str, int | str] = {}
-
-    def complete(self, prompt: str, *, max_tokens: int = 200, system: str = "") -> str | None:
-        self.last_prompt = prompt
-        self.last_kwargs = {"max_tokens": max_tokens, "system": system}
-        if callable(self._response):
-            return self._response(prompt)
-        return self._response
+class _CompletionServer(ThreadingHTTPServer):
+    responses: list[str | None]
+    requests: list[dict[str, Any]]
 
 
-class _ErrorBackend:
-    """Backend that always raises."""
+class _CompletionHandler(BaseHTTPRequestHandler):
+    def do_POST(self) -> None:
+        server = cast(_CompletionServer, self.server)
+        length = int(self.headers.get("Content-Length", "0"))
+        request = cast(dict[str, Any], json.loads(self.rfile.read(length)))
+        server.requests.append(request)
+        response = server.responses.pop(0)
+        body = json.dumps({"choices": [{"message": {"content": response}}]}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
-    def complete(self, prompt: str, *, max_tokens: int = 200, system: str = "") -> str | None:
-        raise RuntimeError("backend error")
+    def log_message(self, _format: str, *args: object) -> None:
+        return
 
 
-# ── llm_extract_answer ─────────────────────────────────────────
+@contextmanager
+def _local_backend(*responses: str | None) -> Iterator[tuple[LocalLLMBackend, _CompletionServer]]:
+    server = _CompletionServer(("127.0.0.1", 0), _CompletionHandler)
+    server.responses = list(responses)
+    server.requests = []
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    host, port = cast(tuple[str, int], server.server_address)
+    backend = LocalLLMBackend(base_url=f"http://{host}:{port}/v1", model="test", timeout=2)
+    try:
+        yield backend, server
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def _closed_backend() -> LocalLLMBackend:
+    probe = socket.socket()
+    probe.bind(("127.0.0.1", 0))
+    host, port = probe.getsockname()
+    probe.close()
+    return LocalLLMBackend(base_url=f"http://{host}:{port}/v1", timeout=0.1)
+
+
+def _prompt(request: dict[str, Any]) -> str:
+    messages = cast(list[dict[str, str]], request["messages"])
+    return messages[-1]["content"]
+
+
+@contextmanager
+def _configured(backend: LocalLLMBackend | None) -> Iterator[None]:
+    from answer_extractor import get_llm_backend, set_llm_backend
+
+    original = get_llm_backend()
+    set_llm_backend(backend)
+    try:
+        yield
+    finally:
+        set_llm_backend(original)
 
 
 class TestLLMExtractAnswer:
-    def setup_method(self) -> None:
-        import answer_extractor
-
-        self._orig = answer_extractor._BACKEND
-        answer_extractor._BACKEND = None
-
-    def teardown_method(self) -> None:
-        import answer_extractor
-
-        answer_extractor._BACKEND = self._orig
-
     def test_no_backend_returns_none(self) -> None:
         from answer_extractor import llm_extract_answer
 
-        assert llm_extract_answer("when", "context about dates") is None
+        with _configured(None):
+            assert llm_extract_answer("when", "context") is None
 
-    def test_successful_extraction(self) -> None:
-        import answer_extractor
+    def test_success_crosses_http_and_preserves_prompt_contract(self) -> None:
         from answer_extractor import llm_extract_answer
 
-        backend = _FakeBackend("March 15, 2026")
-        answer_extractor._BACKEND = backend
-        result = llm_extract_answer("when", "context")
-        assert result == "March 15, 2026"
-        assert "context" in backend.last_prompt
-        assert backend.last_kwargs["max_tokens"] == 100
+        with _local_backend("March 15, 2026") as (backend, server), _configured(backend):
+            assert llm_extract_answer("when", "x" * 2000) == "March 15, 2026"
+        request = server.requests[0]
+        assert request["max_tokens"] == 100
+        assert "x" * 1000 in _prompt(request)
+        assert "x" * 1001 not in _prompt(request)
 
-    def test_unknown_answer_returns_none(self) -> None:
-        import answer_extractor
+    @pytest.mark.parametrize(  # type: ignore[untyped-decorator]
+        "response", ["unknown", "I don't know", "not mentioned", None]
+    )
+    def test_empty_or_abstaining_http_response_returns_none(self, response: str | None) -> None:
         from answer_extractor import llm_extract_answer
 
-        answer_extractor._BACKEND = _FakeBackend("unknown")
-        assert llm_extract_answer("when did X happen", "some context") is None
+        with _local_backend(response) as (backend, _server), _configured(backend):
+            assert llm_extract_answer("question", "paragraph") is None
 
-    def test_i_dont_know_returns_none(self) -> None:
-        import answer_extractor
+    def test_real_connection_refusal_returns_none(self) -> None:
         from answer_extractor import llm_extract_answer
 
-        answer_extractor._BACKEND = _FakeBackend("I don't know")
-        assert llm_extract_answer("question", "paragraph") is None
-
-    def test_none_response_returns_none(self) -> None:
-        import answer_extractor
-        from answer_extractor import llm_extract_answer
-
-        answer_extractor._BACKEND = _FakeBackend(None)
-        assert llm_extract_answer("question", "paragraph") is None
-
-    def test_backend_error_returns_none(self) -> None:
-        import answer_extractor
-        from answer_extractor import llm_extract_answer
-
-        answer_extractor._BACKEND = _ErrorBackend()
-        assert llm_extract_answer("question", "paragraph") is None
-
-    def test_paragraph_truncated_to_1000(self) -> None:
-        import answer_extractor
-        from answer_extractor import llm_extract_answer
-
-        backend = _FakeBackend("answer")
-        answer_extractor._BACKEND = backend
-        llm_extract_answer("q", "x" * 2000)
-        # The prompt should contain at most 1000 chars of paragraph
-        assert "x" * 1001 not in backend.last_prompt
-
-
-# ── LLM backend getter/setter ────────────────────────────────
+        with _configured(_closed_backend()):
+            assert llm_extract_answer("question", "paragraph") is None
 
 
 class TestLLMBackendAccessors:
-    def setup_method(self) -> None:
-        import answer_extractor
+    def test_set_get_and_clear_real_backend(self) -> None:
+        from answer_extractor import get_llm_backend, set_llm_backend
 
-        self._orig = answer_extractor._BACKEND
-
-    def teardown_method(self) -> None:
-        import answer_extractor
-
-        answer_extractor._BACKEND = self._orig
-
-    def test_set_and_get(self) -> None:
-        from answer_extractor import set_llm_backend, get_llm_backend
-
-        backend = _FakeBackend("test")
-        set_llm_backend(backend)
-        assert get_llm_backend() is backend
-
-    def test_set_none(self) -> None:
-        from answer_extractor import set_llm_backend, get_llm_backend
-
-        set_llm_backend(None)
-        assert get_llm_backend() is None
-
-
-# ── LLM prospective queries ───────────────────────────────────
+        original = get_llm_backend()
+        with _local_backend("answer") as (backend, _server):
+            try:
+                set_llm_backend(backend)
+                assert get_llm_backend() is backend
+                set_llm_backend(None)
+                assert get_llm_backend() is None
+            finally:
+                set_llm_backend(original)
 
 
 class TestLLMProspectiveQueries:
-    def setup_method(self) -> None:
-        import answer_extractor
-
-        self._orig = answer_extractor._BACKEND
-        answer_extractor._BACKEND = None
-
-    def teardown_method(self) -> None:
-        import answer_extractor
-
-        answer_extractor._BACKEND = self._orig
-
-    def test_no_backend_returns_empty(self) -> None:
+    def test_no_backend_and_failed_transport_return_empty(self) -> None:
         from answer_extractor import llm_generate_prospective_queries
 
-        assert llm_generate_prospective_queries("paragraph text", "doc.md") == []
+        with _configured(None):
+            assert llm_generate_prospective_queries("paragraph", "doc.md") == []
+        with _configured(_closed_backend()):
+            assert llm_generate_prospective_queries("paragraph", "doc.md") == []
 
-    def test_generates_queries(self) -> None:
-        import answer_extractor
+    def test_real_http_queries_are_filtered_and_capped(self) -> None:
         from answer_extractor import llm_generate_prospective_queries
 
-        answer_extractor._BACKEND = _FakeBackend(
-            "What is the LOCOMO score?\nWhen was the benchmark run?\nTiny"
-        )
-        result = llm_generate_prospective_queries("paragraph", "doc.md")
-        assert len(result) == 2  # "Tiny" is <= 5 chars, filtered out
+        response = "Tiny\n" + "\n".join(f"Query number {i} about something" for i in range(15))
+        with _local_backend(response) as (backend, server), _configured(backend):
+            queries = llm_generate_prospective_queries("paragraph", "doc.md")
+        assert len(queries) == 8
+        assert all(len(query) > 5 for query in queries)
+        assert server.requests[0]["max_tokens"] == 200
+        assert "Source: doc.md" in _prompt(server.requests[0])
 
-    def test_none_response_returns_empty(self) -> None:
-        import answer_extractor
+    def test_missing_http_content_returns_empty(self) -> None:
         from answer_extractor import llm_generate_prospective_queries
 
-        answer_extractor._BACKEND = _FakeBackend(None)
-        assert llm_generate_prospective_queries("paragraph", "doc.md") == []
-
-    def test_backend_error_returns_empty(self) -> None:
-        import answer_extractor
-        from answer_extractor import llm_generate_prospective_queries
-
-        answer_extractor._BACKEND = _ErrorBackend()
-        assert llm_generate_prospective_queries("paragraph", "doc.md") == []
-
-    def test_max_8_queries(self) -> None:
-        import answer_extractor
-        from answer_extractor import llm_generate_prospective_queries
-
-        answer_extractor._BACKEND = _FakeBackend(
-            "\n".join(f"Query number {i} about something" for i in range(15))
-        )
-        result = llm_generate_prospective_queries("paragraph", "doc.md")
-        assert len(result) <= 8
-
-
-# ── LLM synthesis ──────────────────────────────────────────────
+        with _local_backend(None) as (backend, _server), _configured(backend):
+            assert llm_generate_prospective_queries("paragraph", "doc.md") == []
 
 
 class TestLLMSynthesizeAnswer:
-    def setup_method(self) -> None:
-        import answer_extractor
-
-        self._orig = answer_extractor._BACKEND
-        answer_extractor._BACKEND = None
-
-    def teardown_method(self) -> None:
-        import answer_extractor
-
-        answer_extractor._BACKEND = self._orig
-
-    def test_no_backend_returns_none(self) -> None:
+    def test_no_backend_failed_transport_and_abstention_return_none(self) -> None:
         from answer_extractor import llm_synthesize_answer
 
-        assert llm_synthesize_answer("query", ["para1", "para2"]) is None
+        with _configured(None):
+            assert llm_synthesize_answer("query", ["paragraph"]) is None
+        with _configured(_closed_backend()):
+            assert llm_synthesize_answer("query", ["paragraph"]) is None
+        for response in ("unknown", "I don't know", "not mentioned", None):
+            with _local_backend(response) as (backend, _server), _configured(backend):
+                assert llm_synthesize_answer("query", ["paragraph"]) is None
 
-    def test_synthesizes_answer(self) -> None:
-        import answer_extractor
+    @pytest.mark.parametrize(  # type: ignore[untyped-decorator]
+        ("query", "response", "prompt_fragment"),
+        [
+            ("would the user enjoy hiking?", "Yes, outdoors", "hypothetical"),
+            ("what are the hobbies?", "hiking, reading", "List ALL"),
+            ("how many tests?", "The answer is 42", "Be concise"),
+        ],
+    )
+    def test_question_specific_prompts_cross_real_http(
+        self, query: str, response: str, prompt_fragment: str
+    ) -> None:
         from answer_extractor import llm_synthesize_answer
 
-        backend = _FakeBackend("The score was 69.0%")
-        answer_extractor._BACKEND = backend
-        result = llm_synthesize_answer("what was the score?", ["para about scores"])
-        assert result == "The score was 69.0%"
+        with _local_backend(response) as (backend, server), _configured(backend):
+            assert llm_synthesize_answer(query, ["source text"]) == response
+        assert prompt_fragment in _prompt(server.requests[0])
 
-    def test_unknown_returns_none(self) -> None:
-        import answer_extractor
+    def test_only_first_ten_sources_cross_http(self) -> None:
         from answer_extractor import llm_synthesize_answer
 
-        answer_extractor._BACKEND = _FakeBackend("unknown")
-        assert llm_synthesize_answer("query", ["para"]) is None
-
-    def test_none_response_returns_none(self) -> None:
-        import answer_extractor
-        from answer_extractor import llm_synthesize_answer
-
-        answer_extractor._BACKEND = _FakeBackend(None)
-        assert llm_synthesize_answer("query", ["para"]) is None
-
-    def test_backend_error_returns_none(self) -> None:
-        import answer_extractor
-        from answer_extractor import llm_synthesize_answer
-
-        answer_extractor._BACKEND = _ErrorBackend()
-        assert llm_synthesize_answer("query", ["para"]) is None
-
-    def test_hypothetical_prompt(self) -> None:
-        import answer_extractor
-        from answer_extractor import llm_synthesize_answer
-
-        backend = _FakeBackend("Yes, they would enjoy it")
-        answer_extractor._BACKEND = backend
-        result = llm_synthesize_answer("would the user enjoy hiking?", ["likes outdoors"])
-        assert result == "Yes, they would enjoy it"
-        assert "hypothetical" in backend.last_prompt.lower()
-
-    def test_list_prompt(self) -> None:
-        import answer_extractor
-        from answer_extractor import llm_synthesize_answer
-
-        backend = _FakeBackend("hiking, reading, cooking")
-        answer_extractor._BACKEND = backend
-        result = llm_synthesize_answer("what are the hobbies?", ["hobby info"])
-        assert result == "hiking, reading, cooking"
-        assert "list all" in backend.last_prompt.lower()
-
-    def test_default_prompt(self) -> None:
-        import answer_extractor
-        from answer_extractor import llm_synthesize_answer
-
-        backend = _FakeBackend("The answer is 42")
-        answer_extractor._BACKEND = backend
-        result = llm_synthesize_answer("how many tests?", ["test count info"])
-        assert result == "The answer is 42"
-        assert "concise" in backend.last_prompt.lower()
-
-    def test_max_10_paragraphs(self) -> None:
-        import answer_extractor
-        from answer_extractor import llm_synthesize_answer
-
-        backend = _FakeBackend("answer")
-        answer_extractor._BACKEND = backend
-        paras = [f"paragraph {i}" for i in range(20)]
-        llm_synthesize_answer("query", paras)
-        # Only first 10 should be in prompt
-        assert "[Source 10]" in backend.last_prompt
-        assert "[Source 11]" not in backend.last_prompt
+        with _local_backend("answer") as (backend, server), _configured(backend):
+            assert llm_synthesize_answer("query", [f"paragraph {i}" for i in range(20)]) == "answer"
+        prompt = _prompt(server.requests[0])
+        assert "[Source 10]" in prompt
+        assert "[Source 11]" not in prompt
 
 
 # ── Missing patterns: pipeline, roundtrip ─────────────────────
@@ -934,7 +856,9 @@ class TestMultibyteSafety:
     def test_rust_path_direct(self) -> None:
         """Call Rust extractor directly — bypass Python fallbacks."""
         try:
-            from remanentia_answer_extractor import extract_answer as r_extract
+            from remanentia_answer_extractor import (  # type: ignore[import-not-found]
+                extract_answer as r_extract,
+            )
         except ImportError:
             return  # Rust crate not built (CI without maturin build)
         for q in ("how much", "when", "who"):
