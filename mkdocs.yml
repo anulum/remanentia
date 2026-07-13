@@ -123,6 +123,9 @@ nav:
     - provenance_export: api/provenance_export.md
     - world_class_scorecard: api/world_class_scorecard.md
     - lean_context: api/lean_context.md
+    - observed_context: api/observed_context.md
+    - reader_budget: api/reader_budget.md
+    - hypothesis_checkpoint: api/hypothesis_checkpoint.md
     - scorecard_report: api/scorecard_report.md
     - answer_confidence: api/answer_confidence.md
     - discipline_impact: api/discipline_impact.md
