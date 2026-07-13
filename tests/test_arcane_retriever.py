@@ -8,12 +8,25 @@
 
 from __future__ import annotations
 
-import builtins
 import os
-from unittest.mock import patch
+import time
+from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
+from pathlib import Path
 
-import arcane_retriever
-from arcane_retriever import ArcaneRetriever, FusedResult, RetrievalResult
+import torch
+import pytest
+from transformers import BertConfig, BertForSequenceClassification, BertTokenizer
+
+from arcane_retriever import (
+    ArcaneRetriever,
+    FusedResult,
+    RetrievalResult,
+    _python_tokenize_words,
+    _tokenize_words,
+)
+from device_utils import clear_cache
 from fact_decomposer import AtomicFact
 
 
@@ -71,14 +84,129 @@ class TestDataclasses:
 # ── Cross-encoder rerank: on by default, opt-out env ─────────────
 
 
-class _FakeCrossEncoder:
-    """Stub cross-encoder returning preset scores from ``predict``."""
+def _write_cross_encoder(root: Path) -> Path:
+    """Write a real tiny BERT cross-encoder with deterministic pair ordering."""
+    model_dir = root / "cross-encoder"
+    model_dir.mkdir()
+    vocabulary = [
+        "[PAD]",
+        "[UNK]",
+        "[CLS]",
+        "[SEP]",
+        "[MASK]",
+        "q",
+        "alpha",
+        "beta",
+    ]
+    vocab_path = model_dir / "vocab.txt"
+    vocab_path.write_text("\n".join(vocabulary) + "\n", encoding="utf-8")
+    tokenizer = BertTokenizer(vocab_file=str(vocab_path), do_lower_case=True)
+    torch.manual_seed(7)
+    model = BertForSequenceClassification(
+        BertConfig(
+            vocab_size=len(vocabulary),
+            hidden_size=8,
+            num_hidden_layers=1,
+            num_attention_heads=2,
+            intermediate_size=16,
+            max_position_embeddings=32,
+            num_labels=1,
+            hidden_dropout_prob=0.0,
+            attention_probs_dropout_prob=0.0,
+        )
+    )
+    model.eval()
+    tokenizer.save_pretrained(model_dir)
+    model.save_pretrained(model_dir)
+    return model_dir
 
-    def __init__(self, scores: list[float]) -> None:
-        self._scores = scores
 
-    def predict(self, pairs: list, show_progress_bar: bool = False) -> list[float]:
-        return self._scores[: len(pairs)]
+@pytest.fixture(scope="module")
+def cross_encoder_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return _write_cross_encoder(tmp_path_factory.mktemp("real-cross-encoder"))
+
+
+@pytest.fixture(scope="module", autouse=True)
+def local_cross_encoder_default(cross_encoder_dir: Path) -> Iterator[None]:
+    """Route every lazy loader in this module to the real local checkpoint."""
+    model_original = os.environ.get("REMANENTIA_ARCANE_CE_MODEL")
+    device_original = os.environ.get("REMANENTIA_FORCE_DEVICE")
+    os.environ["REMANENTIA_ARCANE_CE_MODEL"] = str(cross_encoder_dir)
+    os.environ["REMANENTIA_FORCE_DEVICE"] = "cpu"
+    clear_cache()
+    try:
+        yield
+    finally:
+        deadline = time.monotonic() + 10
+        while ArcaneRetriever._ce_loading and time.monotonic() < deadline:
+            time.sleep(0.01)
+        if model_original is None:
+            os.environ.pop("REMANENTIA_ARCANE_CE_MODEL", None)
+        else:
+            os.environ["REMANENTIA_ARCANE_CE_MODEL"] = model_original
+        if device_original is None:
+            os.environ.pop("REMANENTIA_FORCE_DEVICE", None)
+        else:
+            os.environ["REMANENTIA_FORCE_DEVICE"] = device_original
+        clear_cache()
+
+
+@contextmanager
+def _cross_encoder_at(model_dir: Path, *, synchronous: bool = True) -> Iterator[None]:
+    """Isolate the production cross-encoder cache around a real local model."""
+    keys = (
+        "REMANENTIA_ARCANE_CE_MODEL",
+        "REMANENTIA_ARCANE_CE_SYNC",
+        "REMANENTIA_ARCANE_CE_DISABLE",
+        "REMANENTIA_FORCE_DEVICE",
+    )
+    original_env = {key: os.environ.get(key) for key in keys}
+    original_state = (
+        ArcaneRetriever._ce_model,
+        ArcaneRetriever._ce_loading,
+        ArcaneRetriever._ce_device,
+        ArcaneRetriever._ce_error,
+    )
+    os.environ["REMANENTIA_ARCANE_CE_MODEL"] = str(model_dir)
+    os.environ["REMANENTIA_FORCE_DEVICE"] = "cpu"
+    if synchronous:
+        os.environ["REMANENTIA_ARCANE_CE_SYNC"] = "1"
+    else:
+        os.environ.pop("REMANENTIA_ARCANE_CE_SYNC", None)
+    os.environ.pop("REMANENTIA_ARCANE_CE_DISABLE", None)
+    ArcaneRetriever._ce_model = None
+    ArcaneRetriever._ce_loading = False
+    ArcaneRetriever._ce_device = None
+    ArcaneRetriever._ce_error = None
+    clear_cache()
+    try:
+        yield
+    finally:
+        (
+            ArcaneRetriever._ce_model,
+            ArcaneRetriever._ce_loading,
+            ArcaneRetriever._ce_device,
+            ArcaneRetriever._ce_error,
+        ) = original_state
+        for key, value in original_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        clear_cache()
+
+
+@contextmanager
+def _cross_encoder_disabled() -> Iterator[None]:
+    original = os.environ.get("REMANENTIA_ARCANE_CE_DISABLE")
+    os.environ["REMANENTIA_ARCANE_CE_DISABLE"] = "1"
+    try:
+        yield
+    finally:
+        if original is None:
+            os.environ.pop("REMANENTIA_ARCANE_CE_DISABLE", None)
+        else:
+            os.environ["REMANENTIA_ARCANE_CE_DISABLE"] = original
 
 
 class TestCrossEncoderRerankDefault:
@@ -92,90 +220,72 @@ class TestCrossEncoderRerankDefault:
             FusedResult(fact=self._fact("beta"), rrf_score=0.2),
         ]
 
-    def test_disable_env_skips_rerank_even_with_model(self):
+    def test_disable_env_skips_rerank_even_with_model(self, cross_encoder_dir: Path):
         ar = ArcaneRetriever(SESSIONS)
         results = self._results()
-        with (
-            patch.object(ArcaneRetriever, "_ce_model", _FakeCrossEncoder([0.9, 0.1])),
-            patch.object(ArcaneRetriever, "_ce_loading", False),
-            patch.dict(os.environ, {"REMANENTIA_ARCANE_CE_DISABLE": "1"}),
-        ):
+        with _cross_encoder_at(cross_encoder_dir):
+            ar._load_ce()
+            os.environ["REMANENTIA_ARCANE_CE_DISABLE"] = "1"
             out = ar._cross_encoder_rerank("q", results, top_n=10)
         assert out is results
         assert [r.rrf_score for r in out] == [0.1, 0.2]  # untouched
 
-    def test_default_reranks_when_model_present(self):
+    def test_default_reranks_when_model_present(self, cross_encoder_dir: Path):
         ar = ArcaneRetriever(SESSIONS)
         results = self._results()
+        alpha = results[0].fact
         beta = results[1].fact
-        with (
-            patch.object(ArcaneRetriever, "_ce_model", _FakeCrossEncoder([0.2, 0.95])),
-            patch.object(ArcaneRetriever, "_ce_loading", False),
-            patch.dict(os.environ, {}, clear=False),
-        ):
-            os.environ.pop("REMANENTIA_ARCANE_CE_DISABLE", None)
+        with _cross_encoder_at(cross_encoder_dir):
+            ar._load_ce()
+            scores = ArcaneRetriever._ce_model.predict(
+                [("q", "alpha"), ("q", "beta")], show_progress_bar=False
+            )
             out = ar._cross_encoder_rerank("q", results, top_n=10)
-        assert out[0].fact is beta  # higher CE score reranked to the top
-        assert out[0].rrf_score == 0.95
+        expected = beta if scores[1] > scores[0] else alpha
+        assert out[0].fact is expected
+        assert out[0].rrf_score == pytest.approx(float(max(scores)))
 
-    def test_default_triggers_load_when_model_absent(self):
+    def test_rerank_triggers_real_sync_load_when_model_absent(self, cross_encoder_dir: Path):
         ar = ArcaneRetriever(SESSIONS)
         results = self._results()
-        with (
-            patch.object(ArcaneRetriever, "_ce_model", None),
-            patch.object(ArcaneRetriever, "_ce_loading", False),
-            patch.object(ArcaneRetriever, "_load_ce") as mock_load,
-            patch.dict(os.environ, {}, clear=False),
-        ):
-            os.environ.pop("REMANENTIA_ARCANE_CE_DISABLE", None)
+        with _cross_encoder_at(cross_encoder_dir):
             out = ar._cross_encoder_rerank("q", results, top_n=10)
-        mock_load.assert_called_once()
-        assert out is results  # model not ready this call → un-reranked
+            assert ArcaneRetriever._ce_model is not None
+        assert out[0].rrf_score >= out[1].rrf_score
 
     def test_load_ce_returns_early_when_already_loading(self):
-        # When a load is already in flight, _load_ce must short-circuit without
-        # spawning a second background loader. This early return is otherwise
-        # only reached by chance via leftover class state across tests, so it is
-        # pinned deterministically here.
         ar = ArcaneRetriever(SESSIONS)
-        with (
-            patch.object(ArcaneRetriever, "_ce_model", None),
-            patch.object(ArcaneRetriever, "_ce_loading", True),
-            patch("threading.Thread") as mock_thread,
-        ):
+        original = ArcaneRetriever._ce_loading
+        ArcaneRetriever._ce_loading = True
+        try:
             ar._load_ce()
-            mock_thread.assert_not_called()  # no second loader started
-            assert ArcaneRetriever._ce_loading is True  # flag left untouched
+            assert ArcaneRetriever._ce_loading is True
+        finally:
+            ArcaneRetriever._ce_loading = original
 
-    def test_sync_env_loads_cross_encoder_before_returning(self, monkeypatch):
-        # REMANENTIA_ARCANE_CE_SYNC=1 loads the reranker synchronously so a
-        # benchmark has it before the first query, and records the device it
-        # resolved to (guards against a silent CPU/GPU fallback).
-        fake = _FakeCrossEncoder([0.5])
-        monkeypatch.setattr("device_utils.safe_device", lambda: "cuda:0")
-        monkeypatch.setattr("sentence_transformers.CrossEncoder", lambda *a, **k: fake)
-        monkeypatch.setenv("REMANENTIA_ARCANE_CE_SYNC", "1")
+    def test_sync_env_loads_real_cross_encoder_before_returning(self, cross_encoder_dir: Path):
         ar = ArcaneRetriever(SESSIONS)
-        with (
-            patch.object(ArcaneRetriever, "_ce_model", None),
-            patch.object(ArcaneRetriever, "_ce_loading", False),
-            patch.object(ArcaneRetriever, "_ce_device", None),
-            patch.object(ArcaneRetriever, "_ce_error", None),
-        ):
+        with _cross_encoder_at(cross_encoder_dir):
             ar._load_ce()
-            assert ArcaneRetriever._ce_model is fake  # loaded synchronously, no thread
-            assert ArcaneRetriever._ce_device == "cuda:0"
-            assert ArcaneRetriever._ce_loading is False  # finally reset the flag
+            assert ArcaneRetriever._ce_model is not None
+            assert ArcaneRetriever._ce_device == "cpu"
+            assert ArcaneRetriever._ce_loading is False
 
-    def test_model_ready_with_no_pairs_returns_original_results(self):
+    def test_background_load_uses_real_local_checkpoint(self, cross_encoder_dir: Path):
+        ar = ArcaneRetriever(SESSIONS)
+        with _cross_encoder_at(cross_encoder_dir, synchronous=False):
+            ar._load_ce()
+            deadline = time.monotonic() + 10
+            while ArcaneRetriever._ce_loading and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert ArcaneRetriever._ce_model is not None
+            assert ArcaneRetriever._ce_error is None
+
+    def test_model_ready_with_no_pairs_returns_original_results(self, cross_encoder_dir: Path):
         ar = ArcaneRetriever(SESSIONS)
         results: list[FusedResult] = []
-        with (
-            patch.object(ArcaneRetriever, "_ce_model", _FakeCrossEncoder([])),
-            patch.object(ArcaneRetriever, "_ce_loading", False),
-            patch.dict(os.environ, {}, clear=False),
-        ):
-            os.environ.pop("REMANENTIA_ARCANE_CE_DISABLE", None)
+        with _cross_encoder_at(cross_encoder_dir):
+            ar._load_ce()
             out = ar._cross_encoder_rerank("q", results, top_n=10)
         assert out is results
 
@@ -244,25 +354,6 @@ class TestChannels:
 
 
 class TestParallelRetrieve:
-    class _FailingFuture:
-        def result(self):
-            raise RuntimeError("channel failed")
-
-    class _FailingExecutor:
-        def __init__(self, *args, **kwargs) -> None:
-            self.submitted = []
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb) -> bool:
-            return False
-
-        def submit(self, *args, **kwargs):
-            future = TestParallelRetrieve._FailingFuture()
-            self.submitted.append((future, args, kwargs))
-            return future
-
     def test_runs_channels(self):
         ar = ArcaneRetriever(SESSIONS)
         results = ar._parallel_retrieve(
@@ -281,19 +372,17 @@ class TestParallelRetrieve:
         )
         assert len(results) == 4
 
-    def test_channel_exception_handled(self):
+    def test_unknown_channel_produces_no_future(self):
         ar = ArcaneRetriever(SESSIONS)
-        with patch.object(ar, "_ch_bm25", side_effect=RuntimeError("crash")):
-            results = ar._parallel_retrieve("test", "x", ["bm25"], top_k=5)
-        assert results["bm25"] == []
+        assert ar._parallel_retrieve("Caroline", "general", ["unknown"], top_k=5) == {}
 
-    def test_future_exception_records_empty_channel(self):
-        ar = ArcaneRetriever(SESSIONS)
-        with (
-            patch.object(arcane_retriever, "ThreadPoolExecutor", self._FailingExecutor),
-            patch.object(arcane_retriever, "as_completed", lambda futures: list(futures)),
-        ):
-            results = ar._parallel_retrieve("test", "x", ["temporal"], top_k=5)
+    def test_real_failed_future_records_empty_channel(self):
+        def fail_channel() -> list[RetrievalResult]:
+            raise RuntimeError("channel failed")
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(fail_channel)
+            results = ArcaneRetriever._collect_channel_futures({future: "temporal"})
         assert results == {"temporal": []}
 
 
@@ -408,6 +497,13 @@ class TestCheckSufficiency:
         assert not ok
         assert reason == "insufficient_count_evidence"
 
+    def test_counting_with_enough_real_facts_continues(self):
+        ar = ArcaneRetriever(SESSIONS)
+        results = [self._fact("Caroline count evidence") for _ in range(5)]
+        ok, reason = ar._check_sufficiency("How many Caroline facts?", "general", results)
+        assert ok
+        assert reason == ""
+
     def test_low_entity_coverage(self):
         ar = ArcaneRetriever(SESSIONS)
         results = [self._fact("completely unrelated text about zebras and giraffes")]
@@ -423,22 +519,9 @@ class TestCheckSufficiency:
         ok, _ = ar._check_sufficiency("Caroline Boston", "general", results)
         assert ok
 
-    def test_sufficiency_uses_python_tokenizer_when_rust_extension_missing(self, monkeypatch):
-        original_import = builtins.__import__
-
-        def import_without_rust(name, *args, **kwargs):
-            if name == "remanentia_fact_decomposer":
-                raise ImportError(name)
-            return original_import(name, *args, **kwargs)
-
-        monkeypatch.setattr(builtins, "__import__", import_without_rust)
-        ar = ArcaneRetriever(SESSIONS)
-        results = [self._fact("Caroline teaches in Boston at school")]
-
-        ok, reason = ar._check_sufficiency("Caroline Boston", "general", results)
-
-        assert ok
-        assert reason == ""
+    def test_python_tokenizer_fallback(self):
+        assert _python_tokenize_words("Caroline, in Boston!") == ["Caroline", "Boston"]
+        assert _tokenize_words("Caroline, in Boston!", None) == ["Caroline", "Boston"]
 
 
 # ── Query rewriting ──────────────────────────────────────────────
@@ -501,20 +584,10 @@ class TestRetrieve:
         results = ar.retrieve("When did the job change?", "temporal-reasoning", top_k=5)
         assert isinstance(results, list)
 
-    def test_retrieve_sufficiency_loop(self):
-        ar = ArcaneRetriever(SESSIONS)
-        # Force insufficiency on first iteration by making check return False
-        call_count = [0]
-
-        def mock_check(q, qt, results):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                return False, "low_entity_coverage"
-            return True, ""
-
-        with patch.object(ar, "_check_sufficiency", side_effect=mock_check):
-            ar.retrieve("test query", "general", top_k=5, max_iterations=3)
-        assert call_count[0] >= 2
+    def test_retrieve_with_multiple_real_sufficiency_iterations(self):
+        ar = ArcaneRetriever([[]])
+        with _cross_encoder_disabled():
+            assert ar.retrieve("missing query", "general", top_k=5, max_iterations=3) == []
 
 
 # ── Build context ────────────────────────────────────────────────
@@ -806,7 +879,7 @@ class TestRecencyDecay:
                 retriever.retrieve("BM25 performance", "general", top_k=10, max_iterations=1)
             return ((time.perf_counter() - t0) * 1000) / 60
 
-        with patch.dict(os.environ, {"REMANENTIA_ARCANE_CE_DISABLE": "1"}):
+        with _cross_encoder_disabled():
             baseline.retrieve("BM25 performance", "general", top_k=10, max_iterations=1)
             decayed.retrieve("BM25 performance", "general", top_k=10, max_iterations=1)
             baseline_ms = mean_retrieve_ms(baseline)

@@ -44,13 +44,28 @@ from __future__ import annotations
 import math
 import os
 import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
 from datetime import date
 
 from fact_decomposer import AtomicFact, FactIndex, decompose_sessions
 from context_builder import build_hierarchical_context
+
+
+def _python_tokenize_words(text: str) -> list[str]:
+    """Tokenize entity-bearing words when the native extension is unavailable."""
+    return re.findall(r"\w{4,}", text)
+
+
+def _tokenize_words(
+    text: str,
+    native_tokenizer: Callable[[str], list[str]] | None,
+) -> list[str]:
+    """Use the native tokenizer when supplied, otherwise the Python engine."""
+    if native_tokenizer is None:
+        return _python_tokenize_words(text)
+    return native_tokenizer(text)
 
 
 @dataclass
@@ -179,13 +194,22 @@ class ArcaneRetriever:
                 elif ch == "session":
                     futures[pool.submit(self._ch_session, query, top_k)] = ch
 
-            for future in as_completed(futures):
-                ch = futures[future]
-                try:
-                    results[ch] = future.result()
-                except Exception:
-                    results[ch] = []
+            results.update(self._collect_channel_futures(futures))
 
+        return results
+
+    @staticmethod
+    def _collect_channel_futures(
+        futures: dict[Future[list[RetrievalResult]], str],
+    ) -> dict[str, list[RetrievalResult]]:
+        """Collect real channel futures, isolating a failed channel as empty."""
+        results: dict[str, list[RetrievalResult]] = {}
+        for future in as_completed(futures):
+            channel = futures[future]
+            try:
+                results[channel] = future.result()
+            except Exception:
+                results[channel] = []
         return results
 
     def _ch_bm25(self, query: str, top_k: int) -> list[RetrievalResult]:
@@ -351,21 +375,15 @@ class ArcaneRetriever:
 
         # Check entity coverage: does the question mention entities found in results?
         try:
-            from remanentia_fact_decomposer import (  # type: ignore[import-untyped]  # Rust extension; no stubs
+            from remanentia_fact_decomposer import (  # type: ignore[import-not-found]  # Rust extension; no stubs
                 tokenize_words as _rust_tw,
             )
         except ImportError:
             _rust_tw = None
 
-        if _rust_tw is not None:  # pragma: no cover
-            q_entities = set(_rust_tw(q_lower))
-        else:
-            q_entities = set(re.findall(r"\w{4,}", q_lower))
+        q_entities = set(_tokenize_words(q_lower, _rust_tw))
         result_text = " ".join(r.fact.text.lower() for r in results[:5])
-        if _rust_tw is not None:  # pragma: no cover
-            result_tokens = set(_rust_tw(result_text))
-        else:
-            result_tokens = set(re.findall(r"\w{4,}", result_text))
+        result_tokens = set(_tokenize_words(result_text, _rust_tw))
         overlap = len(q_entities & result_tokens)
         if overlap < len(q_entities) * 0.3:
             return False, "low_entity_coverage"
@@ -402,7 +420,7 @@ class ArcaneRetriever:
 
                 words = _rust_tw(original)  # pragma: no cover
             except ImportError:
-                words = re.findall(r"\w{4,}", original)
+                words = _python_tokenize_words(original)
             return " ".join(words[:5])
 
         return original
@@ -431,15 +449,17 @@ class ArcaneRetriever:
 
         def _load() -> None:
             try:
-                from sentence_transformers import CrossEncoder
+                from sentence_transformers import CrossEncoder  # type: ignore[import-not-found]
 
                 from device_utils import safe_device
 
                 device = safe_device()
                 ArcaneRetriever._ce_device = device
-                ArcaneRetriever._ce_model = CrossEncoder(
-                    "cross-encoder/ms-marco-MiniLM-L-6-v2", device=device
+                model_name = os.getenv(
+                    "REMANENTIA_ARCANE_CE_MODEL",
+                    "cross-encoder/ms-marco-MiniLM-L-6-v2",
                 )
+                ArcaneRetriever._ce_model = CrossEncoder(model_name, device=device)
             except Exception as exc:  # pragma: no cover — only on a broken CE install
                 ArcaneRetriever._ce_error = f"{type(exc).__name__}: {exc}"
                 ArcaneRetriever._ce_model = False
