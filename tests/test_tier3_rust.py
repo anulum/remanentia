@@ -9,27 +9,26 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
 
 import numpy as np
-import pytest
+import arcane_stdp as stdp
+import remanentia_consolidation as rc
 
-# ── Rust crate imports (skip entire file if unavailable) ───────
-
-rc = pytest.importorskip("remanentia_consolidation")
-stdp = pytest.importorskip("arcane_stdp")
+from knowledge_store import KnowledgeNote
 
 
-# ── Helpers ────────────────────────────────────────────────────
-
-
-@dataclass
-class FakeNote:
-    keywords: list[str] = field(default_factory=list)
-    entities: list[str] = field(default_factory=list)
-    title: str = ""
-    content: str = ""
-    source: str = ""
+def _knowledge_note(keywords: list[str], entities: list[str]) -> KnowledgeNote:
+    """Build the real note type consumed by the Python reflector."""
+    return KnowledgeNote(
+        id="tier3-note",
+        title="Tier 3 note",
+        content="Rust consolidation parity evidence.",
+        keywords=keywords,
+        source="test_tier3_rust.py",
+        created="2026-07-13T00:00:00+00:00",
+        updated="2026-07-13T00:00:00+00:00",
+        entities=entities,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -247,14 +246,14 @@ class TestClusterNotes:
         """Verify Rust matches Python _cluster_notes."""
         from reflector import _cluster_notes
 
-        fake_notes = [
-            FakeNote(keywords=["stdp", "lif", "spike"], entities=["remanentia"]),
-            FakeNote(keywords=["stdp", "lif", "neuron"], entities=["arcane"]),
-            FakeNote(keywords=["django", "web"], entities=["parazit"]),
+        notes = [
+            _knowledge_note(["stdp", "lif", "spike"], ["remanentia"]),
+            _knowledge_note(["stdp", "lif", "neuron"], ["arcane"]),
+            _knowledge_note(["django", "web"], ["parazit"]),
         ]
-        py_result = _cluster_notes(fake_notes)
+        py_result = _cluster_notes(notes)
         rust_result = rc.cluster_notes(
-            [(list(n.keywords), list(n.entities)) for n in fake_notes], 2
+            [(list(n.keywords), list(n.entities)) for n in notes], 2
         )
         assert len(py_result) == len(rust_result)
 

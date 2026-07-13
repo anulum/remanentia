@@ -9,11 +9,14 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
-from unittest.mock import patch
+from collections.abc import Iterator
+from contextlib import contextmanager
+from pathlib import Path
 
 import numpy as np
 import pytest
+
+from knowledge_store import KnowledgeNote
 
 
 # ── Fixtures ──────────────────────────────────────────────────
@@ -117,6 +120,56 @@ def traces_dir(tmp_path_factory):
     for name, content in TRACE_TEXTS.items():
         (d / name).write_text(content, encoding="utf-8")
     return d
+
+
+@pytest.fixture(autouse=True)
+def disable_optional_cross_encoder(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep this pipeline lane on the production no-reranker configuration."""
+    monkeypatch.setenv("REMANENTIA_ARCANE_CE_DISABLE", "1")
+
+
+def _knowledge_note(keywords: list[str], entities: list[str]) -> KnowledgeNote:
+    """Build a real persisted-note domain object for reflector integration."""
+    return KnowledgeNote(
+        id="pipeline-note",
+        title="Pipeline note",
+        content="Rust pipeline integration evidence.",
+        keywords=keywords,
+        source="test_e2e_rust_pipeline.py",
+        created="2026-07-13T00:00:00+00:00",
+        updated="2026-07-13T00:00:00+00:00",
+        entities=entities,
+    )
+
+
+@contextmanager
+def _consolidation_workspace(root: Path) -> Iterator[None]:
+    """Route production consolidation persistence to an isolated filesystem."""
+    import consolidation_engine
+
+    consolidation_dir = root / "consolidation"
+    graph_dir = root / "graph"
+    replacements = {
+        "TRACES_DIR": root,
+        "CONSOLIDATION_DIR": consolidation_dir,
+        "SEMANTIC_DIR": root / "semantic",
+        "GRAPH_DIR": graph_dir,
+        "ENTITIES_PATH": graph_dir / "entities.jsonl",
+        "RELATIONS_PATH": graph_dir / "relations.jsonl",
+        "CLUSTERS_PATH": graph_dir / "trace_clusters.json",
+        "PENDING_PATH": consolidation_dir / "pending.json",
+        "LAST_RUN_PATH": consolidation_dir / "last_consolidation.json",
+        "CONFLICTS_PATH": consolidation_dir / "conflicts.json",
+        "SUMMARY_DAG_PATH": consolidation_dir / "summary_dag.json",
+    }
+    originals = {name: getattr(consolidation_engine, name) for name in replacements}
+    for name, value in replacements.items():
+        setattr(consolidation_engine, name, value)
+    try:
+        yield
+    finally:
+        for name, value in originals.items():
+            setattr(consolidation_engine, name, value)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -296,16 +349,7 @@ class TestTier3ConsolidationE2E:
         """Full consolidate() with real trace files."""
         import consolidation_engine as ce
 
-        with (
-            patch.object(ce, "TRACES_DIR", traces_dir),
-            patch.object(ce, "CONSOLIDATION_DIR", traces_dir / "consolidation"),
-            patch.object(ce, "SEMANTIC_DIR", traces_dir / "semantic"),
-            patch.object(ce, "GRAPH_DIR", traces_dir / "graph"),
-            patch.object(ce, "ENTITIES_PATH", traces_dir / "graph" / "entities.jsonl"),
-            patch.object(ce, "RELATIONS_PATH", traces_dir / "graph" / "relations.jsonl"),
-            patch.object(ce, "CLUSTERS_PATH", traces_dir / "graph" / "trace_clusters.json"),
-            patch.object(ce, "PENDING_PATH", traces_dir / "consolidation" / "pending.json"),
-        ):
+        with _consolidation_workspace(traces_dir):
             (traces_dir / "graph").mkdir(exist_ok=True)
             result = ce.consolidate(force=True)
 
@@ -373,16 +417,11 @@ class TestTier3ConsolidationE2E:
         """_cluster_notes groups notes with shared keywords."""
         from reflector import _cluster_notes
 
-        @dataclass
-        class FakeNote:
-            keywords: list = field(default_factory=list)
-            entities: list = field(default_factory=list)
-
         notes = [
-            FakeNote(keywords=["rust", "speedup", "pyo3"], entities=["remanentia"]),
-            FakeNote(keywords=["rust", "speedup", "maturin"], entities=["remanentia"]),
-            FakeNote(keywords=["rust", "speedup", "crate"], entities=["arcane"]),
-            FakeNote(keywords=["django", "web"], entities=["parazit"]),
+            _knowledge_note(["rust", "speedup", "pyo3"], ["remanentia"]),
+            _knowledge_note(["rust", "speedup", "maturin"], ["remanentia"]),
+            _knowledge_note(["rust", "speedup", "crate"], ["arcane"]),
+            _knowledge_note(["django", "web"], ["parazit"]),
         ]
         clusters = _cluster_notes(notes)
         # First 3 notes share rust+speedup → should cluster together
@@ -595,19 +634,19 @@ class TestRustPathVerification:
 
     def test_consolidation_has_tier3_exports(self):
         """remanentia_consolidation exports Tier 3 functions."""
-        rc = pytest.importorskip("remanentia_consolidation")
+        import remanentia_consolidation as rc
         assert hasattr(rc, "cluster_traces")
         assert hasattr(rc, "build_summary_dag")
         assert hasattr(rc, "cluster_notes")
 
     def test_stdp_has_homeostatic(self):
         """arcane_stdp exports homeostatic_scaling."""
-        stdp = pytest.importorskip("arcane_stdp")
+        import arcane_stdp as stdp
         assert hasattr(stdp, "homeostatic_scaling")
 
     def test_retrieve_has_tier1_exports(self):
         """remanentia_retrieve exports all Tier 1 functions."""
-        rr = pytest.importorskip("remanentia_retrieve")
+        import remanentia_retrieve as rr
         expected = [
             "tokenize",
             "stem",
