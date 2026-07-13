@@ -46,6 +46,11 @@ from memory_entity_scoring import (
     is_person_centric as _is_person_centric,
     query_entity_ids as _query_entity_ids,
 )
+from memory_query_intelligence import (
+    classify_paragraph as _classify_paragraph,
+    classify_query as _classify_query,
+    generate_prospective_queries as _generate_prospective_queries_impl,
+)
 from memory_sources import DEFAULT_TEXT_EXTENSIONS, load_source_config
 import text_chunking as _text_chunking
 
@@ -1453,203 +1458,9 @@ def _load_entity_graph() -> EntityGraph:
 # ── Query intelligence ────────────────────────────────────────────
 
 
-def _classify_query(query: str) -> dict[str, Any]:
-    """Classify query intent for search routing."""
-    q = query.lower()
-    intent: dict[str, Any] = {
-        "type": "general",
-        "boost_types": [],  # paragraph types to boost
-        "date_filter": None,
-        "recency": False,
-    }
-
-    # Order matters: specific patterns before broad ones.
-    if any(w in q for w in ["where is", "find the", "locate", "which file", "what file"]):
-        intent["type"] = "location"
-        intent["boost_types"] = ["function", "code"]
-    elif any(w in q for w in ["what did we decide", "decision", "chose", "rejected", "why did we"]):
-        intent["type"] = "decision"
-        intent["boost_types"] = ["decision"]
-    elif any(w in q for w in ["what went wrong", "failure", "bug", "error", "fix"]):
-        intent["type"] = "debugging"
-        intent["boost_types"] = ["finding", "decision"]
-    elif any(w in q for w in ["status", "progress", "current", "latest"]):
-        intent["type"] = "status"
-        intent["recency"] = True
-    elif any(w in q for w in ["performance", "benchmark", "accuracy", "score", "percent"]):
-        intent["type"] = "metric"
-        intent["boost_types"] = ["metric"]
-    elif any(w in q for w in ["when", "date", "timeline", "before", "after", "first", "last"]):
-        intent["type"] = "temporal"
-        intent["recency"] = "latest" in q or "recent" in q or "last" in q
-    elif any(w in q for w in ["how does", "how to", "explain", "what is"]):
-        intent["type"] = "explanation"
-        intent["boost_types"] = ["function", "finding"]
-
-    return intent
-
-
-def _classify_paragraph(text: str, is_code: bool = False) -> str:
-    """Tag paragraph with its semantic type."""
-    try:
-        _rust_cls = import_module("remanentia_search").classify_paragraph
-
-        return cast(str, _rust_cls(text, is_code))  # pragma: no cover
-    except ImportError:
-        pass
-    t = text.lower()
-
-    if is_code:
-        if re.match(r"\s*(def |fn |pub fn |class |impl )", text):
-            return "function"
-        return "code"
-
-    if any(w in t for w in ["decided", "decision", "chose", "rejected", "we will", "the plan"]):
-        return "decision"
-    if any(w in t for w in ["found", "finding", "result", "measured", "shows that", "proved"]):
-        return "finding"
-    if any(w in t for w in ["P@1", "percent", "accuracy", "precision", "score", "benchmark"]):
-        return "metric"
-    if any(w in t for w in ["version", "v0.", "v1.", "v2.", "v3.", "release", "shipped"]):
-        return "version"
-
-    return "discussion"
-
-
 def _generate_prospective_queries(text: str, doc_name: str, para_type: str) -> list[str]:
-    """Generate hypothetical future queries for this paragraph.
-
-    Kumiho technique: pre-answer questions at write time so retrieval
-    becomes lookup. Expanded to 12 pattern categories.
-    """
-    queries = []
-
-    # 1. Named entities (capitalised phrases)
-    caps = re.findall(r"[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*", text)
-    for c in caps[:5]:
-        if len(c) > 3:
-            queries.append(f"what is {c}")
-            queries.append(c.lower())
-
-    # 2. Function/class names
-    funcs = re.findall(r"(?:def |fn |class )\s*(\w+)", text)
-    for f in funcs[:3]:
-        queries.append(f"where is {f}")
-        queries.append(f"how does {f} work")
-        queries.append(f)
-
-    # 3. Activities and preferences ("likes pottery", "enjoys hiking")
-    for m in re.finditer(
-        r"(?:likes?|loves?|enjoys?|prefers?|hates?|dislikes?|"
-        r"interested in|passionate about|into)\s+(.{3,40}?)(?:[.,;!?\n]|$)",
-        text,
-        re.I,
-    ):
-        activity = m.group(1).strip().lower()
-        queries.append(f"hobbies {activity}")
-        queries.append(f"interests {activity}")
-        queries.append(f"what does {caps[0].lower() if caps else 'the person'} like")
-        queries.append(activity)
-
-    # 4. Occupation/role ("works as", "is a", "employed at")
-    for m in re.finditer(
-        r"(?:works? (?:as|at|for)|employed (?:at|by)|is a |job (?:is|as))\s+(.{3,40}?)(?:[.,;!?\n]|$)",
-        text,
-        re.I,
-    ):
-        role = m.group(1).strip().lower()
-        queries.append(f"where does {caps[0].lower() if caps else 'the person'} work")
-        queries.append(f"job {role}")
-        queries.append(f"career {role}")
-        queries.append(role)
-
-    # 5. Relationships ("married to", "friends with", "dating")
-    for m in re.finditer(
-        r"(?:married to|dating|friends? with|partner|spouse|sibling|brother|sister)\s*(.{0,30}?)(?:[.,;!?\n]|$)",
-        text,
-        re.I,
-    ):
-        queries.append(f"relationship status")
-        queries.append(f"who is {caps[0].lower() if caps else 'the person'} dating")
-
-    # 6. Allergies, health, restrictions
-    for m in re.finditer(
-        r"(?:allergic to|allergy|intolerant|sensitive to|cannot eat|vegetarian|vegan)\s*(.{0,30}?)(?:[.,;!?\n]|$)",
-        text,
-        re.I,
-    ):
-        subject = m.group(1).strip().lower()
-        queries.append(f"allergic {subject}")
-        queries.append(f"what is {caps[0].lower() if caps else 'the person'} allergic to")
-
-    # 7. Travel/location ("went to", "visited", "lives in", "from")
-    for m in re.finditer(
-        r"(?:went to|visited|trip to|lives? in|moved to|from|travel(?:led|ed)? to)\s+(.{3,30}?)(?:[.,;!?\n]|$)",
-        text,
-        re.I,
-    ):
-        place = m.group(1).strip().lower()
-        queries.append(f"where did {caps[0].lower() if caps else 'the person'} go")
-        queries.append(f"trip {place}")
-        queries.append(place)
-
-    # 8. Learning/skills ("learning", "studying", "started")
-    for m in re.finditer(
-        r"(?:learning|studying|started|taking up|practicing)\s+(.{3,30}?)(?:[.,;!?\n]|$)",
-        text,
-        re.I,
-    ):
-        skill = m.group(1).strip().lower()
-        queries.append(f"what is {caps[0].lower() if caps else 'the person'} learning")
-        queries.append(skill)
-
-    # 9. Favourites ("favourite", "favorite")
-    for m in re.finditer(
-        r"(?:favou?rite)\s+(\w+)\s+(?:is|was)\s+(.{3,40}?)(?:[.,;!?\n]|$)", text, re.I
-    ):
-        queries.append(f"favourite {m.group(1).lower()}")
-        queries.append(m.group(2).strip().lower())
-    for m in re.finditer(r"(?:favou?rite)\s+(.{3,40}?)(?:[.,;!?\n]|$)", text, re.I):
-        queries.append(f"favourite {m.group(1).strip().lower()}")
-
-    # 10. Decision/finding/metric type-specific (original patterns)
-    if para_type == "decision":
-        subjects = re.findall(
-            r"(?:decided|chose|rejected|will)\s+(?:to\s+)?(.{10,40}?)(?:\.|,|$)", text, re.I
-        )
-        for s in subjects[:2]:
-            queries.append(f"why did we {s.strip().lower()}")
-            queries.append(f"what did we decide about {s.strip().lower()}")
-    if para_type == "finding":
-        queries.append(f"what did we find about {doc_name.replace('.md', '').replace('_', ' ')}")
-    if para_type == "metric":
-        numbers = re.findall(r"\d+\.?\d*%", text)
-        for n in numbers[:2]:
-            queries.append(f"what score {n}")
-
-    # 11. Version/date-specific queries
-    versions = re.findall(r"v\d+\.\d+(?:\.\d+)?", text)
-    for v in versions[:2]:
-        queries.append(f"what version {v}")
-        queries.append(f"when was {v} released")
-    dates = re.findall(r"\d{4}-\d{2}-\d{2}", text)
-    for d in dates[:2]:
-        queries.append(f"what happened on {d}")
-
-    # 12. File/code-based queries
-    if ".py" in doc_name or ".rs" in doc_name:
-        base = doc_name.split(".")[0]
-        queries.append(f"what does {base} do")
-        queries.append(f"where is {base}")
-
-    # Deduplicate, preserve order
-    seen = set()
-    unique = []
-    for q in queries:
-        if q not in seen:
-            seen.add(q)
-            unique.append(q)
-    return unique[:20]
+    """Compatibility wrapper for extracted prospective-query generation."""
+    return _generate_prospective_queries_impl(text, doc_name, para_type)
 
 
 def _tokenize(text: str) -> list[str]:

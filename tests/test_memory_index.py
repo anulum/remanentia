@@ -17,6 +17,7 @@ import memory_index
 import numpy as np
 
 from compiled_memory import CompiledFact
+from memory_query_intelligence import classify_paragraph_python
 from memory_index import (
     Document,
     MemoryIndex,
@@ -215,23 +216,14 @@ class TestClassifyParagraph:
     def test_discussion_default(self):
         assert _classify_paragraph("Some general discussion about approaches") == "discussion"
 
-    def test_python_fallback_when_native_classifier_missing(self, monkeypatch):
-        real_import = memory_index.import_module
-
-        def import_without_native(name: str):
-            if name == "remanentia_search":
-                raise ImportError(name)
-            return real_import(name)
-
-        monkeypatch.setattr(memory_index, "import_module", import_without_native)
-
-        assert _classify_paragraph("class SearchEngine:", is_code=True) == "function"
-        assert _classify_paragraph("x = 42", is_code=True) == "code"
-        assert _classify_paragraph("We decided to keep BM25 scoring.") == "decision"
-        assert _classify_paragraph("We found a measurable retrieval result.") == "finding"
-        assert _classify_paragraph("P@1 accuracy reached 99 percent.") == "metric"
-        assert _classify_paragraph("Released version v3.9.0.") == "version"
-        assert _classify_paragraph("General operational note.") == "discussion"
+    def test_python_fallback_real_inputs(self):
+        assert classify_paragraph_python("class SearchEngine:", is_code=True) == "function"
+        assert classify_paragraph_python("x = 42", is_code=True) == "code"
+        assert classify_paragraph_python("We decided to keep BM25 scoring.") == "decision"
+        assert classify_paragraph_python("We found a measurable retrieval result.") == "finding"
+        assert classify_paragraph_python("P@1 accuracy reached 99 percent.") == "metric"
+        assert classify_paragraph_python("Released version v3.9.0.") == "version"
+        assert classify_paragraph_python("General operational note.") == "discussion"
 
 
 # ── Query classification ─────────────────────────────────────────
@@ -2115,6 +2107,31 @@ class TestSingleQuerySearch:
 
 
 class TestProspectiveQueryPatterns:
+    def test_activity_and_occupation_patterns(self):
+        queries = _generate_prospective_queries(
+            "Caroline enjoys pottery and works as a teacher.",
+            "profile.md",
+            "discussion",
+        )
+        assert "hobbies pottery and works as a teacher" in queries
+        assert any(query.startswith("job ") for query in queries)
+
+    def test_learning_pattern(self):
+        queries = _generate_prospective_queries(
+            "Caroline is learning quantum painting.",
+            "profile.md",
+            "discussion",
+        )
+        assert "quantum painting" in queries
+
+    def test_finding_pattern(self):
+        queries = _generate_prospective_queries(
+            "The experiment found a stable retrieval invariant.",
+            "retrieval_results.md",
+            "finding",
+        )
+        assert "what did we find about retrieval results" in queries
+
     def test_relationship_pattern(self):
         """Covers lines 1337-1338."""
         queries = _generate_prospective_queries(
