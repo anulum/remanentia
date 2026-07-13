@@ -14,15 +14,23 @@ weekday resolution, confidence thresholds, and edge cases.
 
 from __future__ import annotations
 
+import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import date
-from unittest.mock import MagicMock, patch
+from pathlib import Path
+from typing import Any, cast
 
 import pytest
 import torch
+from transformers import BertConfig, BertModel, BertTokenizer
+
+import date_normalizer
 
 from date_normalizer import (
     VAGUE_DATE_RE,
     DateResult,
+    _rule_based_normalise_python,
     _month_delta,
     _parse_session_date,
     _parse_session_datetime,
@@ -31,6 +39,68 @@ from date_normalizer import (
     normalise_in_context,
     normalize_date_expression,
 )
+
+
+def _reset_model() -> None:
+    date_normalizer._model = None
+    date_normalizer._tokenizer = None
+
+
+@contextmanager
+def _model_at(model_dir: Path) -> Iterator[None]:
+    _reset_model()
+    original = date_normalizer._MODEL_DIR
+    date_normalizer._MODEL_DIR = model_dir
+    try:
+        yield
+    finally:
+        date_normalizer._MODEL_DIR = original
+        _reset_model()
+
+
+def _write_checkpoint(root: Path, digits: list[int], confidence: float = 0.9) -> Path:
+    """Write a tiny real BERT tokenizer, backbone and production date head."""
+    model_dir = root / "date-normalizer-v1"
+    backbone_dir = root / "backbone"
+    model_dir.mkdir(parents=True)
+    backbone_dir.mkdir(parents=True)
+    vocabulary = [
+        "[PAD]",
+        "[UNK]",
+        "[CLS]",
+        "[SEP]",
+        "[MASK]",
+        "reference",
+        "expression",
+        "spring",
+        "date",
+    ]
+    vocab_path = model_dir / "vocab.txt"
+    vocab_path.write_text("\n".join(vocabulary) + "\n", encoding="utf-8")
+    BertTokenizer(vocab_file=str(vocab_path), do_lower_case=True).save_pretrained(model_dir)
+    BertModel(
+        BertConfig(
+            vocab_size=len(vocabulary),
+            hidden_size=8,
+            num_hidden_layers=1,
+            num_attention_heads=2,
+            intermediate_size=16,
+            max_position_embeddings=96,
+        )
+    ).save_pretrained(backbone_dir)
+    (model_dir / "config.json").write_text(
+        json.dumps({"model_name": str(backbone_dir), "num_digits": 8}), encoding="utf-8"
+    )
+    model = date_normalizer._build_model(str(backbone_dir), 8)
+    with torch.no_grad():
+        for parameter in model.parameters():
+            parameter.zero_()
+        dynamic_model = cast(Any, model)
+        for head, digit in zip(dynamic_model.digit_heads, digits, strict=True):
+            head.bias[digit] = 5.0
+        dynamic_model.confidence_head[-2].bias.fill_(torch.logit(torch.tensor(confidence)))
+    torch.save(model.state_dict(), model_dir / "model.pt")
+    return model_dir
 
 
 # ── Month arithmetic ────────────────────────────────────────────
@@ -363,19 +433,19 @@ class TestNormalizeDateExpression:
         assert r is not None
         assert r.method == "rule"
 
-    def test_no_match_returns_none_without_model(self):
+    def test_no_match_returns_none_without_model(self, tmp_path: Path):
         # "spring 2023" has no rule and no model loaded
-        with patch("date_normalizer._load_model", return_value=False):
+        with _model_at(tmp_path / "missing"):
             r = normalize_date_expression("spring 2023", self.REF)
             assert r is None
 
-    def test_ml_fallback_when_rule_misses(self):
-        mock_result = DateResult(iso_date="2023-03-15", confidence=0.8, method="model")
-        with patch("date_normalizer._rule_based_normalise", return_value=None):
-            with patch("date_normalizer._model_normalise", return_value=mock_result):
-                r = normalize_date_expression("some exotic expression", self.REF)
-                assert r is not None
-                assert r.method == "model"
+    def test_ml_fallback_when_rule_misses(self, tmp_path: Path):
+        model_dir = _write_checkpoint(tmp_path, [2, 0, 2, 3, 0, 3, 1, 5], confidence=0.8)
+        with _model_at(model_dir):
+            r = normalize_date_expression("some exotic expression", self.REF)
+        assert r is not None
+        assert r.iso_date == "2023-03-15"
+        assert r.method == "model"
 
 
 class TestExtractAndNormalise:
@@ -397,6 +467,11 @@ class TestExtractAndNormalise:
 
     def test_empty_text(self):
         results = extract_and_normalise("", self.REF)
+        assert results == []
+
+    def test_matched_but_unresolved_expression_is_omitted(self, tmp_path: Path):
+        with _model_at(tmp_path / "missing"):
+            results = extract_and_normalise("It happened some time ago.", self.REF)
         assert results == []
 
 
@@ -439,112 +514,53 @@ class TestVagueDateRegex:
 
 
 class TestModelLoading:
-    def test_model_dir_missing(self):
-        with patch("date_normalizer._MODEL_DIR") as mock_dir:
-            mock_dir.__truediv__ = lambda self, x: MagicMock(exists=lambda: False)
-            # Reset global state
-            import date_normalizer
+    def test_model_dir_missing(self, tmp_path: Path):
+        with _model_at(tmp_path / "missing"):
+            assert date_normalizer._model_normalise("test", date(2023, 1, 1)) is None
 
-            date_normalizer._model = None
+    def test_loaded_real_checkpoint_is_reused(self, tmp_path: Path):
+        model_dir = _write_checkpoint(tmp_path, [2, 0, 2, 3, 0, 4, 1, 0])
+        with _model_at(model_dir):
+            assert date_normalizer._load_model() is True
+            loaded = date_normalizer._model
+            assert date_normalizer._load_model() is True
+            assert date_normalizer._model is loaded
+
+    def test_model_normalise_returns_none_when_real_cache_is_incomplete(self, tmp_path: Path):
+        model_dir = _write_checkpoint(tmp_path, [2, 0, 2, 3, 0, 4, 1, 0])
+        with _model_at(model_dir):
+            assert date_normalizer._load_model() is True
             date_normalizer._tokenizer = None
-            date_normalizer._load_model()
-            # Model dir check happens inside, but we test the fallback
-            # When model is None and loading fails, normalize returns None
-            r = date_normalizer._model_normalise("test", date(2023, 1, 1))
-            assert r is None
+            assert date_normalizer._model_normalise("spring", date(2023, 1, 1)) is None
 
-    def test_already_loaded_returns_true(self):
-        import date_normalizer
+    def test_corrupt_config_returns_false(self, tmp_path: Path):
+        model_dir = tmp_path / "corrupt"
+        model_dir.mkdir()
+        (model_dir / "model.pt").write_bytes(b"checkpoint")
+        (model_dir / "config.json").write_text("{", encoding="utf-8")
+        with _model_at(model_dir):
+            assert date_normalizer._load_model() is False
 
-        date_normalizer._model = MagicMock()  # pretend loaded
-        assert date_normalizer._load_model() is True
-        date_normalizer._model = None  # cleanup
-
-    def test_model_normalise_returns_none_when_loaded_state_is_incomplete(self):
-        import date_normalizer
-
-        date_normalizer._model = MagicMock()
-        date_normalizer._tokenizer = None
-        try:
-            with patch("date_normalizer._load_model", return_value=True):
-                assert date_normalizer._model_normalise("spring", date(2023, 1, 1)) is None
-        finally:
-            date_normalizer._model = None
-            date_normalizer._tokenizer = None
-
-    def test_load_model_exception_returns_false(self):
-        """_load_model returns False when model construction raises."""
-        import date_normalizer
-
-        date_normalizer._model = None
-        date_normalizer._tokenizer = None
-        model_pt = MagicMock(exists=lambda: True)
-        mock_dir = MagicMock()
-        mock_dir.__truediv__ = lambda self, x: model_pt
-        with patch.object(date_normalizer, "_MODEL_DIR", mock_dir):
-            with patch("date_normalizer.json.load", side_effect=OSError("corrupt")):
-                result = date_normalizer._load_model()
-                assert result is False
-
-    def _mock_digit_model(self, digits: list[int], conf: float = 0.9):
-        """Helper: set up mock model returning specific digit predictions."""
-        import date_normalizer
-
-        mock_model = MagicMock()
-        digit_logits = []
-        for d in digits:
-            logit = torch.zeros(1, 10)
-            logit[0, d] = 5.0
-            digit_logits.append(logit)
-        mock_model.return_value = (digit_logits, torch.tensor([conf]))
-
-        mock_tok = MagicMock()
-        mock_tok.return_value = {
-            "input_ids": torch.zeros(1, 64, dtype=torch.long),
-            "attention_mask": torch.ones(1, 64, dtype=torch.long),
-        }
-
-        date_normalizer._model = mock_model
-        date_normalizer._tokenizer = mock_tok
-
-    def _cleanup_model(self):
-        import date_normalizer
-
-        date_normalizer._model = None
-        date_normalizer._tokenizer = None
-
-    def test_model_normalise_full_flow(self):
-        """_model_normalise with valid digits → DateResult."""
-        self._mock_digit_model([2, 0, 2, 3, 0, 4, 1, 0])  # 2023-04-10
-
-        import date_normalizer
-
-        r = date_normalizer._model_normalise("test expression", date(2023, 6, 1))
+    def test_model_normalise_full_flow(self, tmp_path: Path):
+        model_dir = _write_checkpoint(
+            tmp_path, [2, 0, 2, 3, 0, 4, 1, 0], confidence=0.9
+        )
+        with _model_at(model_dir):
+            r = date_normalizer._model_normalise("test expression", date(2023, 6, 1))
         assert r is not None
         assert r.iso_date == "2023-04-10"
         assert r.confidence == pytest.approx(0.9, abs=0.01)
         assert r.method == "model"
-        self._cleanup_model()
 
-    def test_model_normalise_invalid_date(self):
-        """_model_normalise returns None for invalid reconstructed dates."""
-        self._mock_digit_model([2, 0, 2, 3, 1, 3, 3, 2])  # 2023-13-32
-
-        import date_normalizer
-
-        r = date_normalizer._model_normalise("bad date", date(2023, 6, 1))
+    @pytest.mark.parametrize(
+        "digits",
+        [[2, 0, 2, 3, 1, 3, 3, 2], [2, 0, 2, 3, 0, 0, 1, 5]],
+    )
+    def test_model_normalise_invalid_dates(self, tmp_path: Path, digits: list[int]):
+        model_dir = _write_checkpoint(tmp_path, digits)
+        with _model_at(model_dir):
+            r = date_normalizer._model_normalise("bad date", date(2023, 6, 1))
         assert r is None
-        self._cleanup_model()
-
-    def test_model_normalise_month_zero(self):
-        """Month 00 → ValueError → None."""
-        self._mock_digit_model([2, 0, 2, 3, 0, 0, 1, 5])  # 2023-00-15
-
-        import date_normalizer
-
-        r = date_normalizer._model_normalise("zero month", date(2023, 6, 1))
-        assert r is None
-        self._cleanup_model()
 
 
 # ── Simple pattern resolver exception path ─────────────────────
@@ -773,6 +789,12 @@ class TestNormaliseInContext:
         result = normalise_in_context(text, "2023/06/15 (Thu) 10:00")
         assert result == text
 
+    def test_matched_but_unresolved_expression_is_unchanged(self, tmp_path: Path):
+        text = "It happened some time ago."
+        with _model_at(tmp_path / "missing"):
+            result = normalise_in_context(text, "2023/06/15 (Thu) 10:00")
+        assert result == text
+
     def test_empty_reference_date(self):
         text = "I went there yesterday"
         result = normalise_in_context(text, "")
@@ -972,23 +994,25 @@ class TestPythonRuleFallbackCoverage:
     REF = date(2023, 4, 10)
 
     def test_quantified_and_vague_rules_without_native_extension(self):
-        with patch("date_normalizer.import_module", side_effect=ImportError):
-            expectations = {
-                "2 days ago": "2023-04-08",
-                "2 weeks ago": "2023-03-27",
-                "2 months ago": "2023-02-10",
-                "2 years ago": "2021-04-10",
-                "a couple of days ago": "2023-04-08",
-                "a couple of weeks ago": "2023-03-27",
-                "a couple of months ago": "2023-02-10",
-                "a few days ago": "2023-04-07",
-                "a few weeks ago": "2023-03-20",
-                "a few months ago": "2023-01-10",
-                "several days ago": "2023-04-05",
-                "several weeks ago": "2023-03-06",
-                "several months ago": "2022-11-10",
-                "last Monday": "2023-04-03",
-                "yesterday": "2023-04-09",
-            }
-            for expr, expected in expectations.items():
-                assert _rule_based_normalise(expr, self.REF).iso_date == expected
+        expectations = {
+            "2 days ago": "2023-04-08",
+            "2 weeks ago": "2023-03-27",
+            "2 months ago": "2023-02-10",
+            "2 years ago": "2021-04-10",
+            "a couple of days ago": "2023-04-08",
+            "a couple of weeks ago": "2023-03-27",
+            "a couple of months ago": "2023-02-10",
+            "a few days ago": "2023-04-07",
+            "a few weeks ago": "2023-03-20",
+            "a few months ago": "2023-01-10",
+            "several days ago": "2023-04-05",
+            "several weeks ago": "2023-03-06",
+            "several months ago": "2022-11-10",
+            "last Monday": "2023-04-03",
+            "last Tuesday": "2023-04-04",
+            "yesterday": "2023-04-09",
+        }
+        for expr, expected in expectations.items():
+            result = _rule_based_normalise_python(expr, self.REF)
+            assert result is not None
+            assert result.iso_date == expected

@@ -19,10 +19,10 @@ import json
 import logging
 import re
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from importlib import import_module
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 log = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ _SEVERAL_RE = re.compile(
     re.IGNORECASE,
 )
 
-_SIMPLE_RE = {
+_SIMPLE_RE: dict[re.Pattern[str], Callable[[date], date]] = {
     re.compile(r"\byesterday\b", re.I): lambda r: r - timedelta(days=1),
     re.compile(r"\btoday\b", re.I): lambda r: r,
     re.compile(r"\bthe\s+other\s+day\b", re.I): lambda r: r - timedelta(days=3),
@@ -132,6 +132,11 @@ def _rule_based_normalise(expr: str, ref: date) -> Optional[DateResult]:
             )  # pragma: no cover
     except ImportError:
         pass
+    return _rule_based_normalise_python(expr, ref)
+
+
+def _rule_based_normalise_python(expr: str, ref: date) -> Optional[DateResult]:
+    """Run the production Python date rules without native dispatch."""
 
     # Python fallback
     expr_stripped = expr.strip()
@@ -200,7 +205,7 @@ def _rule_based_normalise(expr: str, ref: date) -> Optional[DateResult]:
     if m:
         day_name = m.group(1).lower()
         day_idx = _WEEKDAY_MAP.get(day_name)
-        if day_idx is not None:
+        if day_idx is not None:  # pragma: no branch -- regex restricts the capture to map keys
             days_back = (ref.weekday() - day_idx) % 7
             if days_back == 0:
                 days_back = 7
@@ -226,7 +231,35 @@ def _rule_based_normalise(expr: str, ref: date) -> Optional[DateResult]:
 # ---------------------------------------------------------------------------
 
 
-def _load_model():
+def _build_model(model_name: str, num_digits: int = 8) -> Any:
+    """Build the production BERT backbone and date prediction heads."""
+    import torch.nn as nn
+    from transformers import AutoModel
+
+    class _DateNormalizer(nn.Module):  # type: ignore[misc]
+        def __init__(self) -> None:
+            super().__init__()
+            self.backbone = AutoModel.from_pretrained(model_name)
+            hidden = self.backbone.config.hidden_size
+            self.digit_heads = nn.ModuleList([nn.Linear(hidden, 10) for _ in range(num_digits)])
+            self.confidence_head = nn.Sequential(
+                nn.Linear(hidden, 64),
+                nn.ReLU(),
+                nn.Linear(64, 1),
+                nn.Sigmoid(),
+            )
+
+        def forward(self, input_ids: Any, attention_mask: Any) -> tuple[list[Any], Any]:
+            out = self.backbone(input_ids=input_ids, attention_mask=attention_mask)
+            cls_emb = out.last_hidden_state[:, 0]
+            digit_logits = [head(cls_emb) for head in self.digit_heads]
+            confidence = self.confidence_head(cls_emb).squeeze(-1)
+            return digit_logits, confidence
+
+    return _DateNormalizer()
+
+
+def _load_model() -> bool:
     """Lazy-load the trained bert-mini date normaliser from *_MODEL_DIR*.
 
     Returns:
@@ -243,52 +276,23 @@ def _load_model():
 
     try:
         import torch
-        from transformers import AutoModel, AutoTokenizer
+        from transformers import AutoTokenizer
 
         with open(_MODEL_DIR / "config.json") as f:
             config = json.load(f)
 
         _tokenizer = AutoTokenizer.from_pretrained(str(_MODEL_DIR))  # pragma: no cover
 
-        # Reconstruct model                              # pragma: no cover
-        import torch.nn as nn  # pragma: no cover
-
-        class _DateNormalizer(nn.Module):  # pragma: no cover
-            """8-digit date predictor: backbone → 8 × softmax-10 + confidence."""
-
-            def __init__(self, model_name, num_digits=8):
-                """Build backbone, digit heads, and confidence head."""
-                super().__init__()
-                self.backbone = AutoModel.from_pretrained(model_name)
-                hidden = self.backbone.config.hidden_size
-                self.digit_heads = nn.ModuleList([nn.Linear(hidden, 10) for _ in range(num_digits)])
-                self.confidence_head = nn.Sequential(
-                    nn.Linear(hidden, 64),
-                    nn.ReLU(),
-                    nn.Linear(64, 1),
-                    nn.Sigmoid(),
-                )
-
-            def forward(self, input_ids, attention_mask):
-                """Return (list[digit_logits], confidence) from [CLS]."""
-                out = self.backbone(input_ids=input_ids, attention_mask=attention_mask)
-                cls_emb = out.last_hidden_state[:, 0]
-                digit_logits = [h(cls_emb) for h in self.digit_heads]
-                confidence = self.confidence_head(cls_emb).squeeze(-1)
-                return digit_logits, confidence
-
-        device = "cpu"  # inference on CPU is fast for this tiny model  # pragma: no cover
-        model = _DateNormalizer(
-            config["model_name"], config.get("num_digits", 8)
-        )  # pragma: no cover
+        device = "cpu"
+        model = _build_model(config["model_name"], config.get("num_digits", 8))
         state = torch.load(
             _MODEL_DIR / "model.pt", map_location=device, weights_only=True
-        )  # pragma: no cover
-        model.load_state_dict(state)  # pragma: no cover
-        model.eval()  # pragma: no cover
-        _model = model  # pragma: no cover
-        log.info("Date normaliser model loaded from %s", _MODEL_DIR)  # pragma: no cover
-        return True  # pragma: no cover
+        )
+        model.load_state_dict(state)
+        model.eval()
+        _model = model
+        log.info("Date normaliser model loaded from %s", _MODEL_DIR)
+        return True
     except Exception:
         log.warning("Failed to load date normaliser model", exc_info=True)
         return False
@@ -411,7 +415,7 @@ def _parse_session_date(reference_date_str: str) -> date | None:
     return None
 
 
-def _parse_session_datetime(reference_date_str: str):
+def _parse_session_datetime(reference_date_str: str) -> datetime | None:
     """Parse a LongMemEval session timestamp to a full :class:`datetime`.
 
     Accepted formats::
