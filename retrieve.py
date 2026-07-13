@@ -59,7 +59,6 @@ import argparse
 import hashlib
 import json
 import logging
-import gzip
 import sys
 import time
 from pathlib import Path
@@ -133,6 +132,31 @@ except ImportError:
         write_json_atomic as _write_json_file_atomic,
     )
 
+try:
+    from .retrieval_cache_io import (
+        load_json_gz as _load_json_gz_file,
+        load_npz_dict as _load_npz_cache,
+        load_pickle_disabled as _load_disabled_pickle,
+        load_query_feature_cache as _load_query_features_from_disk,
+        load_trace_index_cache as _load_trace_index_from_disk,
+        persist_query_feature_cache as _persist_query_features_to_disk,
+        persist_trace_index_cache as _persist_trace_index_to_disk,
+        save_json_gz as _save_json_gz_file,
+        trace_fingerprint as _fingerprint_trace_files,
+    )
+except ImportError:
+    from retrieval_cache_io import (
+        load_json_gz as _load_json_gz_file,
+        load_npz_dict as _load_npz_cache,
+        load_pickle_disabled as _load_disabled_pickle,
+        load_query_feature_cache as _load_query_features_from_disk,
+        load_trace_index_cache as _load_trace_index_from_disk,
+        persist_query_feature_cache as _persist_query_features_to_disk,
+        persist_trace_index_cache as _persist_trace_index_to_disk,
+        save_json_gz as _save_json_gz_file,
+        trace_fingerprint as _fingerprint_trace_files,
+    )
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("ArcSap.Retrieve")
 
@@ -158,18 +182,12 @@ LIVE_RESPONSES_DIR = STATE_DIR / "live_retrieval_responses"
 
 def _save_json_gz(path: Path, data: dict) -> None:
     """Save dict as gzipped JSON."""
-    raw = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    with gzip.open(path, "wb") as f:
-        f.write(raw)
+    _save_json_gz_file(path, data)
 
 
 def _load_json_gz(path: Path) -> dict | None:
     """Load dict from gzipped JSON, returning None on failure."""
-    try:
-        with gzip.open(path, "rb") as f:
-            return json.loads(f.read())
-    except Exception:
-        return None
+    return _load_json_gz_file(path)
 
 
 def _load_pickle_safe(path: Path) -> dict | None:
@@ -179,17 +197,12 @@ def _load_pickle_safe(path: Path) -> dict | None:
     None. Operators with legacy .pkl files must convert them first via
     ``python tools/migrate_pickle_to_npz.py``.
     """
-    del path  # unused: pickle path removed
-    return None
+    return _load_disabled_pickle(path)
 
 
 def _load_npz_dict(path: Path) -> dict | None:
     """Load npz as dict[str, ndarray], returning None on failure."""
-    try:
-        data = np.load(path, allow_pickle=False)
-        return dict(data)
-    except Exception:
-        return None
+    return _load_npz_cache(path)
 
 
 _PROBE_DURATION = 0.1
@@ -377,54 +390,15 @@ def _snn_affinity(w: np.ndarray, query_stim: np.ndarray, trace_stim: np.ndarray)
 
 
 def _trace_fingerprint(trace_files: list[Path]) -> str:
-    digest = hashlib.md5()
-    for tf in trace_files:
-        stat = tf.stat()
-        digest.update(tf.name.encode("utf-8"))
-        digest.update(str(stat.st_size).encode("ascii"))
-        digest.update(str(stat.st_mtime_ns).encode("ascii"))
-    return digest.hexdigest()
+    return _fingerprint_trace_files(trace_files)
 
 
 def _load_trace_index_cache(cache_key: str) -> dict | None:
-    # Try new JSON+gzip format first, then legacy pickle
-    for path, loader in (
-        (TRACE_INDEX_CACHE_PATH, _load_json_gz),
-        (_LEGACY_TRACE_CACHE, _load_pickle_safe),
-    ):
-        if not path.exists():
-            continue
-        cached = loader(path)
-        if not isinstance(cached, dict) or cached.get("cache_key") != cache_key:
-            continue
-        trace_spikes = cached.get("trace_spikes")
-        trace_names_lower = cached.get("trace_names_lower")
-        idf = cached.get("idf")
-        if (
-            not isinstance(trace_spikes, dict)
-            or not isinstance(trace_names_lower, dict)
-            or not isinstance(idf, dict)
-        ):
-            continue
-        return {
-            "trace_spikes": trace_spikes,
-            "trace_names_lower": trace_names_lower,
-            "idf": idf,
-        }
-    return None
+    return _load_trace_index_from_disk(TRACE_INDEX_CACHE_PATH, cache_key)
 
 
 def _persist_trace_index_cache(cache_key: str, payload: dict) -> None:
-    TRACE_INDEX_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    to_store = {
-        "cache_key": cache_key,
-        "updated_at": time.time(),
-        "trace_count": len(payload["trace_spikes"]),
-        "trace_spikes": payload["trace_spikes"],
-        "trace_names_lower": payload["trace_names_lower"],
-        "idf": payload["idf"],
-    }
-    _save_json_gz(TRACE_INDEX_CACHE_PATH, to_store)
+    _persist_trace_index_to_disk(TRACE_INDEX_CACHE_PATH, cache_key, payload)
 
 
 def _build_trace_index(tdir: Path, data: dict) -> dict:
@@ -488,37 +462,12 @@ def _load_query_feature_cache() -> None:
     global _QUERY_FEATURE_CACHE_LOADED
     if _QUERY_FEATURE_CACHE_LOADED:
         return
-    # Try new JSON+gzip first, then legacy pickle
-    for path, loader in (
-        (QUERY_FEATURE_CACHE_PATH, _load_json_gz),
-        (_LEGACY_QUERY_CACHE, _load_pickle_safe),
-    ):
-        if not path.exists():
-            continue
-        cached = loader(path)
-        if isinstance(cached, dict):
-            # JSON stores string keys; convert back to tuple keys
-            for k, v in cached.items():
-                if isinstance(k, str) and "\0" in k:
-                    sig, query = k.split("\0", 1)
-                    _QUERY_FEATURE_CACHE[(sig, query)] = v
-                else:
-                    _QUERY_FEATURE_CACHE[k] = v
-            break
+    _QUERY_FEATURE_CACHE.update(_load_query_features_from_disk(QUERY_FEATURE_CACHE_PATH))
     _QUERY_FEATURE_CACHE_LOADED = True
 
 
 def _persist_query_feature_cache() -> None:
-    QUERY_FEATURE_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    items = list(_QUERY_FEATURE_CACHE.items())[-256:]
-    # Convert tuple keys to string keys for JSON serialisation
-    payload = {}
-    for k, v in items:
-        if isinstance(k, tuple):
-            payload[f"{k[0]}\0{k[1]}"] = v
-        else:
-            payload[str(k)] = v
-    _save_json_gz(QUERY_FEATURE_CACHE_PATH, payload)
+    _persist_query_features_to_disk(QUERY_FEATURE_CACHE_PATH, _QUERY_FEATURE_CACHE)
 
 
 def _get_query_features(query: str, data: dict) -> dict:
