@@ -6,477 +6,216 @@
 # Contact: www.anulum.li | protoscience@anulum.li
 # Remanentia — Tests for temporal relation classifier
 
-"""Tests for temporal_relation.py (C3 runtime wrapper).
-
-Covers model loading, relation classification, event ordering,
-confidence thresholds, and graceful degradation.
-"""
+"""Real-checkpoint tests for the C3 temporal relation runtime wrapper."""
 
 from __future__ import annotations
 
-import sys
-from types import ModuleType, SimpleNamespace
-from typing import Any, cast
+import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from typing import Any, cast
 
-import pytest
 import torch
+from transformers import BertConfig, BertModel, BertTokenizer
 
 import temporal_relation
-from temporal_relation import (
-    LABELS,
-    RelationResult,
-    classify_relation,
-    order_events,
-)
+from temporal_relation import LABELS, RelationResult, classify_relation, order_events
 
 
-def _reset_model_state() -> None:
-    """Clear the module-level lazy model cache."""
+def _reset_model() -> None:
     temporal_relation._model = None
     temporal_relation._tokenizer = None
     temporal_relation._config = None
 
 
-def _install_mock_classifier(logits: torch.Tensor) -> None:
-    """Install a callable classifier and tokenizer into the runtime cache."""
-    mock_model = MagicMock()
-    mock_model.return_value = logits
+@contextmanager
+def _model_at(model_dir: Path) -> Iterator[None]:
+    _reset_model()
+    original = temporal_relation._MODEL_DIR
+    temporal_relation._MODEL_DIR = model_dir
+    try:
+        yield
+    finally:
+        temporal_relation._MODEL_DIR = original
+        _reset_model()
 
-    mock_tokenizer = MagicMock()
-    mock_tokenizer.return_value = {
-        "input_ids": torch.zeros(1, 128, dtype=torch.long),
-        "attention_mask": torch.ones(1, 128, dtype=torch.long),
-    }
 
-    temporal_relation._model = mock_model
-    temporal_relation._tokenizer = mock_tokenizer
-    temporal_relation._config = {
+def _write_checkpoint(root: Path, *, top_label: str | None = "before") -> Path:
+    """Write a tiny real BERT tokenizer, backbone and production head state."""
+    model_dir = root / "temporal-relation-v1"
+    backbone_dir = root / "backbone"
+    model_dir.mkdir(parents=True)
+    backbone_dir.mkdir(parents=True)
+
+    vocabulary = [
+        "[PAD]",
+        "[UNK]",
+        "[CLS]",
+        "[SEP]",
+        "[MASK]",
+        "first",
+        "second",
+        "event",
+        "before",
+        "after",
+        "today",
+    ]
+    vocab_path = model_dir / "vocab.txt"
+    vocab_path.write_text("\n".join(vocabulary) + "\n", encoding="utf-8")
+    BertTokenizer(vocab_file=str(vocab_path), do_lower_case=True).save_pretrained(model_dir)
+
+    backbone_config = BertConfig(
+        vocab_size=len(vocabulary),
+        hidden_size=8,
+        num_hidden_layers=1,
+        num_attention_heads=2,
+        intermediate_size=16,
+        max_position_embeddings=32,
+    )
+    BertModel(backbone_config).save_pretrained(backbone_dir)
+
+    config = {
+        "model_name": str(backbone_dir),
+        "num_classes": len(LABELS),
+        "max_seq_len": 16,
         "labels": LABELS,
-        "max_seq_len": 128,
-        "model_name": "test",
-        "num_classes": 6,
     }
-
-
-class _FakeScalar:
-    """Minimal scalar object exposing the tensor ``item`` protocol."""
-
-    def __init__(self, value: float) -> None:
-        """Store the scalar value returned by ``item``."""
-        self._value = value
-
-    def item(self) -> float:
-        """Return the scalar value."""
-        return self._value
-
-
-class _FakeProbabilities:
-    """Softmax-like probability vector for fake model inference."""
-
-    def __init__(self) -> None:
-        """Build a deterministic distribution with ``before`` as top label."""
-        self._values = [0.70, 0.10, 0.08, 0.05, 0.04, 0.03]
-
-    def squeeze(self, dim: int) -> "_FakeProbabilities":
-        """Return self for the single-batch squeeze used by inference."""
-        assert dim == 0
-        return self
-
-    def __getitem__(self, index: int) -> _FakeScalar:
-        """Return a fake scalar probability by index."""
-        return _FakeScalar(self._values[index])
-
-    def argmax(self) -> _FakeScalar:
-        """Return index zero as the highest-probability class."""
-        return _FakeScalar(0)
-
-
-class _FakeNoGrad:
-    """Context manager matching ``torch.no_grad``."""
-
-    def __enter__(self) -> None:
-        """Enter the fake no-grad context."""
-
-    def __exit__(self, *_exc: object) -> None:
-        """Exit the fake no-grad context."""
-
-
-class _FakeHiddenState:
-    """Hidden-state container supporting CLS slicing."""
-
-    def __getitem__(self, _key: object) -> object:
-        """Return a fake CLS embedding."""
-        return object()
-
-
-class _FakeBackbone:
-    """Transformer backbone replacement with the config used by the wrapper."""
-
-    config = SimpleNamespace(hidden_size=4)
-
-    def __call__(self, *, input_ids: object, attention_mask: object) -> object:
-        """Return a fake last hidden state for classifier forwarding."""
-        assert input_ids is not None
-        assert attention_mask is not None
-        return SimpleNamespace(last_hidden_state=_FakeHiddenState())
-
-
-class _FakeModule:
-    """Small stand-in for ``torch.nn.Module``."""
-
-    def __call__(self, *args: object, **kwargs: object) -> object:
-        """Delegate calls to the subclass ``forward`` method."""
-        return self.forward(*args, **kwargs)
-
-    def forward(self, *args: object, **kwargs: object) -> object:
-        """Require subclasses to provide a forward method."""
-        raise NotImplementedError
-
-    def load_state_dict(self, state_dict: object) -> object:
-        """Accept fake checkpoint state."""
-        return state_dict
-
-    def eval(self) -> object:
-        """Return self after switching to inference mode."""
-        return self
-
-
-class _FakeSequential:
-    """Classification head replacement returning deterministic logits."""
-
-    def __init__(self, *_layers: object) -> None:
-        """Accept the layers constructed by the wrapper."""
-
-    def __call__(self, _cls_embedding: object) -> object:
-        """Return fake logits."""
-        return object()
-
-
-class _FakeAutoModel:
-    """Replacement for ``transformers.AutoModel``."""
-
-    @staticmethod
-    def from_pretrained(model_name: str) -> _FakeBackbone:
-        """Return a fake backbone for the configured model name."""
-        assert model_name == "fake-bert"
-        return _FakeBackbone()
-
-
-class _FakeTokenizer:
-    """Tokenizer replacement returning tensor-like input mappings."""
-
-    def __call__(
-        self,
-        event_a: str,
-        event_b: str,
-        *,
-        max_length: int,
-        padding: str,
-        truncation: bool,
-        return_tensors: str,
-    ) -> dict[str, object]:
-        """Return the input mapping consumed by ``classify_relation``."""
-        assert event_a
-        assert event_b
-        assert max_length == 64
-        assert padding == "max_length"
-        assert truncation is True
-        assert return_tensors == "pt"
-        return {"input_ids": object(), "attention_mask": object()}
-
-
-class _FakeAutoTokenizer:
-    """Replacement for ``transformers.AutoTokenizer``."""
-
-    @staticmethod
-    def from_pretrained(model_dir: str) -> _FakeTokenizer:
-        """Return a fake tokenizer for the model directory."""
-        assert model_dir
-        return _FakeTokenizer()
-
-
-def _install_fake_training_modules(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Install fake torch and transformers modules for model-load tests."""
-    fake_torch = ModuleType("torch")
-    fake_nn = ModuleType("torch.nn")
-    fake_transformers = ModuleType("transformers")
-    fake_torch_dynamic = cast(Any, fake_torch)
-    fake_nn_dynamic = cast(Any, fake_nn)
-    fake_transformers_dynamic = cast(Any, fake_transformers)
-
-    def fake_layer(*_args: object, **_kwargs: object) -> object:
-        """Return a fake neural-network layer."""
-        return object()
-
-    def fake_relu() -> object:
-        """Return a fake activation layer."""
-        return object()
-
-    def fake_dropout(_rate: object) -> object:
-        """Return a fake dropout layer."""
-        return object()
-
-    def fake_load(*_args: object, **_kwargs: object) -> dict[str, str]:
-        """Return fake checkpoint weights."""
-        return {"weights": "ok"}
-
-    def fake_softmax(_logits: object, *, dim: int) -> _FakeProbabilities:
-        """Return deterministic fake softmax probabilities."""
-        assert dim == -1
-        return _FakeProbabilities()
-
-    fake_nn_dynamic.Module = _FakeModule
-    fake_nn_dynamic.Sequential = _FakeSequential
-    fake_nn_dynamic.Linear = fake_layer
-    fake_nn_dynamic.ReLU = fake_relu
-    fake_nn_dynamic.Dropout = fake_dropout
-
-    fake_torch_dynamic.nn = fake_nn
-    fake_torch_dynamic.load = fake_load
-    fake_torch_dynamic.no_grad = _FakeNoGrad
-    fake_torch_dynamic.softmax = fake_softmax
-
-    fake_transformers_dynamic.AutoModel = _FakeAutoModel
-    fake_transformers_dynamic.AutoTokenizer = _FakeAutoTokenizer
-
-    monkeypatch.setitem(sys.modules, "torch", fake_torch)
-    monkeypatch.setitem(sys.modules, "torch.nn", fake_nn)
-    monkeypatch.setitem(sys.modules, "transformers", fake_transformers)
-
-
-# ── Constants ──────────────────────────────────────────────────
-
-
-class TestConstants:
-    """Validate exported temporal relation constants."""
-
-    def test_label_count(self) -> None:
-        """Expose six temporal relation labels."""
-        assert len(LABELS) == 6
-
-    def test_expected_labels(self) -> None:
-        """Expose the expected C3 temporal relation vocabulary."""
-        assert "before" in LABELS
-        assert "after" in LABELS
-        assert "same_day" in LABELS
-        assert "overlaps" in LABELS
-        assert "contains" in LABELS
-        assert "unknown" in LABELS
-
-
-# ── RelationResult dataclass ───────────────────────────────────
-
-
-class TestRelationResult:
-    """Validate the relation result data contract."""
-
-    def test_fields(self) -> None:
-        """Store relation, confidence, and per-label probabilities."""
-        r = RelationResult(
-            relation="before",
-            confidence=0.9,
-            probabilities={"before": 0.9, "after": 0.05, "same_day": 0.05},
-        )
-        assert r.relation == "before"
-        assert r.confidence == 0.9
-        assert "before" in r.probabilities
-
-    def test_equality(self) -> None:
-        """Compare dataclass instances by value."""
-        a = RelationResult(relation="before", confidence=0.9, probabilities={})
-        b = RelationResult(relation="before", confidence=0.9, probabilities={})
-        assert a == b
-
-
-class TestConfigHelpers:
-    """Validate model configuration normalization helpers."""
-
-    def test_config_model_name_rejects_blank_value(self) -> None:
-        """Reject missing model names before external model loading."""
-        with pytest.raises(ValueError, match="model_name"):
-            temporal_relation._config_model_name({"model_name": ""})
-
-    def test_config_labels_accepts_tuple_labels(self) -> None:
-        """Accept tuple-backed labels from typed callers."""
+    (model_dir / "config.json").write_text(json.dumps(config), encoding="utf-8")
+
+    model = temporal_relation._build_model(str(backbone_dir), len(LABELS))
+    with torch.no_grad():
+        for parameter in model.parameters():
+            parameter.zero_()
+        if top_label is not None:
+            cast(Any, model).classifier[-1].bias[LABELS.index(top_label)] = 6.0
+    torch.save(model.state_dict(), model_dir / "model.pt")
+    return model_dir
+
+
+class TestContracts:
+    def test_labels_and_result_value_semantics(self) -> None:
+        assert LABELS == ["before", "after", "same_day", "overlaps", "contains", "unknown"]
+        result = RelationResult("before", 0.9, {"before": 0.9})
+        assert result == RelationResult("before", 0.9, {"before": 0.9})
+
+    def test_config_helpers_accept_valid_values_and_reject_invalid_ones(self) -> None:
+        assert temporal_relation._config_int({"n": 7}, "n", 3) == 7
+        assert temporal_relation._config_int({"n": "7"}, "n", 3) == 3
+        assert temporal_relation._config_model_name({"model_name": "bert"}) == "bert"
+        for value in (None, ""):
+            try:
+                temporal_relation._config_model_name({"model_name": value})
+            except ValueError as exc:
+                assert "model_name" in str(exc)
+            else:
+                raise AssertionError("invalid model name was accepted")
+
+    def test_label_config_accepts_lists_and_tuples_with_safe_fallback(self) -> None:
+        assert temporal_relation._config_labels({"labels": list(LABELS)}) == LABELS
         assert temporal_relation._config_labels({"labels": tuple(LABELS)}) == tuple(LABELS)
-
-    def test_config_labels_falls_back_for_invalid_labels(self) -> None:
-        """Use default labels when config labels are not all strings."""
         assert temporal_relation._config_labels({"labels": ["before", 7]}) == LABELS
-
-
-# ── Model loading ──────────────────────────────────────────────
+        assert temporal_relation._config_labels({"labels": "before"}) == LABELS
 
 
 class TestModelLoading:
-    """Validate lazy model-loading behavior."""
+    def test_missing_checkpoint_returns_none(self, tmp_path: Path) -> None:
+        with _model_at(tmp_path / "missing"):
+            assert classify_relation("event A", "event B") is None
 
-    def test_model_missing_returns_none(self, tmp_path: Path) -> None:
-        """Return ``None`` when the trained checkpoint is absent."""
-        _reset_model_state()
-        with patch.object(temporal_relation, "_MODEL_DIR", tmp_path):
-            r = classify_relation("event A", "event B")
-            assert r is None
-
-    def test_already_loaded(self) -> None:
-        """Treat the cached model as ready without reloading files."""
-        _reset_model_state()
-        temporal_relation._model = MagicMock()
-        temporal_relation._tokenizer = MagicMock()
-        temporal_relation._config = {"labels": LABELS, "max_seq_len": 128}
-        assert temporal_relation._load_model() is True
-        _reset_model_state()
-
-    def test_load_model_exception_returns_false(self, tmp_path: Path) -> None:
-        """Return ``False`` when model metadata cannot be read."""
-        _reset_model_state()
-        (tmp_path / "model.pt").write_bytes(b"not-a-real-checkpoint")
-        (tmp_path / "config.json").write_text("{}", encoding="utf-8")
-        with patch.object(temporal_relation, "_MODEL_DIR", tmp_path):
-            with patch("temporal_relation.json.load", side_effect=OSError("corrupt")):
-                result = temporal_relation._load_model()
-                assert result is False
-
-    def test_load_model_with_fake_external_modules(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """Load through the real wrapper path using typed fake dependencies."""
-        _reset_model_state()
-        _install_fake_training_modules(monkeypatch)
-        (tmp_path / "model.pt").write_bytes(b"fake-checkpoint")
-        (tmp_path / "config.json").write_text(
-            '{"model_name": "fake-bert", "num_classes": 6, '
-            '"max_seq_len": 64, "labels": ["before", "after", "same_day", '
-            '"overlaps", "contains", "unknown"]}',
-            encoding="utf-8",
-        )
-
-        with patch.object(temporal_relation, "_MODEL_DIR", tmp_path):
-            assert temporal_relation._load_model() is True
-            result = classify_relation("event A", "event B")
-
-        assert result is not None
-        assert result.relation == "before"
-        assert result.confidence == 0.70
-        _reset_model_state()
-
-    def test_load_model_rejects_non_object_config(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """Reject model config JSON that is not an object."""
-        _reset_model_state()
-        _install_fake_training_modules(monkeypatch)
-        (tmp_path / "model.pt").write_bytes(b"fake-checkpoint")
-        (tmp_path / "config.json").write_text("[]", encoding="utf-8")
-        with patch.object(temporal_relation, "_MODEL_DIR", tmp_path):
+    def test_corrupt_and_non_object_configs_fail_closed(self, tmp_path: Path) -> None:
+        corrupt = tmp_path / "corrupt"
+        corrupt.mkdir()
+        (corrupt / "model.pt").write_bytes(b"checkpoint")
+        (corrupt / "config.json").write_text("{", encoding="utf-8")
+        with _model_at(corrupt):
             assert temporal_relation._load_model() is False
 
-    def test_classify_returns_none_for_incomplete_cache(self) -> None:
-        """Return ``None`` if the lazy-load success state is inconsistent."""
-        _reset_model_state()
-        with patch("temporal_relation._load_model", return_value=True):
+        non_object = tmp_path / "non-object"
+        non_object.mkdir()
+        (non_object / "model.pt").write_bytes(b"checkpoint")
+        (non_object / "config.json").write_text("[]", encoding="utf-8")
+        with _model_at(non_object):
+            assert temporal_relation._load_model() is False
+
+    def test_loaded_real_checkpoint_is_reused(self, tmp_path: Path) -> None:
+        model_dir = _write_checkpoint(tmp_path / "loaded")
+        with _model_at(model_dir):
+            assert temporal_relation._load_model() is True
+            loaded = temporal_relation._model
+            assert temporal_relation._load_model() is True
+            assert temporal_relation._model is loaded
+
+    def test_incomplete_real_cache_fails_closed(self, tmp_path: Path) -> None:
+        model_dir = _write_checkpoint(tmp_path / "incomplete")
+        with _model_at(model_dir):
+            assert temporal_relation._load_model() is True
+            temporal_relation._tokenizer = None
             assert classify_relation("event A", "event B") is None
 
 
-# ── Classification with mocked model ──────────────────────────
-
-
-class TestClassifyRelationMocked:
-    """Validate classification through the public inference function."""
-
-    def test_returns_highest_prob_label(self) -> None:
-        """Return the label with the highest softmax probability."""
-        _install_mock_classifier(torch.tensor([[5.0, 1.0, 0.5, 0.2, 0.1, 0.0]]))
-        r = classify_relation("I started yoga", "I visited the dentist")
-        assert r is not None
-        assert r.relation == "before"
-        assert r.confidence > 0.5
-        _reset_model_state()
-
-    def test_probabilities_sum_to_one(self) -> None:
-        """Return a normalized probability distribution."""
-        _install_mock_classifier(torch.tensor([[5.0, 1.0, 0.5, 0.2, 0.1, 0.0]]))
-        r = classify_relation("event A", "event B")
-        assert r is not None
-        total = sum(r.probabilities.values())
-        assert abs(total - 1.0) < 0.01
-        _reset_model_state()
-
-    def test_all_labels_in_probabilities(self) -> None:
-        """Return one probability entry per configured label."""
-        _install_mock_classifier(torch.tensor([[5.0, 1.0, 0.5, 0.2, 0.1, 0.0]]))
-        r = classify_relation("event A", "event B")
-        assert r is not None
+class TestRealCheckpointClassification:
+    def test_every_label_maps_through_real_inference(self, tmp_path: Path) -> None:
         for label in LABELS:
-            assert label in r.probabilities
-        _reset_model_state()
+            model_dir = _write_checkpoint(tmp_path / label, top_label=label)
+            with _model_at(model_dir):
+                result = classify_relation("first event", "second event")
 
-    def test_empty_event_strings(self) -> None:
-        """Delegate empty event strings to tokenizer padding."""
-        _install_mock_classifier(torch.tensor([[5.0, 1.0, 0.5, 0.2, 0.1, 0.0]]))
-        r = classify_relation("", "")
-        assert r is not None  # model handles empty input via tokenizer padding
-        _reset_model_state()
+            assert result is not None
+            assert result.relation == label
+            assert result.confidence > 0.9
+            assert set(result.probabilities) == set(LABELS)
+            assert abs(sum(result.probabilities.values()) - 1.0) < 1e-6
 
-
-# ── Event ordering ─────────────────────────────────────────────
+    def test_real_tokenizer_handles_empty_event_text(self, tmp_path: Path) -> None:
+        model_dir = _write_checkpoint(tmp_path / "empty")
+        with _model_at(model_dir):
+            result = classify_relation("", "")
+        assert result is not None
+        assert result.relation == "before"
 
 
 class TestOrderEvents:
-    """Validate event ordering through the public ordering function."""
-
-    def test_single_event_unchanged(self) -> None:
-        """Preserve a single event without model access."""
-        events = [("I went to the gym", "2023-04-10")]
-        result = order_events(events)
-        assert len(result) == 1
-        assert result[0][0] == "I went to the gym"
-        assert result[0][2] == ""  # no relation for first
-
-    def test_empty_list(self) -> None:
-        """Preserve an empty event list."""
+    def test_empty_and_single_inputs_need_no_model(self) -> None:
         assert order_events([]) == []
+        assert order_events([("only", "2026-07-13")]) == [("only", "2026-07-13", "")]
 
-    def test_model_unavailable_preserves_order(self) -> None:
-        """Return original order when no classifier is available."""
-        _reset_model_state()
+    def test_missing_checkpoint_preserves_multiple_events(self, tmp_path: Path) -> None:
         events = [("A", ""), ("B", ""), ("C", "")]
-        result = order_events(events)
-        assert len(result) == 3
-        assert result[0][0] == "A"
-        assert result[1][0] == "B"
-        assert result[2][0] == "C"
+        with _model_at(tmp_path / "missing"):
+            assert order_events(events) == [("A", "", ""), ("B", "", ""), ("C", "", "")]
 
-    def test_two_events_before_relation(self) -> None:
-        """Keep chronological order when the first event is before the second."""
-        _install_mock_classifier(torch.tensor([[5.0, 0.0, 0.0, 0.0, 0.0, 0.0]]))
-        events = [("First event", ""), ("Second event", "")]
-        result = order_events(events)
-        assert result == [
-            ("First event", "", ""),
-            ("Second event", "", "before"),
-        ]
-        _reset_model_state()
+    def test_before_checkpoint_keeps_chronological_order(self, tmp_path: Path) -> None:
+        model_dir = _write_checkpoint(tmp_path / "before", top_label="before")
+        with _model_at(model_dir):
+            result = order_events([("First event", "1"), ("Second event", "2")])
+        assert result == [("First event", "1", ""), ("Second event", "2", "before")]
 
-    def test_two_events_after_relation(self) -> None:
-        """Move the second event first when the classifier returns ``after``."""
-        _install_mock_classifier(torch.tensor([[0.0, 5.0, 0.0, 0.0, 0.0, 0.0]]))
-        events = [("Later event", ""), ("Earlier event", "")]
-        result = order_events(events)
-        assert len(result) == 2
-        assert result[0][0] == "Earlier event"
-        _reset_model_state()
+    def test_after_checkpoint_moves_second_event_first(self, tmp_path: Path) -> None:
+        model_dir = _write_checkpoint(tmp_path / "after", top_label="after")
+        with _model_at(model_dir):
+            result = order_events([("Later event", "2"), ("Earlier event", "1")])
+        assert result == [("Earlier event", "1", ""), ("Later event", "2", "after")]
 
-    def test_three_events_pairwise(self) -> None:
-        """Compare all event pairs when ordering more than two events."""
-        _install_mock_classifier(torch.tensor([[5.0, 0.0, 0.0, 0.0, 0.0, 0.0]]))
+    def test_low_confidence_and_non_ordering_labels_preserve_input_order(
+        self, tmp_path: Path
+    ) -> None:
         events = [("A", ""), ("B", ""), ("C", "")]
-        result = order_events(events)
-        assert len(result) == 3
-        _reset_model_state()
+        uniform = _write_checkpoint(tmp_path / "uniform", top_label=None)
+        with _model_at(uniform):
+            low_confidence = order_events(events)
+        assert [event[0] for event in low_confidence] == ["A", "B", "C"]
+
+        unknown = _write_checkpoint(tmp_path / "unknown", top_label="unknown")
+        with _model_at(unknown):
+            non_ordering = order_events(events)
+        assert [event[0] for event in non_ordering] == ["A", "B", "C"]
+        assert non_ordering[1][2] == "unknown"
+
+    def test_incomplete_cache_preserves_order_without_relation(self, tmp_path: Path) -> None:
+        model_dir = _write_checkpoint(tmp_path / "incomplete-order")
+        with _model_at(model_dir):
+            assert temporal_relation._load_model() is True
+            temporal_relation._tokenizer = None
+            result = order_events([("A", ""), ("B", "")])
+        assert result == [("A", "", ""), ("B", "", "")]

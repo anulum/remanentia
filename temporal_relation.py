@@ -106,6 +106,31 @@ def _config_labels(config: Mapping[str, object]) -> Sequence[str]:
     return LABELS
 
 
+def _build_model(model_name: str, num_classes: int = 6) -> Any:
+    """Build the production BERT backbone and temporal classification head."""
+    import torch.nn as nn
+    from transformers import AutoModel
+
+    class _Classifier(nn.Module):  # type: ignore[misc] # torch stubs expose nn.Module as Any.
+        def __init__(self) -> None:
+            super().__init__()
+            self.backbone = AutoModel.from_pretrained(model_name)
+            hidden = self.backbone.config.hidden_size
+            self.classifier = nn.Sequential(
+                nn.Linear(hidden, 256),
+                nn.ReLU(),
+                nn.Dropout(0.1),
+                nn.Linear(256, num_classes),
+            )
+
+        def forward(self, input_ids: Any, attention_mask: Any) -> Any:
+            out = self.backbone(input_ids=input_ids, attention_mask=attention_mask)
+            cls_emb = out.last_hidden_state[:, 0]
+            return self.classifier(cls_emb)
+
+    return _Classifier()
+
+
 def _load_model() -> bool:
     """Lazy-load the trained bert-small temporal relation classifier.
 
@@ -123,8 +148,7 @@ def _load_model() -> bool:
 
     try:
         import torch
-        import torch.nn as nn
-        from transformers import AutoModel, AutoTokenizer
+        from transformers import AutoTokenizer
 
         with open(_MODEL_DIR / "config.json", encoding="utf-8") as f:
             raw_config = json.load(f)
@@ -137,31 +161,10 @@ def _load_model() -> bool:
             AutoTokenizer.from_pretrained(str(_MODEL_DIR)),
         )
 
-        class _Classifier(nn.Module):  # type: ignore[misc] # torch stubs expose nn.Module as Any in this environment.
-            """BERT backbone + Linear→ReLU→Dropout→Linear classification head."""
-
-            def __init__(self, model_name: str, num_classes: int = 6) -> None:
-                """Build backbone and 2-layer classifier."""
-                super().__init__()
-                self.backbone = AutoModel.from_pretrained(model_name)
-                hidden = self.backbone.config.hidden_size
-                self.classifier = nn.Sequential(
-                    nn.Linear(hidden, 256),
-                    nn.ReLU(),
-                    nn.Dropout(0.1),
-                    nn.Linear(256, num_classes),
-                )
-
-            def forward(self, input_ids: Any, attention_mask: Any) -> Any:
-                """Return 6-class logits from [CLS] embedding."""
-                out = self.backbone(input_ids=input_ids, attention_mask=attention_mask)
-                cls_emb = out.last_hidden_state[:, 0]
-                return self.classifier(cls_emb)
-
         device = "cpu"
         model = cast(
             _TrainableTemporalModel,
-            _Classifier(
+            _build_model(
                 _config_model_name(config),
                 _config_int(config, "num_classes", 6),
             ),
