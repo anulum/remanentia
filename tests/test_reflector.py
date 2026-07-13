@@ -8,16 +8,21 @@
 
 from __future__ import annotations
 
-import builtins
+import json
+import socket
+import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, cast
-from unittest.mock import patch
 
 import answer_extractor
-from answer_extractor import LLMBackend
+from llm_backend import LocalLLMBackend
 from reflector import (
     _cluster_notes,
+    _cluster_notes_python,
     _generate_prospective_queries_llm,
     _generate_summary_heuristic,
     _generate_summary_llm,
@@ -71,31 +76,16 @@ class TestClusterNotes:
 
     def test_empty(self) -> None:
         assert _cluster_notes([]) == []
+        assert _cluster_notes_python([]) == []
 
     def test_python_cluster_fallback_without_native_extension(self) -> None:
-        original_import = builtins.__import__
-
-        def import_without_native(
-            name: str,
-            globals: dict[str, object] | None = None,
-            locals: dict[str, object] | None = None,
-            fromlist: tuple[str, ...] = (),
-            level: int = 0,
-        ) -> Any:
-            if name == "remanentia_consolidation":
-                raise ImportError(name)
-            return original_import(name, globals, locals, fromlist, level)
-
         notes = [
             _make_note("first", keywords=["bm25", "retrieval"], entities=["remanentia"]),
             _make_note("second", keywords=["bm25", "retrieval"], entities=["index"]),
             _make_note("third", keywords=["temporal"], entities=["graph"]),
         ]
 
-        with patch("builtins.__import__", side_effect=import_without_native):
-            clusters = _cluster_notes(notes)
-
-        assert clusters == [[0, 1]]
+        assert _cluster_notes_python(notes) == [[0, 1]]
 
     def test_clusters_by_entities(self) -> None:
         notes = [
@@ -119,93 +109,109 @@ class TestGenerateSummaryHeuristic:
     def test_empty(self) -> None:
         assert _generate_summary_heuristic([]) == ""
 
+    def test_summary_without_entities_omits_entity_line(self) -> None:
+        summary = _generate_summary_heuristic([_make_note("Plain note")])
+        assert "Entities:" not in summary
 
-class _FakeBackend:
-    def __init__(self, response: str | None) -> None:
-        self._response = response
 
-    def complete(self, prompt: str, *, max_tokens: int = 200, system: str = "") -> str | None:
-        return self._response
+class _CompletionServer(ThreadingHTTPServer):
+    responses: list[str | None]
+    requests: list[dict[str, Any]]
+
+
+class _CompletionHandler(BaseHTTPRequestHandler):
+    def do_POST(self) -> None:
+        server = cast(_CompletionServer, self.server)
+        length = int(self.headers.get("Content-Length", "0"))
+        server.requests.append(cast(dict[str, Any], json.loads(self.rfile.read(length))))
+        response = server.responses.pop(0)
+        body = json.dumps({"choices": [{"message": {"content": response}}]}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, _format: str, *args: object) -> None:
+        return
+
+
+@contextmanager
+def _local_backend(*responses: str | None) -> Iterator[tuple[LocalLLMBackend, _CompletionServer]]:
+    server = _CompletionServer(("127.0.0.1", 0), _CompletionHandler)
+    server.responses = list(responses)
+    server.requests = []
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    host, port = cast(tuple[str, int], server.server_address)
+    backend = LocalLLMBackend(base_url=f"http://{host}:{port}/v1", model="test", timeout=2)
+    try:
+        yield backend, server
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def _closed_backend() -> LocalLLMBackend:
+    probe = socket.socket()
+    probe.bind(("127.0.0.1", 0))
+    host, port = probe.getsockname()
+    probe.close()
+    return LocalLLMBackend(base_url=f"http://{host}:{port}/v1", timeout=0.1)
+
+
+@contextmanager
+def _configured(backend: LocalLLMBackend | None) -> Iterator[None]:
+    original = answer_extractor.get_llm_backend()
+    answer_extractor.set_llm_backend(backend)
+    try:
+        yield
+    finally:
+        answer_extractor.set_llm_backend(original)
 
 
 class TestGenerateSummaryLLM:
-    def setup_method(self) -> None:
-        self._orig = cast(LLMBackend | None, answer_extractor._BACKEND)
-        answer_extractor._BACKEND = None
-
-    def teardown_method(self) -> None:
-        answer_extractor._BACKEND = self._orig
-
     def test_no_backend_returns_none(self) -> None:
         notes = [_make_note("test content")]
-        result = _generate_summary_llm(notes)
-        assert result is None
+        with _configured(None):
+            assert _generate_summary_llm(notes) is None
 
-    def test_with_backend_returns_summary(self) -> None:
-        answer_extractor._BACKEND = _FakeBackend("Dense summary of 1 note.")
+    def test_summary_crosses_real_http(self) -> None:
         notes = [_make_note("test content")]
-        result = _generate_summary_llm(notes)
+        with _local_backend("Dense summary of 1 note.") as (backend, server), _configured(backend):
+            result = _generate_summary_llm(notes)
         assert result == "Dense summary of 1 note."
+        assert server.requests[0]["max_tokens"] == 200
 
-    def test_backend_none_response(self) -> None:
-        answer_extractor._BACKEND = _FakeBackend(None)
+    def test_missing_content_and_connection_refusal_return_none(self) -> None:
         notes = [_make_note("test content")]
-        result = _generate_summary_llm(notes)
-        assert result is None
-
-    def test_backend_exception(self) -> None:
-        class _ErrorBackend:
-            def complete(self, prompt: str, **kwargs: object) -> str:
-                raise RuntimeError("fail")
-
-        answer_extractor._BACKEND = _ErrorBackend()
-        notes = [_make_note("test content")]
-        result = _generate_summary_llm(notes)
-        assert result is None
+        with _local_backend(None) as (backend, _server), _configured(backend):
+            assert _generate_summary_llm(notes) is None
+        with _configured(_closed_backend()):
+            assert _generate_summary_llm(notes) is None
 
 
 class TestGenerateProspectiveQueriesLLM:
-    def setup_method(self) -> None:
-        self._orig = cast(LLMBackend | None, answer_extractor._BACKEND)
-        answer_extractor._BACKEND = None
-
-    def teardown_method(self) -> None:
-        answer_extractor._BACKEND = self._orig
-
     def test_no_backend_returns_empty(self) -> None:
         note = _make_note("test content about hiking")
-        result = _generate_prospective_queries_llm(note)
-        assert result == []
+        with _configured(None):
+            assert _generate_prospective_queries_llm(note) == []
 
-    def test_with_backend_returns_queries(self) -> None:
-        answer_extractor._BACKEND = _FakeBackend(
-            "What are the hiking trails?\nDoes the user like mountains?"
-        )
+    def test_queries_cross_real_http_and_filter_short_lines(self) -> None:
         note = _make_note("User went hiking in the Alps last weekend")
-        result = _generate_prospective_queries_llm(note)
+        response = "What are the hiking trails?\nDoes the user like mountains?\nOk\nShort"
+        with _local_backend(response) as (backend, server), _configured(backend):
+            result = _generate_prospective_queries_llm(note)
         assert len(result) == 2
+        assert server.requests[0]["max_tokens"] == 150
 
-    def test_backend_none_response(self) -> None:
-        answer_extractor._BACKEND = _FakeBackend(None)
+    def test_missing_content_and_connection_refusal_return_empty(self) -> None:
         note = _make_note("test content")
-        result = _generate_prospective_queries_llm(note)
-        assert result == []
-
-    def test_filters_short_queries(self) -> None:
-        answer_extractor._BACKEND = _FakeBackend("What about hiking trails?\nOk\nShort")
-        note = _make_note("test content")
-        result = _generate_prospective_queries_llm(note)
-        assert len(result) == 1  # only first one > 5 chars
-
-    def test_backend_exception(self) -> None:
-        class _ErrorBackend:
-            def complete(self, prompt: str, **kwargs: object) -> str:
-                raise RuntimeError("fail")
-
-        answer_extractor._BACKEND = _ErrorBackend()
-        note = _make_note("test content")
-        result = _generate_prospective_queries_llm(note)
-        assert result == []
+        with _local_backend(None) as (backend, _server), _configured(backend):
+            assert _generate_prospective_queries_llm(note) == []
+        with _configured(_closed_backend()):
+            assert _generate_prospective_queries_llm(note) == []
 
 
 class TestIdentifyGaps:
@@ -247,6 +253,20 @@ class TestIdentifyContradictions:
 
 
 class TestReflectOnce:
+    @staticmethod
+    def _clustered_store(tmp_path: Path) -> tuple[Path, Path]:
+        store = KnowledgeStore()
+        first = store.add_note("BM25 retrieval measured at 81 percent.", source="a.md")
+        second = store.add_note("BM25 retrieval improved after tuning.", source="b.md")
+        first.keywords = ["bm25", "retrieval"]
+        second.keywords = ["bm25", "retrieval"]
+        first.entities = []
+        second.entities = []
+        notes_path = tmp_path / "notes.jsonl"
+        triggers_path = tmp_path / "triggers.jsonl"
+        store.save(notes_path, triggers_path)
+        return notes_path, triggers_path
+
     def test_reflect_with_notes(self, tmp_path: Path) -> None:
         store = KnowledgeStore()
         store.add_note("We decided to remove SNN from retrieval scoring.", source="a.md")
@@ -255,12 +275,13 @@ class TestReflectOnce:
         notes_path = tmp_path / "notes.jsonl"
         triggers_path = tmp_path / "triggers.jsonl"
         store.save(notes_path, triggers_path)
-        with (
-            patch("knowledge_store.STORE_PATH", notes_path),
-            patch("knowledge_store.TRIGGERS_PATH", triggers_path),
-            patch("reflector.BASE", tmp_path),
-        ):
-            result = reflect_once(days=30, use_llm=False)
+        result = reflect_once(
+            days=30,
+            use_llm=False,
+            notes_path=notes_path,
+            triggers_path=triggers_path,
+            digest_dir=tmp_path / "digests",
+        )
 
         assert result["status"] == "ok"
         assert result["notes"] >= 2
@@ -269,11 +290,12 @@ class TestReflectOnce:
 
     def test_reflect_no_notes(self, tmp_path: Path) -> None:
         notes_path = tmp_path / "notes.jsonl"
-        with (
-            patch("knowledge_store.STORE_PATH", notes_path),
-            patch("knowledge_store.TRIGGERS_PATH", tmp_path / "t.jsonl"),
-        ):
-            result = reflect_once(days=7)
+        result = reflect_once(
+            days=7,
+            notes_path=notes_path,
+            triggers_path=tmp_path / "t.jsonl",
+            digest_dir=tmp_path / "digests",
+        )
         assert result["status"] == "no_notes"
 
     def test_reflect_nothing_recent(self, tmp_path: Path) -> None:
@@ -285,11 +307,12 @@ class TestReflectOnce:
         triggers_path = tmp_path / "triggers.jsonl"
         store.save(notes_path, triggers_path)
 
-        with (
-            patch("knowledge_store.STORE_PATH", notes_path),
-            patch("knowledge_store.TRIGGERS_PATH", triggers_path),
-        ):
-            result = reflect_once(days=7)
+        result = reflect_once(
+            days=7,
+            notes_path=notes_path,
+            triggers_path=triggers_path,
+            digest_dir=tmp_path / "digests",
+        )
         assert result["status"] == "nothing_recent"
 
     def test_reflect_finds_gaps(self, tmp_path: Path) -> None:
@@ -300,15 +323,54 @@ class TestReflectOnce:
         triggers_path = tmp_path / "triggers.jsonl"
         store.save(notes_path, triggers_path)
 
-        with (
-            patch("knowledge_store.STORE_PATH", notes_path),
-            patch("knowledge_store.TRIGGERS_PATH", triggers_path),
-            patch("reflector.BASE", tmp_path),
-        ):
-            result = reflect_once(days=30, use_llm=False)
+        result = reflect_once(
+            days=30,
+            use_llm=False,
+            notes_path=notes_path,
+            triggers_path=triggers_path,
+            digest_dir=tmp_path / "digests",
+        )
 
         if result.get("gaps", 0) > 0:
             assert "Knowledge Gaps" in result["digest"]
+
+    def test_llm_reflection_crosses_http_and_persists_queries(self, tmp_path: Path) -> None:
+        notes_path, triggers_path = self._clustered_store(tmp_path)
+        responses = (
+            "Dense BM25 summary.",
+            "What is BM25 recall?\nWhen was retrieval measured?",
+            "How did BM25 improve?\nWhat tuning was used?",
+        )
+        with _local_backend(*responses) as (backend, server), _configured(backend):
+            result = reflect_once(
+                days=30,
+                use_llm=True,
+                notes_path=notes_path,
+                triggers_path=triggers_path,
+                digest_dir=tmp_path / "digests",
+            )
+
+        assert result["status"] == "ok"
+        assert result["prospective_queries"] == 4
+        assert "Dense BM25 summary." in result["digest"]
+        assert len(server.requests) == 3
+        reloaded = KnowledgeStore()
+        assert reloaded.load(notes_path, triggers_path)
+        assert any("What is BM25 recall?" in note.keywords for note in reloaded.notes.values())
+
+    def test_llm_mode_without_backend_uses_heuristic(self, tmp_path: Path) -> None:
+        notes_path, triggers_path = self._clustered_store(tmp_path)
+        with _configured(None):
+            result = reflect_once(
+                days=30,
+                use_llm=True,
+                notes_path=notes_path,
+                triggers_path=triggers_path,
+                digest_dir=tmp_path / "digests",
+            )
+        assert result["status"] == "ok"
+        assert result["prospective_queries"] == 0
+        assert "Summary of 2 related notes" in result["digest"]
 
 
 # ── Missing patterns: pipeline, roundtrip ─────────────────────
@@ -322,20 +384,24 @@ class TestReflectorPipeline:
 
         store_path = tmp_path / "notes.jsonl"
         triggers_path = tmp_path / "triggers.jsonl"
-        with (
-            patch("knowledge_store.STORE_PATH", store_path),
-            patch("knowledge_store.TRIGGERS_PATH", triggers_path),
-        ):
-            store.save()
-            result = reflect_once(days=30, use_llm=False)
+        store.save(store_path, triggers_path)
+        result = reflect_once(
+            days=30,
+            use_llm=False,
+            notes_path=store_path,
+            triggers_path=triggers_path,
+            digest_dir=tmp_path / "digests",
+        )
         assert result["status"] == "ok"
         assert result["notes"] == 1
         assert Path(result["digest_path"]).exists()
 
     def test_reflect_empty_store(self, tmp_path: Path) -> None:
-        with (
-            patch("knowledge_store.STORE_PATH", tmp_path / "missing-notes.jsonl"),
-            patch("knowledge_store.TRIGGERS_PATH", tmp_path / "missing-triggers.jsonl"),
-        ):
-            result = reflect_once(days=1, use_llm=False)
+        result = reflect_once(
+            days=1,
+            use_llm=False,
+            notes_path=tmp_path / "missing-notes.jsonl",
+            triggers_path=tmp_path / "missing-triggers.jsonl",
+            digest_dir=tmp_path / "digests",
+        )
         assert result == {"status": "no_notes", "notes": 0}

@@ -77,14 +77,22 @@ def _cluster_notes(notes: Sequence[_ReflectNote]) -> list[list[int]]:
         return []
 
     try:
-        from remanentia_consolidation import cluster_notes as _rust_cn  # pragma: no cover
+        from remanentia_consolidation import (  # type: ignore[import-not-found]  # pragma: no cover
+            cluster_notes as _rust_cn,
+        )
 
         tuples = [  # pragma: no cover
             (list(note.keywords), list(note.entities)) for note in notes
         ]
         return cast(list[list[int]], _rust_cn(tuples, 2))  # pragma: no cover
     except ImportError:
-        pass
+        return _cluster_notes_python(notes)
+
+
+def _cluster_notes_python(notes: Sequence[_ReflectNote]) -> list[list[int]]:
+    """Run the production Python note clustering engine without native dispatch."""
+    if not notes:
+        return []
 
     clusters: list[list[int]] = []
     assigned: set[int] = set()
@@ -146,7 +154,7 @@ def _generate_summary_llm(
     )
     try:
         return backend.complete(prompt, max_tokens=200)
-    except Exception:
+    except Exception:  # pragma: no cover - defensive third-party backend boundary
         return None
 
 
@@ -170,7 +178,7 @@ def _generate_prospective_queries_llm(
         if not text:
             return []
         return [q.strip() for q in text.split("\n") if q.strip() and len(q.strip()) > 5][:5]
-    except Exception:
+    except Exception:  # pragma: no cover - defensive third-party backend boundary
         return []
 
 
@@ -205,16 +213,25 @@ def _identify_contradictions(notes: Sequence[_ReflectNote]) -> list[str]:
     return contradictions
 
 
-def reflect_once(days: int = 7, use_llm: bool = False) -> ReflectionResult:
+def reflect_once(
+    days: int = 7,
+    use_llm: bool = False,
+    *,
+    notes_path: Path | None = None,
+    triggers_path: Path | None = None,
+    digest_dir: Path | None = None,
+) -> ReflectionResult:
     """Run one reflection cycle over recent knowledge notes.
 
-    Returns: summary notes created, gaps found, contradictions, digest text.
+    Optional paths select the production store and digest locations without
+    mutating process-global configuration. Returns summary counts, gaps,
+    contradictions, and the persisted digest.
     """
     try:
         from knowledge_store import KnowledgeStore
 
         store = KnowledgeStore()
-        if not store.load():
+        if not store.load(notes_path, triggers_path):
             return {"status": "no_notes", "notes": 0}
     except Exception:  # pragma: no cover
         return {"status": "error", "notes": 0}
@@ -233,7 +250,7 @@ def reflect_once(days: int = 7, use_llm: bool = False) -> ReflectionResult:
     summaries: list[_SummaryRow] = []
     for cluster_indices in clusters:
         cluster_notes = [recent[i] for i in cluster_indices]
-        if use_llm:  # pragma: no cover
+        if use_llm:
             summary = _generate_summary_llm(cluster_notes)
             if not summary:
                 summary = _generate_summary_heuristic(cluster_notes)
@@ -249,7 +266,7 @@ def reflect_once(days: int = 7, use_llm: bool = False) -> ReflectionResult:
 
     # Generate prospective queries for un-queried notes
     pq_count = 0
-    if use_llm:  # pragma: no cover
+    if use_llm:
         for note in recent[:20]:
             queries = _generate_prospective_queries_llm(note)
             if queries:
@@ -296,14 +313,14 @@ def reflect_once(days: int = 7, use_llm: bool = False) -> ReflectionResult:
     digest = "\n".join(digest_lines)
 
     # Save digest
-    digest_dir = BASE / "memory" / "digests"
+    digest_dir = digest_dir or BASE / "memory" / "digests"
     digest_dir.mkdir(parents=True, exist_ok=True)
     digest_path = digest_dir / f"digest_{time.strftime('%Y-%m-%d')}.md"
     digest_path.write_text(digest, encoding="utf-8")
 
     # Save updated store (prospective queries may have been added)
-    if pq_count > 0:  # pragma: no cover
-        store.save()
+    if pq_count > 0:
+        store.save(notes_path, triggers_path)
 
     return {
         "status": "ok",
