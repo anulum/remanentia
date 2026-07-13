@@ -133,9 +133,7 @@ try:
         load_json_gz as _load_json_gz_file,
         load_npz_dict as _load_npz_cache,
         load_pickle_disabled as _load_disabled_pickle,
-        load_query_feature_cache as _load_query_features_from_disk,
         load_trace_index_cache as _load_trace_index_from_disk,
-        persist_query_feature_cache as _persist_query_features_to_disk,
         persist_trace_index_cache as _persist_trace_index_to_disk,
         save_json_gz as _save_json_gz_file,
         trace_fingerprint as _fingerprint_trace_files,
@@ -145,13 +143,16 @@ except ImportError:
         load_json_gz as _load_json_gz_file,
         load_npz_dict as _load_npz_cache,
         load_pickle_disabled as _load_disabled_pickle,
-        load_query_feature_cache as _load_query_features_from_disk,
         load_trace_index_cache as _load_trace_index_from_disk,
-        persist_query_feature_cache as _persist_query_features_to_disk,
         persist_trace_index_cache as _persist_trace_index_to_disk,
         save_json_gz as _save_json_gz_file,
         trace_fingerprint as _fingerprint_trace_files,
     )
+
+try:
+    from .retrieval_query_features import QueryFeatureStore as _QueryFeatureStore
+except ImportError:
+    from retrieval_query_features import QueryFeatureStore as _QueryFeatureStore
 
 try:
     from .retrieval_entity_graph import (
@@ -178,16 +179,12 @@ except ImportError:
 try:
     from .retrieval_spiking import (
         cosine_similarity as _cosine_sim,
-        encode_text as _encode,
         snn_affinity as _snn_affinity,  # noqa: F401 - private compatibility surface
-        spike_feature as _spike_feature,
     )
 except ImportError:
     from retrieval_spiking import (
         cosine_similarity as _cosine_sim,
-        encode_text as _encode,
         snn_affinity as _snn_affinity,  # noqa: F401 - private compatibility surface
-        spike_feature as _spike_feature,
     )
 
 try:
@@ -256,9 +253,8 @@ _LIVE_SERVICE_STALE_S = 300.0
 
 _NETWORK_CACHE: dict[tuple[str, int, int, str], dict] = {}
 _TRACE_INDEX_CACHE: dict[str, dict] = {}
-_QUERY_FEATURE_CACHE: dict[tuple[str, str], dict] = {}
+_QUERY_FEATURE_STORE = _QueryFeatureStore(QUERY_FEATURE_CACHE_PATH)
 _EMBED_CACHE_LOADED = False
-_QUERY_FEATURE_CACHE_LOADED = False
 
 
 # ── Network I/O ───────────────────────────────────────────────────
@@ -350,35 +346,8 @@ def _build_trace_index(tdir: Path, data: dict) -> dict:
     )
 
 
-def _load_query_feature_cache() -> None:
-    global _QUERY_FEATURE_CACHE_LOADED
-    if _QUERY_FEATURE_CACHE_LOADED:
-        return
-    _QUERY_FEATURE_CACHE.update(_load_query_features_from_disk(QUERY_FEATURE_CACHE_PATH))
-    _QUERY_FEATURE_CACHE_LOADED = True
-
-
-def _persist_query_feature_cache() -> None:
-    _persist_query_features_to_disk(QUERY_FEATURE_CACHE_PATH, _QUERY_FEATURE_CACHE)
-
-
 def _get_query_features(query: str, data: dict) -> dict:
-    _load_query_feature_cache()
-    cache_key = (data["_state_signature"], query)
-    cached = _QUERY_FEATURE_CACHE.get(cache_key)
-    if cached is None:
-        stimulus = _encode(query, len(data["v"]))
-        cached = {
-            "stimulus": stimulus,
-            "spikes": _spike_feature(data["w"], stimulus),
-        }
-        if len(_QUERY_FEATURE_CACHE) > 256:
-            items = list(_QUERY_FEATURE_CACHE.items())[-255:]
-            _QUERY_FEATURE_CACHE.clear()
-            _QUERY_FEATURE_CACHE.update(items)
-        _QUERY_FEATURE_CACHE[cache_key] = cached
-        _persist_query_feature_cache()
-    return cached
+    return _QUERY_FEATURE_STORE.get(query, data)
 
 
 # ── History & summaries ───────────────────────────────────────────
@@ -403,6 +372,7 @@ def trace_summaries(traces_dir: Path | None = None) -> list[dict]:
 
 
 # ── Tiered memory (hot/warm/cold) ─────────────────────────────────
+
 
 def _trace_tier(path: Path) -> str:
     """Classify trace into hot/warm/cold based on modification time."""
@@ -557,7 +527,7 @@ def rebuild_caches(
     clear_embedding_cache: bool = False,
 ) -> dict:
     """Rebuild persistent retrieval caches for the active checkpoint."""
-    global _EMBED_CACHE_LOADED, _QUERY_FEATURE_CACHE_LOADED
+    global _EMBED_CACHE_LOADED
     tdir = traces_dir or TRACES_DIR
     data = _load_network(state_path)
     # Remove both new and legacy cache files
@@ -565,11 +535,10 @@ def rebuild_caches(
         if p.exists():
             p.unlink()
     _TRACE_INDEX_CACHE.clear()
-    _QUERY_FEATURE_CACHE.clear()
+    _QUERY_FEATURE_STORE.clear()
     for p in (QUERY_FEATURE_CACHE_PATH, _LEGACY_QUERY_CACHE):
         if p.exists():
             p.unlink()
-    _QUERY_FEATURE_CACHE_LOADED = False
     if clear_embedding_cache:
         for p in (EMBED_CACHE_PATH, _LEGACY_EMBED_CACHE):
             if p.exists():
