@@ -118,6 +118,7 @@ py-modules = [
     "no_egress_audit",
     "lineage_completeness",
     "fleet_recall_scorer",
+    "judge_agreement",
     "provenance_export",
     "world_class_scorecard",
     "lean_context",
