@@ -531,3 +531,76 @@ def test_main_require_multi_seed_gate(tmp_path: Path, capsys: object) -> None:
         ]
     )
     assert code == 0
+
+
+def test_headlines_never_pool_across_settings(tmp_path: Path) -> None:
+    """Oracle and full-S runs of one benchmark form separate headline groups."""
+    oracle = tmp_path / "oracle.json"
+    full_a = tmp_path / "full_a.json"
+    full_b = tmp_path / "full_b.json"
+    _write_json(
+        oracle,
+        {
+            "schema_version": 1,
+            "benchmark": "longmemeval",
+            "source_path": "data/results.jsonl",
+            "source_format": "jsonl",
+            "generated_at": "t",
+            "n_records": 2,
+            "score": {"correct": 1, "total": 2, "accuracy": 72.2},
+            "seeds": [],
+            "settings": ["oracle"],
+        },
+    )
+    for path, seed, accuracy in ((full_a, 42, 56.8), (full_b, 1337, 55.4)):
+        _write_json(
+            path,
+            {
+                "schema_version": 1,
+                "benchmark": "longmemeval",
+                "source_path": "data/results.jsonl",
+                "source_format": "jsonl",
+                "generated_at": "t",
+                "n_records": 2,
+                "score": {"correct": 1, "total": 2, "accuracy": accuracy},
+                "seeds": [seed],
+                "settings": ["full_s"],
+            },
+        )
+
+    manifest = build_benchmark_manifest(report_paths=[oracle, full_a, full_b], repo_root=tmp_path)
+    by_key = {(h["benchmark"], h["setting"]): h for h in manifest["headlines"]}
+
+    full = by_key[("longmemeval", "full_s")]
+    assert full["headline_eligible"] is True
+    assert full["seeds"] == [42, 1337]
+    assert full["variance_band"] == [55.4, 56.8]
+    oracle_headline = by_key[("longmemeval", "oracle")]
+    assert oracle_headline["headline_eligible"] is False
+    assert oracle_headline["reason"] == "no_seed_metadata"
+
+
+def test_mixed_setting_report_is_ineligible(tmp_path: Path) -> None:
+    """A single results file carrying both settings is an integrity fault."""
+    mixed = tmp_path / "mixed.json"
+    _write_json(
+        mixed,
+        {
+            "schema_version": 1,
+            "benchmark": "longmemeval",
+            "source_path": "data/results.jsonl",
+            "source_format": "jsonl",
+            "generated_at": "t",
+            "n_records": 2,
+            "score": {"correct": 1, "total": 2, "accuracy": 60.0},
+            "seeds": [1, 2],
+            "settings": ["full_s", "oracle"],
+        },
+    )
+
+    manifest = build_benchmark_manifest(report_paths=[mixed], repo_root=tmp_path)
+    (headline,) = manifest["headlines"]
+
+    assert headline["setting"] == "mixed"
+    assert headline["headline_eligible"] is False
+    assert headline["reason"] == "mixed_settings"

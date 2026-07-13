@@ -142,6 +142,7 @@ def _report_entry(path: Path, repo_root: Path) -> JsonObject:
         "tokens": _optional_object(payload.get("tokens")) or {},
         "judge": _optional_object(payload.get("judge")) or {},
         "seeds": _seed_list(payload.get("seeds")),
+        "settings": _setting_list(payload.get("settings")),
     }
 
 
@@ -153,23 +154,45 @@ def _seed_list(value: object) -> list[int]:
     return sorted(seeds)
 
 
-def _headline_entries(reports: list[JsonObject]) -> list[JsonObject]:
-    """Aggregate per-benchmark headline eligibility and accuracy variance.
+def _setting_list(value: object) -> list[str]:
+    """Return the report's distinct setting labels, sorted; never fabricated."""
+    if not isinstance(value, list):
+        return []
+    return sorted({item for item in value if isinstance(item, str) and item})
 
-    Groups the manifest's report entries by benchmark name. A benchmark is
-    headline-eligible only when its runs carry at least two distinct RNG
-    seeds; a single run — or runs without seed metadata (every pre-L6.5
-    artefact) — is honestly marked ineligible instead of being presented as
-    a settled number. Accuracy is reported as a variance band across runs,
-    not a point estimate.
+
+def _setting_label(entry: JsonObject) -> str:
+    """Collapse one report's settings into a headline group label.
+
+    ``oracle`` and ``full_s`` runs are never comparable (the oracle inflates
+    ~30 %), so a single results file carrying both is an integrity fault
+    (``mixed``) and pre-L6.2 artefacts without the stamp are ``unknown``.
     """
-    grouped: dict[str, list[JsonObject]] = {}
+    settings = cast(list[str], entry["settings"])
+    if len(settings) == 1:
+        return settings[0]
+    return "mixed" if settings else "unknown"
+
+
+def _headline_entries(reports: list[JsonObject]) -> list[JsonObject]:
+    """Aggregate per-(benchmark, setting) headline eligibility and variance.
+
+    Groups the manifest's report entries by benchmark name AND setting label —
+    oracle and full-S runs of the same benchmark never pool into one band. A
+    group is headline-eligible only when its runs carry at least two distinct
+    RNG seeds; a single run, runs without seed metadata (every pre-L6.5
+    artefact), or a mixed-setting results file are honestly marked ineligible
+    instead of being presented as a settled number. Accuracy is reported as a
+    variance band across runs, not a point estimate.
+    """
+    grouped: dict[tuple[str, str], list[JsonObject]] = {}
     for report in reports:
-        grouped.setdefault(cast(str, report["benchmark"]), []).append(report)
+        key = (cast(str, report["benchmark"]), _setting_label(report))
+        grouped.setdefault(key, []).append(report)
 
     headlines: list[JsonObject] = []
-    for benchmark in sorted(grouped):
-        entries = grouped[benchmark]
+    for benchmark, setting in sorted(grouped):
+        entries = grouped[(benchmark, setting)]
         seeds = sorted({seed for entry in entries for seed in cast(list[int], entry["seeds"])})
         accuracies = [
             accuracy
@@ -177,16 +200,22 @@ def _headline_entries(reports: list[JsonObject]) -> list[JsonObject]:
             if (accuracy := cast(JsonObject, entry["score"]).get("accuracy")) is not None
             and isinstance(accuracy, float)
         ]
-        eligible = len(seeds) >= 2
-        if eligible:
+        if setting == "mixed":
+            eligible = False
+            reason = "mixed_settings"
+        elif len(seeds) >= 2:
+            eligible = True
             reason = "ok"
         elif not seeds:
+            eligible = False
             reason = "no_seed_metadata"
         else:
+            eligible = False
             reason = "single_seed"
         headlines.append(
             {
                 "benchmark": benchmark,
+                "setting": setting,
                 "runs": len(entries),
                 "seeds": seeds,
                 "accuracy": {
@@ -382,9 +411,9 @@ def main(argv: list[str] | None = None) -> int:
         if ineligible:
             for headline in ineligible:
                 print(
-                    f"single-seed headline gate: {headline['benchmark']} "
-                    f"({headline['reason']}, runs={headline['runs']}, "
-                    f"seeds={headline['seeds']})"
+                    f"single-seed headline gate: {headline['benchmark']}"
+                    f"/{headline['setting']} ({headline['reason']}, "
+                    f"runs={headline['runs']}, seeds={headline['seeds']})"
                 )
             return 1
     return 0

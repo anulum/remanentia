@@ -432,3 +432,40 @@ def test_json_summary_without_seed_reports_empty_list(tmp_path: Path) -> None:
     report = report_from_path(path, benchmark="locomo", generated_at="t")
 
     assert report["seeds"] == []
+
+
+def test_jsonl_rows_aggregate_settings(tmp_path: Path) -> None:
+    """Row setting stamps land in the report as a distinct sorted list."""
+    path = tmp_path / "results.jsonl"
+    _write_jsonl(
+        path,
+        [
+            {"question_id": "q1", "judge_label": True, "judge_model": "j", "setting": "full_s"},
+            {"question_id": "q2", "setting": "full_s"},
+            {"question_id": "q3", "judge_label": False, "judge_model": "j"},
+        ],
+    )
+
+    report = report_from_path(path, benchmark="longmemeval", generated_at="t")
+
+    assert report["settings"] == ["full_s"]
+
+
+def test_json_summary_setting_field(tmp_path: Path) -> None:
+    """A JSON summary's single setting string surfaces; absence yields empty."""
+    path = tmp_path / "summary.json"
+    path.write_text(
+        json.dumps(
+            {
+                "total_correct": 1,
+                "total_tested": 2,
+                "by_category": {"c": {"correct": 1, "total": 2}},
+                "setting": "oracle",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = report_from_path(path, benchmark="locomo", generated_at="t")
+
+    assert report["settings"] == ["oracle"]

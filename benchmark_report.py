@@ -165,16 +165,20 @@ def _summarise_rows(
     prompt_hashes: set[str] = set()
     models: set[str] = set()
     seeds: set[int] = set()
+    settings: set[str] = set()
     prompt_token_estimate = 0
     completion_tokens = 0
     unjudged = 0
 
     for row in rows:
-        # Seed provenance is run metadata, not correctness evidence, so it is
-        # collected from every row — judged or not.
+        # Seed and setting provenance are run metadata, not correctness
+        # evidence, so they are collected from every row — judged or not.
         seed = _int_from_value(row.get("seed"))
         if seed is not None:
             seeds.add(seed)
+        setting = row.get("setting")
+        if isinstance(setting, str) and setting:
+            settings.add(setting)
         if "judge_label" not in row:
             unjudged += 1
             continue
@@ -243,6 +247,7 @@ def _summarise_rows(
             "prompt_sha256": sorted(prompt_hashes),
         },
         "seeds": sorted(seeds),
+        "settings": sorted(settings),
     }
 
 
@@ -313,6 +318,9 @@ def _summarise_json_summary(
         "tokens": {"judge_prompt_estimate": 0, "judge_completion": 0},
         "judge": {"models": [], "prompt_sha256": []},
         "seeds": _seeds_from_payload(payload),
+        "settings": [payload["setting"]]
+        if isinstance(payload.get("setting"), str) and payload["setting"]
+        else [],
     }
     method = payload.get("method")
     if isinstance(method, str):
