@@ -19,7 +19,6 @@ Usage::
 
 from __future__ import annotations
 
-import ast
 import gzip
 import json
 import math
@@ -38,6 +37,16 @@ import numpy as np
 import hashlib as _hashlib
 
 from memory_sources import DEFAULT_TEXT_EXTENSIONS, load_source_config
+import text_chunking as _text_chunking
+
+MAX_CODE_CHUNK_CHARS = _text_chunking.MAX_CODE_CHUNK_CHARS
+MAX_CODE_CHUNKS = _text_chunking.MAX_CODE_CHUNKS
+MAX_FALLBACK_TEXT_CHARS = _text_chunking.MAX_FALLBACK_TEXT_CHARS
+MAX_TEXT_PARAGRAPH_CHARS = _text_chunking.MAX_TEXT_PARAGRAPH_CHARS
+_split_code = _text_chunking.split_code
+_split_paragraphs = _text_chunking.split_paragraphs
+_split_python_code = _text_chunking.split_python_code
+_split_sentences = _text_chunking.split_sentences
 
 BASE = Path(__file__).parent
 INDEX_PATH = BASE / "snn_state" / "memory_index.json.gz"
@@ -72,10 +81,6 @@ MANUSCRIPT_SKIP_PATH_PARTS = (
 )
 MIN_FILE_CHARS = 50
 MAX_FILE_CHARS = 1_000_000
-MAX_TEXT_PARAGRAPH_CHARS = 10_000
-MAX_FALLBACK_TEXT_CHARS = 2_000
-MAX_CODE_CHUNK_CHARS = 1000
-MAX_CODE_CHUNKS = 200
 GRAPH_BOOST_QUERY_TYPES = {"general", "decision", "debugging", "explanation"}
 RUST_BM25_MIN_PARAGRAPHS = 50_000
 TEMPORAL_GRAPH_MAX_DOCUMENTS = 20_000
@@ -1324,7 +1329,7 @@ class MemoryIndex:
         if emb_data is None:
             return None
         try:
-            embeddings = cast(np.ndarray, np.asarray(emb_data))
+            embeddings: np.ndarray = np.asarray(emb_data)
             if quantized:
                 if emb_scale is None:
                     return None
@@ -1801,133 +1806,6 @@ def _parse_date(text: str, filename: str) -> str:
     if m:
         return m.group(1)
     return ""
-
-
-def _split_paragraphs(text: str, is_code: bool = False) -> list[str]:
-    """Split text into searchable units.
-
-    For markdown: sentences with context windows (finer granularity than
-    paragraphs for better retrieval precision). Short paragraphs (<200 chars)
-    are kept whole. Longer ones are split into sentences with 1-sentence
-    overlap for context continuity.
-    For code: functions/classes (def/fn/class blocks) + module docstring.
-    """
-    if is_code:
-        return _split_code(text)
-
-    paragraphs = []
-    for block in text.split("\n\n"):
-        stripped = block.strip()
-        if len(stripped) < 30:
-            continue
-        if len(stripped) <= 200:
-            paragraphs.append(stripped[:MAX_TEXT_PARAGRAPH_CHARS])
-        else:
-            # Sentence-level splitting with context windows
-            sents = _split_sentences(stripped)
-            if len(sents) <= 2:
-                paragraphs.append(stripped[:MAX_TEXT_PARAGRAPH_CHARS])
-            else:
-                for i in range(len(sents)):
-                    # Context window: current sentence + 1 before + 1 after
-                    start = max(0, i - 1)
-                    end = min(len(sents), i + 2)
-                    window = " ".join(sents[start:end])
-                    if len(window) > 30:
-                        paragraphs.append(window[:MAX_TEXT_PARAGRAPH_CHARS])
-    if not paragraphs and len(text.strip()) > 30:
-        paragraphs.append(text.strip()[:MAX_FALLBACK_TEXT_CHARS])
-    return paragraphs
-
-
-def _split_sentences(text: str) -> list[str]:
-    """Split text into sentences. Handles common abbreviations."""
-    # Split on sentence boundaries but not on common abbreviations
-    parts = re.split(r"(?<=[.!?])\s+(?=[A-Z])", text)
-    sents = []
-    for p in parts:
-        p = p.strip()
-        if len(p) > 10:
-            sents.append(p)
-    return sents
-
-
-def _split_code(text: str) -> list[str]:
-    """Split code into function/class blocks for indexing."""
-    py_chunks = _split_python_code(text)
-    if py_chunks:
-        return py_chunks[:MAX_CODE_CHUNKS]
-
-    chunks = []
-
-    # Module docstring (first triple-quoted block)
-    doc_match = re.search(r'"""(.*?)"""', text, re.DOTALL)
-    if doc_match and doc_match.start() < 500:
-        chunks.append(doc_match.group(1).strip()[:MAX_CODE_CHUNK_CHARS])
-
-    # Python: def and class blocks
-    for match in re.finditer(
-        r"^((?:def|class|fn|pub fn|impl)\s+\w+.*?)(?=\n(?:def |class |fn |pub fn |impl |\Z))",
-        text,
-        re.MULTILINE | re.DOTALL,
-    ):
-        block = match.group(1).strip()
-        if len(block) > 30:
-            # Keep first 500 chars (signature + docstring + start of body)
-            chunks.append(block[:MAX_CODE_CHUNK_CHARS])
-
-    # If no functions found, treat as plain text
-    if not chunks:
-        for block in text.split("\n\n"):
-            stripped = block.strip()
-            if len(stripped) > 30:
-                chunks.append(stripped[:MAX_CODE_CHUNK_CHARS])
-
-    return chunks[:MAX_CODE_CHUNKS]  # cap at 50 chunks per file
-
-
-def _split_python_code(text: str) -> list[str]:
-    """Split Python into module docstring, classes, functions, and class methods."""
-    try:
-        tree = ast.parse(text)
-    except SyntaxError:
-        return []
-
-    lines = text.splitlines()
-    chunks = []
-
-    module_doc = ast.get_docstring(tree)
-    if module_doc:
-        chunks.append(module_doc.strip()[:MAX_CODE_CHUNK_CHARS])
-
-    for node in tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            block = _extract_python_block(lines, node)
-            if len(block) > 30:
-                chunks.append(block[:MAX_CODE_CHUNK_CHARS])
-        elif isinstance(node, ast.ClassDef):
-            class_header = f"class {node.name}:"
-            class_doc = ast.get_docstring(node)
-            if class_doc:
-                chunks.append(f'{class_header}\n"""{class_doc.strip()}"""'[:MAX_CODE_CHUNK_CHARS])
-            else:
-                class_block = _extract_python_block(lines, node)
-                if len(class_block) > 30:
-                    chunks.append(class_block[:MAX_CODE_CHUNK_CHARS])
-
-            for child in node.body:
-                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    method_block = _extract_python_block(lines, child)
-                    if len(method_block) > 30:
-                        chunks.append(f"{class_header}\n{method_block}"[:MAX_CODE_CHUNK_CHARS])
-
-    return chunks[:MAX_CODE_CHUNKS]
-
-
-def _extract_python_block(lines: list[str], node: ast.AST) -> str:
-    start = max(getattr(node, "lineno", 1) - 1, 0)
-    end = max(getattr(node, "end_lineno", start + 1), start + 1)
-    return "\n".join(lines[start:end]).strip()
 
 
 def _tokenize(text: str) -> list[str]:

@@ -471,6 +471,37 @@ class TestMemoryIndex:
         names = [r.name for r in results]
         assert "code.py" in names
 
+    def test_build_handles_short_sentence_windows_and_short_python_nodes(self, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "short_sentences.md").write_text(
+            " ".join(["Alpha beta.", "Gamma beta."] * 12),
+            encoding="utf-8",
+        )
+        (docs_dir / "short_nodes.py").write_text(
+            "class A:\n"
+            "    pass\n\n"
+            "class Worker:\n"
+            "    def x(self):\n"
+            "        pass\n\n"
+            "# Production indexing fixture with enough source text to enter the pipeline.\n",
+            encoding="utf-8",
+        )
+
+        idx = MemoryIndex()
+        with (
+            patch("memory_index.SOURCES", {"test": docs_dir}),
+            patch("memory_index.SOURCE_EXTENSIONS", {"test": {".md", ".py"}}),
+        ):
+            stats = idx.build(use_gpu_embeddings=False, use_gliner=False)
+
+        assert stats["documents"] == 2
+        assert {document.name for document in idx.documents} == {
+            "short_nodes.py",
+            "short_sentences.md",
+        }
+        assert idx.paragraph_index
+
     def test_location_query_prefers_code_over_notes(self):
         docs_dir = _scratch_case_dir("location_query_prefers_code") / "docs"
         docs_dir.mkdir()
