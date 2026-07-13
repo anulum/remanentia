@@ -1871,8 +1871,18 @@ class TestMultiHopSearch:
         finally:
             memory_index.SOURCES = original_sources
 
-    def test_multihop_subqueries_use_full_search_stack(self):
-        idx = MemoryIndex()
+    def test_multihop_subqueries_use_full_search_stack(self, tmp_path):
+        fact = CompiledFact(
+            fact_id="person.melanie_hobbies",
+            fact_type="continuity",
+            subject="software engineer hobbies",
+            fact="Melanie works as a software engineer and likes chess.",
+            source="conversation.md",
+            aliases=["software engineer"],
+        )
+        compiled_dir = tmp_path / "compiled"
+        write_compiled_facts([fact], compiled_dir)
+        idx = MemoryIndex(compiled_facts_path=compiled_dir / "facts.jsonl")
         idx._built = True
         idx.documents = [
             Document(
@@ -1892,23 +1902,14 @@ class TestMultiHopSearch:
         idx._para_lengths = np.array([3], dtype=np.float32)
         idx._avg_dl = 3.0
 
-        compiled_hit = SearchResult(
-            name="compiled.fact",
-            source="compiled",
-            score=1009.0,
-            snippet="Melanie works as a software engineer and likes chess.",
-            answer="Melanie likes chess.",
-            confidence=1.0,
+        results = idx.search(
+            "What hobbies does the person who works as a software engineer have?",
+            top_k=3,
         )
 
-        with patch("memory_index._compiled_fact_results", return_value=[compiled_hit]):
-            results = idx.search(
-                "What hobbies does the person who works as a software engineer have?",
-                top_k=3,
-            )
-
         assert results
-        assert results[0].name == "compiled.fact"
+        assert results[0].name == "person.melanie_hobbies.fact"
+        assert results[0].answer == fact.fact
 
 
 # ── Rust BM25 paths ──────────────────────────────────────────────

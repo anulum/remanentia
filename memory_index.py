@@ -139,7 +139,7 @@ _RUST_BM25_IMPORT_ATTEMPTED = False
 
 
 class MemoryIndex:
-    def __init__(self) -> None:
+    def __init__(self, *, compiled_facts_path: Path | None = None) -> None:
         self.documents: list[Document] = []
         self.paragraph_index: list[tuple[int, int]] = []  # (doc_idx, para_idx)
         self.paragraph_tokens: list[set[str]] = []
@@ -166,6 +166,7 @@ class MemoryIndex:
         self._content_hashes: dict[str, str] = {}  # file path → SHA-256 of content
         self._hash_hits = 0  # files skipped because hash unchanged
         self._hash_misses = 0  # files (re-)indexed because new or changed
+        self.compiled_facts_path = compiled_facts_path
 
     def build(
         self,
@@ -639,7 +640,7 @@ class MemoryIndex:
         if not q_tokens:
             return []
         compiled_results = (
-            _compiled_fact_results(query, top_k)
+            _compiled_fact_results(query, top_k, self.compiled_facts_path)
             if _has_operational_compiled_memory(self)
             and not (project or after or before or doc_type)
             else []
