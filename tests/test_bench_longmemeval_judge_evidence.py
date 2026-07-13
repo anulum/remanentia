@@ -11,81 +11,15 @@
 from __future__ import annotations
 
 import json
-import sys
-from dataclasses import dataclass
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from types import ModuleType
 
 import pytest
 
 import bench_longmemeval as bench
 from benchmark_evidence import prompt_sha256
-
-
-@dataclass
-class _Usage:
-    """OpenAI-compatible usage object returned by the fake judge client."""
-
-    prompt_tokens: int = 9
-    completion_tokens: int = 1
-    total_tokens: int = 10
-
-
-@dataclass
-class _Message:
-    """OpenAI-compatible message object returned by the fake judge client."""
-
-    content: str = "yes"
-
-
-@dataclass
-class _Choice:
-    """OpenAI-compatible choice object returned by the fake judge client."""
-
-    message: _Message
-
-
-@dataclass
-class _Response:
-    """OpenAI-compatible response object returned by the fake judge client."""
-
-    choices: list[_Choice]
-    usage: _Usage
-
-
-class _Completions:
-    """Fake completions endpoint that verifies the production call shape."""
-
-    def create(
-        self,
-        *,
-        model: str,
-        max_tokens: int,
-        messages: list[dict[str, str]],
-    ) -> _Response:
-        """Return a deterministic affirmative judge response."""
-        assert model == "gpt-4o-mini"
-        assert max_tokens == 10
-        assert len(messages) == 1
-        assert messages[0]["role"] == "user"
-        assert "Is the model response correct?" in messages[0]["content"]
-        return _Response(choices=[_Choice(_Message())], usage=_Usage())
-
-
-@dataclass
-class _Chat:
-    """Fake chat namespace exposing completions."""
-
-    completions: _Completions
-
-
-class _OpenAI:
-    """Fake OpenAI client installed into ``sys.modules`` for run_evaluation."""
-
-    def __init__(self, *, api_key: str, timeout: float) -> None:
-        assert api_key == "test-key"
-        assert timeout == bench._OPENAI_TIMEOUT
-        self.chat = _Chat(_Completions())
 
 
 def test_run_evaluation_writes_judge_evidence_fields(
@@ -123,15 +57,62 @@ def test_run_evaluation_writes_judge_evidence_fields(
         encoding="utf-8",
     )
 
-    fake_openai = ModuleType("openai")
-    fake_openai.__dict__["OpenAI"] = _OpenAI
-    monkeypatch.setitem(sys.modules, "openai", fake_openai)
+    requests: list[dict[str, object]] = []
+    request_times: list[float] = []
+
+    class JudgeHandler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            assert self.path == "/v1/chat/completions"
+            assert self.headers["Authorization"] == "Bearer test-key"
+            length = int(self.headers["Content-Length"])
+            requests.append(json.loads(self.rfile.read(length)))
+            request_times.append(time.monotonic())
+            body = json.dumps(
+                {
+                    "id": "chatcmpl-local-judge",
+                    "object": "chat.completion",
+                    "created": 1,
+                    "model": "gpt-4o-mini",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {"role": "assistant", "content": "yes"},
+                            "finish_reason": "stop",
+                        }
+                    ],
+                    "usage": {
+                        "prompt_tokens": 9,
+                        "completion_tokens": 1,
+                        "total_tokens": 10,
+                    },
+                }
+            ).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, _format, *args):
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), JudgeHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv(
+        "OPENAI_BASE_URL",
+        f"http://127.0.0.1:{server.server_address[1]}/v1",
+    )
     monkeypatch.setattr(bench, "DATA_PATH", data_path)
     monkeypatch.setattr(bench, "OUTPUT_PATH", output_path)
     monkeypatch.setattr(bench, "_PROGRESS_EVERY", 1)
-
-    bench.run_evaluation()
+    try:
+        bench.run_evaluation()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
     capsys.readouterr()
     result_path = output_path.with_suffix(".results.jsonl")
@@ -155,3 +136,11 @@ def test_run_evaluation_writes_judge_evidence_fields(
     assert row["judge_total_tokens"] == 10
     assert isinstance(row["judge_latency_ms"], float)
     assert row["judge_latency_ms"] >= 0.0
+    assert len(request_times) == 1
+    assert requests == [
+        {
+            "messages": [{"role": "user", "content": prompt}],
+            "model": "gpt-4o-mini",
+            "max_tokens": 10,
+        }
+    ]
