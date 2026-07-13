@@ -18,7 +18,7 @@ import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 log = logging.getLogger(__name__)
 
@@ -49,6 +49,42 @@ class FactClassification:
     confidence: float
 
 
+def _build_model(model_name: str, num_types: int = 4) -> Any:
+    """Build the production backbone and three fact-validity heads."""
+    import torch.nn as nn
+    from transformers import AutoModel
+
+    class _FactModel(nn.Module):
+        """BERT backbone with type + supersedes + boundary heads."""
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.backbone = AutoModel.from_pretrained(model_name)
+            hidden = self.backbone.config.hidden_size
+            self.type_head = nn.Linear(hidden, num_types)
+            self.supersedes_head = nn.Sequential(
+                nn.Linear(hidden, 64),
+                nn.ReLU(),
+                nn.Linear(64, 1),
+            )
+            self.boundary_head = nn.Sequential(
+                nn.Linear(hidden, 64),
+                nn.ReLU(),
+                nn.Linear(64, 1),
+            )
+
+        def forward(self, input_ids: Any, attention_mask: Any) -> tuple[Any, Any, Any]:
+            out = self.backbone(input_ids=input_ids, attention_mask=attention_mask)
+            cls_emb = out.last_hidden_state[:, 0]
+            return (
+                self.type_head(cls_emb),
+                self.supersedes_head(cls_emb).squeeze(-1),
+                self.boundary_head(cls_emb).squeeze(-1),
+            )
+
+    return _FactModel()
+
+
 def _load_model() -> bool:
     """Lazy-load the trained bert-mini fact validity model.
 
@@ -66,46 +102,18 @@ def _load_model() -> bool:
 
     try:
         import torch
-        import torch.nn as nn
-        from transformers import AutoModel, AutoTokenizer
+        from transformers import AutoTokenizer
 
         with open(_MODEL_DIR / "config.json") as f:
             _config = json.load(f)
 
         _tokenizer = AutoTokenizer.from_pretrained(str(_MODEL_DIR))
 
-        class _FactModel(nn.Module):
-            """BERT backbone with type + supersedes + boundary heads."""
-
-            def __init__(self, model_name, num_types=4):
-                """Build backbone and three classification/regression heads."""
-                super().__init__()
-                self.backbone = AutoModel.from_pretrained(model_name)
-                hidden = self.backbone.config.hidden_size
-                self.type_head = nn.Linear(hidden, num_types)
-                self.supersedes_head = nn.Sequential(
-                    nn.Linear(hidden, 64),
-                    nn.ReLU(),
-                    nn.Linear(64, 1),
-                )
-                self.boundary_head = nn.Sequential(
-                    nn.Linear(hidden, 64),
-                    nn.ReLU(),
-                    nn.Linear(64, 1),
-                )
-
-            def forward(self, input_ids, attention_mask):
-                """Return (type_logits, supersedes_logit, boundary_logit)."""
-                out = self.backbone(input_ids=input_ids, attention_mask=attention_mask)
-                cls_emb = out.last_hidden_state[:, 0]
-                return (
-                    self.type_head(cls_emb),
-                    self.supersedes_head(cls_emb).squeeze(-1),
-                    self.boundary_head(cls_emb).squeeze(-1),
-                )
-
         device = "cpu"
-        model = _FactModel(_config["model_name"], len(_config.get("fact_types", FACT_TYPES)))
+        model = _build_model(
+            _config["model_name"],
+            len(_config.get("fact_types", FACT_TYPES)),
+        )
         state = torch.load(_MODEL_DIR / "model.pt", map_location=device, weights_only=True)
         model.load_state_dict(state)
         model.eval()

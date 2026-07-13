@@ -6,230 +6,164 @@
 # Contact: www.anulum.li | protoscience@anulum.li
 # Remanentia — Tests for fact validity model
 
-"""Tests for fact_validity_model.py (C5 runtime wrapper).
-
-Covers model loading, fact classification, confidence thresholds,
-supersession detection, and graceful degradation.
-"""
+"""Real-checkpoint tests for the C5 fact-validity runtime wrapper."""
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+import json
+from collections.abc import Iterator
+from contextlib import contextmanager
+from pathlib import Path
 
-import pytest
 import torch
+from transformers import BertConfig, BertModel, BertTokenizer
 
-from fact_validity_model import (
-    FACT_TYPES,
-    FactClassification,
-    classify_fact,
-)
+import fact_validity_model
+from fact_validity_model import FACT_TYPES, FactClassification, classify_fact
 
 
-# ── Constants ──────────────────────────────────────────────────
+def _reset_model() -> None:
+    fact_validity_model._model = None
+    fact_validity_model._tokenizer = None
+    fact_validity_model._config = None
+
+
+@contextmanager
+def _model_at(model_dir: Path) -> Iterator[None]:
+    _reset_model()
+    original = fact_validity_model._MODEL_DIR
+    fact_validity_model._MODEL_DIR = model_dir
+    try:
+        yield
+    finally:
+        fact_validity_model._MODEL_DIR = original
+        _reset_model()
+
+
+def _write_checkpoint(
+    root: Path,
+    *,
+    type_idx: int = 0,
+    supersedes_logit: float = -2.0,
+    boundary_logit: float = -2.0,
+) -> Path:
+    """Write a tiny real BERT tokenizer, backbone and production head state."""
+    model_dir = root / "fact-validity-v1"
+    backbone_dir = root / "backbone"
+    model_dir.mkdir(parents=True)
+    backbone_dir.mkdir(parents=True)
+
+    vocabulary = [
+        "[PAD]",
+        "[UNK]",
+        "[CLS]",
+        "[SEP]",
+        "[MASK]",
+        "i",
+        "live",
+        "berlin",
+        "visited",
+        "plan",
+        "hiking",
+    ]
+    vocab_path = model_dir / "vocab.txt"
+    vocab_path.write_text("\n".join(vocabulary) + "\n", encoding="utf-8")
+    BertTokenizer(vocab_file=str(vocab_path), do_lower_case=True).save_pretrained(model_dir)
+
+    backbone_config = BertConfig(
+        vocab_size=len(vocabulary),
+        hidden_size=8,
+        num_hidden_layers=1,
+        num_attention_heads=2,
+        intermediate_size=16,
+        max_position_embeddings=32,
+    )
+    BertModel(backbone_config).save_pretrained(backbone_dir)
+
+    config = {
+        "model_type": "bert",
+        "model_name": str(backbone_dir),
+        "fact_types": FACT_TYPES,
+        "max_seq_len": 16,
+    }
+    (model_dir / "config.json").write_text(json.dumps(config), encoding="utf-8")
+
+    model = fact_validity_model._build_model(str(backbone_dir), len(FACT_TYPES))
+    with torch.no_grad():
+        for parameter in model.parameters():
+            parameter.zero_()
+        model.type_head.bias[type_idx] = 5.0
+        model.supersedes_head[-1].bias.fill_(supersedes_logit)
+        model.boundary_head[-1].bias.fill_(boundary_logit)
+    torch.save(model.state_dict(), model_dir / "model.pt")
+    return model_dir
 
 
 class TestConstants:
-    def test_fact_type_count(self):
-        assert len(FACT_TYPES) == 4
-
-    def test_expected_types(self):
-        assert "state" in FACT_TYPES
-        assert "event" in FACT_TYPES
-        assert "preference" in FACT_TYPES
-        assert "plan" in FACT_TYPES
-
-
-# ── FactClassification dataclass ───────────────────────────────
+    def test_expected_types(self) -> None:
+        assert FACT_TYPES == ["state", "event", "preference", "plan"]
 
 
 class TestFactClassification:
-    def test_fields(self):
-        fc = FactClassification(
+    def test_fields_and_equality(self) -> None:
+        classification = FactClassification(
             fact_type="state",
             supersedes_prob=0.8,
             has_boundary_prob=0.3,
             confidence=0.95,
         )
-        assert fc.fact_type == "state"
-        assert fc.supersedes_prob == 0.8
-        assert fc.has_boundary_prob == 0.3
-        assert fc.confidence == 0.95
 
-    def test_equality(self):
-        a = FactClassification("state", 0.8, 0.3, 0.95)
-        b = FactClassification("state", 0.8, 0.3, 0.95)
-        assert a == b
-
-
-# ── Model loading ──────────────────────────────────────────────
+        assert classification == FactClassification("state", 0.8, 0.3, 0.95)
 
 
 class TestModelLoading:
-    def test_model_missing_returns_none(self):
-        import fact_validity_model
+    def test_missing_checkpoint_returns_none(self, tmp_path: Path) -> None:
+        with _model_at(tmp_path / "missing"):
+            assert classify_fact("I live in Berlin") is None
 
-        fact_validity_model._model = None
-        fact_validity_model._tokenizer = None
-        fact_validity_model._config = None
-        with patch.object(fact_validity_model, "_MODEL_DIR") as md:
-            md.__truediv__ = lambda s, x: MagicMock(exists=lambda: False)
-            r = classify_fact("I live in Berlin")
-            assert r is None
+    def test_corrupt_config_returns_false(self, tmp_path: Path) -> None:
+        model_dir = tmp_path / "corrupt"
+        model_dir.mkdir()
+        (model_dir / "model.pt").write_bytes(b"not a checkpoint")
+        (model_dir / "config.json").write_text("{", encoding="utf-8")
 
-    def test_already_loaded(self):
-        import fact_validity_model
+        with _model_at(model_dir):
+            assert fact_validity_model._load_model() is False
 
-        fact_validity_model._model = MagicMock()
-        assert fact_validity_model._load_model() is True
-        fact_validity_model._model = None
+    def test_loaded_checkpoint_is_reused(self, tmp_path: Path) -> None:
+        model_dir = _write_checkpoint(tmp_path / "loaded")
 
-    def test_load_model_exception_returns_false(self):
-        import fact_validity_model
-
-        fact_validity_model._model = None
-        fact_validity_model._tokenizer = None
-        fact_validity_model._config = None
-        model_pt = MagicMock(exists=lambda: True)
-        mock_dir = MagicMock()
-        mock_dir.__truediv__ = lambda self, x: model_pt
-        with patch.object(fact_validity_model, "_MODEL_DIR", mock_dir):
-            with patch("fact_validity_model.json.load", side_effect=OSError("corrupt")):
-                result = fact_validity_model._load_model()
-                assert result is False
+        with _model_at(model_dir):
+            assert fact_validity_model._load_model() is True
+            loaded = fact_validity_model._model
+            assert fact_validity_model._load_model() is True
+            assert fact_validity_model._model is loaded
 
 
-# ── Classification with mocked model ──────────────────────────
+class TestRealCheckpointClassification:
+    def test_all_fact_type_heads_map_through_real_inference(self, tmp_path: Path) -> None:
+        for type_idx, expected in enumerate(FACT_TYPES):
+            model_dir = _write_checkpoint(tmp_path / expected, type_idx=type_idx)
+            with _model_at(model_dir):
+                result = classify_fact("I live in Berlin")
 
+            assert result is not None
+            assert result.fact_type == expected
+            assert result.confidence > 0.9
 
-class TestClassifyFactMocked:
-    def _setup_mock(self, type_idx: int = 0, sup_logit: float = -2.0, bnd_logit: float = -2.0):
-        import fact_validity_model
+    def test_probability_heads_use_real_sigmoid_outputs(self, tmp_path: Path) -> None:
+        model_dir = _write_checkpoint(
+            tmp_path / "probabilities",
+            supersedes_logit=3.0,
+            boundary_logit=-3.0,
+        )
 
-        mock_model = MagicMock()
-        type_logits = torch.zeros(1, 4)
-        type_logits[0, type_idx] = 5.0  # highest at given index
-        sup_tensor = torch.tensor([sup_logit])
-        bnd_tensor = torch.tensor([bnd_logit])
-        mock_model.return_value = (type_logits, sup_tensor, bnd_tensor)
+        with _model_at(model_dir):
+            result = classify_fact("I visited Berlin")
+            empty_result = classify_fact("")
 
-        mock_tok = MagicMock()
-        mock_tok.return_value = {
-            "input_ids": torch.zeros(1, 128, dtype=torch.long),
-            "attention_mask": torch.ones(1, 128, dtype=torch.long),
-        }
-
-        fact_validity_model._model = mock_model
-        fact_validity_model._tokenizer = mock_tok
-        fact_validity_model._config = {
-            "fact_types": FACT_TYPES,
-            "max_seq_len": 128,
-            "model_name": "test",
-        }
-
-    def _cleanup(self):
-        import fact_validity_model
-
-        fact_validity_model._model = None
-        fact_validity_model._tokenizer = None
-        fact_validity_model._config = None
-
-    def test_state_classification(self):
-        self._setup_mock(type_idx=0)  # state
-        r = classify_fact("I live in Berlin")
-        assert r is not None
-        assert r.fact_type == "state"
-        assert r.confidence > 0.5
-        self._cleanup()
-
-    def test_event_classification(self):
-        self._setup_mock(type_idx=1)  # event
-        r = classify_fact("I went to the gym")
-        assert r is not None
-        assert r.fact_type == "event"
-        self._cleanup()
-
-    def test_preference_classification(self):
-        self._setup_mock(type_idx=2)  # preference
-        r = classify_fact("I love hiking")
-        assert r is not None
-        assert r.fact_type == "preference"
-        self._cleanup()
-
-    def test_plan_classification(self):
-        self._setup_mock(type_idx=3)  # plan
-        r = classify_fact("I plan to visit Tokyo")
-        assert r is not None
-        assert r.fact_type == "plan"
-        self._cleanup()
-
-    def test_high_supersedes_prob(self):
-        self._setup_mock(type_idx=0, sup_logit=3.0)  # sigmoid(3.0) ≈ 0.95
-        r = classify_fact("I started a new job")
-        assert r is not None
-        assert r.supersedes_prob > 0.5
-        self._cleanup()
-
-    def test_low_supersedes_prob(self):
-        self._setup_mock(type_idx=0, sup_logit=-3.0)  # sigmoid(-3.0) ≈ 0.05
-        r = classify_fact("I live in Berlin")
-        assert r is not None
-        assert r.supersedes_prob < 0.5
-        self._cleanup()
-
-    def test_high_boundary_prob(self):
-        self._setup_mock(type_idx=1, bnd_logit=3.0)
-        r = classify_fact("I visited the doctor on March 15")
-        assert r is not None
-        assert r.has_boundary_prob > 0.5
-        self._cleanup()
-
-    def test_empty_text(self):
-        self._setup_mock()
-        r = classify_fact("")
-        assert r is not None  # model handles via tokenizer padding
-        self._cleanup()
-
-
-# ── With real model (if available) ─────────────────────────────
-
-
-class TestWithRealModel:
-    """Tests that run with the real trained model if available.
-
-    These are skipped if the model checkpoint is not found.
-    """
-
-    @pytest.fixture(autouse=True)
-    def _reset_model(self):
-        import fact_validity_model
-
-        fact_validity_model._model = None
-        fact_validity_model._tokenizer = None
-        fact_validity_model._config = None
-        yield
-        fact_validity_model._model = None
-        fact_validity_model._tokenizer = None
-        fact_validity_model._config = None
-
-    def test_preference_detection(self):
-        r = classify_fact("I love hiking in the mountains")
-        if r is None:
-            pytest.skip("Model not available")
-        assert r.fact_type == "preference"
-        assert r.confidence > 0.5
-
-    def test_plan_detection(self):
-        r = classify_fact("I plan to visit Tokyo next year")
-        if r is None:
-            pytest.skip("Model not available")
-        assert r.fact_type == "plan"
-        assert r.confidence > 0.5
-
-    def test_supersedes_on_change_verb(self):
-        r = classify_fact("I started working at Google")
-        if r is None:
-            pytest.skip("Model not available")
-        # The model may or may not detect supersession here;
-        # we just verify it returns a valid result
-        assert r.fact_type in FACT_TYPES
+        assert result is not None
+        assert result.supersedes_prob > 0.9
+        assert result.has_boundary_prob < 0.1
+        assert empty_result is not None
+        assert empty_result.fact_type == "state"
