@@ -257,61 +257,40 @@ def test_pytest_performance_benchmark_captures_exit_and_tails(monkeypatch):
     assert "err5" in result["stderr_tail"]
 
 
-def test_hardware_snapshot_reads_host_context_and_gpu(monkeypatch):
+def test_hardware_snapshot_reads_host_context_and_gpu(tmp_path: Path):
     benchmark = _load_benchmark_module()
-    real_path = benchmark.Path
+    cpuinfo = tmp_path / "cpuinfo"
+    meminfo = tmp_path / "meminfo"
+    gpu_probe = tmp_path / "gpu-probe"
+    cpuinfo.write_text("model name\t: Test CPU\n", encoding="utf-8")
+    meminfo.write_text("MemTotal:       1048576 kB\n", encoding="utf-8")
+    gpu_probe.write_text("#!/bin/sh\necho 'GPU 0 10%'\n", encoding="utf-8")
+    gpu_probe.chmod(0o700)
 
-    class FakePath:
-        def __init__(self, value):
-            self.value = value
-
-        def read_text(self, encoding="utf-8"):
-            if self.value == "/proc/cpuinfo":
-                return "model name\t: Test CPU\n"
-            if self.value == "/proc/meminfo":
-                return "MemTotal:       1048576 kB\n"
-            return real_path(self.value).read_text(encoding=encoding)
-
-    monkeypatch.setattr(benchmark, "Path", FakePath)
-    monkeypatch.setattr(benchmark.os, "cpu_count", lambda: 16)
-    monkeypatch.setattr(
-        benchmark.subprocess,
-        "run",
-        lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="GPU 0 10%", stderr=""),
+    snapshot = benchmark.hardware_snapshot(
+        cpuinfo_path=cpuinfo,
+        meminfo_path=meminfo,
+        gpu_command=(str(gpu_probe),),
     )
-
-    snapshot = benchmark.hardware_snapshot()
 
     assert snapshot == {
         "cpu_model": "Test CPU",
-        "cpu_count": 16,
+        "cpu_count": benchmark.os.cpu_count(),
         "mem_total_gb": 1.0,
         "gpu_use": "GPU 0 10%",
     }
 
 
-def test_hardware_snapshot_handles_unavailable_files_and_gpu(monkeypatch):
+def test_hardware_snapshot_handles_unavailable_files_and_gpu(tmp_path: Path):
     benchmark = _load_benchmark_module()
-
-    class FailingPath:
-        def __init__(self, value):
-            self.value = value
-
-        def read_text(self, encoding="utf-8"):
-            raise OSError("missing")
-
-    monkeypatch.setattr(benchmark, "Path", FailingPath)
-    monkeypatch.setattr(benchmark.os, "cpu_count", lambda: 2)
-    monkeypatch.setattr(
-        benchmark.subprocess,
-        "run",
-        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("no rocm")),
+    snapshot = benchmark.hardware_snapshot(
+        cpuinfo_path=tmp_path / "missing-cpuinfo",
+        meminfo_path=tmp_path / "missing-meminfo",
+        gpu_command=(str(tmp_path / "missing-gpu-probe"),),
     )
 
-    snapshot = benchmark.hardware_snapshot()
-
     assert snapshot["cpu_model"] == ""
-    assert snapshot["cpu_count"] == 2
+    assert snapshot["cpu_count"] == benchmark.os.cpu_count()
     assert snapshot["mem_total_gb"] == 0
     assert snapshot["gpu_use"] == "unavailable"
 

@@ -237,20 +237,25 @@ def pytest_performance_benchmark() -> dict[str, Any]:
     }
 
 
-def hardware_snapshot() -> dict[str, Any]:
+def hardware_snapshot(
+    *,
+    cpuinfo_path: Path = Path("/proc/cpuinfo"),
+    meminfo_path: Path = Path("/proc/meminfo"),
+    gpu_command: tuple[str, ...] = ("rocm-smi", "--showuse"),
+) -> dict[str, Any]:
     """Capture enough host context to make benchmark numbers interpretable."""
     cpu_model = ""
     cpu_count = os.cpu_count()
     mem_total_kb = 0
     try:
-        for line in Path("/proc/cpuinfo").read_text(encoding="utf-8").splitlines():
+        for line in cpuinfo_path.read_text(encoding="utf-8").splitlines():
             if line.startswith("model name"):
                 cpu_model = line.split(":", 1)[1].strip()
                 break
     except OSError:
         pass
     try:
-        for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+        for line in meminfo_path.read_text(encoding="utf-8").splitlines():
             if line.startswith("MemTotal:"):
                 mem_total_kb = int(line.split()[1])
                 break
@@ -260,7 +265,7 @@ def hardware_snapshot() -> dict[str, Any]:
     gpu = ""
     try:
         result = subprocess.run(
-            ["rocm-smi", "--showuse"],
+            list(gpu_command),
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,
