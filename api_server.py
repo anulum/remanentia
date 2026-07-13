@@ -272,7 +272,7 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
             self._json_response(
                 {
                     "status": "ok",
-                    "new_memories": result.get("new_memories", 0)
+                    "new_memories": result.get("memories_written", result.get("new_memories", 0))
                     if isinstance(result, dict)
                     else 0,
                 }
@@ -297,7 +297,9 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
             from knowledge_store import KnowledgeStore
 
             ks = KnowledgeStore()
+            ks.load()
             ks.add_note(content=content, keywords=[trigger] if trigger else None)
+            ks.save()
             self._json_response({"status": "ok", "stored": content[:80]})
         except Exception as e:
             self._json_response({"error": str(e)}, 500)
@@ -361,7 +363,7 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
         """Suppress non-404 access logs from the stdlib request handler."""
 
         # Quiet logging — only errors
-        if args and "404" in str(args[0]):
+        if any("404" in str(arg) for arg in args):
             super().log_message(fmt, *args)
 
 
