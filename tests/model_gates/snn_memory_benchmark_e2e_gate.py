@@ -10,22 +10,18 @@
 
 from __future__ import annotations
 
-import json
 import hashlib
+import importlib
+import json
 import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-from jsonschema import Draft202012Validator
+from tests.model_gates.model_precondition import MODEL, ROOT, require_pinned_model
 
-ROOT = Path(__file__).resolve().parents[1]
-MODEL = ROOT / ".snn_models" / "all-MiniLM-L6-v2"
+PINNED_DIGEST = require_pinned_model()
 
 
-@pytest.mark.skipif(  # type: ignore[untyped-decorator] # Pytest decorator.
-    not MODEL.is_dir(), reason="pinned local encoder not provisioned"
-)
 def test_benchmark_runs_each_matched_control_in_fresh_process(tmp_path: Path) -> None:
     config = tmp_path / "config.json"
     config.write_text(
@@ -41,17 +37,23 @@ def test_benchmark_runs_each_matched_control_in_fresh_process(tmp_path: Path) ->
     corpus.write_text(
         json.dumps(
             {
+                "schema_version": 1,
                 "encoder_checkpoint": str(MODEL),
+                "encoder_digest": PINNED_DIGEST,
                 "entries": [
                     {
                         "label": "snn",
                         "path": str(ROOT / "docs/research/snn_consolidation.md"),
-                        "sha256": hashlib.sha256((ROOT / "docs/research/snn_consolidation.md").read_bytes()).hexdigest(),
+                        "sha256": hashlib.sha256(
+                            (ROOT / "docs/research/snn_consolidation.md").read_bytes()
+                        ).hexdigest(),
                     },
                     {
                         "label": "retrieval",
                         "path": str(ROOT / "docs/adr/0004-dual-retrieval-stacks.md"),
-                        "sha256": hashlib.sha256((ROOT / "docs/adr/0004-dual-retrieval-stacks.md").read_bytes()).hexdigest(),
+                        "sha256": hashlib.sha256(
+                            (ROOT / "docs/adr/0004-dual-retrieval-stacks.md").read_bytes()
+                        ).hexdigest(),
                     },
                 ],
             }
@@ -61,7 +63,16 @@ def test_benchmark_runs_each_matched_control_in_fresh_process(tmp_path: Path) ->
     report = tmp_path / "report.json"
     base = [sys.executable, "-m", "snn_memory.cli"]
     subprocess.run(
-        base + ["train", "--config", str(config), "--corpus-manifest", str(corpus), "--output", str(checkpoint)],
+        base
+        + [
+            "train",
+            "--config",
+            str(config),
+            "--corpus-manifest",
+            str(corpus),
+            "--output",
+            str(checkpoint),
+        ],
         cwd=ROOT,
         check=True,
     )
@@ -85,7 +96,7 @@ def test_benchmark_runs_each_matched_control_in_fresh_process(tmp_path: Path) ->
     )
     result = json.loads(report.read_text())
     schema = json.loads((ROOT / "docs/schema/snn_memory_result.schema.json").read_text())
-    Draft202012Validator(schema).validate(result)
+    importlib.import_module("jsonschema").Draft202012Validator(schema).validate(result)
     assert set(result["conditions"]) == {
         "trained",
         "shuffled",
@@ -95,3 +106,8 @@ def test_benchmark_runs_each_matched_control_in_fresh_process(tmp_path: Path) ->
     }
     assert result["seeds"] == [11, 29]
     assert result["gates"]["g2_pass"] is False
+    assert all(
+        row["prediction"] is None
+        for seed_details in result["conditions"]["zero"].values()
+        for row in seed_details
+    )

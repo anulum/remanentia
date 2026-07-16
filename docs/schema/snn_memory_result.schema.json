@@ -82,12 +82,13 @@
         },
         "gates": {
           "type": "object",
+          "description": "Schema v1 pins every reported G1/G2 gate (g1_pass, g2_effect_threshold_pass, g2_pass) to false: the current benchmark self-calibrates each stored signature from the cue it then scores, so no v1 producer may emit a passed gate. This object does not decide G0/G3/G4. A held-out harness able to legitimately pass a gate must publish under schema_version 2 with boolean gates.",
           "additionalProperties": false,
           "required": ["g1_pass", "g2_effect_threshold_pass", "g2_pass"],
           "properties": {
-            "g1_pass": {"type": "boolean"},
-            "g2_effect_threshold_pass": {"type": "boolean"},
-            "g2_pass": {"type": "boolean"}
+            "g1_pass": {"const": false},
+            "g2_effect_threshold_pass": {"const": false},
+            "g2_pass": {"const": false}
           }
         },
         "limits": {

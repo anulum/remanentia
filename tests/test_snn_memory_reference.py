@@ -72,6 +72,37 @@ def test_simultaneous_first_spikes_leave_weights_unchanged() -> None:
     np.testing.assert_array_equal(updated, weights)
 
 
+def test_recurrent_accumulation_is_canonical_ascending_presynaptic() -> None:
+    config = ModelConfig(
+        n_neurons=4,
+        excitatory_fraction=0.75,
+        dt_ms=1.0,
+        tau_m_ms=1.0,
+        v_rest_mv=0.0,
+        v_reset_mv=0.0,
+        v_threshold_mv=0.5,
+        weight_max=1.0e16,
+        connectivity=1.0,
+    )
+    weights = np.zeros((4, 4), dtype=np.float64)
+    topology = np.zeros((4, 4), dtype=np.bool_)
+    weights[0, 2] = 1.0e16
+    weights[1, 2] = 1.0
+    weights[3, 2] = -1.0e16
+    topology[[0, 1, 3], 2] = True
+    state = initialise_state(config)
+    state.spikes[[0, 1, 3]] = True
+    current = np.zeros(4, dtype=np.float64)
+    current[2] = np.nextafter(0.5, -np.inf)
+
+    next_state, _, recurrent = step_network(
+        state, weights, topology, current, config, plasticity_enabled=False
+    )
+
+    assert recurrent[2] == 0.0
+    assert not next_state.spikes[2]
+
+
 def test_refractory_state_blocks_immediate_respike() -> None:
     config, weights, topology = _pair_network()
     currents = np.full((3, 4), 100.0)
@@ -111,4 +142,17 @@ def test_run_episode_rejects_wrong_current_shape() -> None:
     with pytest.raises(ValueError, match="timesteps, n_neurons"):
         run_episode(
             initialise_state(config), weights, topology, np.zeros(4), config, plasticity_enabled=False
+        )
+
+
+def test_run_episode_rejects_zero_timesteps() -> None:
+    config, weights, topology = _pair_network()
+    with pytest.raises(ValueError, match="at least one timestep"):
+        run_episode(
+            initialise_state(config),
+            weights,
+            topology,
+            np.zeros((0, config.n_neurons)),
+            config,
+            plasticity_enabled=False,
         )

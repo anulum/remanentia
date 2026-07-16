@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "split": "locked-evaluation",
+  "locked": true,
+  "encoder_checkpoint": "../../.snn_models/all-MiniLM-L6-v2",
+  "encoder_digest": "f293e6b519396deb31d8704b779a7ca742fae3c58aaaa7a81809b0ae7067ebe8",
+  "entries": [
+    {"label": "memory-index", "path": "../../docs/api/memory_index.md", "sha256": "41e7189230ae113e52359efb31411aa8f3f71a7b43ffd1f2f78eb77234cf64bc"},
+    {"label": "arcane-retriever", "path": "../../docs/api/arcane_retriever.md", "sha256": "018a5dd1981dadb5a60e88cbb4944fe494d2df8ad6cd113be442ce39ceefb479"},
+    {"label": "temporal-graph", "path": "../../docs/api/temporal_graph.md", "sha256": "b8033fe5858b7ca5be6a713c67dca62488e26cdb4bc250170d7bff132adfedb1"},
+    {"label": "claim-schema", "path": "../../docs/api/claim_schema.md", "sha256": "73984c6e6e4d17d077558994ae356e8e134c19cd9675c07b49196c24ab8fef10"},
+    {"label": "memory-recall", "path": "../../docs/api/memory_recall.md", "sha256": "26454b115408873ccb59377adf687b8450c39de8777b4367ecf22b986e5ab434"},
+    {"label": "recall-gate", "path": "../../docs/api/recall_gate.md", "sha256": "32f1352ee529922f5759e9f1d48e26e82847daa32685dbc93a360dfc5174240a"},
+    {"label": "vector-pipeline", "path": "../../docs/api/vector_pipeline.md", "sha256": "da4f226255950a56564a78bdd7c8b97ac65e8d660ccbcf1a5c3c764eed11bee8"},
+    {"label": "knowledge-store", "path": "../../docs/api/knowledge_store.md", "sha256": "1df45fe3d960b46d058299f82d71e35a1b1fcfdd7c1372b5a9a2eeba60acc2ac"},
+    {"label": "context-builder", "path": "../../docs/api/context_builder.md", "sha256": "00cafccd848fe5382a290bfa0d7228fda0c4b990e4941d7988775c3a9cd16897"},
+    {"label": "finding-ingest", "path": "../../docs/api/finding_ingest.md", "sha256": "83a78757a8a510a9d11be96c6563c466404226c32759c04180e8397390ab45d4"},
+    {"label": "provenance-export", "path": "../../docs/api/provenance_export.md", "sha256": "a7e8eefaa5effc8e0d45aee36824f46cebba5f67f0ed93089b068b6535175eab"},
+    {"label": "index-freshness", "path": "../../docs/api/index_freshness.md", "sha256": "f7f2777237e859a2a15ffa0cb63267557121d683c43ba75d658b0d8127c06eb4"},
+    {"label": "embedding-model", "path": "../../docs/models/embedding.md", "sha256": "12018650bb8e06afbdbfa0613149de2080b74bc8fa23cac608fd7b8777f4fac3"},
+    {"label": "relation-model", "path": "../../docs/models/relation.md", "sha256": "1b1860bbab392eedbcbb869c3be1f5b9732f6695f250c6fc79aca84a0b7c87f5"},
+    {"label": "temporal-tutorial", "path": "../../docs/tutorials/temporal_tutorial.md", "sha256": "aad476c61d093fe01ca35d17ba27ad60d259652f2093ce8baf11ee1791c13ac4"},
+    {"label": "knowledge-store-tutorial", "path": "../../docs/tutorials/knowledge_store_tutorial.md", "sha256": "fb927f1d5c752adc5ea3491771772d976000cb6beca1f1e3101a5b1d287eea0e"}
+  ]
+}

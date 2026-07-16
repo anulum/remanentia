@@ -26,6 +26,9 @@ class EpisodeResult:
     spikes: npt.NDArray[np.bool_]
     voltages: npt.NDArray[np.float64]
     recurrent_current: npt.NDArray[np.float64]
+    refractory: npt.NDArray[np.int64]
+    pre_traces: npt.NDArray[np.float64]
+    post_traces: npt.NDArray[np.float64]
     final_state: NetworkState
     final_weights: FloatArray
 
@@ -45,7 +48,12 @@ def step_network(
     validate_weights(weights, topology, config)
     next_state = state.copy()
     next_weights = weights.copy()
-    recurrent_current = state.spikes.astype(np.float64) @ weights
+    recurrent_current = np.zeros(config.n_neurons, dtype=np.float64)
+    for pre in range(config.n_neurons):
+        if not state.spikes[pre]:
+            continue
+        for post in range(config.n_neurons):
+            recurrent_current[post] += weights[pre, post]
     active = state.refractory == 0
     dv = (
         -(state.voltage - config.v_rest_mv) / config.tau_m_ms
@@ -91,11 +99,16 @@ def run_episode(
     """Run a complete current sequence through the public reference engine."""
     if currents.ndim != 2 or currents.shape[1] != config.n_neurons:
         raise ValueError("currents must have shape (timesteps, n_neurons)")
+    if currents.shape[0] == 0:
+        raise ValueError("episode requires at least one timestep")
     episode_state = state.copy()
     episode_weights = weights.copy()
     spike_rows: list[BoolArray] = []
     voltage_rows: list[FloatArray] = []
     recurrent_rows: list[FloatArray] = []
+    refractory_rows: list[npt.NDArray[np.int64]] = []
+    pre_trace_rows: list[FloatArray] = []
+    post_trace_rows: list[FloatArray] = []
     for current in currents:
         episode_state, episode_weights, recurrent = step_network(
             episode_state,
@@ -108,10 +121,16 @@ def run_episode(
         spike_rows.append(episode_state.spikes.copy())
         voltage_rows.append(episode_state.voltage.copy())
         recurrent_rows.append(recurrent)
+        refractory_rows.append(episode_state.refractory.copy())
+        pre_trace_rows.append(episode_state.pre_trace.copy())
+        post_trace_rows.append(episode_state.post_trace.copy())
     return EpisodeResult(
         np.asarray(spike_rows, dtype=np.bool_),
         np.asarray(voltage_rows, dtype=np.float64),
         np.asarray(recurrent_rows, dtype=np.float64),
+        np.asarray(refractory_rows, dtype=np.int64),
+        np.asarray(pre_trace_rows, dtype=np.float64),
+        np.asarray(post_trace_rows, dtype=np.float64),
         episode_state,
         episode_weights,
     )

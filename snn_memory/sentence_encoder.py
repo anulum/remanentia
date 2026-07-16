@@ -21,10 +21,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-import numpy as np
-
 from snn_memory.contracts import EncoderConfig, ModelConfig
-from snn_memory.encoder import directory_digest, embeddings_to_currents, split_events
+from snn_memory.encoder import (
+    as_embedding_matrix,
+    directory_digest,
+    embeddings_to_currents,
+    require_sentences,
+    split_events,
+)
 from snn_memory.state import FloatArray
 
 
@@ -44,25 +48,19 @@ class LocalSentenceEncoder:
         path = Path(checkpoint)
         if not path.is_dir():
             raise FileNotFoundError(f"local encoder checkpoint not found: {path}")
-        try:
-            from sentence_transformers import SentenceTransformer
-        except ImportError as exc:  # pragma: no cover - exercised only without the optional dep
-            raise RuntimeError("sentence-transformers is required for temporal encoding") from exc
+        from sentence_transformers import SentenceTransformer
+
         self._path = path.resolve()
         self._model = SentenceTransformer(str(self._path), local_files_only=True, device="cpu")
         self.digest = directory_digest(self._path)
 
     def encode(self, sentences: list[str]) -> FloatArray:
         """Return one finite float64 embedding row per ordered sentence."""
-        if not sentences:
-            raise ValueError("at least one non-empty sentence is required")
-        values = np.asarray(
+        require_sentences(sentences)
+        return as_embedding_matrix(
             self._model.encode(sentences, convert_to_numpy=True, normalize_embeddings=True),
-            dtype=np.float64,
+            len(sentences),
         )
-        if values.ndim != 2 or not np.all(np.isfinite(values)):
-            raise ValueError("encoder returned invalid embeddings")
-        return values
 
 
 def encode_trace(

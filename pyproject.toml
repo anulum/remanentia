@@ -28,6 +28,7 @@ classifiers = [
 
 dependencies = [
     "defusedxml>=0.7.1",
+    "jsonschema>=4.20",
     "numpy>=1.24",
 ]
 
@@ -80,6 +81,8 @@ remanentia-recall-calibration = "recall_calibration:main"
 remanentia-store-manifest = "store_manifest:main"
 remanentia-store-sources = "store_sources:main"
 remanentia-snn-memory = "snn_memory.cli:main"
+remanentia-snn-source-universe = "snn_memory.source_universe:main"
+remanentia-snn-cue-materializer = "snn_memory.cue_materializer:main"
 
 [project.urls]
 Homepage = "https://www.remanentia.com"
@@ -179,6 +182,7 @@ py-modules = [
     "memory/**/*.json",
     "memory/**/*.jsonl",
 ]
+"snn_memory" = ["schema/*.json", "schema/*.json.license"]
 
 [tool.setuptools.data-files]
 "share/remanentia/data" = ["data/compiled_seed_facts.jsonl"]
@@ -236,17 +240,43 @@ omit = [
     # local model; its pure statistics live in judge_agreement.py (unit-tested,
     # 100 %), the runner itself is an un-imported I/O harness.
     "tools/local_judge_agreement.py",
-    # Standalone research SNN-memory harnesses that require the git-ignored
-    # 175 MB .snn_models/ sentence checkpoint. Their model-free maths is
-    # unit-tested at 100 % (tests/test_snn_memory_encoder.py plus the reference/
-    # state/trainer/probe/experiment suites); the pinned-model train/probe/
-    # benchmark paths are exercised end to end by the local installed-wheel E2E
-    # tests (tests/test_snn_memory_cli_e2e.py, test_snn_memory_benchmark_e2e.py).
-    "snn_memory/cli.py",
+    # The pinned-model run adapter needs the git-ignored 175 MB .snn_models/
+    # checkpoint (absent in CI) and is excluded from the CI-core coverage
+    # denominator. The model-free CLI surfaces STAY measured and are covered 100 %
+    # in-process: snn_memory/cli.py (parsing, inspect/verify, dispatch) by
+    # tests/test_snn_memory_cli.py, and snn_memory/cli_io.py (JSON + corpus digest
+    # loading) by tests/test_snn_memory_cli_io.py. cli_runners.py and
+    # sentence_encoder.py are covered by their own required model-provisioned report
+    # (tests/model_gates/snn_memory_cli_runners_gate.py plus the exact installed-wheel
+    # and source-tree model gates), run explicitly by
+    # tools/verify_snn_memory_model_gates.py and never replaced by omission.
+    "snn_memory/cli_runners.py",
     "snn_memory/sentence_encoder.py",
+    # The streamed adapter hard-requires a separately built PyO3 wheel, which is
+    # absent from the default Python-only CI core. It is never accepted by
+    # omission alone: tools/verify_snn_memory_stream_stage1.py builds both clean
+    # wheels, installs them outside the checkout, inventories its dedicated gate,
+    # and enforces 100 % line + branch coverage on the installed adapter.
+    "snn_memory/stream_backend.py",
+    # Mandatory installed-wheel build/install/coverage orchestration harness;
+    # its real subprocess exits and artifacts are the verifier's evidence. The
+    # pinned-model verifier is likewise an explicit subprocess harness whose
+    # model-provisioned reports are enforced outside the default CI core.
+    "tools/verify_snn_memory_stream_stage1.py",
+    "tools/verify_snn_memory_model_gates.py",
+    # D1 is validated only through a freshly built and installed production
+    # wheel against real temporary Git repositories. Its dedicated verifier
+    # enforces 100 % line + branch coverage and self-audits the Stage-2 gate.
+    "snn_memory/source_universe.py",
+    "tools/verify_snn_memory_source_universe_d1.py",
     # Test files themselves
     "tests/test_*.py",
     "tests/conftest.py",
+    # Specialized real gate harnesses are executed by their mandatory explicit
+    # verifiers above; they are evidence generators, not product denominator.
+    "tests/model_gates/*",
+    "tests/installed_gates/*",
+    "tests/stage2_installed_gates/*",
 ]
 
 [tool.coverage.report]

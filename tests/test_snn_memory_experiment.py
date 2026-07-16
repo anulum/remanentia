@@ -10,7 +10,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+import json
+from importlib import import_module
+from pathlib import Path
+from typing import Any, Callable, cast
 
 import numpy as np
 import pytest
@@ -80,12 +83,38 @@ def test_encoder_only_condition_rejects_a_cue_without_external_input() -> None:
         evaluate_condition(checkpoint, empty, labels, "encoder-only", 11, ProbeConfig(completion_steps=8))
 
 
-def test_benchmark_reports_all_five_conditions_and_holds_g2_closed() -> None:
+def test_benchmark_reports_all_five_conditions_and_holds_gates_closed() -> None:
     checkpoint, sequences, labels = _checkpoint()
     report = benchmark(checkpoint, sequences, labels, [11, 29], ProbeConfig(completion_steps=6))
     assert report["seeds"] == [11, 29]
     assert set(report["conditions"]) == set(CONDITIONS)
+    assert report["gates"]["g1_pass"] is False
+    assert report["gates"]["g2_effect_threshold_pass"] is False
     assert report["gates"]["g2_pass"] is False
+    # Always-on model-free contract guard: the real benchmark(...) output, round-tripped
+    # through JSON exactly as the CLI writes it (integer seed keys coerced to strings),
+    # must satisfy the tracked public schema. The validator is loaded from the real
+    # jsonschema module at runtime and only its callable is typed, so strict mypy holds
+    # without a stub, ignore, or duplicated schema logic.
+    root = Path(__file__).resolve().parents[1]
+    schema = json.loads((root / "docs/schema/snn_memory_result.schema.json").read_text(encoding="utf-8"))
+    validate = cast(Callable[[object, object], None], import_module("jsonschema").validate)
+    validate(json.loads(json.dumps(report)), schema)
+    # Schema v1 pins all three reported G1/G2 gates to false structurally, so the guard
+    # enforces semantics and not only shape: a report claiming ANY passed gate must fail
+    # validation. Exercise every const-false key so a future accidental boolean
+    # regression in either G2 field is caught too.
+    validation_error = cast(type[Exception], import_module("jsonschema.exceptions").ValidationError)
+    for gate in ("g1_pass", "g2_effect_threshold_pass", "g2_pass"):
+        tampered = json.loads(json.dumps(report))
+        tampered["gates"][gate] = True
+        with pytest.raises(validation_error):
+            validate(tampered, schema)
+    for section in ("conditions", "p_at_1"):
+        missing_encoder_only = json.loads(json.dumps(report))
+        del missing_encoder_only[section]["encoder-only"]
+        with pytest.raises(validation_error):
+            validate(missing_encoder_only, schema)
 
 
 def _scores(seeds: list[int]) -> dict[str, dict[int, list[float]]]:
@@ -106,15 +135,21 @@ def _details(seeds: list[int]) -> dict[str, dict[int, list[dict[str, Any]]]]:
     return {name: {seed: rows(completion[name]) for seed in seeds} for name in CONDITIONS}
 
 
-def test_decision_report_flags_g1_but_reserves_g2_for_locked_seeds() -> None:
+def test_decision_report_holds_every_gate_fail_closed() -> None:
     seeds = [11, 29]
     report = decision_report(_scores(seeds), _details(seeds), seeds)
-    assert report["gates"]["g1_pass"] is True
+    assert report["gates"]["g1_pass"] is False
     assert report["gates"]["g2_effect_threshold_pass"] is False
+    assert report["gates"]["g2_pass"] is False
+    assert any("circular self-matching" in line for line in report["limits"])
 
 
-def test_decision_report_effect_threshold_passes_on_locked_seed_set() -> None:
+def test_decision_report_keeps_gates_closed_even_with_perfect_circular_scores() -> None:
+    # Even flawless self-matching scores on the locked seed set must not open a gate:
+    # the harness calibrates each signature from the cue it scores, so p_at_1 is
+    # circular. The raw figure is retained only as an explicitly non-gating diagnostic.
     report = decision_report(_scores(LOCKED_SEEDS), _details(LOCKED_SEEDS), LOCKED_SEEDS)
-    assert report["gates"]["g1_pass"] is True
-    assert report["gates"]["g2_effect_threshold_pass"] is True
+    assert report["gates"]["g1_pass"] is False
+    assert report["gates"]["g2_effect_threshold_pass"] is False
+    assert report["gates"]["g2_pass"] is False
     assert report["p_at_1"]["trained"] > report["p_at_1"]["random"]

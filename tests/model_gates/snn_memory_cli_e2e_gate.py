@@ -6,23 +6,23 @@
 # Contact: www.anulum.li | protoscience@anulum.li
 # Remanentia — Temporal SNN process-boundary tests
 
-"""Installed CLI train-to-checkpoint-to-fresh-probe real-surface tests."""
+"""Fresh source-tree module-process train/checkpoint/probe real-surface tests."""
 
 from __future__ import annotations
 
-import json
 import hashlib
+import importlib
+import json
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
-from jsonschema import Draft202012Validator
 
 from snn_memory.checkpoint import load_checkpoint
+from tests.model_gates.model_precondition import MODEL, ROOT, require_pinned_model
 
-ROOT = Path(__file__).resolve().parents[1]
-MODEL = ROOT / ".snn_models" / "all-MiniLM-L6-v2"
+PINNED_DIGEST = require_pinned_model()
 
 
 def _write_inputs(tmp_path: Path, epochs: int) -> tuple[Path, Path]:
@@ -40,17 +40,23 @@ def _write_inputs(tmp_path: Path, epochs: int) -> tuple[Path, Path]:
     manifest.write_text(
         json.dumps(
             {
+                "schema_version": 1,
                 "encoder_checkpoint": str(MODEL),
+                "encoder_digest": PINNED_DIGEST,
                 "entries": [
                     {
                         "label": "snn",
                         "path": str(ROOT / "docs/research/snn_consolidation.md"),
-                        "sha256": hashlib.sha256((ROOT / "docs/research/snn_consolidation.md").read_bytes()).hexdigest(),
+                        "sha256": hashlib.sha256(
+                            (ROOT / "docs/research/snn_consolidation.md").read_bytes()
+                        ).hexdigest(),
                     },
                     {
                         "label": "retrieval",
                         "path": str(ROOT / "docs/adr/0004-dual-retrieval-stacks.md"),
-                        "sha256": hashlib.sha256((ROOT / "docs/adr/0004-dual-retrieval-stacks.md").read_bytes()).hexdigest(),
+                        "sha256": hashlib.sha256(
+                            (ROOT / "docs/adr/0004-dual-retrieval-stacks.md").read_bytes()
+                        ).hexdigest(),
                     },
                 ],
             }
@@ -69,14 +75,19 @@ def _run(*arguments: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-@pytest.mark.skipif(  # type: ignore[untyped-decorator] # Pytest decorator.
-    not MODEL.is_dir(), reason="pinned local encoder not provisioned"
-)
 def test_fresh_process_probe_accepts_cue_but_no_corpus_argument(tmp_path: Path) -> None:
     config, manifest = _write_inputs(tmp_path, 1)
     checkpoint = tmp_path / "checkpoint"
     result_path = tmp_path / "probe.json"
-    _run("train", "--config", str(config), "--corpus-manifest", str(manifest), "--output", str(checkpoint))
+    _run(
+        "train",
+        "--config",
+        str(config),
+        "--corpus-manifest",
+        str(manifest),
+        "--output",
+        str(checkpoint),
+    )
     _run(
         "probe",
         "--checkpoint",
@@ -92,23 +103,28 @@ def test_fresh_process_probe_accepts_cue_but_no_corpus_argument(tmp_path: Path) 
     )
     result = json.loads(result_path.read_text())
     schema = json.loads((ROOT / "docs/schema/snn_memory_result.schema.json").read_text())
-    Draft202012Validator(schema).validate(result)
+    importlib.import_module("jsonschema").Draft202012Validator(schema).validate(result)
     assert result["label"] is None or result["label"] in {"snn", "retrieval"}
     assert result["weight_digest_unchanged"] is True
     help_text = _run("probe", "--help").stdout
     assert "--corpus" not in help_text
 
 
-@pytest.mark.skipif(  # type: ignore[untyped-decorator] # Pytest decorator.
-    not MODEL.is_dir(), reason="pinned local encoder not provisioned"
-)
 def test_resumed_training_matches_uninterrupted_weight_digest(tmp_path: Path) -> None:
     config_one, manifest = _write_inputs(tmp_path, 1)
     config_three, _ = _write_inputs(tmp_path, 3)
     first = tmp_path / "first"
     resumed = tmp_path / "resumed"
     direct = tmp_path / "direct"
-    _run("train", "--config", str(config_one), "--corpus-manifest", str(manifest), "--output", str(first))
+    _run(
+        "train",
+        "--config",
+        str(config_one),
+        "--corpus-manifest",
+        str(manifest),
+        "--output",
+        str(first),
+    )
     _run(
         "train",
         "--config",
@@ -120,5 +136,44 @@ def test_resumed_training_matches_uninterrupted_weight_digest(tmp_path: Path) ->
         "--output",
         str(resumed),
     )
-    _run("train", "--config", str(config_three), "--corpus-manifest", str(manifest), "--output", str(direct))
-    assert load_checkpoint(resumed).manifest["array_digest"] == load_checkpoint(direct).manifest["array_digest"]
+    _run(
+        "train",
+        "--config",
+        str(config_three),
+        "--corpus-manifest",
+        str(manifest),
+        "--output",
+        str(direct),
+    )
+    resumed_checkpoint = load_checkpoint(resumed)
+    direct_checkpoint = load_checkpoint(direct)
+    assert resumed_checkpoint.manifest["array_digest"] == direct_checkpoint.manifest["array_digest"]
+    assert resumed_checkpoint.manifest["event_digest"] == direct_checkpoint.manifest["event_digest"]
+    assert resumed_checkpoint.training_events == direct_checkpoint.training_events
+
+
+def test_cli_rejects_non_forward_resume_target(tmp_path: Path) -> None:
+    config_one, manifest = _write_inputs(tmp_path, 1)
+    first = tmp_path / "first"
+    _run(
+        "train",
+        "--config",
+        str(config_one),
+        "--corpus-manifest",
+        str(manifest),
+        "--output",
+        str(first),
+    )
+    with pytest.raises(subprocess.CalledProcessError) as raised:
+        _run(
+            "train",
+            "--config",
+            str(config_one),
+            "--corpus-manifest",
+            str(manifest),
+            "--resume-checkpoint",
+            str(first),
+            "--output",
+            str(tmp_path / "invalid"),
+        )
+    assert "resume target epochs must exceed completed epochs" in raised.value.stderr

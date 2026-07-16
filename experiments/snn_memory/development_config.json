@@ -1,0 +1,19 @@
+{
+  "model": {
+    "n_neurons": 512,
+    "excitatory_fraction": 0.8,
+    "connectivity": 0.1
+  },
+  "encoder": {
+    "feature_dim": 512,
+    "packet_ms": 20,
+    "silent_ms": 5,
+    "active_fraction": 0.05,
+    "projection_seed": 1729
+  },
+  "train": {
+    "seed": 11,
+    "epochs": 3,
+    "input_current": 18.0
+  }
+}

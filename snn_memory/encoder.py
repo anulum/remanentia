@@ -32,15 +32,34 @@ def split_events(text: str) -> list[str]:
     return [part.strip() for part in _SENTENCE_SPLIT.split(text) if part.strip()]
 
 
+def require_sentences(sentences: list[str]) -> None:
+    """Reject an empty ordered-sentence list before encoding."""
+    if not sentences:
+        raise ValueError("at least one non-empty sentence is required")
+
+
+def as_embedding_matrix(values: object, expected_rows: int) -> FloatArray:
+    """Coerce and validate a model's output as a finite 2-D matrix, one row per input."""
+    array = np.asarray(values, dtype=np.float64)
+    if array.ndim != 2 or array.shape[0] != expected_rows or not np.all(np.isfinite(array)):
+        raise ValueError("encoder returned invalid embeddings")
+    return array
+
+
 def directory_digest(path: Path) -> str:
-    """Hash all regular checkpoint files in stable relative-path order."""
+    """Hash a checkpoint tree with domain separation and length framing."""
     digest = hashlib.sha256()
+    digest.update(b"remanentia.encoder-directory.v1\x00")
     files = sorted(item for item in path.rglob("*") if item.is_file())
     if not files:
         raise ValueError("encoder checkpoint directory is empty")
     for item in files:
-        digest.update(item.relative_to(path).as_posix().encode("utf-8"))
-        digest.update(item.read_bytes())
+        relative = item.relative_to(path).as_posix().encode("utf-8")
+        content = item.read_bytes()
+        digest.update(len(relative).to_bytes(8, "big"))
+        digest.update(relative)
+        digest.update(len(content).to_bytes(8, "big"))
+        digest.update(content)
     return digest.hexdigest()
 
 

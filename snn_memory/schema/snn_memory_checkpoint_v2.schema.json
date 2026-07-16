@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://remanentia.com/schemas/snn_memory_checkpoint_v2.schema.json",
+  "title": "Remanentia temporal SNN per-seed checkpoint v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "experiment_digest", "dataset_digest", "candidate_set_digest", "task_set_digest", "seed", "condition", "ordered_record_ids", "topology_digest", "encoder", "model_config_digest", "input_current", "training_source_digests", "calibration_cue_digests", "adjacency", "arrays", "epochs_completed", "replay_order_digest", "build", "scoring_calibration"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "experiment_digest": {"$ref": "#/$defs/sha256"},
+    "dataset_digest": {"$ref": "#/$defs/sha256"},
+    "candidate_set_digest": {"$ref": "#/$defs/sha256"},
+    "task_set_digest": {"$ref": "#/$defs/sha256"},
+    "seed": {"enum": [11, 29, 47, 71, 101, 131, 167, 211, 257, 307]},
+    "condition": {"enum": ["trained", "shuffled", "random", "zero", "untrained", "encoder-only", "temporal-order-permuted", "leave-one-record-out"]},
+    "ordered_record_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/recordId"}},
+    "topology_digest": {
+      "$ref": "#/$defs/sha256",
+      "description": "Checkpoint binding for Stage-2 topology arrays; Slice A authenticates this manifest and internal adjacency agreement only."
+    },
+    "encoder": {"$ref": "#/$defs/encoder"},
+    "model_config_digest": {"$ref": "#/$defs/sha256"},
+    "input_current": {"type": "number", "exclusiveMinimum": 0.0},
+    "training_source_digests": {"$ref": "#/$defs/recordDigests"},
+    "calibration_cue_digests": {"$ref": "#/$defs/recordDigests"},
+    "adjacency": {"$ref": "#/$defs/adjacency"},
+    "arrays": {"$ref": "#/$defs/arrays"},
+    "epochs_completed": {"type": "integer", "minimum": 0},
+    "replay_order_digest": {
+      "$ref": "#/$defs/sha256",
+      "description": "Checkpoint binding for the Stage-2 replay-order artifact; its bytes are not an input to the Slice-A reader."
+    },
+    "build": {"$ref": "#/$defs/build"},
+    "scoring_calibration": {"$ref": "#/$defs/scoringCalibration"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"condition": {"const": "untrained"}}, "required": ["condition"]},
+      "then": {"properties": {"epochs_completed": {"const": 0}}},
+      "else": {"properties": {"epochs_completed": {"minimum": 1}}}
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "recordId": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "relativePath": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"},
+    "encoder": {
+      "type": "object", "additionalProperties": false,
+      "required": ["checkpoint_locator", "directory_digest", "config_digest"],
+      "properties": {"checkpoint_locator": {"$ref": "#/$defs/relativePath"}, "directory_digest": {"$ref": "#/$defs/sha256"}, "config_digest": {"$ref": "#/$defs/sha256"}}
+    },
+    "recordDigest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["record_id", "digest"],
+      "properties": {"record_id": {"$ref": "#/$defs/recordId"}, "digest": {"$ref": "#/$defs/sha256"}}
+    },
+    "recordDigests": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/recordDigest"}},
+    "adjacency": {
+      "type": "object", "additionalProperties": false,
+      "required": ["orientation", "outgoing_digest", "incoming_digest", "topology_digest"],
+      "properties": {"orientation": {"const": "row-pre-column-post"}, "outgoing_digest": {"$ref": "#/$defs/sha256"}, "incoming_digest": {"$ref": "#/$defs/sha256"}, "topology_digest": {"$ref": "#/$defs/sha256"}}
+    },
+    "arrays": {
+      "type": "object", "additionalProperties": false,
+      "required": ["weights_digest", "training_final_state_digest", "probe_initial_state_digest", "signatures_digest", "record_ids_digest"],
+      "properties": {
+        "weights_digest": {"$ref": "#/$defs/sha256"},
+        "training_final_state_digest": {
+          "$ref": "#/$defs/sha256",
+          "description": "Audit-only digest of membrane, refractory, and pre/post traces after training; never loaded as probe state."
+        },
+        "probe_initial_state_digest": {
+          "$ref": "#/$defs/sha256",
+          "description": "Digest of freshly reset membrane, refractory, and pre/post traces loaded independently for every probe."
+        },
+        "signatures_digest": {"$ref": "#/$defs/sha256"},
+        "record_ids_digest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "build": {
+      "type": "object", "additionalProperties": false,
+      "required": ["python_wheel_digest", "rust_wheel_digest", "backend_version", "backend_build_digest", "repository_head", "dirty_tree_digest", "patch_digest"],
+      "properties": {"python_wheel_digest": {"$ref": "#/$defs/sha256"}, "rust_wheel_digest": {"$ref": "#/$defs/sha256"}, "backend_version": {"type": "string", "minLength": 1}, "backend_build_digest": {"$ref": "#/$defs/sha256"}, "repository_head": {"type": "string", "pattern": "^[a-f0-9]{40}$"}, "dirty_tree_digest": {"$ref": "#/$defs/sha256"}, "patch_digest": {"$ref": "#/$defs/sha256"}}
+    },
+    "scoringCalibration": {
+      "type": "object", "additionalProperties": false,
+      "required": ["abstention_threshold", "metric", "development_artifact_digest"],
+      "properties": {"abstention_threshold": {"type": "number"}, "metric": {"enum": ["cosine", "temporal-overlap"]}, "development_artifact_digest": {"$ref": "#/$defs/sha256"}}
+    }
+  }
+}

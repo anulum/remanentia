@@ -5,29 +5,32 @@
   "description": "Manifest emitted by the public train CLI for an immutable NPZ checkpoint bundle. Recall loads this bundle without enabling plasticity.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "orientation", "plasticity", "array_digest", "model", "labels", "metadata"],
+  "required": ["schema_version", "orientation", "plasticity", "array_digest", "event_digest", "model", "labels", "metadata"],
   "properties": {
     "schema_version": {"const": 1},
     "orientation": {"const": "row-pre-column-post"},
     "plasticity": {"const": "online-pair-stdp-e-to-e"},
     "array_digest": {"$ref": "#/$defs/sha256"},
+    "event_digest": {"$ref": "#/$defs/sha256"},
     "model": {"$ref": "#/$defs/model"},
     "labels": {
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
-      "items": {"type": "string", "minLength": 1}
+      "items": {"type": "string", "minLength": 1, "pattern": "^(?!\\s).*\\S$"}
     },
     "metadata": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["seed", "epochs_completed", "encoder", "encoder_digest", "python"],
+      "required": ["seed", "epochs_completed", "input_current", "encoder", "encoder_digest", "corpus_digest", "python"],
       "properties": {
         "seed": {"$ref": "#/$defs/seed"},
         "epochs_completed": {"type": "integer", "minimum": 1},
+        "input_current": {"type": "number", "exclusiveMinimum": 0.0},
         "encoder": {"$ref": "#/$defs/encoder"},
         "encoder_digest": {"$ref": "#/$defs/sha256"},
-        "python": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+(?:\\.[0-9]+)?"}
+        "corpus_digest": {"$ref": "#/$defs/sha256"},
+        "python": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+(?:\\.[0-9]+)?$"}
       }
     }
   },
@@ -51,7 +54,7 @@
         "tau_minus_ms": {"type": "number", "exclusiveMinimum": 0.0},
         "a_plus": {"type": "number", "minimum": 0.0},
         "a_minus": {"type": "number", "minimum": 0.0},
-        "weight_min": {"type": "number", "minimum": 0.0},
+        "weight_min": {"const": 0.0},
         "weight_max": {"type": "number", "exclusiveMinimum": 0.0},
         "connectivity": {"type": "number", "exclusiveMinimum": 0.0, "maximum": 1.0}
       }

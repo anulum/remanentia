@@ -47,7 +47,7 @@ except ImportError:  # pragma: no cover — Windows
 # ─── Atomic writes ────────────────────────────────────────────────────
 
 
-def _fsync_parent_dir(directory: Path) -> None:
+def fsync_directory(directory: Path) -> None:
     """fsync *directory* so the rename that just landed is itself durable.
 
     ``os.replace`` makes the swap atomic, and we already fsync the file's
@@ -94,7 +94,7 @@ def _atomic_write_raw(path: Path, data: bytes) -> None:
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp_name, path)  # codeql[py/path-injection]
-        _fsync_parent_dir(path.parent)
+        fsync_directory(path.parent)
     except Exception:
         # Leave the partial file for post-mortem but do not clobber target.
         try:

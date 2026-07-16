@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://remanentia.com/schemas/snn_memory_task_output_v2.schema.json",
+  "title": "Remanentia temporal SNN cue-only task output v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "checkpoint_digest", "cue_digest", "initial_state_digest", "process_instance_digest", "backend_digest", "record_order_digest", "predicted_record_id", "ranked_record_ids", "scores", "completion", "trajectory_digest"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "checkpoint_digest": {"$ref": "#/$defs/sha256"},
+    "cue_digest": {
+      "$ref": "#/$defs/sha256",
+      "description": "Digest of the authenticated probe cue bundle, not a dataset cue-text path."
+    },
+    "initial_state_digest": {
+      "$ref": "#/$defs/sha256",
+      "description": "Must equal the checkpoint probe_initial_state_digest for freshly reset membrane, refractory, and pre/post traces."
+    },
+    "process_instance_digest": {"$ref": "#/$defs/sha256"},
+    "backend_digest": {"$ref": "#/$defs/sha256"},
+    "record_order_digest": {"$ref": "#/$defs/sha256"},
+    "predicted_record_id": {"oneOf": [{"$ref": "#/$defs/recordId"}, {"type": "null"}]},
+    "ranked_record_ids": {"type": "array", "maxItems": 5, "uniqueItems": true, "items": {"$ref": "#/$defs/recordId"}},
+    "scores": {"type": "array", "maxItems": 5, "items": {"type": "number"}},
+    "completion": {"$ref": "#/$defs/completion"},
+    "trajectory_digest": {
+      "$ref": "#/$defs/sha256",
+      "description": "Binding for the Stage-2 trajectory artifact; its bytes are not an input to the Slice-A reader."
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "recordId": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "completion": {
+      "type": "object", "additionalProperties": false,
+      "required": ["spikes", "recurrent_energy", "half_life_steps", "cue_steps", "completion_steps"],
+      "properties": {"spikes": {"type": "integer", "minimum": 0}, "recurrent_energy": {"type": "number", "minimum": 0.0}, "half_life_steps": {"type": ["integer", "null"], "minimum": 0}, "cue_steps": {"type": "integer", "minimum": 0}, "completion_steps": {"type": "integer", "minimum": 1}}
+    }
+  }
+}

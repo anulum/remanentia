@@ -23,9 +23,9 @@ import pytest
 
 from snn_memory.contracts import EncoderConfig, ModelConfig
 from snn_memory.sentence_encoder import LocalSentenceEncoder, encode_trace
+from tests.model_gates.model_precondition import MODEL, ROOT, require_pinned_model
 
-ROOT = Path(__file__).resolve().parents[1]
-MODEL = ROOT / ".snn_models" / "all-MiniLM-L6-v2"
+PINNED_DIGEST = require_pinned_model()
 
 
 def test_missing_local_checkpoint_fails_closed(tmp_path: Path) -> None:
@@ -33,9 +33,6 @@ def test_missing_local_checkpoint_fails_closed(tmp_path: Path) -> None:
         LocalSentenceEncoder(tmp_path / "missing")
 
 
-@pytest.mark.skipif(  # type: ignore[untyped-decorator] # Pytest decorator.
-    not MODEL.is_dir(), reason="pinned local encoder not provisioned"
-)
 def test_real_markdown_encodes_ordered_deterministic_packets() -> None:
     encoder = LocalSentenceEncoder(MODEL)
     text = (ROOT / "docs/research/snn_consolidation.md").read_text(encoding="utf-8")
@@ -47,3 +44,9 @@ def test_real_markdown_encodes_ordered_deterministic_packets() -> None:
     assert first.currents.shape[1] == model.n_neurons
     np.testing.assert_array_equal(first.currents, second.currents)
     assert first.checkpoint_digest == second.checkpoint_digest
+
+
+def test_real_encode_rejects_empty_sentences() -> None:
+    encoder = LocalSentenceEncoder(MODEL)
+    with pytest.raises(ValueError, match="at least one non-empty sentence"):
+        encoder.encode([])

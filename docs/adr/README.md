@@ -37,6 +37,7 @@ state of play.
 | [0003](0003-pluggable-llm-backend-protocol.md) | Pluggable LLM backend via Protocol | Accepted |
 | [0004](0004-dual-retrieval-stacks.md) | Keep two retrieval stacks until consolidation | Accepted · to be superseded by P4-24 |
 | [0005](0005-rule-based-date-normalisation.md) | Prefer rule-based date normalisation over ML | Accepted |
+| [0006](0006-preregister-temporal-snn-memory-experiment.md) | Preregister the temporal SNN memory experiment | Accepted |
 
 ## How to add an ADR
 

@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "split": "development",
+  "encoder_checkpoint": "../../.snn_models/all-MiniLM-L6-v2",
+  "encoder_digest": "f293e6b519396deb31d8704b779a7ca742fae3c58aaaa7a81809b0ae7067ebe8",
+  "entries": [
+    {"label": "snn-consolidation", "path": "../../docs/research/snn_consolidation.md", "sha256": "0558100545cd6c0e7db07420d6776557cf9bbbed7301d533d7f7bd13f40a5fac"},
+    {"label": "adr-log", "path": "../../docs/adr/0001-use-adr-log.md", "sha256": "68045e0d2c36f4adac9a66bd89d1fa08c7a1900a95e1ce0f59ddcf04bd07f811"},
+    {"label": "safe-checkpoints", "path": "../../docs/adr/0002-remove-pickle-runtime.md", "sha256": "141de4b1af311a22cddcea09427199937c6f8daf2b4b3c761252fdef49ef84b6"},
+    {"label": "llm-backends", "path": "../../docs/adr/0003-pluggable-llm-backend-protocol.md", "sha256": "246417590953c3d9fdb8c5b35322efd7e7a4763cbc743112fa3a08509e66239d"},
+    {"label": "retrieval-stacks", "path": "../../docs/adr/0004-dual-retrieval-stacks.md", "sha256": "e85df464ce2e518c5b133207c28cc518e1b224c1d23bc7567c93e8fa4e16ca26"},
+    {"label": "date-normalisation", "path": "../../docs/adr/0005-rule-based-date-normalisation.md", "sha256": "dd5c3910ac7aa00ee83bea270d55900f0f655b50dfa523142890e4bac5fc3223"},
+    {"label": "architecture", "path": "../../docs/architecture/architecture.md", "sha256": "30fba302f1bc6050f2e5479780d4e012e5b50734eb9b17107370b608f6a9bc84"},
+    {"label": "getting-started", "path": "../../docs/guides/getting-started.md", "sha256": "550da3738ebcbdd1340db126396a55d5f3e435a808253804519d4c4555b898e9"}
+  ]
+}

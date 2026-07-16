@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Remanentia — Temporal SNN memory engine crate configuration
+
+[package]
+name = "rust_snn_memory"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+authors = ["Miroslav Šotek <protoscience@anulum.li>"]
+description = "Deterministic LIF and online STDP engine for temporal memory experiments"
+
+[lib]
+name = "rust_snn_memory"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+numpy = "0.25"
+pyo3 = { version = "0.25", features = ["extension-module"] }
+sha2 = "0.10"

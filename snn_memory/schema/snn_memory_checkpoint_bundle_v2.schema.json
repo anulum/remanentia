@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://remanentia.com/schemas/snn_memory_checkpoint_bundle_v2.schema.json",
+  "title": "Remanentia temporal SNN checkpoint-bundle descriptor v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "artifact_type", "state", "lane_role", "checkpoint_manifest", "identities", "components", "replay_schedule_digest", "self_sha256"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "artifact_type": {"const": "snn-memory-checkpoint-bundle-v2"},
+    "state": {"enum": ["fixture_only", "pre_result"]},
+    "lane_role": {"const": "lane_p"},
+    "checkpoint_manifest": {"$ref": "#/$defs/manifestBinding"},
+    "identities": {"$ref": "#/$defs/identities"},
+    "components": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "items": {"$ref": "#/$defs/component"}
+    },
+    "replay_schedule_digest": {"$ref": "#/$defs/sha256"},
+    "self_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "gitSha1": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "recordId": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "relativePath": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[a-z0-9][a-z0-9._-]*$"},
+    "manifestBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "file_sha256", "payload_self_sha256"],
+      "properties": {
+        "path": {"const": "manifest.json"},
+        "file_sha256": {"$ref": "#/$defs/sha256"},
+        "payload_self_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "identities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["experiment_digest", "dataset_digest", "task_set_digest", "candidate_set_digest", "d1_file_sha256", "d2_file_sha256", "seed", "condition", "n_neurons", "n_excitatory", "weight_max", "model_config", "encoder_directory_digest", "encoder_config_digest", "model_config_digest", "input_current", "repository_head", "patch_digest", "python_wheel_sha256", "rust_wheel_sha256", "backend_build_digest", "materializer_module_sha256"],
+      "properties": {
+        "experiment_digest": {"$ref": "#/$defs/sha256"},
+        "dataset_digest": {"$ref": "#/$defs/sha256"},
+        "task_set_digest": {"$ref": "#/$defs/sha256"},
+        "candidate_set_digest": {"$ref": "#/$defs/sha256"},
+        "d1_file_sha256": {"$ref": "#/$defs/sha256"},
+        "d2_file_sha256": {"$ref": "#/$defs/sha256"},
+        "seed": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+        "condition": {"enum": ["trained", "shuffled", "random", "zero", "untrained"]},
+        "n_neurons": {"type": "integer", "minimum": 2},
+        "n_excitatory": {"type": "integer", "minimum": 1},
+        "weight_max": {"type": "number", "exclusiveMinimum": 0.0},
+        "model_config": {"type": "object", "minProperties": 1},
+        "encoder_directory_digest": {"$ref": "#/$defs/sha256"},
+        "encoder_config_digest": {"$ref": "#/$defs/sha256"},
+        "model_config_digest": {"$ref": "#/$defs/sha256"},
+        "input_current": {"type": "number", "exclusiveMinimum": 0.0},
+        "repository_head": {"$ref": "#/$defs/gitSha1"},
+        "patch_digest": {"$ref": "#/$defs/sha256"},
+        "python_wheel_sha256": {"$ref": "#/$defs/sha256"},
+        "rust_wheel_sha256": {"$ref": "#/$defs/sha256"},
+        "backend_build_digest": {"$ref": "#/$defs/sha256"},
+        "materializer_module_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "role", "file_sha256", "semantic_digest", "dtype", "shape", "byte_length", "framing_version"],
+      "properties": {
+        "path": {"$ref": "#/$defs/relativePath"},
+        "role": {"enum": ["topology", "adjacency_outgoing", "adjacency_incoming", "weights", "training_final_state", "probe_initial_state", "signatures", "record_ids", "replay_schedule"]},
+        "file_sha256": {"$ref": "#/$defs/sha256"},
+        "semantic_digest": {"$ref": "#/$defs/sha256"},
+        "dtype": {"enum": ["|b1", "<f8", "<u8", "json", "state"]},
+        "shape": {"type": "array", "items": {"type": "integer", "minimum": 0}},
+        "byte_length": {"type": "integer", "minimum": 0},
+        "framing_version": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}

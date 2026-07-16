@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 
@@ -45,11 +45,13 @@ def evaluate_condition(
     else:
         if condition not in {"trained", "shuffled", "random", "zero"}:
             raise ValueError(f"unsupported control condition: {condition}")
+        # The membership guard above validates the literal at runtime; cast documents
+        # that narrowing for the type checker without suppressing any diagnostic.
         weights = make_control(
             checkpoint.weights,
             checkpoint.topology,
             checkpoint.model,
-            condition,
+            cast(ControlName, condition),
             seed,
         )
         signatures = calibrate_signatures(
@@ -126,42 +128,21 @@ def decision_report(
     details: dict[str, dict[int, list[dict[str, Any]]]],
     seeds: list[int],
 ) -> dict[str, Any]:
-    """Build one seed-complete decision report from isolated condition results."""
+    """Build one seed-complete decision report with the reported G1/G2 gates fail-closed.
+
+    ``evaluate_condition`` calibrates each stored label signature from the same
+    sequence prefix it later scores, so ``p_at_1`` and ``trained_minus_shuffled`` are
+    circular self-matching, not held-out recall. The reported G1 and G2 gates are
+    therefore held ``False`` until a disjoint held-out-cue, fresh-process probe harness
+    exists; the figures below and the per-row ``completion_spikes`` in ``conditions``
+    are retained only as explicitly non-gating diagnostics. This function does not
+    decide G0, G3 or G4.
+    """
     trained_shuffled = paired_interval(scores["trained"], scores["shuffled"], seeds)
     p_at_1 = {
         name: float(np.mean([value for rows in runs.values() for value in rows]))
         for name, runs in scores.items()
     }
-    trained_completion = [
-        int(row["completion_spikes"])
-        for seed_rows in details["trained"].values()
-        for row in seed_rows
-    ]
-    shuffled_completion = [
-        int(row["completion_spikes"])
-        for seed_rows in details["shuffled"].values()
-        for row in seed_rows
-    ]
-    zero_completion = [
-        int(row["completion_spikes"])
-        for seed_rows in details["zero"].values()
-        for row in seed_rows
-    ]
-    g1_pass = (
-        trained_shuffled.mean >= 0.25
-        and trained_shuffled.lower > 0.0
-        and bool(trained_completion)
-        and all(value > 0 for value in trained_completion)
-        and float(np.mean(trained_completion)) > float(np.mean(shuffled_completion))
-        and float(np.mean(trained_completion)) > float(np.mean(zero_completion))
-    )
-    effect_threshold = (
-        seeds == LOCKED_SEEDS
-        and trained_shuffled.mean >= 0.15
-        and trained_shuffled.lower > 0.05
-        and p_at_1["trained"] > p_at_1["random"]
-        and p_at_1["trained"] > p_at_1["zero"]
-    )
     return {
         "schema_version": 1,
         "seeds": seeds,
@@ -169,11 +150,19 @@ def decision_report(
         "p_at_1": p_at_1,
         "trained_minus_shuffled": asdict(trained_shuffled),
         "gates": {
-            "g1_pass": g1_pass,
-            "g2_effect_threshold_pass": effect_threshold,
+            "g1_pass": False,
+            "g2_effect_threshold_pass": False,
             "g2_pass": False,
         },
         "limits": [
+            "G1/G2 gates are held fail-closed: evaluate_condition calibrates each stored "
+            "signature from the same sequence prefix it scores, so p_at_1 and "
+            "trained_minus_shuffled are circular self-matching, not held-out recall.",
+            "p_at_1, trained_minus_shuffled and the per-condition completion_spikes are "
+            "non-gating diagnostics only.",
+            "Valid G1/G2 gates require a disjoint held-out-cue, fresh-process probe "
+            "harness (independent per-seed training, calibration cue disjoint from "
+            "every scored cue).",
             "G2 also requires locked-corpus corruption and false-recall audits.",
             "This report does not evaluate G4 or product retrieval.",
         ],

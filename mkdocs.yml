@@ -156,6 +156,7 @@ nav:
     - Channel Ablations: benchmarks/CHANNEL_ABLATIONS.md
   - Research:
     - SNN Consolidation: research/snn_consolidation.md
+    - Temporal SNN Memory Experiment: research/temporal_snn_memory.md
   - Changelog: CHANGELOG.md
 
 markdown_extensions:

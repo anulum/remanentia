@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Remanentia — Temporal SNN memory extension build
+
+[build-system]
+requires = ["maturin>=1.8,<2"]
+build-backend = "maturin"
+
+[project]
+name = "rust-snn-memory"
+version = "0.1.0"
+requires-python = ">=3.10"
+license = { text = "AGPL-3.0-or-later" }
+authors = [
+    { name = "Miroslav Šotek", email = "protoscience@anulum.li" },
+]
+description = "Float64 LIF and online STDP engine for temporal memory experiments"
+
+[tool.maturin]
+manifest-path = "Cargo.toml"
+module-name = "rust_snn_memory"

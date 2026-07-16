@@ -1,0 +1,252 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://remanentia.com/schema/snn_memory_cue_set_v2.schema.json",
+  "title": "Remanentia temporal SNN disjoint cue set v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "artifact_type", "cue_set_version", "source_universe", "derivation", "tokenizer", "cue_contract", "noise_lexicon", "encoder", "model", "implementations", "records", "self_sha256"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "artifact_type": {"const": "snn-memory-cue-set"},
+    "cue_set_version": {"const": 1},
+    "source_universe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file_sha256", "payload_self_sha256", "repository_head", "selected_record_ids"],
+      "properties": {
+        "file_sha256": {"$ref": "#/$defs/sha256"},
+        "payload_self_sha256": {"$ref": "#/$defs/sha256"},
+        "repository_head": {"$ref": "#/$defs/sha1"},
+        "selected_record_ids": {"type": "array", "minItems": 16, "maxItems": 16, "uniqueItems": true, "items": {"$ref": "#/$defs/record_id"}}
+      }
+    },
+    "derivation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["block_count", "requested_percents", "rounding", "families", "calibration_domain_ascii", "family_permutation_domain_ascii", "position_domain_ascii", "noise_token_domain_ascii", "cue_id_domain_ascii", "variant_id_domain_ascii"],
+      "properties": {
+        "block_count": {"const": 5},
+        "requested_percents": {"const": [0, 10, 25, 40]},
+        "rounding": {"const": "half-up-integer-v1"},
+        "families": {"const": ["truncation", "deletion", "masking", "sparse_noise"]},
+        "calibration_domain_ascii": {"const": "remanentia:snn-v2-calibration-block:v1\\0"},
+        "family_permutation_domain_ascii": {"const": "remanentia:snn-v2-family-permutation:v1\\0"},
+        "position_domain_ascii": {"const": "remanentia:snn-v2-corruption-positions:v1\\0"},
+        "noise_token_domain_ascii": {"const": "remanentia:snn-v2-noise-token:v1\\0"},
+        "cue_id_domain_ascii": {"const": "remanentia:snn-v2-cue-id:v1\\0"},
+        "variant_id_domain_ascii": {"const": "remanentia:snn-v2-variant-id:v1\\0"}
+      }
+    },
+    "tokenizer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "rule", "sha256"],
+      "properties": {
+        "identity": {"const": "remanentia-snn-v2-cue-tokenizer-v1"},
+        "rule": {"const": "canonical-event=single-space-join-of-str-split;cue-text=lf-join-of-canonical-events;tokens=split-on-single-space-per-line"},
+        "sha256": {"const": "9fabb54398fc08f1535f63cfdb0bd4ded639728b1f5de45544341ed8ed3bd676"}
+      }
+    },
+    "cue_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["normalizer", "near_duplicate_metric", "near_duplicate_maximum"],
+      "properties": {
+        "normalizer": {"const": "unicode-nfkc-whitespace-v1"},
+        "near_duplicate_metric": {"const": "token-jaccard-v1"},
+        "near_duplicate_maximum": {"const": 0.9}
+      }
+    },
+    "noise_lexicon": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "path", "sha256", "token_count"],
+      "properties": {
+        "identity": {"const": "remanentia-snn-v2-noise-lexicon-v1"},
+        "path": {"const": "noise_lexicon.txt"},
+        "sha256": {"const": "cfa197aee538266ed7602b560bec471ba8b0030d7e07ba8447725df43748fa76"},
+        "token_count": {"const": 64}
+      }
+    },
+    "encoder": {"$ref": "#/$defs/encoder"},
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["config_digest", "n_neurons", "input_current", "config"],
+      "properties": {
+        "config_digest": {"$ref": "#/$defs/sha256"},
+        "n_neurons": {"type": "integer", "minimum": 2},
+        "input_current": {"type": "number", "exclusiveMinimum": 0.0},
+        "config": {"$ref": "#/$defs/model_config"}
+      }
+    },
+    "implementations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cue_materializer", "split_events", "sentence_encoder"],
+      "properties": {
+        "cue_materializer": {
+          "allOf": [
+            {"$ref": "#/$defs/implementation"},
+            {"properties": {"logical_path": {"const": "snn_memory/cue_materializer.py"}}}
+          ]
+        },
+        "split_events": {
+          "allOf": [
+            {"$ref": "#/$defs/implementation"},
+            {"properties": {"logical_path": {"const": "snn_memory/encoder.py"}}}
+          ]
+        },
+        "sentence_encoder": {
+          "allOf": [
+            {"$ref": "#/$defs/implementation"},
+            {"properties": {"logical_path": {"const": "snn_memory/sentence_encoder.py"}}}
+          ]
+        }
+      }
+    },
+    "records": {"type": "array", "minItems": 16, "maxItems": 16, "items": {"$ref": "#/$defs/record"}},
+    "self_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "sha1": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "record_id": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "cue_id": {"type": "string", "pattern": "^cue-[a-f0-9]{32}$"},
+    "variant_id": {"type": "string", "pattern": "^variant-[a-f0-9]{32}$"},
+    "cue_path": {"type": "string", "pattern": "^cues/cue-[a-f0-9]{32}\\.txt$"},
+    "variant_path": {"type": "string", "pattern": "^cues/variant-[a-f0-9]{32}\\.txt$"},
+    "bundle_path": {"type": "string", "pattern": "^bundles/variant-[a-f0-9]{32}\\.json$"},
+    "event_indices": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "integer", "minimum": 0, "maximum": 255}},
+    "implementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["logical_path", "sha256", "byte_count", "bytes_base64"],
+      "properties": {
+        "logical_path": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_count": {"type": "integer", "minimum": 1},
+        "bytes_base64": {"type": "string", "minLength": 1}
+      }
+    },
+    "encoder_config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["feature_dim", "packet_ms", "silent_ms", "active_fraction", "projection_seed"],
+      "properties": {
+        "feature_dim": {"type": "integer", "minimum": 8},
+        "packet_ms": {"type": "integer", "minimum": 2},
+        "silent_ms": {"type": "integer", "minimum": 0},
+        "active_fraction": {"type": "number", "exclusiveMinimum": 0.0, "maximum": 1.0},
+        "projection_seed": {"type": "integer", "minimum": 0, "maximum": 4294967295}
+      }
+    },
+    "model_config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["n_neurons", "excitatory_fraction", "dt_ms", "tau_m_ms", "v_rest_mv", "v_reset_mv", "v_threshold_mv", "refractory_ms", "tau_plus_ms", "tau_minus_ms", "a_plus", "a_minus", "weight_min", "weight_max", "connectivity"],
+      "properties": {
+        "n_neurons": {"type": "integer", "minimum": 2},
+        "excitatory_fraction": {"type": "number"},
+        "dt_ms": {"type": "number"},
+        "tau_m_ms": {"type": "number"},
+        "v_rest_mv": {"type": "number"},
+        "v_reset_mv": {"type": "number"},
+        "v_threshold_mv": {"type": "number"},
+        "refractory_ms": {"type": "number"},
+        "tau_plus_ms": {"type": "number"},
+        "tau_minus_ms": {"type": "number"},
+        "a_plus": {"type": "number"},
+        "a_minus": {"type": "number"},
+        "weight_min": {"type": "number"},
+        "weight_max": {"type": "number"},
+        "connectivity": {"type": "number"}
+      }
+    },
+    "encoder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "directory_sha256", "config_digest", "config"],
+      "properties": {
+        "identity": {"type": "string", "minLength": 1},
+        "directory_sha256": {"$ref": "#/$defs/sha256"},
+        "config_digest": {"$ref": "#/$defs/sha256"},
+        "config": {"$ref": "#/$defs/encoder_config"}
+      }
+    },
+    "bundle_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/bundle_path"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "calibration_cue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cue_id", "path", "sha256", "normalized_text_sha256", "event_indices"],
+      "properties": {
+        "cue_id": {"$ref": "#/$defs/cue_id"},
+        "path": {"$ref": "#/$defs/cue_path"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "normalized_text_sha256": {"$ref": "#/$defs/sha256"},
+        "event_indices": {"$ref": "#/$defs/event_indices"}
+      }
+    },
+    "variant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["variant_id", "path", "sha256", "normalized_text_sha256", "requested_percent", "affected_count", "realized_fraction", "selected_positions", "tokenizer_digest", "bundle"],
+      "properties": {
+        "variant_id": {"$ref": "#/$defs/variant_id"},
+        "path": {"$ref": "#/$defs/variant_path"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "normalized_text_sha256": {"$ref": "#/$defs/sha256"},
+        "requested_percent": {"enum": [0, 10, 25, 40]},
+        "affected_count": {"type": "integer", "minimum": 0},
+        "realized_fraction": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "selected_positions": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "minimum": 0}},
+        "tokenizer_digest": {"const": "9fabb54398fc08f1535f63cfdb0bd4ded639728b1f5de45544341ed8ed3bd676"},
+        "bundle": {"$ref": "#/$defs/bundle_reference"}
+      }
+    },
+    "base_cue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cue_id", "task", "transform_family", "event_indices", "token_count", "variants"],
+      "properties": {
+        "cue_id": {"$ref": "#/$defs/cue_id"},
+        "task": {"const": "record_recall"},
+        "transform_family": {"enum": ["truncation", "deletion", "masking", "sparse_noise"]},
+        "event_indices": {"$ref": "#/$defs/event_indices"},
+        "token_count": {"type": "integer", "minimum": 1},
+        "variants": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "prefixItems": [
+            {"allOf": [{"$ref": "#/$defs/variant"}, {"properties": {"requested_percent": {"const": 0}}}]},
+            {"allOf": [{"$ref": "#/$defs/variant"}, {"properties": {"requested_percent": {"const": 10}}}]},
+            {"allOf": [{"$ref": "#/$defs/variant"}, {"properties": {"requested_percent": {"const": 25}}}]},
+            {"allOf": [{"$ref": "#/$defs/variant"}, {"properties": {"requested_percent": {"const": 40}}}]}
+          ]
+        }
+      }
+    },
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["record_id", "event_count", "calibration_block_index", "family_permutation_index", "calibration_cue", "evaluation_base_cues"],
+      "properties": {
+        "record_id": {"$ref": "#/$defs/record_id"},
+        "event_count": {"type": "integer", "minimum": 50, "maximum": 256},
+        "calibration_block_index": {"type": "integer", "minimum": 0, "maximum": 4},
+        "family_permutation_index": {"type": "integer", "minimum": 0, "maximum": 23},
+        "calibration_cue": {"$ref": "#/$defs/calibration_cue"},
+        "evaluation_base_cues": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"$ref": "#/$defs/base_cue"}}
+      }
+    }
+  }
+}

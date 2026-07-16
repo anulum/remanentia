@@ -69,7 +69,11 @@ docs/assets/orcid_qr.png
 target/
 node_modules/
 .venv/
+.snn_models/
 # Compiled Rust extensions (built locally or in CI, never committed)
 *.so
 rust_*/Cargo.lock
 remanentia_topology/Cargo.lock
+
+# Generated raw source-universe stimuli corpus (archived to 00_SAFETY_BACKUPS)
+snn_stimuli/

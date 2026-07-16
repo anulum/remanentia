@@ -1,0 +1,261 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://remanentia.com/schemas/snn_memory_dataset_v2.schema.json",
+  "title": "Remanentia temporal SNN held-out dataset manifest v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "experiment_id", "experiment_digest", "split", "locked", "lock_timestamp", "seeds", "encoder", "model", "source_universe", "candidate_set", "context_budget", "cue_contract", "artifacts", "records", "distractor_records", "schedules"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "experiment_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{7,127}$"},
+    "experiment_digest": {"$ref": "#/$defs/sha256"},
+    "split": {"enum": ["development", "locked"]},
+    "locked": {"type": "boolean"},
+    "lock_timestamp": {"type": ["string", "null"], "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "seeds": {"const": [11, 29, 47, 71, 101, 131, 167, 211, 257, 307]},
+    "encoder": {"$ref": "#/$defs/encoder"},
+    "model": {"$ref": "#/$defs/model"},
+    "source_universe": {"$ref": "#/$defs/sourceUniverse"},
+    "candidate_set": {"$ref": "#/$defs/candidateSet"},
+    "context_budget": {"$ref": "#/$defs/contextBudget"},
+    "cue_contract": {"$ref": "#/$defs/cueContract"},
+    "artifacts": {"$ref": "#/$defs/artifacts"},
+    "records": {
+      "type": "array",
+      "minItems": 16,
+      "maxItems": 16,
+      "items": {"$ref": "#/$defs/record"}
+    },
+    "distractor_records": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/artifact"}
+    },
+    "schedules": {"$ref": "#/$defs/schedules"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "recordId": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "relativePath": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"},
+    "cueId": {"type": "string", "pattern": "^cue-[a-f0-9]{32}$"},
+    "variantId": {"type": "string", "pattern": "^variant-[a-f0-9]{32}$"},
+    "eventIndices": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "integer", "minimum": 0}
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/relativePath"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "indexedArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "event_indices"],
+      "properties": {
+        "path": {"$ref": "#/$defs/relativePath"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "event_indices": {"$ref": "#/$defs/eventIndices"}
+      }
+    },
+    "cueArtifact": {
+      "description": "Authenticated UTF-8 cue text for the evaluator/lock coordinator; this is not a probe cue bundle.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cue_id", "path", "sha256", "normalized_text_sha256", "event_indices"],
+      "properties": {
+        "cue_id": {"$ref": "#/$defs/cueId"},
+        "path": {"$ref": "#/$defs/relativePath"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "normalized_text_sha256": {"$ref": "#/$defs/sha256"},
+        "event_indices": {"$ref": "#/$defs/eventIndices"}
+      }
+    },
+    "variant": {
+      "description": "Authenticated UTF-8 cue text variant; authenticated probe bundles are a separate later contract.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["variant_id", "path", "sha256", "normalized_text_sha256", "requested_percent", "realized_fraction", "tokenizer_digest", "selected_positions"],
+      "properties": {
+        "variant_id": {"$ref": "#/$defs/variantId"},
+        "path": {"$ref": "#/$defs/relativePath"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "normalized_text_sha256": {"$ref": "#/$defs/sha256"},
+        "requested_percent": {"enum": [0, 10, 25, 40]},
+        "realized_fraction": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "tokenizer_digest": {"$ref": "#/$defs/sha256"},
+        "selected_positions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "baseCue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cue_id", "task", "transform_family", "event_indices", "variants"],
+      "properties": {
+        "cue_id": {"$ref": "#/$defs/cueId"},
+        "task": {"enum": ["record_recall", "next_event"]},
+        "expected_record_id": {
+          "$ref": "#/$defs/recordId",
+          "description": "Evaluator-only answer for next_event; never exposed to a probe process."
+        },
+        "transform_family": {"enum": ["truncation", "deletion", "masking", "sparse_noise"]},
+        "event_indices": {"$ref": "#/$defs/eventIndices"},
+        "variants": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {"$ref": "#/$defs/variant"}
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"task": {"const": "next_event"}}, "required": ["task"]},
+          "then": {"required": ["expected_record_id"]},
+          "else": {"not": {"required": ["expected_record_id"]}}
+        }
+      ]
+    },
+    "temporalMarker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timestamp_ns", "timestamp_source", "timestamp_precision", "source_commit"],
+      "properties": {
+        "timestamp_ns": {"type": "integer", "minimum": 0},
+        "timestamp_source": {"const": "git-commit"},
+        "timestamp_precision": {"const": "seconds"},
+        "source_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"}
+      }
+    },
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["record_id", "training_source", "calibration_cue", "evaluation_base_cues", "temporal_marker"],
+      "properties": {
+        "record_id": {"$ref": "#/$defs/recordId"},
+        "training_source": {"$ref": "#/$defs/indexedArtifact"},
+        "calibration_cue": {"$ref": "#/$defs/cueArtifact"},
+        "evaluation_base_cues": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {"$ref": "#/$defs/baseCue"}
+        },
+        "temporal_marker": {"$ref": "#/$defs/temporalMarker"}
+      }
+    },
+    "encoderConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["feature_dim", "packet_ms", "silent_ms", "active_fraction", "projection_seed"],
+      "properties": {
+        "feature_dim": {"type": "integer", "minimum": 8},
+        "packet_ms": {"type": "integer", "minimum": 2},
+        "silent_ms": {"type": "integer", "minimum": 0},
+        "active_fraction": {"type": "number", "exclusiveMinimum": 0.0, "maximum": 1.0},
+        "projection_seed": {"type": "integer", "minimum": 0, "maximum": 4294967295}
+      }
+    },
+    "encoder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checkpoint_locator", "directory_digest", "config_digest", "config"],
+      "properties": {
+        "checkpoint_locator": {"$ref": "#/$defs/relativePath"},
+        "directory_digest": {"$ref": "#/$defs/sha256"},
+        "config_digest": {"$ref": "#/$defs/sha256"},
+        "config": {"$ref": "#/$defs/encoderConfig"}
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["config_digest", "input_current"],
+      "properties": {
+        "config_digest": {"$ref": "#/$defs/sha256"},
+        "input_current": {"type": "number", "exclusiveMinimum": 0.0}
+      }
+    },
+    "sourceUniverse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact", "selector_digest", "payload_min_bytes", "payload_max_bytes", "event_min", "event_max"],
+      "properties": {
+        "artifact": {"$ref": "#/$defs/artifact"},
+        "selector_digest": {"$ref": "#/$defs/sha256"},
+        "payload_min_bytes": {"const": 1000},
+        "payload_max_bytes": {"const": 20000},
+        "event_min": {"const": 50},
+        "event_max": {"const": 256}
+      }
+    },
+    "candidateSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ordered_record_ids", "digest"],
+      "properties": {
+        "ordered_record_ids": {
+          "type": "array",
+          "minItems": 16,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/recordId"}
+        },
+        "digest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "contextBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["top_k", "max_payload_utf8_bytes"],
+      "properties": {
+        "top_k": {"const": 5},
+        "max_payload_utf8_bytes": {"type": "integer", "minimum": 1}
+      }
+    },
+    "cueContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["normalizer", "near_duplicate_metric", "near_duplicate_maximum"],
+      "properties": {
+        "normalizer": {"const": "unicode-nfkc-whitespace-v1"},
+        "near_duplicate_metric": {"const": "token-jaccard-v1"},
+        "near_duplicate_maximum": {"type": "number", "minimum": 0.0, "exclusiveMaximum": 1.0}
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provenance_store", "temporal_edges", "noise_lexicon", "task_set", "development_calibration"],
+      "properties": {
+        "provenance_store": {"$ref": "#/$defs/artifact"},
+        "temporal_edges": {"$ref": "#/$defs/artifact"},
+        "noise_lexicon": {"$ref": "#/$defs/artifact"},
+        "task_set": {"$ref": "#/$defs/artifact"},
+        "development_calibration": {"$ref": "#/$defs/artifact"}
+      }
+    },
+    "schedules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capacity_prefixes", "interference", "forgetting", "leave_one_record_out", "temporal_order_permutation"],
+      "properties": {
+        "capacity_prefixes": {"const": [4, 8, 12, 16]},
+        "interference": {"$ref": "#/$defs/artifact"},
+        "forgetting": {"$ref": "#/$defs/artifact"},
+        "leave_one_record_out": {"$ref": "#/$defs/artifact"},
+        "temporal_order_permutation": {"$ref": "#/$defs/artifact"}
+      }
+    }
+  }
+}

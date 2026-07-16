@@ -15,9 +15,11 @@ import pytest
 
 from snn_memory.contracts import EncoderConfig, ModelConfig
 from snn_memory.encoder import (
+    as_embedding_matrix,
     corrupt_currents,
     directory_digest,
     embeddings_to_currents,
+    require_sentences,
     split_events,
 )
 
@@ -37,6 +39,17 @@ def test_directory_digest_is_stable_and_rejects_empty_directory(tmp_path) -> Non
     empty.mkdir()
     with pytest.raises(ValueError, match="empty"):
         directory_digest(empty)
+
+
+def test_directory_digest_frames_paths_and_content_unambiguously(tmp_path) -> None:
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    (first / "a").write_bytes(b"bc")
+    (second / "ab").write_bytes(b"c")
+    assert b"a" + b"bc" == b"ab" + b"c"
+    assert directory_digest(first) != directory_digest(second)
 
 
 def test_embeddings_to_currents_are_deterministic_ordered_packets() -> None:
@@ -66,3 +79,21 @@ def test_corrupt_currents_removes_seeded_events_and_bounds_fraction() -> None:
     assert np.all((corrupted == 0.0) | (corrupted == currents))
     with pytest.raises(ValueError, match=r"\[0, 1\)"):
         corrupt_currents(currents, 1.0, 11)
+
+
+def test_require_sentences_rejects_an_empty_list() -> None:
+    require_sentences(["one"])
+    with pytest.raises(ValueError, match="at least one non-empty sentence"):
+        require_sentences([])
+
+
+def test_as_embedding_matrix_accepts_finite_2d_and_rejects_otherwise() -> None:
+    matrix = as_embedding_matrix([[1.0, 2.0], [3.0, 4.0]], 2)
+    assert matrix.shape == (2, 2)
+    assert matrix.dtype == np.float64
+    with pytest.raises(ValueError, match="invalid embeddings"):
+        as_embedding_matrix([1.0, 2.0], 2)
+    with pytest.raises(ValueError, match="invalid embeddings"):
+        as_embedding_matrix([[1.0, np.inf]], 1)
+    with pytest.raises(ValueError, match="invalid embeddings"):
+        as_embedding_matrix([[1.0, 2.0]], 2)
