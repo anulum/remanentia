@@ -217,6 +217,9 @@ omit = [
     "bench_all_local_models.py",
     "analyze_failures.py",
     "run_exp*.py",
+    # Operator performance benchmark — writes internal benchmark reports, not
+    # imported by product code (same class as the bench_*.py runners above).
+    "tools/benchmark_performance.py",
     "experimental/*",
     # Training infrastructure (not product code)
     "training/*",
@@ -269,6 +272,30 @@ omit = [
     # enforces 100 % line + branch coverage and self-audits the Stage-2 gate.
     "snn_memory/source_universe.py",
     "tools/verify_snn_memory_source_universe_d1.py",
+    # D2/D3/D4-A are the SNN-memory v2 installed-wheel modules (landed 4e5ca5b).
+    # Like D1 and the streamed adapter above, they are validated only through a
+    # freshly built and installed production wheel run outside the checkout, so
+    # the default Python-only CI core cannot exercise them and would report them
+    # at 0 %. They are NEVER accepted by omission alone — each has a dedicated
+    # verifier that builds + installs the wheel, runs its Stage-N installed gate
+    # under coverage, and enforces the coverage floor at source:
+    # - D2 cue_materializer: tools/verify_snn_memory_cue_materializer_d2.py
+    #   (Stage-2 gate, real pinned encoder) -> coverage --fail-under=100.
+    # - D3 experiment_lock + gb_preflight: tools/verify_snn_memory_d3.py
+    #   (Stage-3 gate, Python + Rust wheels) -> coverage --fail-under=100.
+    # - D4-A checkpoint_materialize_v2 + checkpoint_bundle_v2 + candidate_bank_v2:
+    #   tools/verify_snn_memory_d4a.py (Stage-4 gate) -> >= 95 % line + branch
+    #   with every accepted residual A/B/C-classified at source (T1819); any
+    #   unclassified residual fails the verifier.
+    "snn_memory/cue_materializer.py",
+    "tools/verify_snn_memory_cue_materializer_d2.py",
+    "snn_memory/experiment_lock.py",
+    "snn_memory/gb_preflight.py",
+    "tools/verify_snn_memory_d3.py",
+    "snn_memory/checkpoint_materialize_v2.py",
+    "snn_memory/checkpoint_bundle_v2.py",
+    "snn_memory/candidate_bank_v2.py",
+    "tools/verify_snn_memory_d4a.py",
     # Test files themselves
     "tests/test_*.py",
     "tests/conftest.py",

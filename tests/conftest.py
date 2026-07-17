@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -16,6 +17,47 @@ import pytest
 
 # Ensure the parent directory is importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+
+# Combined-coverage pass A: with REMANENTIA_COVERAGE_NO_RUST=1 the compiled Rust
+# extensions are made unimportable so the dispatch modules take their pure-Python
+# fallbacks, exactly as the setuptools-only CI test job does. Pass B (this flag
+# unset, extensions present) measures the native dispatch paths; combining the two
+# covers both without any `# pragma: no cover - native dispatch`. See
+# tools/run_combined_coverage.sh.
+if os.environ.get("REMANENTIA_COVERAGE_NO_RUST") == "1":
+    import importlib.abc as _iabc
+
+    _BLOCKED_RUST = frozenset(
+        {
+            "remanentia_active_retrieval",
+            "remanentia_aggregate_precompute",
+            "remanentia_answer_extractor",
+            "remanentia_answer_normalizer",
+            "remanentia_consolidation",
+            "remanentia_entity_extractor",
+            "remanentia_fact_decomposer",
+            "remanentia_knowledge_store",
+            "remanentia_recall",
+            "remanentia_retrieve",
+            "remanentia_search",
+            "remanentia_skill_extractor",
+            "remanentia_temporal",
+            "remanentia_topology",
+            "arcane_stdp",
+            "rust_snn_memory",
+        }
+    )
+
+    class _RustAbsentFinder(_iabc.MetaPathFinder):
+        def find_spec(self, fullname, path, target=None):
+            if fullname.split(".")[0] in _BLOCKED_RUST:
+                raise ModuleNotFoundError(f"rust extension {fullname!r} blocked", name=fullname)
+            return None
+
+    sys.meta_path.insert(0, _RustAbsentFinder())
+    for _mod in [_m for _m in sys.modules if _m.split(".")[0] in _BLOCKED_RUST]:
+        del sys.modules[_mod]
 
 
 @pytest.fixture(autouse=True)

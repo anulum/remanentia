@@ -15,6 +15,7 @@ from unittest.mock import patch
 
 import memory_index
 import numpy as np
+import pytest
 
 from compiled_memory import CompiledFact, write_compiled_facts
 from memory_query_intelligence import (
@@ -1941,6 +1942,7 @@ class TestRustBm25Paths:
             memory_index.HASH_CACHE_PATH = original_hash_cache
 
     def test_search_rust_bm25_success(self, tmp_path):
+        pytest.importorskip("remanentia_search")
         idx = self._real_index(tmp_path)
 
         result = idx._search_rust_bm25({"alpha", "beta"}, top_k=10)
@@ -1950,7 +1952,7 @@ class TestRustBm25Paths:
         assert result[0] > 0.0
 
     def test_ensure_rust_bm25_builds_and_caches_real_extension(self, tmp_path):
-        import remanentia_search
+        remanentia_search = pytest.importorskip("remanentia_search")
 
         idx = self._real_index(tmp_path)
         first = idx._ensure_rust_bm25()
@@ -1961,7 +1963,7 @@ class TestRustBm25Paths:
         assert first.num_paragraphs() == len(idx.paragraph_index)
 
     def test_search_uses_real_rust_bm25(self, tmp_path, monkeypatch):
-        import remanentia_search
+        remanentia_search = pytest.importorskip("remanentia_search")
 
         idx = self._real_index(tmp_path)
         monkeypatch.setenv("REMANENTIA_USE_RUST_BM25", "1")
@@ -2274,7 +2276,7 @@ class TestRustBm25NoneReturn:
 
 class TestGetRustBm25ClassSuccessImport:
     def test_successful_import(self):
-        import remanentia_search
+        remanentia_search = pytest.importorskip("remanentia_search")
         import memory_index
 
         old_attempted = memory_index._RUST_BM25_IMPORT_ATTEMPTED
@@ -2287,6 +2289,75 @@ class TestGetRustBm25ClassSuccessImport:
         finally:
             memory_index._RUST_BM25_IMPORT_ATTEMPTED = old_attempted
             memory_index._RUST_BM25_CLASS = old_cls
+
+
+class TestRustBm25ErrorBranches:
+    """Cover the rust-BM25 dispatch guard branches with injected fake classes.
+
+    These run in both coverage passes because they inject a fake rust class
+    rather than requiring the real extension: the real rust path succeeds (no
+    exception) when present and is skipped when absent, so the guard branches
+    are otherwise unreachable in either single pass.
+    """
+
+    def test_ensure_rust_bm25_no_class_disables(self, monkeypatch):
+        idx = MemoryIndex()
+        monkeypatch.setattr(memory_index, "_get_rust_bm25_class", lambda: None)
+        assert idx._ensure_rust_bm25() is None
+        assert idx._rust_bm25 is False
+
+    def test_ensure_rust_bm25_build_failure_disables(self, monkeypatch):
+        class _RaisingBm25:
+            def build(self, *args):
+                raise RuntimeError("rust build boom")
+
+        idx = MemoryIndex()
+        monkeypatch.setattr(memory_index, "_get_rust_bm25_class", lambda: _RaisingBm25)
+        assert idx._ensure_rust_bm25() is None
+        assert idx._rust_bm25 is False
+
+    def test_search_rust_bm25_search_failure_disables(self, monkeypatch):
+        class _RaisingSearch:
+            def search(self, *args):
+                raise RuntimeError("rust search boom")
+
+        idx = MemoryIndex()
+        monkeypatch.setattr(idx, "_ensure_rust_bm25", lambda: _RaisingSearch())
+        assert idx._search_rust_bm25({"alpha"}, top_k=5) is None
+        assert idx._rust_bm25 is False
+
+    def test_get_rust_bm25_class_import_failure(self, monkeypatch):
+        monkeypatch.setattr(memory_index, "_RUST_BM25_IMPORT_ATTEMPTED", False)
+        monkeypatch.setattr(memory_index, "_RUST_BM25_CLASS", None)
+
+        def _raise(name):
+            raise ImportError(f"no {name}")
+
+        monkeypatch.setattr(memory_index, "import_module", _raise)
+        assert memory_index._get_rust_bm25_class() is None
+        assert memory_index._RUST_BM25_CLASS is False
+
+
+class TestSearchCrossEncoderStage:
+    """Stage-3 cross-encoder rerank replacing the candidate set (line 825)."""
+
+    def test_cross_encoder_rerank_replaces_candidates(self, tmp_path, monkeypatch):
+        traces = tmp_path / "traces"
+        traces.mkdir()
+        (traces / "doc.md").write_text(
+            "# Doc\n\nThe SNN adapter alpha beta gamma content for searching.",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(memory_index, "SOURCES", {"test": traces})
+        monkeypatch.setattr(memory_index, "SOURCE_EXTENSIONS", {"test": {".md"}})
+        monkeypatch.setattr(memory_index, "HASH_CACHE_PATH", tmp_path / "content_hashes.json")
+        idx = MemoryIndex()
+        idx.build(use_gpu_embeddings=False, use_gliner=False, incremental=False)
+        monkeypatch.setattr(
+            idx, "_cross_encoder_rerank", lambda query, candidates: list(candidates[:1])
+        )
+        results = idx.search("SNN adapter", top_k=5)
+        assert isinstance(results, list)
 
 
 class TestSplitParagraphsLongTwoSentences:

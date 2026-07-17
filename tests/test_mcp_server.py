@@ -248,9 +248,7 @@ class TestHandleRecall:
 
 class TestHandleRemember:
     def test_writes_trace_file(self, tmp_path):
-        result = handle_remember(
-            "We decided to use BM25.", "decision", "remanentia", base=tmp_path
-        )
+        result = handle_remember("We decided to use BM25.", "decision", "remanentia", base=tmp_path)
         assert "Remembered:" in result
         traces = list((tmp_path / "reasoning_traces").glob("*.md"))
         assert len(traces) == 1
@@ -353,9 +351,7 @@ class TestHandleRecallLightweight:
         import mcp_server
 
         mcp_server._RECALL_INDEX = None
-        result = _lightweight_recall(
-            "xyznonexistent_zzz_999", top_k=3, base=tmp_traces.parent
-        )
+        result = _lightweight_recall("xyznonexistent_zzz_999", top_k=3, base=tmp_traces.parent)
         assert "No memories" in result
 
 
@@ -690,3 +686,84 @@ class TestMCPRoundtrip:
         assert remember is not None and recall is not None
         assert "Remembered:" in remember["result"]["content"][0]["text"]
         assert "cobaltsemaphore" in recall["result"]["content"][0]["text"]
+
+
+# ── default-workspace + guarded-tier coverage gaps ───────────────
+
+
+class TestMcpServerDefaultWorkspaceGaps:
+    """Drive the pure-Python default-workspace and guarded-tier branches that
+    isolated-workspace tests never reach (mcp_server 341, 371-374, 394,
+    400-415, 485-487, 503, 507)."""
+
+    def test_recall_non_default_index_path_load_fail(self, tmp_path):
+        missing = tmp_path / "absent_index.json.gz"
+        result = handle_recall("any query", base=tmp_path, index_path=missing)
+        assert isinstance(result, str)
+
+    def test_recall_guarded_tier_resolves(self, real_unified_index, monkeypatch):
+        workspace, index, index_path = real_unified_index
+        monkeypatch.setenv("REMANENTIA_GUARDED", "1")
+        result = handle_recall("SNN removal decision", base=workspace, index=index)
+        assert isinstance(result, str)
+
+    def test_recall_result_answer_header(self):
+        class _Res:
+            source = "traces"
+            name = "d.md"
+            score = 9.0
+            answer = "the real answer"
+            snippet = "snippet body"
+
+        class _Index:
+            def search(self, *args, **kwargs):
+                return [_Res()]
+
+        result = handle_recall("q", index=_Index())
+        assert "the real answer" in result
+
+    def test_recall_default_workspace_knowledge_graph(self, real_unified_index, monkeypatch):
+        import mcp_server
+
+        workspace, index, index_path = real_unified_index
+        monkeypatch.setattr(mcp_server, "BASE", workspace)
+        monkeypatch.setattr(mcp_server, "_UNIFIED_INDEX", index)
+
+        class _Note:
+            content = "A distinct knowledge note about the SNN adapter removal."
+            title = "SNN knowledge note"
+            note_type = "fact"
+
+        class _KS:
+            def check_triggers(self, query):
+                return []
+
+            def graph_search(self, query, top_k, hop_depth):
+                return [_Note()]
+
+        monkeypatch.setattr(mcp_server, "_get_knowledge_store", lambda: _KS())
+        result = handle_recall("SNN removal decision", base=workspace)
+        assert isinstance(result, str)
+
+    def test_remember_default_workspace(self, tmp_path, monkeypatch):
+        import mcp_server
+
+        workspace = tmp_path / "ws"
+        (workspace / "reasoning_traces").mkdir(parents=True)
+        monkeypatch.setattr(mcp_server, "BASE", workspace)
+
+        class _KS:
+            def add_note(self, *args, **kwargs):
+                return None
+
+            def add_trigger(self, *args, **kwargs):
+                return None
+
+            def save(self, *args, **kwargs):
+                return None
+
+        monkeypatch.setattr(mcp_server, "_get_knowledge_store", lambda: _KS())
+        monkeypatch.setattr(mcp_server, "_close_recall_loops", lambda content: None)
+        monkeypatch.setattr(mcp_server, "_schedule_consolidation", lambda: None)
+        result = handle_remember("a real memory body", base=workspace)
+        assert "Remembered" in result

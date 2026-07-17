@@ -634,19 +634,19 @@ class TestRustPathVerification:
 
     def test_consolidation_has_tier3_exports(self):
         """remanentia_consolidation exports Tier 3 functions."""
-        import remanentia_consolidation as rc
+        rc = pytest.importorskip("remanentia_consolidation")
         assert hasattr(rc, "cluster_traces")
         assert hasattr(rc, "build_summary_dag")
         assert hasattr(rc, "cluster_notes")
 
     def test_stdp_has_homeostatic(self):
         """arcane_stdp exports homeostatic_scaling."""
-        import arcane_stdp as stdp
+        stdp = pytest.importorskip("arcane_stdp")
         assert hasattr(stdp, "homeostatic_scaling")
 
     def test_retrieve_has_tier1_exports(self):
         """remanentia_retrieve exports all Tier 1 functions."""
-        import remanentia_retrieve as rr
+        rr = pytest.importorskip("remanentia_retrieve")
         expected = [
             "tokenize",
             "stem",

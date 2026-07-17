@@ -11,10 +11,16 @@ from __future__ import annotations
 import time
 
 import numpy as np
-import arcane_stdp as stdp
-import remanentia_consolidation as rc
+import pytest
 
 from knowledge_store import KnowledgeNote
+
+# The Tier-3 Rust crates (arcane_stdp, remanentia_consolidation) are built only
+# in the rust-parity CI job. In the pure-Python `test` job they are absent, so
+# skip cleanly at collection instead of aborting the whole session — matching
+# the importorskip guard the other rust tiers (tier2, recall, retrieve) use.
+stdp = pytest.importorskip("arcane_stdp")
+rc = pytest.importorskip("remanentia_consolidation")
 
 
 def _knowledge_note(keywords: list[str], entities: list[str]) -> KnowledgeNote:
@@ -252,9 +258,7 @@ class TestClusterNotes:
             _knowledge_note(["django", "web"], ["parazit"]),
         ]
         py_result = _cluster_notes(notes)
-        rust_result = rc.cluster_notes(
-            [(list(n.keywords), list(n.entities)) for n in notes], 2
-        )
+        rust_result = rc.cluster_notes([(list(n.keywords), list(n.entities)) for n in notes], 2)
         assert len(py_result) == len(rust_result)
 
     def test_performance(self):

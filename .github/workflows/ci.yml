@@ -14,6 +14,7 @@ on:
       - "**/*.py"
       - "tests/**"
       - "pyproject.toml"
+      - "Makefile"
       - "rust_*/**"
       - "remanentia_topology/**"
       - "experiments/**"
@@ -94,10 +95,19 @@ jobs:
       - name: Run tests
         run: python -m pytest tests/ -q --tb=short
 
-      - name: Run tests with coverage
+      - name: Build Rust extensions for combined coverage (pass B)
         if: matrix.python-version == '3.12'
         run: |
-          python -m pytest tests/ --cov=. --cov-config=pyproject.toml --cov-report=term-missing --cov-fail-under=100 -q --tb=short
+          pip install "maturin==1.12.6"
+          make build-rust PYTHON=python
+
+      - name: Run tests with combined coverage (Python fallback + Rust dispatch)
+        if: matrix.python-version == '3.12'
+        # De-hollow coverage gate: pass A blocks the compiled extensions and
+        # measures the pure-Python fallbacks; pass B runs with them present and
+        # measures the native dispatch paths. Combining the two data files
+        # reaches 100% with no `# pragma: no cover - native dispatch`.
+        run: make test-cov-combined PYTHON=python
 
   rust:
     runs-on: ubuntu-latest
