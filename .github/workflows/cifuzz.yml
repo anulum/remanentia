@@ -9,7 +9,7 @@ name: CIFuzz
 on:
   pull_request:
     branches: [main]
-    paths: ["*.py", "tests/**"]
+    paths: ["*.py", "**/*.py", "tests/**"]
 
 permissions: {}
 

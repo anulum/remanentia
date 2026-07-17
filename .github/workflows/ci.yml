@@ -11,6 +11,7 @@ on:
     branches: [main]
     paths:
       - "*.py"
+      - "**/*.py"
       - "tests/**"
       - "pyproject.toml"
       - "rust_*/**"
