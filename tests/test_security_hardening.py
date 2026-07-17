@@ -142,6 +142,10 @@ class RaisingAwaitableTask:
         """Cancel the real task before simulating a drain failure."""
         return bool(self._original.cancel())
 
+    def done(self) -> bool:
+        """Mirror the wrapped Future so shutdown's done()-guard works."""
+        return bool(self._original.done())
+
     def __await__(self) -> Iterator[Any]:
         """Raise while the emitter drains the connection task."""
 

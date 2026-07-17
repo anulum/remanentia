@@ -19,7 +19,11 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME = Path(os.environ.get("REMANENTIA_STAGE3_RUNTIME_ROOT", "[workspace]/_runtime"))
+RUNTIME = Path(
+    os.environ.get(
+        "REMANENTIA_STAGE3_RUNTIME_ROOT", str(Path.home() / ".cache" / "remanentia" / "runtime")
+    )
+)
 GATE = ROOT / "tests/stage3_installed_gates/snn_memory_d3_gate.py"
 EXPECTED_GATES = {"snn_memory_d3_gate.py"}
 MODEL = ROOT / ".snn_models" / "all-MiniLM-L6-v2"
@@ -77,7 +81,9 @@ def _pinned_encoder_digest() -> str:
 def main() -> int:
     actual = {path.name for path in (ROOT / "tests/stage3_installed_gates").glob("*_gate.py")}
     if actual != EXPECTED_GATES:
-        raise RuntimeError(f"D3 gate inventory drift: expected={sorted(EXPECTED_GATES)} actual={sorted(actual)}")
+        raise RuntimeError(
+            f"D3 gate inventory drift: expected={sorted(EXPECTED_GATES)} actual={sorted(actual)}"
+        )
     encoder_digest = _pinned_encoder_digest()
     RUNTIME.mkdir(parents=True, exist_ok=True)
     workspace = Path(tempfile.mkdtemp(prefix="remanentia-d3-", dir=RUNTIME))
@@ -93,8 +99,16 @@ def main() -> int:
     )
     _run(
         [
-            sys.executable, "-m", "pip", "wheel", "--no-index", "--no-deps",
-            "--no-build-isolation", "--wheel-dir", str(python_wheels), str(ROOT),
+            sys.executable,
+            "-m",
+            "pip",
+            "wheel",
+            "--no-index",
+            "--no-deps",
+            "--no-build-isolation",
+            "--wheel-dir",
+            str(python_wheels),
+            str(ROOT),
         ],
         workspace,
     )
@@ -102,8 +116,16 @@ def main() -> int:
     python_wheel = _one(python_wheels, "remanentia-*.whl")
     _run(
         [
-            sys.executable, "-m", "pip", "install", "--no-index", "--no-deps",
-            "--target", str(install_target), str(python_wheel), str(rust_wheel),
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--no-index",
+            "--no-deps",
+            "--target",
+            str(install_target),
+            str(python_wheel),
+            str(rust_wheel),
         ],
         workspace,
     )
@@ -123,30 +145,50 @@ def main() -> int:
     environment.setdefault("TOKENIZERS_PARALLELISM", "false")
     _run(
         [
-            sys.executable, "-m", "coverage", "run", "--rcfile=/dev/null", "--branch",
+            sys.executable,
+            "-m",
+            "coverage",
+            "run",
+            "--rcfile=/dev/null",
+            "--branch",
             f"--data-file={coverage_data}",
             f"--include={lock_module},{gb_module}",
             str(GATE),
-            "--workspace", str(fixtures),
-            "--install-target", str(install_target),
-            "--repo-root", str(ROOT),
-            "--extension-sha256", extension_sha256,
-            "--encoder-checkpoint", str(MODEL),
-            "--encoder-digest", encoder_digest,
-            "--python-wheel-sha256", _sha(python_wheel),
-            "--rust-wheel-sha256", _sha(rust_wheel),
-            "--public-schema", str(ROOT / "docs/schema/snn_memory_experiment_lock_v2.schema.json"),
-            "--public-license", str(ROOT / "docs/schema/snn_memory_experiment_lock_v2.schema.json.license"),
+            "--workspace",
+            str(fixtures),
+            "--install-target",
+            str(install_target),
+            "--repo-root",
+            str(ROOT),
+            "--extension-sha256",
+            extension_sha256,
+            "--encoder-checkpoint",
+            str(MODEL),
+            "--encoder-digest",
+            encoder_digest,
+            "--python-wheel-sha256",
+            _sha(python_wheel),
+            "--rust-wheel-sha256",
+            _sha(rust_wheel),
+            "--public-schema",
+            str(ROOT / "docs/schema/snn_memory_experiment_lock_v2.schema.json"),
+            "--public-license",
+            str(ROOT / "docs/schema/snn_memory_experiment_lock_v2.schema.json.license"),
         ],
         workspace,
         environment,
     )
     _run(
         [
-            sys.executable, "-m", "coverage", "report", "--rcfile=/dev/null",
+            sys.executable,
+            "-m",
+            "coverage",
+            "report",
+            "--rcfile=/dev/null",
             f"--data-file={coverage_data}",
             f"--include={lock_module},{gb_module}",
-            "--show-missing", "--fail-under=100",
+            "--show-missing",
+            "--fail-under=100",
         ],
         workspace,
         environment,

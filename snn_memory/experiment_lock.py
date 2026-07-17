@@ -34,7 +34,7 @@ D3 artifacts may declare only the ``pre_result`` or ``fixture_only`` states
 (Section 5.1); no D3 artifact claims a G1/G2/G3, utility, efficacy, scientific,
 product, continuity, consciousness, SOTA, or AOT pass. The writer may implement
 the lock capability but this D3 run exercises it only against temporary
-``fixture_only`` artifacts under ``[workspace]/_runtime``; it never performs
+``fixture_only`` artifacts under a temporary runtime root; it never performs
 the live dataset-lock ceremony or writes a scientific artifact into the repository.
 """
 
@@ -121,8 +121,15 @@ _GB_TAIL_BINS = (4, 5, 6, 7)
 _GB_CANDIDATE_LAGS = (1, 2, 3, 4)
 _GB_EPSILON = 2.220446049250313e-16
 _GB_RECURRENT_KEYS = (
-    "e_signed_sum", "e_l1", "e_l2", "i_signed_sum", "i_l1", "i_l2",
-    "net_signed_sum", "net_l1", "net_l2",
+    "e_signed_sum",
+    "e_l1",
+    "e_l2",
+    "i_signed_sum",
+    "i_l1",
+    "i_l2",
+    "net_signed_sum",
+    "net_l1",
+    "net_l2",
 )
 _GB_NET_L1_KEY = "net_l1"
 _GB_NET_L2_KEY = "net_l2"
@@ -372,7 +379,9 @@ def _require_finite_non_negative_grid(payload: Mapping[str, Any], key: str) -> N
 def _validate_scoring_target_semantics(payload: Mapping[str, Any]) -> None:
     candidate_order = list(payload["candidate_order"])
     if candidate_order != sorted(candidate_order):
-        raise ExperimentLockError("scoring candidate order must be lexical immutable-record-ID order")
+        raise ExperimentLockError(
+            "scoring candidate order must be lexical immutable-record-ID order"
+        )
     signatures = list(payload["candidate_signature_digests"])
     if len(signatures) != len(candidate_order):
         raise ExperimentLockError("one candidate signature digest is required per candidate")
@@ -405,14 +414,18 @@ def _validate_calibration_spec_semantics(payload: Mapping[str, Any]) -> None:
     if negatives != synthetic_negative_ids(positives):
         raise ExperimentLockError("synthetic negative IDs are not the matched four-family corpus")
     if generator["config_digest"] != synthetic_config_digest():
-        raise ExperimentLockError("synthetic config digest does not bind the generator configuration")
+        raise ExperimentLockError(
+            "synthetic config digest does not bind the generator configuration"
+        )
     selection_digest, validation_digest = synthetic_partition_digests(positives)
     if generator["selection_partition_digest"] != selection_digest:
         raise ExperimentLockError("synthetic selection partition digest is not bound")
     if generator["validation_partition_digest"] != validation_digest:
         raise ExperimentLockError("synthetic validation partition digest is not bound")
     if payload["task_set_digest"] != synthetic_task_set_digest(positives, negatives):
-        raise ExperimentLockError("calibration task-set digest does not bind the synthetic inventory")
+        raise ExperimentLockError(
+            "calibration task-set digest does not bind the synthetic inventory"
+        )
 
 
 def _validate_experiment_lock_semantics(payload: Mapping[str, Any]) -> None:
@@ -489,7 +502,9 @@ def _gb_half_life(rows: Sequence[Mapping[str, Any]], width: int) -> int | None:
     return None
 
 
-def _gb_bin_hamming(raster: Sequence[frozenset[int]], bin_high: int, bin_low: int, width: int) -> int:
+def _gb_bin_hamming(
+    raster: Sequence[frozenset[int]], bin_high: int, bin_low: int, width: int
+) -> int:
     total = 0
     for offset in range(width):
         high = raster[bin_high * width + offset]
@@ -572,7 +587,9 @@ def _gb_classify(
 ) -> str:
     if _gb_tail_silent(rows, raster, width, numerical_zero_floor):
         return "silent_decay"
-    if _gb_lag_passes(rows, raster, width, n_neurons, 1, spike_drift_ceiling, current_drift_ceiling):
+    if _gb_lag_passes(
+        rows, raster, width, n_neurons, 1, spike_drift_ceiling, current_drift_ceiling
+    ):
         return "settled_fixed"
     for lag in (2, 3, 4):
         if _gb_lag_passes(
@@ -592,7 +609,9 @@ def _validate_gb_evidence_semantics(payload: Mapping[str, Any]) -> None:
         raise ExperimentLockError("gb evidence spike raster differs from completion_steps")
     for index, row in enumerate(rows):
         if index > 0 and row["timestep"] != rows[index - 1]["timestep"] + 1:
-            raise ExperimentLockError("gb evidence completion timesteps are not contiguous ascending")
+            raise ExperimentLockError(
+                "gb evidence completion timesteps are not contiguous ascending"
+            )
     n_neurons = payload["n_neurons"]
     raster: list[frozenset[int]] = []
     for neurons in raster_lists:
@@ -624,11 +643,18 @@ def _validate_gb_evidence_semantics(payload: Mapping[str, Any]) -> None:
     if list(_gb_tail_hamming(raster, width)) != list(payload["bin_spike_hamming"]):
         raise ExperimentLockError("gb evidence tail Hamming differs from the recomputed raster")
     trajectory = _gb_classify(
-        rows, raster, width, n_neurons,
-        spike_drift_ceiling, current_drift_ceiling, numerical_zero_floor,
+        rows,
+        raster,
+        width,
+        n_neurons,
+        spike_drift_ceiling,
+        current_drift_ceiling,
+        numerical_zero_floor,
     )
     if trajectory != payload["trajectory_class"]:
-        raise ExperimentLockError("gb evidence trajectory class differs from the recomputed dynamics")
+        raise ExperimentLockError(
+            "gb evidence trajectory class differs from the recomputed dynamics"
+        )
     settled = payload["settled"]
     if settled != (payload["trajectory_class"] in ("settled_fixed", "settled_periodic")):
         raise ExperimentLockError("gb evidence settled flag disagrees with the trajectory class")
@@ -794,9 +820,14 @@ def calibration_threshold_digest(payload: Mapping[str, Any]) -> str:
     grids: dict[str, Any] = {
         key: list(payload[key])
         for key in (
-            "numerical_zero_floor_grid", "spike_drift_ceiling_grid", "current_drift_ceiling_grid",
-            "representation_margin_floor_grid", "normalized_effective_rank_floor_grid",
-            "settled_fraction_floor_grid", "wandering_ceiling_grid", "collapse_ceiling_grid",
+            "numerical_zero_floor_grid",
+            "spike_drift_ceiling_grid",
+            "current_drift_ceiling_grid",
+            "representation_margin_floor_grid",
+            "normalized_effective_rank_floor_grid",
+            "settled_fraction_floor_grid",
+            "wandering_ceiling_grid",
+            "collapse_ceiling_grid",
             "abstention_grid",
         )
     }
@@ -819,19 +850,29 @@ _FOREIGN_LANE_H_DOMAIN = b"remanentia:snn-v2-foreign-lane-h:v1\0"
 _LANE_H_MISSING_STATUS = "inadmissible_missing_historical_evidence"
 _LANE_H_ADMISSIBLE_STATUS = "admissible_authenticated_historical_evidence"
 _LANE_C_COMPONENT_KEYS: tuple[str, ...] = (
-    "diagnostic_schema_sha256", "experiment_config_sha256", "output_root_sha256",
-    "task_set_sha256", "threshold_sha256", "candidate_bank_sha256", "scorer_sha256",
+    "diagnostic_schema_sha256",
+    "experiment_config_sha256",
+    "output_root_sha256",
+    "task_set_sha256",
+    "threshold_sha256",
+    "candidate_bank_sha256",
+    "scorer_sha256",
     "provenance_sha256",
 )
 _LANE_H_COMPONENT_KEYS: tuple[str, ...] = (
-    "historical_git_object", "historical_embedding_sha256", "historical_configuration_sha256",
-    "historical_dependency_environment_sha256", "historical_ranking_output_sha256",
-    "historical_output_root_sha256", "historical_provenance_sha256",
+    "historical_git_object",
+    "historical_embedding_sha256",
+    "historical_configuration_sha256",
+    "historical_dependency_environment_sha256",
+    "historical_ranking_output_sha256",
+    "historical_output_root_sha256",
+    "historical_provenance_sha256",
 )
 
 
 def lane_c_manifest_identity(manifest: Mapping[str, str]) -> dict[str, str]:
     """Derive the seven-field Lane-C identity from its measured diagnostic manifest digests."""
+
     def field(*values: str) -> str:
         return _framed_digest(_LANE_C_MANIFEST_DOMAIN, list(values))
 
@@ -842,24 +883,33 @@ def lane_c_manifest_identity(manifest: Mapping[str, str]) -> dict[str, str]:
         "candidate_bank": field("candidate_bank", manifest["candidate_bank_sha256"]),
         "scorer": field("scorer", manifest["scorer_sha256"]),
         "schema": field("diagnostic_schema", manifest["diagnostic_schema_sha256"]),
-        "provenance": field("provenance", manifest["provenance_sha256"],
-                            "experiment_config", manifest["experiment_config_sha256"]),
+        "provenance": field(
+            "provenance",
+            manifest["provenance_sha256"],
+            "experiment_config",
+            manifest["experiment_config_sha256"],
+        ),
     }
 
 
 def lane_h_manifest_identity(manifest: Mapping[str, str]) -> dict[str, str]:
     """Derive the seven-field Lane-H identity from an authenticated historical manifest's digests."""
+
     def field(*values: str) -> str:
         return _framed_digest(_LANE_H_MANIFEST_DOMAIN, list(values))
 
     return {
         "root": field("historical_output_root", manifest["historical_output_root_sha256"]),
-        "task_set": field("historical_ranking_output", manifest["historical_ranking_output_sha256"]),
+        "task_set": field(
+            "historical_ranking_output", manifest["historical_ranking_output_sha256"]
+        ),
         "threshold": field("historical_configuration", manifest["historical_configuration_sha256"]),
         "candidate_bank": field("historical_embedding", manifest["historical_embedding_sha256"]),
         "scorer": field("historical_git_object", manifest["historical_git_object"]),
-        "schema": field("historical_dependency_environment",
-                        manifest["historical_dependency_environment_sha256"]),
+        "schema": field(
+            "historical_dependency_environment",
+            manifest["historical_dependency_environment_sha256"],
+        ),
         "provenance": field("historical_provenance", manifest["historical_provenance_sha256"]),
     }
 
@@ -885,7 +935,9 @@ def build_foreign_lane_c(manifest: Mapping[str, str]) -> dict[str, Any]:
     return block
 
 
-def build_foreign_lane_h_inadmissible(reason: str, missing_inventory: Sequence[str]) -> dict[str, Any]:
+def build_foreign_lane_h_inadmissible(
+    reason: str, missing_inventory: Sequence[str]
+) -> dict[str, Any]:
     """Build a bound inadmissible Lane-H record — an explicit absence, no fabricated identities."""
     block: dict[str, Any] = {
         "lane_role": "lane_h",
@@ -949,19 +1001,29 @@ def foreign_evidence_digests(foreign_lanes: Mapping[str, Any]) -> frozenset[str]
 def lock_identity_inventory(payload: Mapping[str, Any]) -> frozenset[str]:
     """Return the complete explicit Lane-P identity inventory carried by the lock payload."""
     inventory: set[str] = set(lane_identity_fields(payload))
-    inventory.update([
-        payload["candidate_order_digest"], payload["expected_task_set_digest"],
-        payload["scoring_target_digest"], payload["calibration_spec_digest"],
-        payload["output_root_digest"], payload["lane_role_digest"], payload["lane_domain_digest"],
-    ])
+    inventory.update(
+        [
+            payload["candidate_order_digest"],
+            payload["expected_task_set_digest"],
+            payload["scoring_target_digest"],
+            payload["calibration_spec_digest"],
+            payload["output_root_digest"],
+            payload["lane_role_digest"],
+            payload["lane_domain_digest"],
+        ]
+    )
     inventory.update(_thaw(payload["identities"]).values())
     d1 = payload["d1"]
     inventory.update([d1["file_sha256"], d1["payload_self_sha256"], d1["repository_head"]])
     inventory.update(_thaw(d1["selected_record_ids"]))
     d2 = payload["d2"]
-    inventory.update([
-        d2["cue_set_file_sha256"], d2["cue_set_payload_self_sha256"], d2["bundle_inventory_digest"],
-    ])
+    inventory.update(
+        [
+            d2["cue_set_file_sha256"],
+            d2["cue_set_payload_self_sha256"],
+            d2["bundle_inventory_digest"],
+        ]
+    )
     return frozenset(inventory)
 
 
@@ -1065,7 +1127,9 @@ def _bundle_identity_digests(bundle: Any) -> set[str]:
     """
     payload = bundle.payload
     raw_embedding = base64.b64decode(payload["embedding"]["data_base64"])
-    embedding_digest = hashlib.sha256(b"remanentia:snn-v2-embedding:v1\0" + raw_embedding).hexdigest()
+    embedding_digest = hashlib.sha256(
+        b"remanentia:snn-v2-embedding:v1\0" + raw_embedding
+    ).hexdigest()
     digests: set[str] = {
         bundle.file_sha256,
         str(bundle.payload_self_sha256),
@@ -1116,7 +1180,9 @@ def bind_lane_isolation(
         or scoring_target.artifact_type != "snn-memory-scoring-target-v2"
         or calibration_spec.artifact_type != "snn-memory-gb-calibration-spec-v2"
     ):
-        raise ExperimentLockError("lane isolation requires the exact lock/scoring/calibration types")
+        raise ExperimentLockError(
+            "lane isolation requires the exact lock/scoring/calibration types"
+        )
     lane = lock.payload["lane_role"]
     if lane != LaneRole.LANE_P.value:
         raise ExperimentLockError("only a Lane-P lock is admissible for evaluation")
@@ -1133,28 +1199,41 @@ def bind_lane_isolation(
     lock_identities = lock.payload["identities"]
     for key in _SHARED_IDENTITY_KEYS:
         if scoring_target.payload["identities"][key] != lock_identities[key]:
-            raise ExperimentLockError("scoring-target identity differs from the lock identity block")
+            raise ExperimentLockError(
+                "scoring-target identity differs from the lock identity block"
+            )
         if calibration_spec.payload["identities"][key] != lock_identities[key]:
             raise ExperimentLockError("calibration identity differs from the lock identity block")
     # The lock's granular lane candidate-bank and threshold identities must bind the exact
     # scoring candidate bank and calibration threshold grids.
     lane_identity = lock.payload["lane_identity"]
-    if lane_identity["candidate_bank"] != scoring_target.payload["identities"]["candidate_bank_digest"]:
-        raise ExperimentLockError("lock candidate-bank identity does not bind the scoring candidate bank")
+    if (
+        lane_identity["candidate_bank"]
+        != scoring_target.payload["identities"]["candidate_bank_digest"]
+    ):
+        raise ExperimentLockError(
+            "lock candidate-bank identity does not bind the scoring candidate bank"
+        )
     if lane_identity["threshold"] != calibration_threshold_digest(calibration_spec.payload):
-        raise ExperimentLockError("lock threshold identity does not bind the calibration thresholds")
+        raise ExperimentLockError(
+            "lock threshold identity does not bind the calibration thresholds"
+        )
     # The candidate bank order is D1/D2 provenance; scoring requires lexical order.
     if tuple(scoring_target.payload["candidate_order"]) != tuple(
         sorted(lock.payload["candidate_order"])
     ):
-        raise ExperimentLockError("scoring candidate order must be the lexical Lane-P candidate set")
+        raise ExperimentLockError(
+            "scoring candidate order must be the lexical Lane-P candidate set"
+        )
     # The presented bundle set must exactly reconstruct the cue set's declared bundle inventory:
     # no omission, duplicate, unexpected, or substituted bundle, and no caller-selected subset.
     declared = sorted(set(cue_bundle_inventory(cue_set.payload)))
     if not declared:
         raise ExperimentLockError("the authenticated cue set declares no cue bundles")
     if sorted(bundle.file_sha256 for bundle in bundles) != sorted(sha for _, sha in declared):
-        raise ExperimentLockError("bound bundles do not reconstruct the authenticated cue-set inventory")
+        raise ExperimentLockError(
+            "bound bundles do not reconstruct the authenticated cue-set inventory"
+        )
     # The bound foreign-lane identity set must be disjoint from every presented Lane-P artifact
     # identity class (scoring/calibration toolchain identities, D1/D2 files, every bundle identity).
     foreign = foreign_evidence_digests(lock.payload["foreign_lanes"])
@@ -1166,7 +1245,9 @@ def bind_lane_isolation(
     for bundle in bundles:
         artifact_inventory.update(_bundle_identity_digests(bundle))
     if foreign & artifact_inventory:
-        raise ExperimentLockError("a foreign-lane identity contaminates a bound Lane-P artifact identity")
+        raise ExperimentLockError(
+            "a foreign-lane identity contaminates a bound Lane-P artifact identity"
+        )
 
 
 def bind_task_completeness(lock: ValidatedArtifact, completeness: ValidatedArtifact) -> None:
@@ -1190,7 +1271,9 @@ def bind_task_completeness(lock: ValidatedArtifact, completeness: ValidatedArtif
     if tuple(completeness.payload["seeds"]) != tuple(lock.payload["seeds"]):
         raise ExperimentLockError("completeness seed set differs from the lock seed set")
     if completeness.payload["task_set_digest"] != lock.payload["expected_task_set_digest"]:
-        raise ExperimentLockError("completeness task-set digest differs from the lock expected task set")
+        raise ExperimentLockError(
+            "completeness task-set digest differs from the lock expected task set"
+        )
 
 
 def bind_d1_d2(
@@ -1312,9 +1395,7 @@ def _cmd_read(arguments: argparse.Namespace) -> dict[str, Any]:
 
 
 def _cmd_completeness(arguments: argparse.Namespace) -> dict[str, Any]:
-    artifact = read_artifact(
-        arguments.artifact, expected_type="snn-memory-task-completeness-v2"
-    )
+    artifact = read_artifact(arguments.artifact, expected_type="snn-memory-task-completeness-v2")
     return {
         "completeness": bool(artifact.payload["completeness"]),
         "abort_reason": artifact.payload["abort_reason"],

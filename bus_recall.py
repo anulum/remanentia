@@ -282,7 +282,15 @@ class BusRecallEmitter:
         if task is not None:  # pragma: no branch - set before loop becomes ready
             if not task.done():
                 task.cancel()
-            await asyncio.gather(task, return_exceptions=True)
+            results = await asyncio.gather(task, return_exceptions=True)
+            for result in results:
+                if isinstance(result, BaseException) and not isinstance(
+                    result, asyncio.CancelledError
+                ):
+                    log.debug(
+                        "Recall bus connect task shutdown failed",
+                        exc_info=result,
+                    )
         assert self._loop is not None
         self._loop.stop()
 

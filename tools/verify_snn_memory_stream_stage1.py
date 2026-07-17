@@ -19,7 +19,11 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME_ROOT = Path(os.environ.get("REMANENTIA_STAGE1_RUNTIME_ROOT", "[workspace]/_runtime"))
+RUNTIME_ROOT = Path(
+    os.environ.get(
+        "REMANENTIA_STAGE1_RUNTIME_ROOT", str(Path.home() / ".cache" / "remanentia" / "runtime")
+    )
+)
 GATE = ROOT / "tests/installed_gates/snn_memory_stream_stage1_gate.py"
 EXPECTED_INSTALLED_GATES = {"snn_memory_stream_stage1_gate.py"}
 

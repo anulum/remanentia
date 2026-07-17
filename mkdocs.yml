@@ -139,6 +139,9 @@ nav:
     - seed_utils: api/seed_utils.md
     - vector_index: api/vector_index.md
     - vector_pipeline: api/vector_pipeline.md
+    - cli_recall: api/cli_recall.md
+    - memory_dates: api/memory_dates.md
+    - text_chunking: api/text_chunking.md
     - CLI: api/cli.md
   - Architecture:
     - Overview: architecture/architecture.md

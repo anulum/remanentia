@@ -19,7 +19,11 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME = Path(os.environ.get("REMANENTIA_STAGE2_RUNTIME_ROOT", "[workspace]/_runtime"))
+RUNTIME = Path(
+    os.environ.get(
+        "REMANENTIA_STAGE2_RUNTIME_ROOT", str(Path.home() / ".cache" / "remanentia" / "runtime")
+    )
+)
 GATES = {
     "snn_memory_source_universe_d1_gate.py",
     "snn_memory_cue_materializer_d2_gate.py",
@@ -74,9 +78,7 @@ def _pinned_encoder_digest() -> str:
         digest.update(content)
     live = digest.hexdigest()
     if live != declared[0]:
-        raise RuntimeError(
-            f"pinned local encoder digest drift: tracked={declared[0]} live={live}"
-        )
+        raise RuntimeError(f"pinned local encoder digest drift: tracked={declared[0]} live={live}")
     return live
 
 

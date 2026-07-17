@@ -149,7 +149,7 @@ class MemoryIndex:
         compiled_output_dir: Path = BASE / "memory" / "compiled",
         sources: Mapping[str, Path] | None = None,
         source_extensions: Mapping[str, set[str]] | None = None,
-        hash_cache_path: Path = HASH_CACHE_PATH,
+        hash_cache_path: Path | None = None,
     ) -> None:
         self.documents: list[Document] = []
         self.paragraph_index: list[tuple[int, int]] = []  # (doc_idx, para_idx)
@@ -186,7 +186,7 @@ class MemoryIndex:
             if source_extensions is not None
             else None
         )
-        self.hash_cache_path = hash_cache_path
+        self.hash_cache_path = HASH_CACHE_PATH if hash_cache_path is None else hash_cache_path
 
     def build(
         self,
@@ -1433,7 +1433,11 @@ def needs_rebuild() -> bool:
     for source_name, source_dir in SOURCES.items():
         if not source_dir.exists():
             continue
-        for f in _iter_source_files(source_name, source_dir):
+        for f in _iter_source_files(
+            source_name,
+            source_dir,
+            source_extensions=SOURCE_EXTENSIONS,
+        ):
             if f.stat().st_mtime > idx_mtime:
                 return True
     return False

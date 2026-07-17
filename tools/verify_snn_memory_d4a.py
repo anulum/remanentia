@@ -22,8 +22,12 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME = Path(os.environ.get("REMANENTIA_STAGE4_RUNTIME_ROOT",
-                              "[workspace]/_runtime/REMANENTIA/D4A"))
+RUNTIME = Path(
+    os.environ.get(
+        "REMANENTIA_STAGE4_RUNTIME_ROOT",
+        str(Path.home() / ".cache" / "remanentia" / "runtime" / "REMANENTIA/D4A"),
+    )
+)
 GATE = ROOT / "tests/stage4_installed_gates/snn_memory_d4a_gate.py"
 EXPECTED_GATES = {"snn_memory_d4a_gate.py"}
 MODEL = ROOT / ".snn_models" / "all-MiniLM-L6-v2"
@@ -32,9 +36,9 @@ MANIFESTS = (
     ROOT / "experiments/snn_memory/locked_evaluation_corpus.json",
 )
 _MODULES = ("checkpoint_bundle_v2", "candidate_bank_v2", "checkpoint_materialize_v2")
-_RSS_LIMIT_KB = 1_572_864          # 1.5 GiB aggregate process-tree RSS
-_DISK_LIMIT_BYTES = 2 * 1024 ** 3  # 2 GiB workspace
-_WALL_LIMIT_SECONDS = 1800         # 30 minutes (D4-A amendment 2026-07-16T1819; external watchdog >=2100s)
+_RSS_LIMIT_KB = 1_572_864  # 1.5 GiB aggregate process-tree RSS
+_DISK_LIMIT_BYTES = 2 * 1024**3  # 2 GiB workspace
+_WALL_LIMIT_SECONDS = 1800  # 30 minutes (D4-A amendment 2026-07-16T1819; external watchdog >=2100s)
 _MIN_COVERAGE = 95.0
 # workers=1: at most one materializer child plus its single calibration worker alive under the gate
 # root at any instant; a larger concurrent non-root count means parallelism escaped serialization.
@@ -136,7 +140,9 @@ def _process_cmdlines(pids: list[int]) -> list[str]:
     return lines
 
 
-def _supervise(argv: list[str], cwd: Path, environment: dict[str, str], workspace: Path) -> dict[str, Any]:
+def _supervise(
+    argv: list[str], cwd: Path, environment: dict[str, str], workspace: Path
+) -> dict[str, Any]:
     """Run the gate as a supervised process group; monitor by ancestry AND process group.
 
     Fails closed and kills the whole group on any RSS/disk/wall breach, captures the gate's final
@@ -149,11 +155,17 @@ def _supervise(argv: list[str], cwd: Path, environment: dict[str, str], workspac
     # child can never block on output. (D4-A hardening after the concurrent-run wedge, 2026-07-16.)
     stdout_path = workspace / "_supervise_stdout.bin"
     stderr_path = workspace / "_supervise_stderr.bin"
-    stdout_file = open(stdout_path, "wb")
-    stderr_file = open(stderr_path, "wb")
+    stdout_file = open(stdout_path, "wb")  # noqa: SIM115  # fds owned by the child until join
+    stderr_file = open(stderr_path, "wb")  # noqa: SIM115  # fds owned by the child until join
     try:
-        process = subprocess.Popen(argv, cwd=cwd, env=environment, start_new_session=True,
-                                   stdout=stdout_file, stderr=stderr_file)
+        process = subprocess.Popen(
+            argv,
+            cwd=cwd,
+            env=environment,
+            start_new_session=True,
+            stdout=stdout_file,
+            stderr=stderr_file,
+        )
     finally:
         stdout_file.close()  # the child holds its own dup; the parent needs no copy
         stderr_file.close()
@@ -170,10 +182,17 @@ def _supervise(argv: list[str], cwd: Path, environment: dict[str, str], workspac
             peak_rss_kb = max(peak_rss_kb, _tree_rss_kb(sorted(tree)))
             peak_disk = max(peak_disk, _tree_size_bytes(workspace))
             elapsed = time.monotonic() - start
-            breach = ("RSS" if peak_rss_kb > _RSS_LIMIT_KB else
-                      "workspace-disk" if peak_disk > _DISK_LIMIT_BYTES else
-                      "wall-clock" if elapsed > _WALL_LIMIT_SECONDS else
-                      "concurrency" if max_descendants > _MAX_CONCURRENT_NON_ROOT else None)
+            breach = (
+                "RSS"
+                if peak_rss_kb > _RSS_LIMIT_KB
+                else "workspace-disk"
+                if peak_disk > _DISK_LIMIT_BYTES
+                else "wall-clock"
+                if elapsed > _WALL_LIMIT_SECONDS
+                else "concurrency"
+                if max_descendants > _MAX_CONCURRENT_NON_ROOT
+                else None
+            )
             if breach is not None:
                 offenders = _process_cmdlines(sorted(live_non_root))
                 os.killpg(pgid, signal.SIGKILL)
@@ -181,7 +200,8 @@ def _supervise(argv: list[str], cwd: Path, environment: dict[str, str], workspac
                 raise RuntimeError(
                     f"gate process group breached the {breach} envelope "
                     f"(peak_rss={peak_rss_kb} KiB, disk={peak_disk} B, elapsed={elapsed:.0f}s, "
-                    f"live_non_root={len(live_non_root)}, procs={offenders})")
+                    f"live_non_root={len(live_non_root)}, procs={offenders})"
+                )
             if returncode is not None:
                 break
             time.sleep(0.4)
@@ -195,21 +215,33 @@ def _supervise(argv: list[str], cwd: Path, environment: dict[str, str], workspac
                     os.kill(pid, signal.SIGKILL)
                 except OSError:
                     continue
-            raise RuntimeError(f"gate left orphan process-group members after exit: {sorted(leftover)}")
+            raise RuntimeError(
+                f"gate left orphan process-group members after exit: {sorted(leftover)}"
+            )
         if returncode != 0:
             raise RuntimeError(f"gate exited {returncode}: {stderr.decode()[:2000]}")
         gate_stderr = stderr.decode()
         gate_stdout = stdout.decode()
-        canonical = json.dumps(json.loads(gate_stdout), sort_keys=True,
-                               separators=(",", ":")).encode("utf-8") + b"\n"
+        canonical = (
+            json.dumps(json.loads(gate_stdout), sort_keys=True, separators=(",", ":")).encode(
+                "utf-8"
+            )
+            + b"\n"
+        )
         if stdout != canonical:
             raise RuntimeError("gate stdout is not exactly one canonical JSON line")
         if gate_stderr != "":
             raise RuntimeError(f"gate emitted uncontrolled stderr: {gate_stderr[:2000]!r}")
-        return {"root_pid": process.pid, "peak_rss_kb": peak_rss_kb, "peak_workspace_bytes": peak_disk,
-                "observed_pids": sorted(observed), "unique_pid_count": len(observed),
-                "max_concurrent_non_root": max_descendants, "wall_seconds": round(elapsed, 1),
-                "gate_report": json.loads(gate_stdout)}
+        return {
+            "root_pid": process.pid,
+            "peak_rss_kb": peak_rss_kb,
+            "peak_workspace_bytes": peak_disk,
+            "observed_pids": sorted(observed),
+            "unique_pid_count": len(observed),
+            "max_concurrent_non_root": max_descendants,
+            "wall_seconds": round(elapsed, 1),
+            "gate_report": json.loads(gate_stdout),
+        }
     except BaseException:
         if process.poll() is None:
             os.killpg(pgid, signal.SIGKILL)
@@ -279,7 +311,8 @@ def _write_coverage_harness(workspace: Path, data_file: Path, includes: str) -> 
     site_dir = workspace / "covsite"
     site_dir.mkdir()
     (site_dir / "sitecustomize.py").write_text(
-        "import coverage\ncoverage.process_startup()\n", encoding="utf-8")
+        "import coverage\ncoverage.process_startup()\n", encoding="utf-8"
+    )
     return rcfile, site_dir
 
 
@@ -312,7 +345,9 @@ def _classC(reason: str, *keys: str) -> dict[str, dict[str, str]]:
     return {key: {"class": "C", "reason": reason} for key in keys}
 
 
-_FIXTURE_FULL_CONN = "fixture connectivity=1.0 leaves no off-topology edge / no valid disagreeing adjacency row"
+_FIXTURE_FULL_CONN = (
+    "fixture connectivity=1.0 leaves no off-topology edge / no valid disagreeing adjacency row"
+)
 _FIXTURE_ONE_EPOCH = "single-epoch fixture cannot present one record across two epochs"
 # _reconcile_bank_checkpoint is reached only through the bind CLI, which always reads the bank via
 # candidate_bank_v2.read_candidate_bank_v2 first; guards the reader already enforces are unreachable.
@@ -343,7 +378,9 @@ _STAGING_CLEANUP = "the staging rmtree+re-raise fires only if _produce_output or
 _C_GITPATH = "reachable via a consistent D1 reseal renaming a selected record path to a HEAD-absent path (with considered/eligible re-sort); witness owed"
 _C_CALBLOCK = "reachable via a D2 calibration reseal desyncing the block digest from the D1-derived calibration block; witness owed"
 _C_CONTROL_ID = "reachable via a trained-checkpoint reseal mutating a descriptor identity so it differs from the control configuration; witness owed"
-_C_CONTROL_ORDER = "reachable via a trained-checkpoint reseal mutating manifest ordered_record_ids; witness owed"
+_C_CONTROL_ORDER = (
+    "reachable via a trained-checkpoint reseal mutating manifest ordered_record_ids; witness owed"
+)
 _C_SCORING = "reachable via a scoring-target + candidate-bank two-artifact reseal desyncing a scoring field from the bank; witness owed"
 _SCORING_VALIDATOR_BANKDIG = "the scoring-target semantic validator binds identities.candidate_bank_digest to candidate_order+signatures, and the order/signature guards catch any bank divergence first, so the standalone candidate-bank-digest bind check is unreachable"
 _SCORING_LAYOUT_COMPLETION = "the bank reader binds signature_layout.completion_steps == the scoring block's completion_steps and the scoring-target-vs-layout check fires first, so the scoring-target-vs-scoring-block completion check is unreachable"
@@ -375,7 +412,8 @@ _RESIDUAL_CLASSIFICATION: dict[str, dict[str, dict[str, dict[str, str]]]] = {
         "lines": {
             **_classC(_C_CLEANUP_RACE, "310", "311", "316", "317"),
             "384": {"class": _A, "reason": _SCHEMA_CONST},
-            "427": {"class": _A, "reason": _POST_RAW}, "429": {"class": _A, "reason": _POST_RAW},
+            "427": {"class": _A, "reason": _POST_RAW},
+            "429": {"class": _A, "reason": _POST_RAW},
         },
         "arcs": {
             "383->384": {"class": _A, "reason": _SCHEMA_CONST},
@@ -446,8 +484,9 @@ _RESIDUAL_CLASSIFICATION: dict[str, dict[str, dict[str, dict[str, str]]]] = {
 }
 
 
-def _classify_residuals(name: str, missing_lines: list[int],
-                        missing_arcs: list[list[int]]) -> tuple[list[dict[str, object]], list[str]]:
+def _classify_residuals(
+    name: str, missing_lines: list[int], missing_arcs: list[list[int]]
+) -> tuple[list[dict[str, object]], list[str]]:
     table = _RESIDUAL_CLASSIFICATION.get(name, {})
     lines_table, arcs_table = table.get("lines", {}), table.get("arcs", {})
     records: list[dict[str, object]] = []
@@ -468,11 +507,28 @@ def _classify_residuals(name: str, missing_lines: list[int],
     return records, unclassified
 
 
-def _per_module_coverage(rcfile: Path, data_file: Path, modules: dict[str, Path],
-                         workspace: Path, environment: dict[str, str]) -> dict[str, dict[str, object]]:
+def _per_module_coverage(
+    rcfile: Path,
+    data_file: Path,
+    modules: dict[str, Path],
+    workspace: Path,
+    environment: dict[str, str],
+) -> dict[str, dict[str, object]]:
     json_path = workspace / "coverage.json"
-    _run([sys.executable, "-m", "coverage", "json", f"--rcfile={rcfile}",
-          f"--data-file={data_file}", "-o", str(json_path)], workspace, environment)
+    _run(
+        [
+            sys.executable,
+            "-m",
+            "coverage",
+            "json",
+            f"--rcfile={rcfile}",
+            f"--data-file={data_file}",
+            "-o",
+            str(json_path),
+        ],
+        workspace,
+        environment,
+    )
     files = json.loads(json_path.read_text(encoding="utf-8"))["files"]
     per_module: dict[str, dict[str, object]] = {}
     failures: list[str] = []
@@ -497,37 +553,63 @@ def _per_module_coverage(rcfile: Path, data_file: Path, modules: dict[str, Path]
         # denominators exclude only proven A/B; Class C stays in them (T1819 §5-6 branch, T1905 §3-4 stmt).
         line_records = [record for record in classification if record["kind"] == "line"]
         arc_records = [record for record in classification if record["kind"] == "arc"]
-        a_lines = sorted(str(record["location"]) for record in line_records if record["class"] == "A")
-        b_lines = sorted(str(record["location"]) for record in line_records if record["class"] == "B")
-        c_lines = sorted(str(record["location"]) for record in line_records if record["class"] == "C")
+        a_lines = sorted(
+            str(record["location"]) for record in line_records if record["class"] == "A"
+        )
+        b_lines = sorted(
+            str(record["location"]) for record in line_records if record["class"] == "B"
+        )
+        c_lines = sorted(
+            str(record["location"]) for record in line_records if record["class"] == "C"
+        )
         a_arcs = sorted(str(record["location"]) for record in arc_records if record["class"] == "A")
         b_arcs = sorted(str(record["location"]) for record in arc_records if record["class"] == "B")
         c_arcs = sorted(str(record["location"]) for record in arc_records if record["class"] == "C")
         adjusted_statement_denominator = statements - len(a_lines) - len(b_lines)
         adjusted_branch_denominator = branches - len(a_arcs) - len(b_arcs)
-        reachable_statement_pct = (100.0 * covered / adjusted_statement_denominator
-                                   if adjusted_statement_denominator else 100.0)
-        reachable_branch_pct = (100.0 * covered_branches / adjusted_branch_denominator
-                                if adjusted_branch_denominator else 100.0)
-        structural_statement_ceiling = (100.0 * adjusted_statement_denominator / statements
-                                        if statements else 100.0)
-        structural_branch_ceiling = 100.0 * adjusted_branch_denominator / branches if branches else 100.0
+        reachable_statement_pct = (
+            100.0 * covered / adjusted_statement_denominator
+            if adjusted_statement_denominator
+            else 100.0
+        )
+        reachable_branch_pct = (
+            100.0 * covered_branches / adjusted_branch_denominator
+            if adjusted_branch_denominator
+            else 100.0
+        )
+        structural_statement_ceiling = (
+            100.0 * adjusted_statement_denominator / statements if statements else 100.0
+        )
+        structural_branch_ceiling = (
+            100.0 * adjusted_branch_denominator / branches if branches else 100.0
+        )
         per_module[name] = {
-            "num_statements": statements, "covered_statements": covered,
-            "missing_statements": len(missing_lines), "statement_pct": round(statement_pct, 2),
+            "num_statements": statements,
+            "covered_statements": covered,
+            "missing_statements": len(missing_lines),
+            "statement_pct": round(statement_pct, 2),
             "reachable_statement_pct": round(reachable_statement_pct, 2),
             "structural_raw_statement_ceiling_pct": round(structural_statement_ceiling, 2),
             "adjusted_statement_denominator": adjusted_statement_denominator,
-            "statement_A_count": len(a_lines), "statement_B_count": len(b_lines),
+            "statement_A_count": len(a_lines),
+            "statement_B_count": len(b_lines),
             "statement_C_count": len(c_lines),
-            "statement_A_lines": a_lines, "statement_B_lines": b_lines, "statement_C_lines": c_lines,
-            "num_branches": branches, "covered_branches": covered_branches,
-            "missing_branches": len(missing_arcs), "branch_pct": round(branch_pct, 2),
+            "statement_A_lines": a_lines,
+            "statement_B_lines": b_lines,
+            "statement_C_lines": c_lines,
+            "num_branches": branches,
+            "covered_branches": covered_branches,
+            "missing_branches": len(missing_arcs),
+            "branch_pct": round(branch_pct, 2),
             "reachable_branch_pct": round(reachable_branch_pct, 2),
             "structural_raw_branch_ceiling_pct": round(structural_branch_ceiling, 2),
             "adjusted_branch_denominator": adjusted_branch_denominator,
-            "branch_A_count": len(a_arcs), "branch_B_count": len(b_arcs), "branch_C_count": len(c_arcs),
-            "branch_A_arcs": a_arcs, "branch_B_arcs": b_arcs, "branch_C_arcs": c_arcs,
+            "branch_A_count": len(a_arcs),
+            "branch_B_count": len(b_arcs),
+            "branch_C_count": len(c_arcs),
+            "branch_A_arcs": a_arcs,
+            "branch_B_arcs": b_arcs,
+            "branch_C_arcs": c_arcs,
             "residual_classification": classification,
         }
         # A module whose proven raw structural ceiling stays >=95% keeps the raw floor; a module below it
@@ -538,14 +620,16 @@ def _per_module_coverage(rcfile: Path, data_file: Path, modules: dict[str, Path]
         elif covered != adjusted_statement_denominator or c_lines:
             failures.append(
                 f"{name}:reachable-statement {reachable_statement_pct:.2f}% "
-                f"(covered {covered}/{adjusted_statement_denominator}, Class-C={len(c_lines)}) is not 100% zero-C")
+                f"(covered {covered}/{adjusted_statement_denominator}, Class-C={len(c_lines)}) is not 100% zero-C"
+            )
         if structural_branch_ceiling >= _MIN_COVERAGE:
             if branch_pct < _MIN_COVERAGE:
                 failures.append(f"{name}:raw-branch {branch_pct:.2f}% < {_MIN_COVERAGE}%")
         elif covered_branches != adjusted_branch_denominator or c_arcs:
             failures.append(
                 f"{name}:reachable-branch {reachable_branch_pct:.2f}% "
-                f"(covered {covered_branches}/{adjusted_branch_denominator}, Class-C={len(c_arcs)}) is not 100% zero-C")
+                f"(covered {covered_branches}/{adjusted_branch_denominator}, Class-C={len(c_arcs)}) is not 100% zero-C"
+            )
     if unclassified:
         raise RuntimeError(f"unclassified coverage residuals (need A/B/C): {unclassified}")
     if failures:
@@ -556,8 +640,13 @@ def _per_module_coverage(rcfile: Path, data_file: Path, modules: dict[str, Path]
 def main() -> int:
     actual = {path.name for path in (ROOT / "tests/stage4_installed_gates").glob("*_gate.py")}
     if actual != EXPECTED_GATES:
-        raise RuntimeError(f"D4-A gate inventory drift: expected={sorted(EXPECTED_GATES)} actual={sorted(actual)}")
-    for base in ("snn_memory_checkpoint_bundle_v2.schema.json", "snn_memory_candidate_bank_v2.schema.json"):
+        raise RuntimeError(
+            f"D4-A gate inventory drift: expected={sorted(EXPECTED_GATES)} actual={sorted(actual)}"
+        )
+    for base in (
+        "snn_memory_checkpoint_bundle_v2.schema.json",
+        "snn_memory_candidate_bank_v2.schema.json",
+    ):
         _schema_pair_parity(base)
         _schema_pair_parity(base + ".license")
     encoder_digest = _pinned_encoder_digest()
@@ -575,8 +664,16 @@ def main() -> int:
     )
     _run(
         [
-            sys.executable, "-m", "pip", "wheel", "--no-index", "--no-deps",
-            "--no-build-isolation", "--wheel-dir", str(python_wheels), str(ROOT),
+            sys.executable,
+            "-m",
+            "pip",
+            "wheel",
+            "--no-index",
+            "--no-deps",
+            "--no-build-isolation",
+            "--wheel-dir",
+            str(python_wheels),
+            str(ROOT),
         ],
         workspace,
     )
@@ -584,13 +681,24 @@ def main() -> int:
     python_wheel = _one(python_wheels, "remanentia-*.whl")
     _run(
         [
-            sys.executable, "-m", "pip", "install", "--no-index", "--no-deps",
-            "--target", str(install_target), str(python_wheel), str(rust_wheel),
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--no-index",
+            "--no-deps",
+            "--target",
+            str(install_target),
+            str(python_wheel),
+            str(rust_wheel),
         ],
         workspace,
     )
     extension = _one(install_target / "rust_snn_memory", "rust_snn_memory*.so")
-    modules = {name: (install_target / "snn_memory" / f"{name}.py").resolve(strict=True) for name in _MODULES}
+    modules = {
+        name: (install_target / "snn_memory" / f"{name}.py").resolve(strict=True)
+        for name in _MODULES
+    }
     include = ",".join(str(path) for path in modules.values())
     extension_sha256 = _sha(extension)
     coverage_data = workspace / ".coverage"
@@ -616,20 +724,41 @@ def main() -> int:
     # COVERAGE_PROCESS_START; the verifier supervises the whole process group and fails closed.
     supervision = _supervise(
         [
-            sys.executable, str(GATE),
-            "--workspace", str(fixtures),
-            "--install-target", str(install_target),
-            "--repo-root", str(ROOT),
-            "--extension-sha256", extension_sha256,
-            "--encoder-checkpoint", str(MODEL),
-            "--encoder-digest", encoder_digest,
-            "--python-wheel-sha256", _sha(python_wheel),
-            "--rust-wheel-sha256", _sha(rust_wheel),
+            sys.executable,
+            str(GATE),
+            "--workspace",
+            str(fixtures),
+            "--install-target",
+            str(install_target),
+            "--repo-root",
+            str(ROOT),
+            "--extension-sha256",
+            extension_sha256,
+            "--encoder-checkpoint",
+            str(MODEL),
+            "--encoder-digest",
+            encoder_digest,
+            "--python-wheel-sha256",
+            _sha(python_wheel),
+            "--rust-wheel-sha256",
+            _sha(rust_wheel),
         ],
-        workspace, environment, workspace,
+        workspace,
+        environment,
+        workspace,
     )
-    _run([sys.executable, "-m", "coverage", "combine", f"--rcfile={rcfile}",
-          f"--data-file={coverage_data}"], workspace, environment)
+    _run(
+        [
+            sys.executable,
+            "-m",
+            "coverage",
+            "combine",
+            f"--rcfile={rcfile}",
+            f"--data-file={coverage_data}",
+        ],
+        workspace,
+        environment,
+    )
     per_module = _per_module_coverage(rcfile, coverage_data, modules, workspace, environment)
     gate_report = supervision["gate_report"]
     observed = set(supervision["observed_pids"])
@@ -643,16 +772,21 @@ def main() -> int:
     if gate_report["conditions"] != ["trained", "shuffled", "random", "zero", "untrained"]:
         raise RuntimeError(f"gate report conditions differ: {gate_report['conditions']}")
     if gate_report["candidate_count"] != _CANDIDATE_COUNT:
-        raise RuntimeError(f"gate candidate count is not {_CANDIDATE_COUNT}: {gate_report['candidate_count']}")
+        raise RuntimeError(
+            f"gate candidate count is not {_CANDIDATE_COUNT}: {gate_report['candidate_count']}"
+        )
     if gate_report["n_neurons"] != _N_NEURONS:
         raise RuntimeError(f"gate n_neurons is not {_N_NEURONS}: {gate_report['n_neurons']}")
     if gate_report["materializer_run_count"] != _MATERIALIZER_RUNS:
-        raise RuntimeError(f"materializer run count is not {_MATERIALIZER_RUNS}: "
-                           f"{gate_report['materializer_run_count']}")
+        raise RuntimeError(
+            f"materializer run count is not {_MATERIALIZER_RUNS}: "
+            f"{gate_report['materializer_run_count']}"
+        )
     expected_workers = _MATERIALIZER_RUNS * _CANDIDATE_COUNT + 1
     if gate_report["worker_child_count"] != expected_workers:
-        raise RuntimeError(f"worker child count is not {expected_workers}: "
-                           f"{gate_report['worker_child_count']}")
+        raise RuntimeError(
+            f"worker child count is not {expected_workers}: {gate_report['worker_child_count']}"
+        )
     materializer_pids = gate_report["materializer_pids"]
     worker_pids = gate_report["worker_pids"]
     if len(materializer_pids) != gate_report["materializer_run_count"]:
@@ -664,7 +798,9 @@ def main() -> int:
     reported = set(materializer_pids) | set(worker_pids)
     unaccounted = reported - observed
     if unaccounted:
-        raise RuntimeError(f"gate-reported PIDs not observed by the supervisor: {sorted(unaccounted)}")
+        raise RuntimeError(
+            f"gate-reported PIDs not observed by the supervisor: {sorted(unaccounted)}"
+        )
     if root_pid not in observed:
         raise RuntimeError("supervised root PID was not observed in the process group")
     report = {

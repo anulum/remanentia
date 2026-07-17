@@ -648,7 +648,9 @@ def test_memory_index_search_merges_compiled_facts(monkeypatch: Any) -> None:
     idx._built = True
     idx.paragraph_index = [(0, 0)] * 1001
 
-    def compiled_result(query: str, top_k: int) -> list[SearchResult]:
+    def compiled_result(
+        query: str, top_k: int, _compiled_facts_path: object | None = None
+    ) -> list[SearchResult]:
         return [
             SearchResult(
                 name="retrieval.embedding_weight.fact",
