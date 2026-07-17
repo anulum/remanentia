@@ -166,7 +166,7 @@ def tokenize(text: str, stopwords: Set[str] = STOPWORDS) -> list[str]:
         from remanentia_retrieve import tokenize as rust_tokenize  # type: ignore[import-not-found]
     except ImportError:  # pragma: no cover - platform-dependent dispatch
         return python_tokenize(text, stopwords)
-    return cast(list[str], rust_tokenize(text, stopwords))  # pragma: no cover - native dispatch
+    return cast(list[str], rust_tokenize(text, stopwords))
 
 
 def python_stem(word: str) -> str:
@@ -183,7 +183,7 @@ def stem(word: str) -> str:
         from remanentia_retrieve import stem as rust_stem
     except ImportError:  # pragma: no cover - platform-dependent dispatch
         return python_stem(word)
-    return cast(str, rust_stem(word))  # pragma: no cover - native dispatch
+    return cast(str, rust_stem(word))
 
 
 def python_expand_query(query: str, stopwords: Set[str] = STOPWORDS) -> str:
@@ -201,7 +201,7 @@ def expand_query(query: str, stopwords: Set[str] = STOPWORDS) -> str:
         from remanentia_retrieve import expand_query as rust_expand_query
     except ImportError:  # pragma: no cover - platform-dependent dispatch
         return python_expand_query(query, stopwords)
-    return cast(str, rust_expand_query(query, stopwords))  # pragma: no cover - native dispatch
+    return cast(str, rust_expand_query(query, stopwords))
 
 
 def python_bigrams(tokens: Sequence[str]) -> list[str]:
@@ -215,7 +215,7 @@ def bigrams(tokens: list[str]) -> list[str]:
         from remanentia_retrieve import bigrams as rust_bigrams
     except ImportError:  # pragma: no cover - platform-dependent dispatch
         return python_bigrams(tokens)
-    return cast(list[str], rust_bigrams(tokens))  # pragma: no cover - native dispatch
+    return cast(list[str], rust_bigrams(tokens))
 
 
 def python_build_idf(
@@ -239,9 +239,7 @@ def build_idf(trace_texts: dict[str, str], stopwords: Set[str] = STOPWORDS) -> d
         from remanentia_retrieve import build_idf as rust_build_idf
     except ImportError:  # pragma: no cover - platform-dependent dispatch
         return python_build_idf(trace_texts, stopwords)
-    return cast(  # pragma: no cover - native dispatch
-        dict[str, float], rust_build_idf(trace_texts, stopwords)
-    )
+    return cast(dict[str, float], rust_build_idf(trace_texts, stopwords))
 
 
 def python_tfidf_score(
@@ -284,7 +282,7 @@ def tfidf_score(
         from remanentia_retrieve import tfidf_score as rust_tfidf_score
     except ImportError:  # pragma: no cover - platform-dependent dispatch
         return python_tfidf_score(query, document_name, document_text, idf, stopwords)
-    return cast(  # pragma: no cover - native dispatch
+    return cast(
         float,
         rust_tfidf_score(query, document_name, document_text, idf, stopwords),
     )

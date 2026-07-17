@@ -73,7 +73,7 @@ def extract_entities(text: str) -> list[str]:
         native_extract = import_module("remanentia_consolidation").extract_entities
     except ImportError:  # pragma: no cover - platform-dependent dispatch
         return extract_entities_python(text)
-    return cast(list[str], native_extract(text))  # pragma: no cover - native dispatch
+    return cast(list[str], native_extract(text))
 
 
 def extract_entities_python(text: str) -> list[str]:
@@ -218,7 +218,7 @@ def extract_key_lines(text: str) -> list[str]:
         native_extract = import_module("remanentia_consolidation").extract_key_lines
     except ImportError:  # pragma: no cover - platform-dependent dispatch
         return extract_key_lines_python(text)
-    return cast(list[str], native_extract(text))  # pragma: no cover - native dispatch
+    return cast(list[str], native_extract(text))
 
 
 def extract_key_lines_python(text: str) -> list[str]:
@@ -299,11 +299,11 @@ def cluster_traces(traces: TraceData) -> list[list[str]]:
         native_cluster = import_module("remanentia_consolidation").cluster_traces
     except ImportError:  # pragma: no cover - platform-dependent dispatch
         return cluster_traces_python(traces)
-    tuples = [  # pragma: no cover - native dispatch
+    tuples = [
         (name, str(meta["project"]), str(meta.get("date", ""))[:10])
         for name, meta in traces.items()
     ]
-    return cast(list[list[str]], native_cluster(tuples))  # pragma: no cover - native dispatch
+    return cast(list[list[str]], native_cluster(tuples))
 
 
 def cluster_traces_python(traces: TraceData) -> list[list[str]]:

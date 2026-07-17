@@ -640,7 +640,7 @@ def _parse_frontmatter(text: str) -> JsonObject | None:
         native_parse = import_module("remanentia_consolidation").parse_frontmatter
     except ImportError:  # pragma: no cover - platform-dependent dispatch
         return _parse_frontmatter_python(text)
-    rust_result = native_parse(text)  # pragma: no cover - native dispatch
+    rust_result = native_parse(text)
     return cast(JsonObject | None, rust_result if rust_result else None)  # pragma: no cover
 
 

@@ -43,7 +43,7 @@ def build_summary_dag(trace_data: TraceData) -> list[DAGNodeDict]:
         native_build = import_module("remanentia_consolidation").build_summary_dag
     except ImportError:  # pragma: no cover - platform-dependent dispatch
         return build_summary_dag_python(trace_data)
-    tuples = [  # pragma: no cover - native dispatch
+    tuples = [
         (
             name,
             data.get("date", ""),

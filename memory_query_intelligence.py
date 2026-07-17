@@ -26,7 +26,7 @@ def tokenize(text: str) -> list[str]:
         native_tokenize = import_module("remanentia_search").tokenize
     except ImportError:  # pragma: no cover - platform-dependent dispatch
         return tokenize_python(text)
-    return cast(list[str], native_tokenize(text))  # pragma: no cover - native dispatch
+    return cast(list[str], native_tokenize(text))
 
 
 def reciprocal_rank_fusion_python(
