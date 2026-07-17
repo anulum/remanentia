@@ -196,7 +196,7 @@ fn readonly_1<T: Element>(py: Python<'_>, values: Vec<T>) -> PyResult<Py<PyArray
     let array = py
         .import("numpy")?
         .call_method1("frombuffer", (&bytes, &dtype))?
-        .downcast_into::<PyArray1<T>>()?;
+        .cast_into::<PyArray1<T>>()?;
     array.call_method1("setflags", (false,))?;
     Ok(array.unbind())
 }
@@ -213,7 +213,7 @@ fn readonly_2<T: Element>(
     let immutable = py
         .import("numpy")?
         .call_method1("frombuffer", (&bytes, &dtype))?
-        .downcast_into::<PyArray1<T>>()?;
+        .cast_into::<PyArray1<T>>()?;
     immutable.call_method1("setflags", (false,))?;
     let array = immutable.reshape([rows, columns])?;
     array.call_method1("setflags", (false,))?;
@@ -345,7 +345,7 @@ fn py_run_streamed_episode_v2(
         return Err(PyValueError::new_err("packet row count mismatch"));
     }
 
-    let result = py.allow_threads(|| {
+    let result = py.detach(|| {
         run_streamed_episode_core(
             &mut rust_state,
             &mut rust_weights,
