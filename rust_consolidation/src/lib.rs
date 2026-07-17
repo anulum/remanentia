@@ -431,8 +431,8 @@ fn date_gap_days(a: &str, b: &str) -> i64 {
 fn build_summary_dag(
     trace_data: Vec<(String, String, String, Vec<String>, Vec<String>, String)>,
     fanout: usize,
-) -> Vec<HashMap<String, PyObject>> {
-    Python::with_gil(|py| {
+) -> Vec<HashMap<String, Py<PyAny>>> {
+    Python::attach(|py| {
         if trace_data.is_empty() {
             return Vec::new();
         }
@@ -572,7 +572,7 @@ fn build_summary_dag(
         all_nodes
             .into_iter()
             .map(|node| {
-                let mut d: HashMap<String, PyObject> = HashMap::new();
+                let mut d: HashMap<String, Py<PyAny>> = HashMap::new();
                 d.insert(
                     "node_id".to_string(),
                     node.node_id.into_pyobject(py).unwrap().into_any().unbind(),

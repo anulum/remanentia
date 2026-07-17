@@ -19,6 +19,6 @@ name = "rust_snn_memory"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-numpy = "0.25"
-pyo3 = { version = "0.25", features = ["extension-module"] }
+numpy = "0.29"
+pyo3 = { version = "0.29", features = ["extension-module"] }
 sha2 = "0.10"

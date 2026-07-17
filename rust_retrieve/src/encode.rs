@@ -50,7 +50,7 @@ pub fn hash_encode(
         }
     }
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let arr = Array1::from_vec(pattern);
         Ok(arr.into_pyarray(py).into())
     })
