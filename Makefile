@@ -1,4 +1,4 @@
-.PHONY: test test-all test-cov test-cov-combined build-rust lint fmt preflight preflight-fast docs docs-build install-hooks bench clean build
+.PHONY: test test-all test-cov test-cov-combined build-rust verify-snn-floors lint fmt preflight preflight-fast docs docs-build install-hooks bench clean build
 
 PYTHON ?= python
 
@@ -24,6 +24,20 @@ build-rust:
 	@for crate in $(CRATES); do \
 		echo "== maturin develop $$crate ==" ; \
 		$(PYTHON) -m maturin develop --release --manifest-path $$crate/Cargo.toml || exit 1 ; \
+	done
+
+# Prove the installed-wheel SNN-memory coverage floors that live OUTSIDE the
+# default CI core (omitted in pyproject): each verifier builds + installs a
+# fresh wheel and enforces its floor (D1/D2/D3 = 100 %, D4-A >= 95 % with
+# preregistered A/B/C residuals, stream/model-gates = 100 %). Heavy; D2 and the
+# model gates need the pinned .snn_models encoder present. Run before tagging a
+# release — this is the automated proof that the omitted modules are at floor.
+SNN_FLOOR_VERIFIERS = source_universe_d1 cue_materializer_d2 d3 d4a stream_stage1 model_gates
+
+verify-snn-floors:
+	@for v in $(SNN_FLOOR_VERIFIERS); do \
+		echo "== verify_snn_memory_$$v ==" ; \
+		$(PYTHON) tools/verify_snn_memory_$$v.py || exit 1 ; \
 	done
 
 test-all: test
