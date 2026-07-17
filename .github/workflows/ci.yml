@@ -16,7 +16,13 @@ on:
       - "pyproject.toml"
       - "rust_*/**"
       - "remanentia_topology/**"
-      - ".github/workflows/ci.yml"
+      - "experiments/**"
+      - "docs/schema/**"
+      - "notebooks/**"
+      - "snn_memory/schema/**"
+      - "tools/**"
+      - "training/**"
+      - ".github/workflows/**"
   pull_request:
     branches: [main]
 
