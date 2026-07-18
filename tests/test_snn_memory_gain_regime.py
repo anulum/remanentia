@@ -15,6 +15,7 @@ import pytest
 
 from snn_memory import gain_regime as gr
 from snn_memory.contracts import ModelConfig
+from snn_memory.state import initialise_weights
 
 
 def _dale_weights() -> tuple[np.ndarray, int]:
@@ -112,3 +113,47 @@ def test_report_flags_subthreshold_regime_and_a_supra_threshold_one() -> None:
         gr.gain_regime_report(dense, 11, active_fraction=1.0)["crosses_threshold_at_saturation"]
         is True
     )
+
+
+# ---- G2 feasibility frontier (regression-locks the gain-regime feasibility finding) ---------------
+# The ADR-0006-locked 2048-neuron config is marginally sub-threshold at the encoder's 5% cue drive,
+# and two single-lever amendments (connectivity, weight_max) cross the self-sustain ceiling there.
+# Pins the numbers in experiments/snn_memory/gain_regime_feasibility_result.md to committed code so
+# the finding stays reproducible (not a hand-copied number). Uses the cheap operative functions
+# directly (the report's spectral_radius is an expensive O(N^3) eig irrelevant to the criterion).
+
+_G2_LOCKED = dict(n_neurons=2048, excitatory_fraction=0.8, connectivity=0.1, weight_max=1.0)
+_ENCODER_ACTIVE = 0.05
+
+
+def _saturated_depolarisation(config: ModelConfig, active_fraction: float) -> tuple[float, float]:
+    """(saturated E->E depolarisation, threshold gap) in mV at the given active fraction, seed 11."""
+    weights, _topology = initialise_weights(config, 11)
+    saturated = gr.saturate_excitatory(weights, config.n_excitatory, config.weight_max)
+    depolarisation = gr.recurrent_depolarisation_mv(saturated, config.n_excitatory, active_fraction)
+    return depolarisation, gr.threshold_gap_mv(config)
+
+
+def test_g2_locked_config_is_marginally_subthreshold_at_the_encoder_drive() -> None:
+    config = ModelConfig(**_G2_LOCKED)
+    depolarisation, gap = _saturated_depolarisation(config, _ENCODER_ACTIVE)
+    assert gap == pytest.approx(10.0)
+    # The saturated ceiling reaches ~6.76 mV at 5% active — ~1.5x short of the 10 mV gap.
+    assert depolarisation == pytest.approx(6.76, abs=0.15)
+    assert depolarisation < gap  # does not self-sustain at the cue drive
+    weights, _ = initialise_weights(config, 11)
+    saturated = gr.saturate_excitatory(weights, config.n_excitatory, config.weight_max)
+    needed = gr.active_fraction_for_threshold(saturated, config.n_excitatory, gap)
+    assert needed == pytest.approx(0.074, abs=0.003)
+
+
+@pytest.mark.parametrize(
+    ("lever", "value"),
+    [("connectivity", 0.15), ("weight_max", 1.5)],
+)
+def test_g2_single_lever_amendment_crosses_the_ceiling_at_the_encoder_drive(
+    lever: str, value: float
+) -> None:
+    config = ModelConfig(**{**_G2_LOCKED, lever: value})
+    depolarisation, gap = _saturated_depolarisation(config, _ENCODER_ACTIVE)
+    assert depolarisation >= gap  # the single-lever amendment self-sustains at the cue drive
