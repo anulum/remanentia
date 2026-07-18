@@ -308,7 +308,10 @@ def validate_stream_result(
     for timestep in range(timesteps):
         start = int(result.spike_offsets[timestep])
         stop = int(result.spike_offsets[timestep + 1])
-        if np.any(result.spike_indices[start + 1 : stop] <= result.spike_indices[start : stop - 1]):
+        # Slice the row explicitly: a silent timestep (stop == start, e.g. an empty first row where
+        # stop == 0) must not fall into ``stop - 1`` negative indexing.
+        row = result.spike_indices[start:stop]
+        if np.any(row[1:] <= row[:-1]):
             raise RuntimeError("spike rows must be strictly ascending and unique")
     expected_phases = np.ones(timesteps, dtype=np.uint8)
     expected_phases[:cue_steps] = 0
