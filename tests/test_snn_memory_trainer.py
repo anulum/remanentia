@@ -97,3 +97,41 @@ def test_resume_requires_both_weights_and_topology() -> None:
         train_memories(
             sequences, labels, model, TrainConfig(seed=11, epochs=2), initial_weights=weights
         )
+
+
+def _stream_backend():
+    """Load the installed Rust streamed backend, skipping when the extension is absent."""
+    import hashlib
+    from pathlib import Path
+
+    from snn_memory.stream_backend import BackendIdentity, load_stream_backend
+
+    module = pytest.importorskip("rust_snn_memory.rust_snn_memory")
+    digest = hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest()
+    return load_stream_backend(
+        BackendIdentity(module.STREAMED_API_VERSION, module.CRATE_VERSION, digest)
+    )
+
+
+def test_rust_backend_trains_bit_identically_to_the_numpy_oracle() -> None:
+    backend = _stream_backend()
+    model = ModelConfig(n_neurons=20, excitatory_fraction=0.8, connectivity=0.3, weight_max=2.0)
+    sequences, labels = _corpus(model)
+    train = TrainConfig(seed=11, epochs=3)
+    oracle = train_memories(sequences, labels, model, train)
+    accelerated = train_memories(sequences, labels, model, train, backend=backend)
+    # Chained multi-episode training + calibration are bit-identical on the Rust streamed path.
+    np.testing.assert_array_equal(oracle.weights, accelerated.weights)
+    np.testing.assert_array_equal(oracle.signatures, accelerated.signatures)
+
+
+def test_rust_backend_calibration_matches_the_numpy_oracle() -> None:
+    backend = _stream_backend()
+    model = ModelConfig(n_neurons=20, excitatory_fraction=0.8, connectivity=0.3, weight_max=2.0)
+    sequences, labels = _corpus(model)
+    trained = train_memories(sequences, labels, model, TrainConfig(seed=11, epochs=2))
+    oracle = calibrate_signatures(sequences, trained.weights, trained.topology, model)
+    accelerated = calibrate_signatures(
+        sequences, trained.weights, trained.topology, model, backend=backend
+    )
+    np.testing.assert_array_equal(oracle, accelerated)
