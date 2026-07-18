@@ -13,6 +13,8 @@ import multiprocessing as mp
 import os
 import threading
 import time
+from pathlib import Path
+from typing import Protocol
 
 import pytest
 
@@ -24,73 +26,91 @@ from file_utils import (
 )
 
 
+class _Event(Protocol):
+    """Minimal event contract shared by thread and process synchronizers."""
+
+    def set(self) -> None:
+        """Mark the event as ready."""
+
+    def wait(self, timeout: float | None = None) -> bool:
+        """Wait until the event is ready or *timeout* expires."""
+
+
 # ── atomic writes ────────────────────────────────────────────────────
 
 
 class TestAtomicWriteText:
-    def test_writes_to_target(self, tmp_path):
+    def test_writes_to_target(self, tmp_path: Path) -> None:
         p = tmp_path / "out.txt"
         atomic_write_text(p, "hello")
         assert p.read_text() == "hello"
 
-    def test_overwrites_existing(self, tmp_path):
+    def test_overwrites_existing(self, tmp_path: Path) -> None:
         p = tmp_path / "out.txt"
         p.write_text("old")
         atomic_write_text(p, "new")
         assert p.read_text() == "new"
 
-    def test_creates_parent_dirs(self, tmp_path):
+    def test_creates_parent_dirs(self, tmp_path: Path) -> None:
         p = tmp_path / "a" / "b" / "c" / "out.txt"
         atomic_write_text(p, "x")
         assert p.read_text() == "x"
 
-    def test_encoding_utf8_default(self, tmp_path):
+    def test_encoding_utf8_default(self, tmp_path: Path) -> None:
         p = tmp_path / "utf.txt"
         atomic_write_text(p, "Žižkov ¥500 🎯")
         assert p.read_text(encoding="utf-8") == "Žižkov ¥500 🎯"
 
-    def test_no_tmp_leak_on_success(self, tmp_path):
+    def test_no_tmp_leak_on_success(self, tmp_path: Path) -> None:
         p = tmp_path / "clean.txt"
         atomic_write_text(p, "x")
         leftovers = [x for x in tmp_path.iterdir() if x != p]
         assert leftovers == []
 
-    def test_target_untouched_on_failure(self, tmp_path, monkeypatch):
-        p = tmp_path / "existing.txt"
-        p.write_text("old content")
+    def test_real_replace_failure_preserves_target_and_cleans_temp(self, tmp_path: Path) -> None:
+        target = tmp_path / "existing-target"
+        target.mkdir()
+        sentinel = target / "sentinel.txt"
+        sentinel.write_text("old content")
 
-        # Monkeypatch os.replace to simulate a crash after tmpfile was written
-        def _boom(src, dst):
-            raise OSError("simulated crash")
+        # Replacing a non-empty directory with a file fails at the real
+        # filesystem boundary after the same-directory temporary file exists.
+        with pytest.raises(OSError) as exc_info:
+            atomic_write_text(target, "new content")
 
-        monkeypatch.setattr("file_utils.os.replace", _boom)
-        with pytest.raises(OSError, match="simulated crash"):
-            atomic_write_text(p, "new content")
-        # Old content must survive the failed write
-        assert p.read_text() == "old content"
+        assert isinstance(exc_info.value.filename, str)
+        assert exc_info.value.filename2 == str(target)
+        temporary_path = Path(exc_info.value.filename)
+        assert temporary_path.parent == tmp_path
+        assert temporary_path.name.startswith(".existing-target.")
+        assert temporary_path.name.endswith(".tmp")
+        assert not temporary_path.exists()
+        assert target.is_dir()
+        assert sentinel.read_text() == "old content"
+        assert list(tmp_path.iterdir()) == [target]
 
 
 class TestAtomicWriteBytes:
-    def test_writes_raw_bytes(self, tmp_path):
+    def test_writes_raw_bytes(self, tmp_path: Path) -> None:
         p = tmp_path / "out.bin"
         atomic_write_bytes(p, b"\x00\x01\x02\xff")
         assert p.read_bytes() == b"\x00\x01\x02\xff"
 
 
 class TestAtomicWriteJson:
-    def test_writes_json(self, tmp_path):
+    def test_writes_json(self, tmp_path: Path) -> None:
         p = tmp_path / "out.json"
         atomic_write_json(p, {"a": 1, "b": [2, 3]})
         assert json.loads(p.read_text()) == {"a": 1, "b": [2, 3]}
 
-    def test_indent_and_sort(self, tmp_path):
+    def test_indent_and_sort(self, tmp_path: Path) -> None:
         p = tmp_path / "out.json"
         atomic_write_json(p, {"b": 2, "a": 1}, indent=2, sort_keys=True)
         text = p.read_text()
         assert text.index('"a"') < text.index('"b"')
         assert "  " in text  # indent=2
 
-    def test_unicode_preserved(self, tmp_path):
+    def test_unicode_preserved(self, tmp_path: Path) -> None:
         p = tmp_path / "out.json"
         atomic_write_json(p, {"name": "Žižkov ¥"})
         reloaded = json.loads(p.read_text())
@@ -101,22 +121,22 @@ class TestAtomicWriteJson:
 
 
 class TestFileLockSingleProcess:
-    def test_acquire_and_release(self, tmp_path):
+    def test_acquire_and_release(self, tmp_path: Path) -> None:
         lock = FileLock(tmp_path / "x.lock")
         lock.acquire()
         lock.release()  # no error = success
 
-    def test_context_manager(self, tmp_path):
+    def test_context_manager(self, tmp_path: Path) -> None:
         with FileLock(tmp_path / "x.lock") as lk:
             assert lk is not None
 
-    def test_double_release_is_noop(self, tmp_path):
+    def test_double_release_is_noop(self, tmp_path: Path) -> None:
         lock = FileLock(tmp_path / "x.lock")
         lock.acquire()
         lock.release()
         lock.release()  # second release does nothing
 
-    def test_lock_file_persists(self, tmp_path):
+    def test_lock_file_persists(self, tmp_path: Path) -> None:
         lock_path = tmp_path / "x.lock"
         with FileLock(lock_path):
             assert lock_path.exists()
@@ -124,7 +144,12 @@ class TestFileLockSingleProcess:
         assert lock_path.exists()
 
 
-def _hold_lock(path_str: str, duration: float, ready_event, started_event):
+def _hold_lock(
+    path_str: str,
+    duration: float,
+    ready_event: _Event,
+    started_event: _Event,
+) -> None:
     with FileLock(path_str):
         started_event.set()
         ready_event.wait(timeout=5)
@@ -132,12 +157,12 @@ def _hold_lock(path_str: str, duration: float, ready_event, started_event):
 
 
 class TestFileLockConcurrency:
-    def test_blocking_waits_for_release(self, tmp_path):
+    def test_blocking_waits_for_release(self, tmp_path: Path) -> None:
         lock_path = tmp_path / "blocking.lock"
         started = threading.Event()
         release = threading.Event()
 
-        def _holder():
+        def _holder() -> None:
             with FileLock(lock_path):
                 started.set()
                 release.wait(timeout=2)
@@ -160,7 +185,7 @@ class TestFileLockConcurrency:
         lock3.acquire()
         lock3.release()
 
-    def test_non_blocking_raises_immediately(self, tmp_path):
+    def test_non_blocking_raises_immediately(self, tmp_path: Path) -> None:
         lock_path = tmp_path / "nb.lock"
         holder = FileLock(lock_path)
         holder.acquire()
@@ -170,7 +195,7 @@ class TestFileLockConcurrency:
         finally:
             holder.release()
 
-    def test_timeout_raises(self, tmp_path):
+    def test_timeout_raises(self, tmp_path: Path) -> None:
         lock_path = tmp_path / "to.lock"
         holder = FileLock(lock_path)
         holder.acquire()
@@ -184,7 +209,7 @@ class TestFileLockConcurrency:
         finally:
             holder.release()
 
-    def test_timeout_path_succeeds_after_wait(self, tmp_path):
+    def test_timeout_path_succeeds_after_wait(self, tmp_path: Path) -> None:
         """Polling loop exits successfully when the holder releases."""
         lock_path = tmp_path / "wait.lock"
         holder = FileLock(lock_path)
@@ -192,7 +217,7 @@ class TestFileLockConcurrency:
 
         released = threading.Event()
 
-        def _release_after_delay():
+        def _release_after_delay() -> None:
             time.sleep(0.15)
             holder.release()
             released.set()
@@ -209,8 +234,9 @@ class TestFileLockConcurrency:
             waiter.release()
             t.join(timeout=1)
 
-    @pytest.mark.skipif(os.name == "nt", reason="fcntl not available on Windows")
-    def test_shared_allows_multiple_readers(self, tmp_path):
+    def test_shared_allows_multiple_readers(self, tmp_path: Path) -> None:
+        if os.name == "nt":
+            pytest.skip("fcntl not available on Windows")
         lock_path = tmp_path / "shared.lock"
         a = FileLock(lock_path, exclusive=False)
         b = FileLock(lock_path, exclusive=False)
@@ -222,7 +248,7 @@ class TestFileLockConcurrency:
 
 @pytest.mark.skipif(os.name == "nt", reason="fcntl not available on Windows")
 class TestFileLockCrossProcess:
-    def test_blocking_across_processes(self, tmp_path):
+    def test_blocking_across_processes(self, tmp_path: Path) -> None:
         lock_path = tmp_path / "xprocess.lock"
         ready = mp.Event()
         started = mp.Event()

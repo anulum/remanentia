@@ -1,8 +1,8 @@
 # SNN trainer throughput — the numpy reference is the bottleneck, the Rust backend is the lever (2026-07-18)
 
 Grounded compute assessment for the amended-config G2 development probe (ADR-0007). Determines what
-hardware/path makes the run feasible. All numbers measured on the project-workspace workstation (12 cores, load ~50,
-5 GB available) under `.venv`.
+hardware/path makes the run feasible. Measurements ran on a loaded 12-core development workstation
+(~50 system load, 5 GB available) under the repository `.venv`.
 
 ## Measured — the numpy reference trainer scales ~N^3 and is punishing at 2048
 

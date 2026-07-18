@@ -37,7 +37,7 @@ from pathlib import Path
 from types import TracebackType
 
 try:
-    import fcntl  # type: ignore[import-not-found]  # POSIX only
+    import fcntl  # POSIX only
 
     _HAVE_FCNTL = True
 except ImportError:  # pragma: no cover — Windows
