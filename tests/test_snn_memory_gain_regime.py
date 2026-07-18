@@ -101,6 +101,22 @@ def test_report_exposes_the_full_regime_and_saturation_raises_depolarisation() -
     assert isinstance(report["crosses_threshold_at_saturation"], bool)
 
 
+def test_reachable_gain_report_scores_the_trained_block_not_the_ceiling() -> None:
+    config = ModelConfig(n_neurons=4, excitatory_fraction=0.5)  # gap 10 mV, n_excitatory 2
+    weights, n_exc = _dale_weights()
+    # The actual (weak) trained block barely depolarises at a near-silent active fraction.
+    low = gr.reachable_gain_report(config, weights, active_fraction=0.01)
+    assert low["threshold_gap_mv"] == pytest.approx(10.0)
+    assert low["crosses_threshold_reachable"] is False
+    assert low["depolarisation_reachable_mv"] < low["threshold_gap_mv"]
+    # A strongly-potentiated excitatory block at full activity clears the gap.
+    strong = weights.copy()
+    strong[:n_exc, :n_exc] = 100.0
+    high = gr.reachable_gain_report(config, strong, active_fraction=1.0)
+    assert high["crosses_threshold_reachable"] is True
+    assert high["depolarisation_reachable_mv"] >= high["threshold_gap_mv"]
+
+
 def test_report_flags_subthreshold_regime_and_a_supra_threshold_one() -> None:
     dense = ModelConfig(n_neurons=20, excitatory_fraction=0.8, connectivity=1.0)
     # A near-silent active fraction cannot cross the gap even with saturated weights ...

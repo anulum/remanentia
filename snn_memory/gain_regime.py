@@ -117,3 +117,30 @@ def gain_regime_report(
         ),
         "crosses_threshold_at_saturation": depolarisation_saturated >= gap,
     }
+
+
+def reachable_gain_report(
+    config: ModelConfig, trained_weights: FloatArray, active_fraction: float
+) -> dict[str, float | bool]:
+    """Score the TRAINED (reachable) E→E depolarisation — the sufficient-side go/no-go.
+
+    ``gain_regime_report`` scores the ``weight_max``-saturated ceiling: a NECESSARY condition (the most
+    online STDP could ever build must clear the firing gap). This scores what plasticity ACTUALLY built —
+    the trained ``trained_weights`` block — so ``crosses_threshold_reachable`` is the sufficient-side
+    predictor. A supra-threshold ceiling with a sub-threshold reachable depolarisation is exactly the
+    ADR-0007 dev-probe outcome: the ceiling crosses but online STDP does not reach it.
+    """
+    gap = threshold_gap_mv(config)
+    depolarisation = recurrent_depolarisation_mv(
+        trained_weights, config.n_excitatory, active_fraction
+    )
+    return {
+        "n_neurons": config.n_neurons,
+        "threshold_gap_mv": gap,
+        "active_fraction": active_fraction,
+        "depolarisation_reachable_mv": depolarisation,
+        "active_fraction_for_threshold_reachable": active_fraction_for_threshold(
+            trained_weights, config.n_excitatory, gap
+        ),
+        "crosses_threshold_reachable": depolarisation >= gap,
+    }
