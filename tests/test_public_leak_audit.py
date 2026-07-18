@@ -57,7 +57,7 @@ def test_reports_private_workspace_and_agent_identity_leaks(tmp_path: Path) -> N
     audit = _load_module()
     public_file = tmp_path / "README.md"
     public_file.write_text(
-        "Load from [workspace]/private and ask Claude to continue.\n",  # public-leak-audit: allow
+        "Load from /media/anulum/GOTM/private and ask Claude to continue.\n",  # public-leak-audit: allow
         encoding="utf-8",
     )
 
@@ -76,12 +76,12 @@ def test_skips_internal_docs_and_binary_files(tmp_path: Path) -> None:
     internal = tmp_path / "docs" / "internal" / "handover.md"
     internal.parent.mkdir(parents=True)
     internal.write_text(  # public-leak-audit: allow
-        "Claude used [workspace] in this private note.\n",  # public-leak-audit: allow
+        "Claude used /media/anulum/GOTM in this private note.\n",  # public-leak-audit: allow
         encoding="utf-8",
     )
     binary = tmp_path / "docs" / "assets" / "binary.md"
     binary.parent.mkdir(parents=True)
-    binary.write_bytes(b"\x89PNG\r\n\x1a\n\x00project-workspace")
+    binary.write_bytes(b"\x89PNG\r\n\x1a\n\x00GOTM")
 
     result = audit.audit_paths([internal, binary], root=tmp_path)
 
@@ -98,7 +98,7 @@ def test_skips_unreadable_oversized_invalid_and_cache_files(tmp_path: Path) -> N
     invalid.write_bytes(b"\xff\xfe")
     cache = tmp_path / ".venv" / "note.md"
     cache.parent.mkdir()
-    cache.write_text("project-workspace\n", encoding="utf-8")  # public-leak-audit: allow
+    cache.write_text("GOTM\n", encoding="utf-8")  # public-leak-audit: allow
 
     result = audit.audit_paths([missing, oversized, invalid, cache], root=tmp_path)
 
@@ -110,7 +110,7 @@ def test_external_absolute_path_is_reported_as_absolute(tmp_path: Path) -> None:
     """Findings outside the requested root should keep an absolute display path."""
     audit = _load_module()
     outside = tmp_path / "outside.md"
-    outside.write_text("shared-coordination\n", encoding="utf-8")  # public-leak-audit: allow
+    outside.write_text("agentic-shared\n", encoding="utf-8")  # public-leak-audit: allow
 
     result = audit.audit_paths([outside], root=tmp_path / "repo")
 
@@ -126,7 +126,7 @@ def test_main_returns_nonzero_for_explicit_leak_file(
     audit = _load_module()
     leaked = tmp_path / "module.py"
     leaked.write_text(  # public-leak-audit: allow
-        'REFERENCE = "workspace-internal"\n',  # public-leak-audit: allow
+        'REFERENCE = "04_ARCANE_SAPIENCE"\n',  # public-leak-audit: allow
         encoding="utf-8",
     )
 

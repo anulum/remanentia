@@ -131,7 +131,7 @@ DEFAULT_RULES = (
     ),
     LeakRule(
         "private workspace label",
-        re.compile(r"\b(?:project-workspace|workspace-internal|shared-coordination)\b"),  # public-leak-audit: allow
+        re.compile(r"\b(?:GOTM|04_ARCANE_SAPIENCE|agentic-shared)\b"),  # public-leak-audit: allow
     ),
     LeakRule(
         "agent identity label",
