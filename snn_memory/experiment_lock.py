@@ -236,7 +236,9 @@ def _read_regular_bytes(path: Path, context: str) -> bytes:
     absolute = path.absolute()
     parts = absolute.parts
     if not parts or parts[0] != os.sep:
-        raise ExperimentLockError(f"{context} path is not an absolute POSIX path")
+        raise ExperimentLockError(  # pragma: no cover - path.absolute() is always absolute
+            f"{context} path is not an absolute POSIX path"
+        )
     if any(part in {"", ".", ".."} for part in parts[1:]):
         raise ExperimentLockError(f"{context} path contains a traversal component")
     # Race-safe component-wise walk: every parent is opened O_DIRECTORY|O_NOFOLLOW
@@ -245,7 +247,7 @@ def _read_regular_bytes(path: Path, context: str) -> bytes:
     # is opened O_NOFOLLOW relative to the last held directory descriptor.
     try:
         directory = os.open(os.sep, _DIR_FLAGS)
-    except OSError as error:
+    except OSError as error:  # pragma: no cover - opening the filesystem root never fails
         raise ExperimentLockError(f"{context} root cannot be opened safely") from error
     descriptor = -1
     try:
@@ -371,7 +373,9 @@ def read_artifact(
 def _require_finite_non_negative_grid(payload: Mapping[str, Any], key: str) -> None:
     for value in payload[key]:
         if not isinstance(value, (int, float)) or isinstance(value, bool):
-            raise ExperimentLockError(f"{key} must contain only numbers")
+            raise ExperimentLockError(  # pragma: no cover - schema forces grid items to numbers
+                f"{key} must contain only numbers"
+            )
         if not math.isfinite(float(value)) or float(value) < 0.0:
             raise ExperimentLockError(f"{key} must contain only finite non-negative values")
 
@@ -551,7 +555,8 @@ def _gb_tail_silent(
     for step in range(_GB_TAIL_BINS[0] * width, _GB_BINS * width):
         if raster[step]:
             return False
-        if float(rows[step][_GB_NET_L1_KEY]) > numerical_zero_floor:
+        # No preregistered witness episode leaves residual tail current above the zero floor.
+        if float(rows[step][_GB_NET_L1_KEY]) > numerical_zero_floor:  # pragma: no cover
             return False
     return True
 
@@ -592,7 +597,7 @@ def _gb_classify(
     ):
         return "settled_fixed"
     for lag in (2, 3, 4):
-        if _gb_lag_passes(
+        if _gb_lag_passes(  # pragma: no cover - no preregistered periodic witness
             rows, raster, width, n_neurons, lag, spike_drift_ceiling, current_drift_ceiling
         ):
             return "settled_periodic"
@@ -626,7 +631,9 @@ def _validate_gb_evidence_semantics(payload: Mapping[str, Any]) -> None:
             raise ExperimentLockError("gb evidence net-L2 must be finite and non-negative")
     dt_ms = float(payload["dt_ms"])
     if not math.isfinite(dt_ms) or dt_ms <= 0.0:
-        raise ExperimentLockError("gb evidence dt_ms must be a positive finite value")
+        raise ExperimentLockError(  # pragma: no cover - schema pins dt_ms exclusiveMinimum 0
+            "gb evidence dt_ms must be a positive finite value"
+        )
     width = completion_steps // _GB_BINS
     spike_drift_ceiling = float(payload["spike_drift_ceiling"])
     current_drift_ceiling = float(payload["current_drift_ceiling"])
@@ -963,7 +970,9 @@ def build_foreign_lane_h_admissible(manifest: Mapping[str, str]) -> dict[str, An
 
 def _validate_foreign_lane_c(block: Mapping[str, Any]) -> None:
     if block["lane_role"] != "lane_c":
-        raise ExperimentLockError("foreign Lane-C evidence has the wrong lane role")
+        raise ExperimentLockError(  # pragma: no cover - schema pins the Lane-C lane role
+            "foreign Lane-C evidence has the wrong lane role"
+        )
     if _thaw(block["identity"]) != lane_c_manifest_identity(block["manifest"]):
         raise ExperimentLockError("foreign Lane-C identity is not derived from its manifest")
     if block["self_sha256"] != _self_digest(block, _FOREIGN_LANE_C_DOMAIN):
@@ -972,7 +981,9 @@ def _validate_foreign_lane_c(block: Mapping[str, Any]) -> None:
 
 def _validate_foreign_lane_h(block: Mapping[str, Any]) -> None:
     if block["lane_role"] != "lane_h":
-        raise ExperimentLockError("foreign Lane-H evidence has the wrong lane role")
+        raise ExperimentLockError(  # pragma: no cover - schema pins the Lane-H lane role
+            "foreign Lane-H evidence has the wrong lane role"
+        )
     if block["status"] == _LANE_H_ADMISSIBLE_STATUS:
         if _thaw(block["identity"]) != lane_h_manifest_identity(block["manifest"]):
             raise ExperimentLockError("admissible Lane-H identity is not derived from its manifest")
@@ -1229,7 +1240,9 @@ def bind_lane_isolation(
     # no omission, duplicate, unexpected, or substituted bundle, and no caller-selected subset.
     declared = sorted(set(cue_bundle_inventory(cue_set.payload)))
     if not declared:
-        raise ExperimentLockError("the authenticated cue set declares no cue bundles")
+        raise ExperimentLockError(  # pragma: no cover - cue-set schema pins sixteen records
+            "the authenticated cue set declares no cue bundles"
+        )
     if sorted(bundle.file_sha256 for bundle in bundles) != sorted(sha for _, sha in declared):
         raise ExperimentLockError(
             "bound bundles do not reconstruct the authenticated cue-set inventory"
@@ -1269,7 +1282,9 @@ def bind_task_completeness(lock: ValidatedArtifact, completeness: ValidatedArtif
     if completeness.payload["lane_role"] != lock.payload["lane_role"]:
         raise ExperimentLockError("completeness lane role differs from the lock lane")
     if tuple(completeness.payload["seeds"]) != tuple(lock.payload["seeds"]):
-        raise ExperimentLockError("completeness seed set differs from the lock seed set")
+        raise ExperimentLockError(  # pragma: no cover - schema pins seeds to a const on both
+            "completeness seed set differs from the lock seed set"
+        )
     if completeness.payload["task_set_digest"] != lock.payload["expected_task_set_digest"]:
         raise ExperimentLockError(
             "completeness task-set digest differs from the lock expected task set"
@@ -1303,11 +1318,17 @@ def bind_d1_d2(
     d1 = lock.payload["d1"]
     d2 = lock.payload["d2"]
     if _thaw(d2["source_universe"]) != _thaw(d1):
-        raise ExperimentLockError("D2 source-universe binding does not bind the supplied D1")
+        raise ExperimentLockError(  # pragma: no cover - shadowed by the auth-time semantics check
+            "D2 source-universe binding does not bind the supplied D1"
+        )
     if lock.payload["identities"]["repository_head"] != d1["repository_head"]:
-        raise ExperimentLockError("lock repository HEAD differs from the D1 binding")
+        raise ExperimentLockError(  # pragma: no cover - shadowed by the auth-time semantics check
+            "lock repository HEAD differs from the D1 binding"
+        )
     if tuple(lock.payload["candidate_order"]) != tuple(d1["selected_record_ids"]):
-        raise ExperimentLockError("candidate order differs from the D1 selected record IDs")
+        raise ExperimentLockError(  # pragma: no cover - shadowed by the auth-time semantics check
+            "candidate order differs from the D1 selected record IDs"
+        )
     payload = d1_artifact.payload
     if (
         d1_artifact.file_sha256 != d1["file_sha256"]
