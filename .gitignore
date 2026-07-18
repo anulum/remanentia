@@ -23,6 +23,7 @@ memory/graph/*.jsonl
 docs/internal/
 data/longmemeval_oracle.json
 data/longmemeval_s.json
+data/longmemeval_full_s_seed*.jsonl
 data/*.R8_baseline.jsonl
 data/*.R9_baseline.jsonl
 data/*.R10_broken_sort.jsonl

@@ -195,10 +195,15 @@ Results with snippets + extracted answers
 
 ## Benchmarks
 
-### LongMemEval (committed, reproducible)
+### LongMemEval (reproducible with upstream data)
 
 500 questions across 6 categories. GPT-4o-mini generation + judge. Per-run history
 is tracked in `benchmarks/longmemeval_history.jsonl`.
+
+The third-party LongMemEval corpus and per-question run rows are not redistributed in
+this repository. Obtain the dataset from the upstream LongMemEval distribution under
+its own terms, then place the local inputs under `data/` as described below. Aggregate
+Remanentia reports remain committed for auditability.
 
 LongMemEval has two settings, and the distinction matters: the **oracle** setting gives
 the reader only the gold sessions (~2 per question), so retrieval is not exercised; the

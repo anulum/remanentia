@@ -115,6 +115,10 @@ Datasets:
 - `data/longmemeval_s.json` for full-S.
 - `data/longmemeval_oracle.json` for oracle.
 
+These third-party datasets and generated per-question rows are not redistributed by
+Remanentia. Obtain LongMemEval from its upstream distribution under its own licence
+terms and keep the local copies under `data/`; the paths are gitignored.
+
 Full-S Arcane hypothesis rows include `retrieval_diagnostics`:
 
 - `selected_session_idxs`: haystack indices rendered into the reader prompt.
