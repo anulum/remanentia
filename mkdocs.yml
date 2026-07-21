@@ -1,6 +1,6 @@
 site_name: Remanentia
-site_url: https://remanentia.com/docs
-site_description: Persistent AI memory with SNN-orchestrated consolidation
+site_url: https://www.remanentia.com/docs
+site_description: Local-first, auditable memory for AI agents and knowledge-intensive software
 site_author: Miroslav Šotek
 repo_url: https://github.com/anulum/remanentia
 repo_name: anulum/remanentia
@@ -47,14 +47,18 @@ plugins:
 
 nav:
   - Home: index.md
+  - Discover:
+    - Use Cases and Value: product/use-cases-and-value.md
+    - Learning Path: guides/learning-path.md
   - Tutorials:
     - Quick Start: tutorials/quickstart.md
+    - Agent Memory with MCP: tutorials/agent-memory.md
     - Knowledge Store: tutorials/knowledge_store_tutorial.md
     - Temporal Queries: tutorials/temporal_tutorial.md
     - Notebook Walkthrough: tutorials/notebook_walkthrough.md
   - Guides:
-    - Learning Path: guides/learning-path.md
     - Getting Started: guides/getting-started.md
+    - Choose an Interface: guides/choose-an-interface.md
     - User Manual: guides/USER_MANUAL.md
     - Integration Guide: guides/INTEGRATION_GUIDE.md
     - Container Deployment: guides/container_deployment.md
@@ -68,6 +72,7 @@ nav:
     - Date Normaliser (C4): models/date_normalizer.md
     - Fact Validity (C5): models/fact_validity.md
   - API Reference:
+    - API Guide: api-guide.md
     - memory_index: api/memory_index.md
     - memory_sources: api/memory_sources.md
     - store_paths: api/store_paths.md
@@ -156,10 +161,15 @@ nav:
       - 0003 Pluggable LLM backend: adr/0003-pluggable-llm-backend-protocol.md
       - 0004 Dual retrieval stacks: adr/0004-dual-retrieval-stacks.md
       - 0005 Rule-based date normalisation: adr/0005-rule-based-date-normalisation.md
+      - 0006 Preregister temporal SNN experiment: adr/0006-preregister-temporal-snn-memory-experiment.md
+      - 0007 Amend G2 operating point: adr/0007-amend-g2-supra-threshold-operating-point.md
+      - 0008 Amend STDP reach: adr/0008-amend-stdp-reach-ltp-dominant-plasticity.md
+      - 0009 Amend weight headroom: adr/0009-amend-weight-max-headroom-for-reachable-depolarisation.md
   - Benchmarks:
     - LongMemEval: benchmarks/LongMemEval.md
     - LOCOMO: benchmarks/LOCOMO.md
     - Channel Ablations: benchmarks/CHANNEL_ABLATIONS.md
+    - Sovereign Memory Evaluation: benchmarks/SOVEREIGN_MEMORY_EVALUATION.md
   - Research:
     - SNN Consolidation: research/snn_consolidation.md
     - Temporal SNN Memory Experiment: research/temporal_snn_memory.md

@@ -331,7 +331,7 @@ Tests in `tests/test_improvements.py` and `tests/test_integration.py`:
 - **Rust wiring**: extract_decision_points Rust vs Python equivalence
 - **Performance**: extract_decision_points < 10µs
 
-All 6 STRONG dimensions: empty, error, negative, pipeline, roundtrip,
+Test dimensions: empty, error, negative, pipeline, roundtrip,
 performance.
 
 ## API Reference

@@ -21,7 +21,10 @@ pip install -e ".[all]"
 
 ## Step 2: Create Directory Structure
 
+Set an explicit writable store and initialise it:
+
 ```bash
+export REMANENTIA_BASE="$PWD/.remanentia-data"
 remanentia init
 ```
 
@@ -37,10 +40,9 @@ snn_state/            # SNN checkpoints (auto-populated)
 
 ## Step 3: Write a Reasoning Trace
 
-Create a markdown file in `reasoning_traces/`:
+Create `$REMANENTIA_BASE/reasoning_traces/first_trace.md` with this content:
 
-```bash
-cat > reasoning_traces/2026-03-29_first_trace.md << 'EOF'
+```markdown
 # Decision: Use BM25 for retrieval
 
 ## Context
@@ -58,8 +60,10 @@ naturally (the k1 parameter) and doesn't require GPU inference.
 ## Result
 
 P@1 improved from 71% to 85% on our internal benchmark.
-EOF
 ```
+
+The numbers in this synthetic trace are tutorial data, not a Remanentia
+benchmark claim.
 
 ## Step 4: Search
 
@@ -106,14 +110,17 @@ Add to `.mcp.json` in your project:
 {
   "mcpServers": {
     "remanentia": {
-      "command": "python",
-      "args": ["path/to/remanentia/mcp_server.py"]
+      "command": "/absolute/path/to/.venv/bin/python",
+      "args": ["-m", "mcp_server"],
+      "env": {"REMANENTIA_BASE": "/absolute/path/to/remanentia-store"}
     }
   }
 }
 ```
 
-Now any MCP-compatible tool (Cursor and others) can search your memory via `remanentia_recall`.
+Now any MCP-compatible tool can search your memory via `remanentia_recall`.
+For a complete read/write/feedback walkthrough, continue with the
+[Agent Memory Tutorial](agent-memory.md).
 
 ## Next Steps
 

@@ -26,7 +26,9 @@ from importlib import import_module as _import_module
 from pathlib import Path
 from typing import cast
 
-BASE = Path(__file__).parent
+from store_paths import default_base
+
+BASE = default_base()
 TEMPORAL_PATH = BASE / "memory" / "graph" / "temporal_edges.jsonl"
 StatsMap = dict[str, int | str]
 TemporalEdgeRows = list[tuple[str, str, str, str, str]]

@@ -28,16 +28,16 @@ ks = KnowledgeStore()
 
 # Add notes — entities, keywords, and prospective queries are auto-extracted
 n1 = ks.add_note(
-    "BM25 retrieval accuracy is 81.2% on the LOCOMO benchmark. "
-    "The main bottleneck is temporal questions at 42.7%.",
+    "In this fictional example, Project Lyra passed 18 of 20 retrieval cases. "
+    "The remaining two cases require temporal ordering.",
     source="session_log.md",
 )
 print(f"Note 1: id={n1.id}, entities={n1.entities}, type={n1.title}")
 print(f"  Prospective queries: {n1.prospective_queries[:3]}")
 
 n2 = ks.add_note(
-    "Switched from binary TF to real term frequency in BM25 scoring. "
-    "This improved LOCOMO multi-hop from 75% to 82.6%.",
+    "Project Lyra switched from binary TF to real term frequency in BM25 scoring. "
+    "The synthetic evaluation then passed 19 of 20 cases.",
     source="decision_log.md",
 )
 print(f"\nNote 2: id={n2.id}, entities={n2.entities}")
@@ -49,7 +49,7 @@ for link in n1.links:
 
 # Keyword search
 print("\n=== Keyword search ===")
-results = ks.search("LOCOMO accuracy", top_k=3)
+results = ks.search("Project Lyra retrieval cases", top_k=3)
 for note, score in results:
     print(f"  {note.id} (score={score:.1f}): {note.content[:80]}")
 
@@ -61,7 +61,7 @@ for note in related:
 
 # Contradiction detection — add a note that contradicts an existing one
 n3 = ks.add_note(
-    "BM25 retrieval accuracy dropped to 65.0% after the index rebuild.",
+    "Project Lyra passed only 13 of 20 synthetic cases after the index rebuild.",
     source="regression_log.md",
 )
 if n3.supersedes:

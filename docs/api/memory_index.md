@@ -321,7 +321,7 @@ Tests in `tests/test_memory_index.py` (relevant to new features):
 Plus all existing tests for BM25, search, reranking, incremental add,
 temporal graph integration, etc. (200+ tests total in the file).
 
-All 6 STRONG dimensions: empty, error, negative, pipeline, roundtrip, performance.
+Test dimensions: empty, error, negative, pipeline, roundtrip, and performance.
 
 ## API Reference
 

@@ -85,6 +85,31 @@ def _markdown_records(directory: Path) -> list[tuple[dict[str, Any], str]]:
 
 
 class TestIngestCore:
+    def test_parser_exception_advances_cursor_and_records_rejection(self, tmp_path: Path) -> None:
+        """A parser exception is a durable rejection, never a retry-loop crash."""
+        hub = tmp_path / "hub.db"
+        _append_event(hub, _valid_finding_record("unparsable"))
+        store = sc.EventStore(str(hub))
+        cursor = SeqCursor(tmp_path / "cur.json")
+
+        def fail_parse(payload: Any) -> Any:
+            raise ValueError("synthetic parse failure")
+
+        try:
+            report = ingest_findings(
+                store,
+                MarkdownFindingSink(tmp_path / "findings"),
+                cursor,
+                parse_finding=fail_parse,
+                admit=lambda finding: None,
+            )
+        finally:
+            store.close()
+
+        assert report.rejections == ((1, "unparsable payload: synthetic parse failure"),)
+        assert report.admitted == 0
+        assert cursor.load() == 1
+
     def test_admits_accept_and_floor_drops_reject(self, tmp_path: Path) -> None:
         hub = tmp_path / "hub.db"
         _append_event(hub, _valid_finding_record("accepted"))

@@ -1,11 +1,11 @@
 # scorecard_report
 
-The world-class evaluation harness wired to **real** benchmark output (roadmap W1
+The multi-axis evaluation harness wired to **real** benchmark output (roadmap W1
 finish): turn a LongMemEval results JSONL into one comparable run report.
 
 ## Why this module exists
 
-A world-class claim needs a number that is comparable — pinned to its setting
+A credible claim needs a number that is comparable — pinned to its setting
 (oracle vs full-S), reader, and judge — and that reports the sovereign no-egress
 axis. This module reads the rows the judge already writes (`judge_label`,
 `judge_model`, `question_type`) and produces that report, using `no_egress_audit`

@@ -128,7 +128,7 @@ generic co-occurrence edges.
 ### Graph Query
 
 ```bash
-remanentia graph "STDP" --hops 2
+remanentia graph --top 15
 ```
 
 ## SNN Daemon (experimental, excluded from coverage)

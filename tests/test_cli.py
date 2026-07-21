@@ -31,6 +31,39 @@ from cli import (
 
 
 class TestCmdStatus:
+    def test_capacity_report_details(self, tmp_path, capsys, monkeypatch):
+        """Status renders non-empty capacity categories and lifecycle counts."""
+        (tmp_path / "snn_state").mkdir()
+        (tmp_path / "reasoning_traces").mkdir()
+        (tmp_path / "memory" / "semantic").mkdir(parents=True)
+        (tmp_path / "memory" / "graph").mkdir(parents=True)
+        report = {
+            "decision": {
+                "needs_consolidation": True,
+                "state_counts": {"active": 2, "stale": 1},
+                "usage_pct": 82.5,
+                "chars": 825,
+                "limit": 1000,
+                "file_count": 3,
+            }
+        }
+
+        original = cli._runtime_attr
+
+        def runtime_attr(module_name, attr_name):
+            if (module_name, attr_name) == ("consolidation_engine", "capacity_report"):
+                return lambda: report
+            return original(module_name, attr_name)
+
+        monkeypatch.setattr(cli, "_runtime_attr", runtime_attr)
+        with patch("cli.BASE", tmp_path):
+            cmd_status(type("Args", (), {})())
+
+        output = capsys.readouterr().out
+        assert "Capacity:" in output
+        assert "decision" in output
+        assert "active=2, stale=1" in output
+
     def test_no_daemon(self, tmp_path, capsys):
         state_dir = tmp_path / "snn_state"
         state_dir.mkdir()

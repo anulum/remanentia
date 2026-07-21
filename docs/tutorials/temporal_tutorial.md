@@ -129,7 +129,10 @@ This is why a query like "how many days between the start and the release" can r
 
 ## Current Limitations
 
-Temporal-reasoning is the weakest category in the LongMemEval benchmark at 45.9% (61/133 questions). The main gaps:
+Temporal questions remain a measured challenge, but results vary materially by
+oracle versus full-S setting and by reader/judge configuration. Use the
+[LongMemEval report](../benchmarks/LongMemEval.md) for current evidence. Typical
+failure modes include:
 
 - Questions about event ordering across sessions ("did X happen before Y started Z")
 - Questions requiring knowledge-update tracking ("what is their CURRENT job" when the job changed across sessions)

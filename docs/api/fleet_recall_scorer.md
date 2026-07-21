@@ -9,7 +9,7 @@ into a number.
 The query stream has existed twice for a while (`recall_ledger` is the durable
 local sink, `bus_recall` mirrors the same events to the hub), but nothing
 scored it: the stream was recorded, never measured, so the fleet-fed axis of
-the world-class scorecard stayed permanently dark. This module is the scorer;
+the multi-axis scorecard stayed permanently dark. This module is the scorer;
 `world_class_scorecard` and `scorecard_report` fold its report in beside the
 abstention, no-egress and lineage axes.
 

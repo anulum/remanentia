@@ -62,6 +62,7 @@ from memory_query_intelligence import (
     tokenize as _tokenize,
 )
 from memory_sources import DEFAULT_TEXT_EXTENSIONS, load_source_config
+from store_paths import default_base
 import text_chunking as _text_chunking
 
 _extract_date_context = _memory_dates.extract_date_context
@@ -77,7 +78,7 @@ _split_paragraphs = _text_chunking.split_paragraphs
 _split_python_code = _text_chunking.split_python_code
 _split_sentences = _text_chunking.split_sentences
 
-BASE = Path(__file__).parent
+BASE = default_base()
 INDEX_PATH = BASE / "snn_state" / "memory_index.json.gz"
 _LEGACY_INDEX_PATH = BASE / "snn_state" / "memory_index.pkl"
 INDEX_EMB_PATH = BASE / "snn_state" / "memory_index_embeddings.npz"

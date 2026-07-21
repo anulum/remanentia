@@ -80,8 +80,8 @@ Triggers are checked by the MCP server on every `remanentia_recall` call. They s
 When a new note contradicts an existing one, both are preserved with a supersession chain:
 
 ```python
-ks.add_note("BM25 accuracy is 85% on LOCOMO.", source="v1.md")
-n2 = ks.add_note("BM25 accuracy dropped to 65% after the index rebuild.", source="v2.md")
+ks.add_note("In this fictional example, Project Lyra passed 18 of 20 cases.", source="v1.md")
+n2 = ks.add_note("Project Lyra passed 14 of 20 cases after the rebuild.", source="v2.md")
 
 if n2.supersedes:
     print(f"Note {n2.id} supersedes {n2.supersedes}")

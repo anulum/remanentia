@@ -274,7 +274,7 @@ context = ar.build_context("current employer", results)
   invalid dates, empty sessions, same-day, very old
 - **Performance**: retrieve < 50ms per query
 
-All 6 STRONG dimensions: empty, error, negative, pipeline, roundtrip, performance.
+Test dimensions: empty, error, negative, pipeline, roundtrip, and performance.
 
 ## API Reference
 

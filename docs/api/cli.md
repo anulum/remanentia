@@ -1,58 +1,82 @@
 # CLI Reference
 
-Command-line interface for Remanentia.
-
-## Commands
-
-### search
+The `remanentia` command exposes local recall, store maintenance, service, and
+schema operations. Set an explicit writable store before running data commands:
 
 ```bash
-remanentia search "query" [--top-k N] [--project NAME] [--after DATE] [--before DATE]
-```
-
-### recall
-
-```bash
-remanentia recall "query" [--top-k N] [--format context|json]
-```
-
-### status
-
-```bash
-remanentia status
-```
-
-### consolidate
-
-```bash
-remanentia consolidate [--force]
-```
-
-### init
-
-```bash
+export REMANENTIA_BASE="$PWD/.remanentia-data"
 remanentia init
 ```
 
-Creates the directory structure for a new Remanentia installation.
+## Command map
 
-### serve
+| Command | Purpose |
+|---|---|
+| `recall` | Search memory and render summary, context, or JSON |
+| `search` | Alias of `recall` |
+| `consolidate` | Consolidate new or all traces |
+| `status` | Report selected-store state |
+| `store-manifest` | Inspect or write the selected-store manifest |
+| `store-sources` | Inspect or write MemoryIndex source configuration |
+| `openapi` | Export the FastAPI OpenAPI schema |
+| `claim-schema` | Export or check the claim-axis schema |
+| `graph` | Show top entity relationships |
+| `entities` | List known entities |
+| `daemon` | Start, stop, or inspect the legacy experimental daemon |
+| `init` | Create the selected-store directory layout |
+| `observe` | Watch source files or run one observation cycle |
+| `reflect` | Run optional LLM-powered reflection |
+| `setup-llm` | Detect hardware and configure a local model |
+| `serve` | Start the FastAPI service |
+| `serve-llm` | Start the configured local LLM server |
+| `notes` | List knowledge notes |
+
+`remanentia --help` and `remanentia <command> --help` are the canonical option
+reference for the installed version.
+
+## Recall and search
 
 ```bash
-remanentia serve [--port PORT] [--host HOST] [--token-file PATH] [--require-auth]
+remanentia search "deployment decision" --top 5
+remanentia recall "deployment decision" --top 5 --format context
+remanentia recall "deployment decision" --project example --after 2026-01-01 --format json
 ```
 
-Starts the FastAPI REST server. Use `--require-auth` in deployments that must
-refuse open private endpoints, and use `--token-file` to load
-`REMANENTIA_API_TOKEN` before `api:app` imports.
+Both commands accept `--top`, not `--top-k`. Optional model synthesis is
+controlled by `--llm` and `--llm-backend`; it is not used by default.
 
-### openapi
+## Consolidation and inspection
 
 ```bash
-remanentia openapi [--output PATH]
+remanentia consolidate
+remanentia consolidate --force
+remanentia status
+remanentia graph --top 15
+remanentia entities
+remanentia notes --top 20
 ```
 
-Writes the deterministic FastAPI OpenAPI schema, including bearer-auth
-annotations for private endpoints.
+## Store configuration
+
+```bash
+remanentia store-manifest --json
+remanentia store-manifest --write --json
+remanentia store-sources --write --json
+```
+
+## API and schemas
+
+```bash
+remanentia serve --host 127.0.0.1 --port 8001
+remanentia serve --host 127.0.0.1 --port 8001 \
+  --require-auth --token-file /run/secrets/remanentia_api_token
+remanentia openapi --output docs/openapi/remanentia_openapi.json
+remanentia claim-schema --output docs/schema/remanentia_claim_axes.schema.json
+```
+
+Use `--require-auth` when the service must refuse to start without a token.
+Binding outside loopback also requires a trusted transport-security boundary.
+
+## Python entry point
 
 ::: cli.main

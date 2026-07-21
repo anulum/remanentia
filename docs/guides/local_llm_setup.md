@@ -137,15 +137,14 @@ Or set the environment variable `REMANENTIA_LLM_CONFIG=/path/to/llm.toml`.
 `--host` only for deliberately isolated network deployments with an external
 firewall/authentication boundary.
 
-## 6a. ML350 32B coder route
+## 6a. Remote local-model route
 
-ML350 exposes a hot Qwen 2.5 Coder 32B Q4 route for higher-quality local
-coding and memory-synthesis work. It is intentionally kept behind SSH/UFW.
-
-Open a tunnel from the workstation or notebook:
+If a model server runs on another trusted host, keep it bound to that host's
+loopback interface and use an authenticated private network or an SSH tunnel.
+For example:
 
 ```bash
-ssh -N -L 11438:127.0.0.1:11438 anulum@192.168.1.30
+ssh -N -L 11438:127.0.0.1:11438 user@model-host.example
 ```
 
 Then point Remanentia at the tunneled llama.cpp endpoint:
@@ -154,7 +153,7 @@ Then point Remanentia at the tunneled llama.cpp endpoint:
 [llm]
 backend = "local"
 local_url = "http://127.0.0.1:11438/v1"
-local_model = "qwen2.5-coder-32b-instruct-q4"
+local_model = "your-local-model"
 local_timeout = 300
 
 [llm.tokens]
@@ -166,14 +165,13 @@ synthesise = 320
 Use the config explicitly:
 
 ```bash
-export REMANENTIA_LLM_CONFIG="$HOME/.remanentia/ml350-code32b.toml"
+export REMANENTIA_LLM_CONFIG="/absolute/path/to/local-model.toml"
 remanentia recall "query" --llm --llm-backend local
 ```
 
-The same model is registered in ML350 LiteLLM as `local-code` and `local-best`.
-Use LiteLLM only when the caller can pass the configured bearer token; the
-direct SSH tunnel above needs no API key and is simpler for local Remanentia
-runs.
+Treat the remote service as a separate security boundary. Configure its
+authentication even when the tunnel is private, and do not place access tokens
+in tracked configuration files.
 
 ## 6b. Using the local LLM through the MCP server
 
@@ -182,7 +180,7 @@ others) talks to Remanentia. Two flags flip the backend selection:
 
 ```bash
 # LLM-synthesised recall answers, local-Ollama backend pinned
-python mcp_server.py --llm --local-llm
+python -m mcp_server --llm --local-llm
 ```
 
 Under the hood the flags set two environment variables the

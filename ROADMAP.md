@@ -18,15 +18,16 @@ full-S** convention (never the oracle setting); see `VALIDATION.md` and
   quarantine ledger)
 - [x] World-class evaluation harness (calibrated abstention, no-egress audit,
   lineage completeness, scorecard + `remanentia-scorecard` CLI)
-- [x] MCP server (4 tools) with stdio rate limiting; REST API with bearer auth,
+- [x] MCP server (6 tools) with stdio rate limiting; REST API with bearer auth,
   `--require-auth`, rate limiting, PII redaction
 - [x] Docker deployment (non-root, digest-pinned, healthcheck, hash-pinned install)
   + OpenAPI export
-- [x] 16 Rust acceleration crates (PyO3 + maturin, Python fallback)
-- [x] 100 % product-module coverage gate; 75 API reference pages; ADR log; model
+- [x] 17 Rust/PyO3 modules with Python fallbacks (16 in the general crate matrix;
+  temporal-SNN memory has separate installed-wheel verification)
+- [x] 100 % product-module coverage gate; 78 packaged-module API pages; ADR log; model
   cards; CycloneDX SBOM + sigstore + SLSA provenance release pipeline
 
-## In progress — World-Class Hardening (2026-07)
+## In progress — Measurable Hardening (2026-07)
 
 Two objectives: (A) match measurable SOTA on the realistic full-S setting, and (B)
 define and own a new evaluation category no leaderboard measures.

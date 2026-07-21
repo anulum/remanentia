@@ -306,7 +306,8 @@ export REMANENTIA_USE_RUST_BM25=1
 
 ## Test Coverage
 
-Current local full-suite baseline: 2,143 passed, 3 skipped on 2026-05-12.
-The CI coverage job enforces the repository's 100% coverage gate. Performance
+Canonical test and coverage evidence lives in the repository's `VALIDATION.md`;
+point-in-time counts are not duplicated here. The CI coverage job enforces the
+repository's 100% coverage gate. Performance
 budget tests and benchmark checks should be rerun before publishing new latency
 or throughput numbers.

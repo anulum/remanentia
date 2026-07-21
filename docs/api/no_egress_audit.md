@@ -1,7 +1,7 @@
 # no_egress_audit
 
 Sovereign no-egress audit: prove a run made **zero cloud LLM calls**. Part of the
-world-class evaluation harness (roadmap W1/W3) for the local-first/sovereign axis
+multi-axis evaluation harness (roadmap W1/W3) for the local-first/sovereign axis
 no public memory leaderboard scores.
 
 ## Why this module exists

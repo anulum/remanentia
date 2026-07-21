@@ -22,6 +22,7 @@ pip install -e ".[dev]"
 ## Directory Setup
 
 ```bash
+export REMANENTIA_BASE="$PWD/.remanentia-data"
 remanentia init
 ```
 
@@ -54,8 +55,9 @@ Add to your `.mcp.json` (Cursor or any MCP-compatible client):
 {
   "mcpServers": {
     "remanentia": {
-      "command": "python",
-      "args": ["path/to/mcp_server.py"]
+      "command": "/absolute/path/to/.venv/bin/python",
+      "args": ["-m", "mcp_server"],
+      "env": {"REMANENTIA_BASE": "/absolute/path/to/remanentia-store"}
     }
   }
 }
@@ -69,12 +71,14 @@ Available tools:
 | `remanentia_remember` | Store a new memory |
 | `remanentia_status` | System statistics |
 | `remanentia_graph` | Query entity relationships |
+| `remanentia_recall_feedback` | Record retrieval usefulness feedback |
+| `remanentia_recall_correctness` | Record a correctness-labelled outcome |
 
 ## CLI Reference
 
 ```bash
 remanentia search "query"              # Search memory
-remanentia recall "query" --top-k 10   # Deep recall with context
+remanentia recall "query" --top 10     # Deep recall with context
 remanentia status                       # System status
 remanentia consolidate --force          # Run consolidation
 remanentia init                         # Create directory structure
@@ -87,11 +91,13 @@ pip install -e ".[api]"
 remanentia serve --host 127.0.0.1 --port 8001
 ```
 
-Endpoints:
+Core endpoints (the running service also publishes `/docs` and `/openapi.json`):
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | POST | `/recall` | Search memory (JSON body: `{"query": "...", "top_k": 3}`) |
+| POST | `/recall/correctness` | Record a labelled correctness outcome |
+| POST | `/vector/search/public` | Search through the public vector contract |
 | POST | `/consolidate` | Run consolidation |
 | GET | `/status` | System status |
 | GET | `/health` | Health check |
@@ -102,10 +108,11 @@ Endpoints:
 ## HTTP API (stdlib, no dependencies)
 
 ```bash
-python api_server.py --port 8001
+python -m api_server --host 127.0.0.1 --port 8001
 ```
 
-Lighter alternative with no FastAPI dependency. Same core endpoints (recall, status, consolidate, remember).
+Lighter alternative with no FastAPI dependency. It exposes `health`, `recall`,
+`status`, `consolidate`, and `remember`; do not assume full FastAPI route parity.
 
 ## Container Deployment
 
@@ -123,4 +130,6 @@ The Compose deployment binds `127.0.0.1:8001`, stores memory under the
 
 - [User Manual](USER_MANUAL.md) — full feature reference
 - [Integration Guide](INTEGRATION_GUIDE.md) — MCP, REST, Python API
+- [Choose an Interface](choose-an-interface.md) — compare CLI, Python, MCP, and HTTP
+- [API Guide](../api-guide.md) — requests, routes, tools, and compatibility
 - [Performance Tuning](PERFORMANCE_TUNING.md) — index configuration, Rust acceleration

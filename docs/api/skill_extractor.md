@@ -390,7 +390,7 @@ Tests in `tests/test_improvements.py` (shared test file):
 - **Tokenize**: Rust vs Python equivalence
 - **Marker matching**: all 5 trigger-action pairs, false negatives
 
-All 6 STRONG dimensions: empty, error, negative, pipeline, roundtrip,
+Test dimensions: empty, error, negative, pipeline, roundtrip,
 performance.
 
 ## API Reference

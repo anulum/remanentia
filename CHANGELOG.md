@@ -6,13 +6,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- A reworked documentation surface now provides a product overview, use-case
+  and readiness guidance, an interface chooser, a stable API entry point, a
+  complete MCP agent-memory tutorial, and navigation for all ADRs and sovereign
+  evaluation material.
 - Source for the 14 remaining PyO3 acceleration crates now lives in the
   repository (`rust_active_retrieval`, `rust_aggregate_precompute`,
   `rust_answer_extractor`, `rust_answer_normalizer`, `rust_consolidation`,
   `rust_entity_extractor`, `rust_fact_decomposer`, `rust_knowledge_store`,
   `rust_pii_redactor`, `rust_retrieve`, `rust_search`, `rust_skill_extractor`,
   `rust_stdp`, `rust_temporal`), joining the previously in-tree `rust_recall`
-  and `remanentia_topology` — the full 16-crate Rust surface is now
+  and `remanentia_topology`; `rust_snn_memory` completes the full 17-module
+  Rust acceleration surface, which is now
   version-controlled and buildable from a clean checkout.
 - ROCm (AMD) GPU support: `device_utils.safe_device` now recognises a ROCm
   PyTorch build (`torch.version.hip`) and runs the retrieval cross-encoder and

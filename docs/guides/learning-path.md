@@ -22,7 +22,7 @@ Progressive guide from first search to production deployment.
 **Goal:** Use the knowledge store, set up MCP, understand consolidation.
 
 1. [Knowledge Store Tutorial](../tutorials/knowledge_store_tutorial.md) — atomic notes, links, graph search
-2. Set up MCP integration (`.mcp.json` config in the quick start)
+2. Complete the [Agent Memory Tutorial](../tutorials/agent-memory.md)
 3. Run `remanentia consolidate --force` to extract semantic memories from traces
 4. Browse `memory/semantic/` to see consolidated facts
 5. Run `remanentia graph --top 10` to see entity relationships
@@ -47,7 +47,9 @@ Progressive guide from first search to production deployment.
 - Dates are extracted automatically from ISO format, written English, and M/D/Y
 - The temporal graph tracks event ordering (before/after/same_day edges)
 - `temporal_code_execute()` computes answers from dates (durations, ordering, recency)
-- Temporal-reasoning has reached 65.4% on LongMemEval R11 (up from 45.9% in R8) — 65% target achieved. Multi-session is the current bottleneck at 54.1%.
+- Benchmark results depend on the evaluation setting. Use the
+  [LongMemEval report](../benchmarks/LongMemEval.md) for current, evidence-linked
+  full-S and historical oracle results.
 
 **What you'll have:** Date-aware search with computed temporal answers.
 
@@ -56,7 +58,8 @@ Progressive guide from first search to production deployment.
 **Goal:** Build custom retrieval pipelines, use filtered search, integrate with applications.
 
 1. Read the [Integration Guide](INTEGRATION_GUIDE.md) — Python API, REST API, environment variables
-2. Study the example scripts in `examples/`:
+2. Use the [Interface Guide](choose-an-interface.md) to select the narrowest integration surface
+3. Study the example scripts in `examples/`:
    - `basic_search.py` — MemoryIndex build/load/search
    - `filtered_search.py` — project, date, and doc_type filters
    - `knowledge_notes.py` — KnowledgeStore with graph search and triggers

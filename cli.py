@@ -513,7 +513,7 @@ def main() -> None:
     _ensure_utf8()
     parser = argparse.ArgumentParser(
         prog="remanentia",
-        description="Persistent AI memory with SNN-orchestrated consolidation",
+        description="Local-first, auditable memory for AI agents and knowledge-intensive software",
     )
     sub = parser.add_subparsers(dest="command")
 

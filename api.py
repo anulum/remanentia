@@ -49,6 +49,7 @@ from api_security import (
     TokenBucketLimiter,
     enforce_body_size,
 )
+from store_paths import default_base
 
 JsonValue: TypeAlias = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
 JsonObject: TypeAlias = dict[str, JsonValue]
@@ -68,7 +69,7 @@ def _cors_origins_from_env() -> list[str]:
 
 app = FastAPI(
     title="Remanentia",
-    description="Persistent AI memory with SNN-orchestrated consolidation",
+    description="Local-first, auditable memory for AI agents and knowledge-intensive software",
     version="0.5.0",
 )
 
@@ -79,7 +80,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-BASE = Path(__file__).parent
+BASE = default_base()
 STATE_DIR = BASE / "snn_state"
 GRAPH_DIR = BASE / "memory" / "graph"
 VECTOR_WORKER_MAX_AGE_S = 1800

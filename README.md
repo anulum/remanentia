@@ -27,13 +27,24 @@ Contact: www.anulum.li | protoscience@anulum.li
 
 ![Remanentia](docs/assets/remanentia_repo_header.png)
 
-**Persistent AI memory with SNN-orchestrated consolidation, entity graphs, and deep contextual recall.**
+**Local-first, auditable memory for AI agents and knowledge-intensive software.**
 
-> **Active Development** — Remanentia is under intensive development. The core memory engine, BM25+embedding hybrid retrieval, SNN-orchestrated consolidation, temporal reasoning, and the MCP server are functional, tested, and deployable. **Canonical test and coverage numbers live only in [`VALIDATION.md`](VALIDATION.md)** (do not copy counts into this README — they drift). The repository keeps a 100% product-module coverage gate in CI via `pyproject.toml`. Rust acceleration spans 16 crates with a Python fallback on every path. LongMemEval, **full-S setting** (realistic ~50-session haystacks, retrieval actually exercised; this is what published leaderboards measure): **56.6% overall** (3-run mean on the current `gpt-4o-mini`, spread 2.2). The older 72.2%/~71% figures are the *oracle* setting (gold sessions only, retrieval bypassed) and are not comparable to leaderboards — see Benchmarks for both. Figures are 3-run means, not single runs. APIs may evolve as this work progresses.
+> **Active Development** — The retrieval, graph, temporal, consolidation, CLI,
+> MCP, and HTTP surfaces are implemented and tested. Temporal SNN memory is an
+> explicitly preregistered research programme, not a dependency of the normal
+> retrieval path. **Canonical test and coverage evidence lives in
+> [`VALIDATION.md`](VALIDATION.md)** so point-in-time counts do not drift across
+> landing pages. Rust acceleration spans 17 modules with Python fallbacks.
+> Benchmark settings and limitations are documented under [Benchmarks](#benchmarks).
 
 BM25+embedding hybrid retrieval with RRF | 11 typed entity relation types | temporal reasoning with date arithmetic | async consolidation | thread-safe MCP server
 
 [remanentia.com](https://www.remanentia.com) | [GitHub](https://github.com/anulum/remanentia)
+
+**New here?** Read the [documentation home](docs/index.md), follow the
+[five-minute quick start](docs/tutorials/quickstart.md), compare
+[integration interfaces](docs/guides/choose-an-interface.md), or review
+[use cases and readiness boundaries](docs/product/use-cases-and-value.md).
 
 ---
 
@@ -53,7 +64,9 @@ archives, but the public package does not require a private monorepo layout.
 
 Remanentia indexes your project's existing files — session logs, code, research documents, reasoning traces — into a unified BM25 index with query intelligence. Ask a question, get the relevant paragraph with an extracted answer.
 
-No vector database. No cloud service. No LLM in the retrieval path.
+No managed vector database, cloud service, or LLM is required for the core
+retrieval path. Local vector indexing and hosted or local synthesis remain
+optional, operator-selected layers.
 
 ## Quick Start
 
@@ -61,13 +74,16 @@ No vector database. No cloud service. No LLM in the retrieval path.
 # Install from PyPI
 pip install remanentia
 
+# Select a writable, explicit memory store
+export REMANENTIA_BASE="$PWD/.remanentia-data"
+
 # Or install from source
 pip install -e .
 
 # Create directory structure
 remanentia init
 
-# Add your reasoning traces to reasoning_traces/
+# Add your reasoning traces to $REMANENTIA_BASE/reasoning_traces/
 # Then consolidate into semantic memories
 remanentia consolidate --force
 
@@ -117,6 +133,7 @@ Knowledge store (multi-hop graph search) ...... Zettelkasten + prospective queri
 | Semantic | `memory/semantic/**/*.md` | Consolidated facts with YAML frontmatter |
 | Procedural | `skills/*.json` | Extracted skills and workflows |
 | Graph | `memory/graph/*.jsonl` | Entity-entity relations with evidence |
+| Knowledge | `memory/knowledge_notes.jsonl` | Atomic linked notes and prospective queries |
 
 ### Components
 
@@ -159,7 +176,7 @@ Knowledge store (multi-hop graph search) ...... Zettelkasten + prospective queri
 - Optional: sentence-transformers (embedding rerank), torch (GPU), fastapi (REST API), `anthropic` Python package (hosted LLM)
 - Optional: llama.cpp / Ollama for local LLM (any chat-completions-compatible endpoint)
 
-## CLI
+## Installation Profiles
 
 ```bash
 pip install -e ".[all]"     # everything
@@ -392,7 +409,7 @@ For Cursor or any MCP-compatible tool:
   "mcpServers": {
     "remanentia": {
       "command": "python",
-      "args": ["path/to/mcp_server.py"]
+      "args": ["-m", "mcp_server"]
     }
   }
 }
@@ -400,8 +417,11 @@ For Cursor or any MCP-compatible tool:
 
 Tools:
 - `remanentia_recall` — search with full context
+- `remanentia_remember` — store a memory note
 - `remanentia_status` — system status
 - `remanentia_graph` — entity relationship query
+- `remanentia_recall_feedback` — record retrieval usefulness feedback
+- `remanentia_recall_correctness` — record a correctness-labelled outcome
 
 Set `REMANENTIA_BASE` to point ingest, freshness checks, `remanentia init`, and
 `remanentia status` at a custom memory store. `remanentia init` creates that
@@ -413,7 +433,7 @@ The user-service installer accepts the same selection as `--base` and
 export those paths, and the watchdog writes the freshness report under the
 selected store.
 
-## CLI
+## CLI Reference
 
 ```bash
 remanentia search "query"                    # search (alias for recall)
@@ -546,11 +566,11 @@ Miroslav Šotek ([Anulum](https://www.anulum.li)) | ORCID: [0009-0009-3560-0851]
 
 <p align="center">
   <a href="https://www.anulum.li">
-    <img src="docs/assets/anulum_logo_company.jpg" width="180" alt="ANULUM">
+    <img src="docs/assets/anulum_logo_company.jpg" height="70" alt="ANULUM">
   </a>
   &nbsp;&nbsp;&nbsp;&nbsp;
   <a href="https://www.anulum.li">
-    <img src="docs/assets/fortis_studio_logo.jpg" width="180" alt="Fortis Studio">
+    <img src="docs/assets/fortis_studio_logo.jpg" height="70" alt="Fortis Studio">
   </a>
   <br>
   <em>Developed by <a href="https://www.anulum.li">ANULUM</a> / Fortis Studio</em>

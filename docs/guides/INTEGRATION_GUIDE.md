@@ -10,10 +10,10 @@ Add to `.mcp.json` in your project root:
 {
   "mcpServers": {
     "remanentia": {
-      "command": "python",
-      "args": ["/path/to/remanentia/mcp_server.py"],
+      "command": "/absolute/path/to/.venv/bin/python",
+      "args": ["-m", "mcp_server"],
       "env": {
-        "REMANENTIA_BASE": "/path/to/remanentia"
+        "REMANENTIA_BASE": "/absolute/path/to/remanentia-store"
       }
     }
   }
@@ -66,6 +66,16 @@ No parameters. Returns index statistics, memory counts, SNN state.
 ```
 
 Parameters: `entity` (filter by entity name, optional), `top` (max relations to return, default 10).
+
+#### remanentia_recall_feedback
+
+Records whether retrieved context was useful for a downstream task. This is a
+quality signal, not a correctness label.
+
+#### remanentia_recall_correctness
+
+Records a verifier-labelled correctness outcome for a prior recall so the
+abstention calibration surface can distinguish use from correctness.
 
 ## REST API (FastAPI)
 
@@ -166,7 +176,7 @@ ks.save()
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `REMANENTIA_BASE` | Script directory | Base path for all data |
+| `REMANENTIA_BASE` | Module directory if unset | Explicit writable base path for runtime data; set this in installed deployments |
 | `REMANENTIA_USE_RUST_BM25` | `0` | Force Rust BM25 (`1` to enable) |
 | `REMANENTIA_LLM_ANSWERS` | unset | Enable LLM answer synthesis |
 | `REMANENTIA_API_TOKEN` | unset | Bearer token required by private REST endpoints when configured |

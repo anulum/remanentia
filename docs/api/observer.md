@@ -227,7 +227,7 @@ observe_loop(interval=30)  # runs forever, heartbeat every ~5 min
   performance (<50ms)
 - **Pipeline integration**: notes flow into KnowledgeStore, index update
 
-All 6 STRONG dimensions: empty, error, negative, pipeline, roundtrip, performance.
+Test dimensions: empty, error, negative, pipeline, roundtrip, and performance.
 
 ## API Reference
 

@@ -1,7 +1,7 @@
 # lineage_completeness
 
 Lineage-of-belief completeness: measure *why a fact is believed*. Part of the
-world-class evaluation harness (roadmap W1/W5) for the auditability axis no public
+multi-axis evaluation harness (roadmap W1/W5) for the auditability axis no public
 memory leaderboard scores.
 
 ## Why this module exists

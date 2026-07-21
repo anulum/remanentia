@@ -36,8 +36,12 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any, TypeAlias, cast
 
-BASE = Path(__file__).parent
-sys.path.insert(0, str(BASE))
+from store_paths import default_base
+
+PACKAGE_ROOT = Path(__file__).parent
+sys.path.insert(0, str(PACKAGE_ROOT))
+
+BASE = default_base()
 
 from api_security import (  # noqa: E402 — path inserted above
     DEFAULT_BODY_LIMIT,

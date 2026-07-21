@@ -23,11 +23,11 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from importlib import import_module
-from pathlib import Path
 from typing import Any, cast
 
+from store_paths import default_base
 
-BASE = Path(__file__).parent
+BASE = default_base()
 TRACES_DIR = BASE / "reasoning_traces"
 SEMANTIC_DIR = BASE / "memory" / "semantic"
 GRAPH_DIR = BASE / "memory" / "graph"

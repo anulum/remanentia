@@ -1,13 +1,13 @@
 # coverage_accuracy
 
 Risk–coverage (calibrated-abstention) evaluation: measuring whether the system
-**knows what it doesn't know**. Part of the world-class evaluation harness
+**knows what it doesn't know**. Part of the multi-axis evaluation harness
 (roadmap W1/W5) for an axis no public memory leaderboard scores.
 
 ## Why this module exists
 
 Every memory leaderboard reports final-answer accuracy and nothing else. A
-world-class system must also abstain well — answer confidently where it has
+reliable system must also abstain well — answer confidently where it has
 support, and say "I don't have that" where it does not. This module turns
 per-question outcomes into a **risk–coverage curve**: sort answers by confidence,
 sweep a threshold, and at every *coverage* (fraction answered) measure the

@@ -34,7 +34,8 @@ make test-cov-combined
 
 - Python 3.10+ with type hints on public API boundaries
 - No `# noqa` comments — fix the code instead
-- SPDX 6-line header on every source file (match the header on any existing source file)
+- Use the repository's current seven-line SPDX/commercial header on source files;
+  copy it from a neighbouring file of the same type.
 - Anti-slop policy: no narration comments, no defensive boilerplate walls,
   no buzzword naming, no trivial wrappers
 
@@ -54,16 +55,16 @@ make test-cov-combined
 
 ## Rust Modules
 
-PyO3 acceleration crates live in the tracked Rust crate directories. Build with
-maturin:
+PyO3 acceleration modules live in the tracked Rust directories. Build and
+install the complete wheel set through the repository's canonical target:
 
 ```bash
-cd rust_recall  # or any rust_* directory
-VIRTUAL_ENV=.venv maturin develop --release
-
-# Verify
-python -c "from remanentia_recall import tokenize_words; print('OK')"
+make build-rust PYTHON=python
+make test-cov-combined PYTHON=python
 ```
+
+The Makefile builds each module as a uniquely named wheel before installation;
+do not replace this with a root-level `maturin develop` command.
 
 ## Pull Requests
 

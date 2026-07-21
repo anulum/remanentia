@@ -5,7 +5,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- The documentation now includes a product and use-case overview, an interface
+  chooser, a stable API entry point, a complete MCP tutorial, all accepted ADRs,
+  and sovereign-evaluation navigation.
+
 ### Changed
+- CLI, MCP, HTTP, container, and Python surfaces now derive mutable runtime
+  paths from the operator-selected `REMANENTIA_BASE`; onboarding examples set an
+  explicit writable store.
+- Product positioning separates the tested retrieval core from legacy and
+  preregistered temporal-SNN research.
 - Cross-session entity-summary synthesis is now **off by default** (opt in with
   `REMANENTIA_SYNTHESIS_ENABLE=1`, replacing the previous
   `REMANENTIA_SYNTHESIS_DISABLE` opt-out). A 2-seed full-S ablation found no

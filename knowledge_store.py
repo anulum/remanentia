@@ -26,7 +26,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
-BASE = Path(__file__).parent
+from store_paths import default_base
+
+BASE = default_base()
 STORE_PATH = BASE / "memory" / "knowledge_notes.jsonl"
 TRIGGERS_PATH = BASE / "memory" / "triggers.jsonl"
 

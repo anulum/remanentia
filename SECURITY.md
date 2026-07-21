@@ -4,8 +4,8 @@
 
 | Version | Supported          | Notes |
 |---------|--------------------|-------|
-| 0.3.x   | :white_check_mark: | Current development (alpha) |
-| < 0.3   | :x:                | Superseded |
+| 0.5.x   | :white_check_mark: | Current development (alpha) |
+| < 0.5   | :x:                | Superseded |
 
 Only the latest `0.x` patch receives security fixes.
 
@@ -47,9 +47,11 @@ The following are out of scope:
   `tools/migrate_pickle_to_npz.py` for the one-shot migrator
 - PII redaction (`pii_redactor.py`) scrubs emails, phone numbers, IBAN,
   credit cards, and API-key-shaped tokens from every memory write
-- API server requires Bearer auth (`REMANENTIA_API_TOKEN`), per-IP rate
-  limit, and a 1 MiB body cap by default; `/health` is the only exempt
-  path
+- API servers support Bearer auth (`REMANENTIA_API_TOKEN`), per-client rate
+  limits, and a 1 MiB body cap. Authentication is disabled when no token is
+  configured, so non-local deployments must start with `--require-auth` and a
+  token or token file. `/health` remains public; the FastAPI vector-search
+  contract is also intentionally public and server-filtered.
 - Memory-store writes use atomic `os.replace` and advisory `flock` so
   concurrent writers cannot tear files or lose updates
 - Public-release leak audit (`python tools/public_leak_audit.py`) scans

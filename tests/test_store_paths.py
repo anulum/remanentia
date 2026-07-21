@@ -15,7 +15,11 @@ same corpus roots unless an operator explicitly overrides the source firehose.
 
 from __future__ import annotations
 
+import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -81,6 +85,67 @@ def test_environment_overrides_match_cli_contract(
     assert default_findings_dir() == base / "memory" / "semantic" / "findings"
     assert default_finding_cursor() == base / "memory" / "semantic" / DEFAULT_FINDING_CURSOR_NAME
     assert default_feed_cursor() == base / "memory" / "semantic" / DEFAULT_FEED_CURSOR_NAME
+
+
+def test_selected_store_reaches_runtime_surfaces_in_fresh_process(tmp_path: Path) -> None:
+    """CLI, recall, consolidation, API, and vector paths share one selected store."""
+    store = tmp_path / "selected-store"
+    env = os.environ.copy()
+    env["REMANENTIA_BASE"] = str(store)
+
+    init = subprocess.run(
+        [sys.executable, "-m", "cli", "init"],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert "Ready to use" in init.stdout
+    assert (store / "reasoning_traces").is_dir()
+    assert (store / "memory" / "semantic").is_dir()
+
+    trace = store / "reasoning_traces" / "onboarding.md"
+    trace.write_text(
+        "# Deployment decision\n\nThe development API binds to loopback port 8001. "
+        "This synthetic trace verifies selected-store recall.\n",
+        encoding="utf-8",
+    )
+
+    search = subprocess.run(
+        [sys.executable, "-m", "cli", "search", "loopback port", "--format", "json"],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    payload = json.loads(search.stdout)
+    assert payload["query"] == "loopback port"
+    assert payload["trace"] == "onboarding.md"
+    assert (store / "snn_state" / "memory_index.json.gz").is_file()
+
+    probe = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import json, api, api_server, consolidation_engine, knowledge_store, "
+                "memory_index, memory_recall, observer, reflector, temporal_graph, vector_pipeline; "
+                "print(json.dumps({name: str(module.BASE) for name, module in {"
+                "'api': api, 'api_server': api_server, "
+                "'consolidation_engine': consolidation_engine, "
+                "'knowledge_store': knowledge_store, 'memory_index': memory_index, "
+                "'memory_recall': memory_recall, 'observer': observer, "
+                "'reflector': reflector, 'temporal_graph': temporal_graph, "
+                "'vector_pipeline': vector_pipeline}.items()}))"
+            ),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    bases = json.loads(probe.stdout.splitlines()[-1])
+    assert set(bases.values()) == {str(store)}
 
 
 def test_freshness_stage_roots_are_ordered_source_to_sink(tmp_path: Path) -> None:

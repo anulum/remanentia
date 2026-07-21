@@ -26,8 +26,8 @@ remanentia/
 ├── cli.py                  Command-line interface
 ├── api.py                  FastAPI REST server
 ├── api_server.py           Lightweight HTTP API for cross-service integration
-├── snn_backend.py          Dual-backend LIF network (GPU/CPU) with Rust STDP
-├── snn_daemon.py           Persistent SNN background daemon
+├── snn_backend.py          Legacy experimental LIF backend
+├── snn_daemon.py           Legacy experimental daemon (not product core)
 │
 ├── reasoning_traces/       Raw session decisions (episodic memory)
 ├── memory/
@@ -165,24 +165,17 @@ or pre-trained HuggingFace defaults.
 Training: 5 jobs in parallel on 5× AMD RX 6600 XT (ROCm 6.2), ~25 min wall time.
 Checkpoints stored in `models/` (gitignored).
 
-## SNN Substrate
+## SNN Research Boundary
 
-A 1000-neuron LIF (Leaky Integrate-and-Fire) network with STDP runs as a
-background daemon. Its role is consolidation orchestration and novelty
-detection — not retrieval (validated negative result from 60+ experiments).
-
-**Backends:**
-- Rust (`arcane_stdp`): `stdp_batch` + `lif_step` + `homeostatic_scaling` (45×) via PyO3/rayon
-- GPU (PyTorch CUDA): 20,000 neurons, cuBLAS GEMV
-- CPU (NumPy dense): vectorised outer product STDP
-
-The SNN detects when new information is surprising relative to stored
-patterns and triggers consolidation cycles. Complementary learning
-(fast W + slow W) consolidates recurring patterns across traces.
+The legacy SNN daemon and SNN text-retrieval path are not part of the current
+product core. The maintained temporal-SNN work is a separate, preregistered
+research package with dedicated schemas, gates, and ADRs. Core retrieval and
+consolidation do not depend on either path. See ADR 0006–0009 and
+`docs/research/temporal_snn_memory.md`.
 
 ## MCP Server
 
-Stdio JSON-RPC server exposing four tools:
+Stdio JSON-RPC server exposing six tools:
 
 | Tool | Function |
 |------|----------|
@@ -190,17 +183,21 @@ Stdio JSON-RPC server exposing four tools:
 | `remanentia_remember` | Persist a memory as reasoning trace |
 | `remanentia_status` | System status summary |
 | `remanentia_graph` | Entity relationship query |
+| `remanentia_recall_feedback` | Record usefulness feedback |
+| `remanentia_recall_correctness` | Record a correctness-labelled outcome |
 
 Thread-safe with singleton index. Async consolidation on every write
 (debounced). Compatible with Cursor and any MCP-compatible client.
 
-## Rust Acceleration (13 crates, Tiers 1–3 + recall)
+## Rust Acceleration (17 modules)
 
 All compute-bound Python functions have a Rust path via PyO3/maturin.
 Every module falls back silently to Python when the crate is absent (CI).
 Crate sources live in the tracked Rust crate directories in this repository.
 
-Build: `VIRTUAL_ENV=.venv maturin develop --release`
+Build all installed-wheel extensions with `make build-rust`. Sixteen modules
+also run in the general Rust CI matrix; temporal-SNN memory uses separate
+installed-wheel verification gates.
 
 ### Tier 1 — Retrieval hot-path (`remanentia_retrieve`)
 

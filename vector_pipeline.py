@@ -29,8 +29,9 @@ from vector_index import (
     VectorIndexStats,
     VectorSearchResult,
 )
+from store_paths import default_base
 
-BASE = Path(__file__).parent
+BASE = default_base()
 DEFAULT_VECTOR_INDEX_DIR = BASE / "snn_state" / "vector_index"
 DEFAULT_VECTOR_REFRESH_HEARTBEAT = BASE / "snn_state" / "vector_refresh_worker.json"
 VECTOR_CHUNK_MAX_WORDS = 96

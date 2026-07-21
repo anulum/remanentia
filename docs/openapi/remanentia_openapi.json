@@ -152,7 +152,7 @@
     }
   },
   "info": {
-    "description": "Persistent AI memory with SNN-orchestrated consolidation",
+    "description": "Local-first, auditable memory for AI agents and knowledge-intensive software",
     "title": "Remanentia",
     "version": "0.5.0"
   },

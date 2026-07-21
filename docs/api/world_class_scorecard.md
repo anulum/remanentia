@@ -1,13 +1,13 @@
 # world_class_scorecard
 
-The honest, comparable, category-defining scorecard for one benchmark run — the
-capstone of the world-class evaluation harness (roadmap W1).
+The comparable scorecard for one benchmark run and the capstone of the
+multi-axis evaluation harness (roadmap W1).
 
 ## Why this module exists
 
 The field's headline numbers are non-comparable: different reader and judge LLMs
 everywhere, and most report the inflated oracle setting (the Zep 84 % → 58 %
-dispute is the proof). A world-class claim needs a scorecard that pins what makes
+dispute is the proof). A credible claim needs a scorecard that pins what makes
 a number comparable and reports the axes no leaderboard scores.
 
 Each scorecard records the **setting** (oracle vs realistic full-S — never

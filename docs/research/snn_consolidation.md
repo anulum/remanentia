@@ -1,11 +1,14 @@
 # SNN Consolidation: Architecture and Negative Results
 
-## Summary
+## Status and scope
 
-Remanentia uses a 1,000-neuron LIF (Leaky Integrate-and-Fire) spiking
-network with STDP (Spike-Timing-Dependent Plasticity) for memory
-consolidation orchestration. The SNN's role is novelty detection and
-consolidation timing — not retrieval.
+This page records the **historical legacy-daemon experiments**. The daemon and
+its SNN retrieval path are not part of the current product core. Normal
+retrieval and consolidation run without them.
+
+The maintained temporal-SNN work is a separate, preregistered research package.
+See [ADR 0006](../adr/0006-preregister-temporal-snn-memory-experiment.md) and
+its [operating-point amendments](../adr/0007-amend-g2-supra-threshold-operating-point.md).
 
 ## The Negative Result
 
@@ -17,15 +20,16 @@ not create discriminative features for text retrieval.**
 - TF-IDF(0.4) + best-paragraph(0.6) hybrid: 92.9% P@1 **without SNN**
 - No SNN configuration improved retrieval over BM25+embedding baseline
 
-This is a validated negative result. The SNN was not abandoned — its
-role was redefined from retrieval to consolidation orchestration.
+This is a validated negative result for the legacy text-retrieval design. It
+does not establish a production benefit for SNN consolidation and does not
+serve as evidence for the separate temporal-SNN experiment.
 
-## What the SNN Does
+## What the legacy prototype attempted
 
 1. **Novelty detection**: measures how much new input diverges from
    stored weight patterns. Novel information triggers consolidation.
 
-2. **Consolidation timing**: the daemon checks for new traces every
+2. **Consolidation timing**: the daemon checked for new traces every
    60 seconds. When novelty exceeds threshold, full consolidation runs.
 
 3. **Complementary learning**: fast weights (STDP, current session)
@@ -35,7 +39,7 @@ role was redefined from retrieval to consolidation orchestration.
 4. **Hippocampal replay**: during idle cycles, stored traces are
    re-injected at low amplitude, strengthening existing associations.
 
-## Architecture
+## Historical architecture
 
 - **Network**: 1,000 LIF neurons, Watts-Strogatz small-world topology
 - **Synapses**: STDP with A+=A-=0.005, tau=20ms, W_max=2.0
@@ -60,5 +64,5 @@ The SNN backend maps naturally to neuromorphic hardware:
 - SpiNNaker
 - BrainScaleS
 
-A proof-of-concept on Intel's Lava framework (CPU simulation) would
-demonstrate Remanentia's consolidation on a neuromorphic stack.
+Neuromorphic deployment remains a possible research direction, not a shipped or
+validated product capability.

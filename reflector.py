@@ -24,7 +24,9 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Protocol, TypedDict, cast
 
-BASE = Path(__file__).parent
+from store_paths import default_base
+
+BASE = default_base()
 
 
 class _ReflectNote(Protocol):

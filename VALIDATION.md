@@ -21,8 +21,9 @@ dated and labelled.
   `[tool.coverage.report] fail_under = 100` (10,283/10,283 statements, 0 missing at
   the 2026-06-29 gate).
 - **Scope caveat (honest):** the coverage gate measures the pure-**Python** product
-  path. The 16 Rust acceleration crates are validated separately by the per-crate
-  `cargo test` / `cargo clippy` matrix in CI; end-to-end Rust↔Python parity
+  path. Sixteen Rust acceleration modules run in the per-crate `cargo test` /
+  `cargo clippy` matrix; temporal-SNN memory has dedicated installed-wheel
+  verification gates. End-to-end Rust↔Python parity
   coverage is a tracked hardening item, not yet part of the 100 % gate.
 
 ## CI Gates (`.github/workflows/ci.yml`)
@@ -36,7 +37,7 @@ dated and labelled.
 | mypy | Advisory per-module type check (strict ratchet in progress) |
 | bandit | SAST clean on the security-relevant module set |
 | REUSE | Every file carries an SPDX licence marker |
-| rust | `cargo fmt --check` + `cargo test` + `cargo clippy -D warnings` per crate (16) |
+| rust | General 16-module crate matrix plus temporal-SNN installed-wheel gates |
 
 ## Benchmark Results (honest, realistic setting)
 

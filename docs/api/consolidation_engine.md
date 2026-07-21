@@ -342,7 +342,7 @@ if dag_path.exists():
 - **Quality ratchet**: strict-mypy-clean production/test surfaces and audited
   helper docstrings for metadata, graph persistence, DAG, and scoring helpers
 
-All 6 STRONG dimensions: empty, error, negative, pipeline, roundtrip, performance.
+Test dimensions: empty, error, negative, pipeline, roundtrip, and performance.
 
 ## API Reference
 

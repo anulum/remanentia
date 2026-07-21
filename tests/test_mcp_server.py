@@ -745,6 +745,53 @@ class TestMcpServerDefaultWorkspaceGaps:
         result = handle_recall("SNN removal decision", base=workspace)
         assert isinstance(result, str)
 
+    def test_recall_default_workspace_loads_index_and_logs_empty_result(
+        self, tmp_path, monkeypatch
+    ):
+        """The singleton load path records an empty default-workspace recall."""
+        import mcp_server
+
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        index_path = workspace / "memory_index.json.gz"
+        monkeypatch.setattr(mcp_server, "BASE", workspace)
+        monkeypatch.setattr(mcp_server, "_UNIFIED_INDEX", None)
+        monkeypatch.setattr(
+            mcp_server,
+            "_get_knowledge_store",
+            lambda: type("Store", (), {"check_triggers": lambda self, query: []})(),
+        )
+        logged = []
+        monkeypatch.setattr(mcp_server, "_log_recall", lambda *args: logged.append(args))
+
+        class EmptyIndex:
+            def load(self, path):
+                return path == index_path
+
+            def search(self, *args, **kwargs):
+                return []
+
+        original = mcp_server._runtime_attr
+        monkeypatch.setattr(
+            mcp_server,
+            "_runtime_attr",
+            lambda module, attr: (
+                EmptyIndex
+                if (module, attr) == ("memory_index", "MemoryIndex")
+                else original(module, attr)
+            ),
+        )
+
+        result = handle_recall(
+            "term-that-does-not-exist-in-the-synthetic-index",
+            base=workspace,
+            index_path=index_path,
+        )
+
+        assert result.startswith("No memories found")
+        assert mcp_server._UNIFIED_INDEX is not None
+        assert len(logged) == 1
+
     def test_remember_default_workspace(self, tmp_path, monkeypatch):
         import mcp_server
 

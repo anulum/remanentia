@@ -30,7 +30,9 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any, cast
 
-BASE = Path(__file__).parent
+from store_paths import default_base
+
+BASE = default_base()
 COORDINATION_ROOT = Path(os.environ.get("REMANENTIA_COORDINATION_ROOT", BASE / ".coordination"))
 STATE_PATH = BASE / "memory" / "observer_state.json"
 _LOGGER = logging.getLogger(__name__)

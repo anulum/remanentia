@@ -1,7 +1,7 @@
 # provenance_export
 
 Project the knowledge-store belief graph onto the provenance store the
-lineage-of-belief scorer reads. Part of the world-class evaluation harness
+lineage-of-belief scorer reads. Part of the multi-axis evaluation harness
 (roadmap W5) — the producer side of the auditability axis.
 
 ## Why this module exists

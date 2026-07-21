@@ -33,7 +33,9 @@ from typing import cast
 
 import numpy as np
 
-BASE = Path(__file__).parent
+from store_paths import default_base
+
+BASE = default_base()
 TRACES_DIR = BASE / "reasoning_traces"
 SEMANTIC_DIR = BASE / "memory" / "semantic"
 GRAPH_DIR = BASE / "memory" / "graph"
