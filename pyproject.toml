@@ -88,7 +88,7 @@ remanentia-snn-cue-materializer = "snn_memory.cue_materializer:main"
 [project.urls]
 Homepage = "https://www.remanentia.com"
 Repository = "https://github.com/anulum/remanentia"
-Documentation = "https://www.remanentia.com/docs"
+Documentation = "https://anulum.github.io/remanentia/"
 Issues = "https://github.com/anulum/remanentia/issues"
 Changelog = "https://github.com/anulum/remanentia/blob/main/CHANGELOG.md"
 Discussions = "https://github.com/anulum/remanentia/discussions"
