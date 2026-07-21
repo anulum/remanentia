@@ -16,12 +16,12 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from REMANENTIA.retrieval_live_service import (
+from retrieval_live_service import (
     LiveServiceConfig,
     load_live_service_config,
     retrieve_via_live_service,
 )
-from REMANENTIA.retrieval_network_io import write_json_atomic
+from retrieval_network_io import write_json_atomic
 
 
 def _config(root: Path, *, timeout_s: float = 0.2) -> LiveServiceConfig:

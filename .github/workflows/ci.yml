@@ -46,7 +46,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install lint tools
-        run: pip install "ruff==0.15.6" "bandit==1.9.4" "mypy>=1.19.1,<2.0" "reuse==5.0.2"
+        run: pip install "ruff==0.15.11" "bandit==1.9.4" "mypy>=1.19.1,<2.0" "reuse==5.0.2"
 
       - name: REUSE compliance
         # REUSE 3.3 / REUSE.toml — every file must have an SPDX-License-

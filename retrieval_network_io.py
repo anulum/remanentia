@@ -114,9 +114,7 @@ def resolve_network_config(
             "source": "explicit",
         }
 
-    manifest_config = _existing_manifest_config(
-        read_json(paths.retrieval_state_path), paths=paths
-    )
+    manifest_config = _existing_manifest_config(read_json(paths.retrieval_state_path), paths=paths)
     if manifest_config is not None:
         return manifest_config
 
@@ -128,9 +126,7 @@ def resolve_network_config(
             if checkpoint_path.exists():
                 return {
                     "checkpoint_path": checkpoint_path,
-                    "encoding_backend": normalize_backend(
-                        current_state.get("retrieval_backend")
-                    ),
+                    "encoding_backend": normalize_backend(current_state.get("retrieval_backend")),
                     "source": "current_state",
                 }
 
@@ -197,8 +193,7 @@ def load_network(
     payload: NetworkPayload = dict(load_checkpoint(checkpoint_path))
     signature = hashlib.md5(
         (
-            f"{checkpoint_path}:{stat.st_mtime_ns}:{stat.st_size}:"
-            f"{config['encoding_backend']}"
+            f"{checkpoint_path}:{stat.st_mtime_ns}:{stat.st_size}:{config['encoding_backend']}"
         ).encode()
     ).hexdigest()
     payload.update(

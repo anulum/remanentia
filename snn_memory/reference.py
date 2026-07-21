@@ -56,9 +56,7 @@ def step_network(
             recurrent_current[post] += weights[pre, post]
     active = state.refractory == 0
     dv = (
-        -(state.voltage - config.v_rest_mv) / config.tau_m_ms
-        + input_current
-        + recurrent_current
+        -(state.voltage - config.v_rest_mv) / config.tau_m_ms + input_current + recurrent_current
     ) * config.dt_ms
     next_state.voltage[active] += dv[active]
     next_state.voltage[~active] = config.v_reset_mv
@@ -76,7 +74,12 @@ def step_network(
         ltp = config.a_plus * np.outer(decayed_pre, spikes.astype(np.float64))
         ltd = config.a_minus * np.outer(spikes.astype(np.float64), decayed_post)
         next_weights[mask] += (ltp - ltd)[mask]
-        np.clip(next_weights[: config.n_excitatory], config.weight_min, config.weight_max, out=next_weights[: config.n_excitatory])
+        np.clip(
+            next_weights[: config.n_excitatory],
+            config.weight_min,
+            config.weight_max,
+            out=next_weights[: config.n_excitatory],
+        )
         next_weights[~topology] = 0.0
 
     next_state.pre_trace = decayed_pre + spikes

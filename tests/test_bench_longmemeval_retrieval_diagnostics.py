@@ -40,9 +40,7 @@ def _local_reader(answer: str) -> Iterator[tuple[str, list[dict[str, object]]]]:
             assert self.path == "/v1/chat/completions"
             length = int(self.headers["Content-Length"])
             requests.append(json.loads(self.rfile.read(length)))
-            body = json.dumps(
-                {"choices": [{"message": {"content": answer}}]}
-            ).encode()
+            body = json.dumps({"choices": [{"message": {"content": answer}}]}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
@@ -260,9 +258,7 @@ def test_full_s_arcane_confidence_run_stamps_abstention_fields(
     monkeypatch.setattr(bench, "_USE_LOCAL_LLM", True)
     monkeypatch.setattr(bench, "_LOCAL_MODEL", "diagnostic-reader")
     monkeypatch.setenv("REMANENTIA_ARCANE_CE_DISABLE", "1")
-    with _local_reader(
-        "The selected answer is in session s2.\nCONFIDENCE: 0.8"
-    ) as (url, requests):
+    with _local_reader("The selected answer is in session s2.\nCONFIDENCE: 0.8") as (url, requests):
         monkeypatch.setattr(bench, "_LOCAL_URL", url)
         bench.run_benchmark()
 

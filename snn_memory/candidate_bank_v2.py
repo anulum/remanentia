@@ -77,13 +77,17 @@ def _require(condition: bool, message: str) -> None:
         raise CandidateBankError(message)
 
 
-def _lexical_candidates(ids: Sequence[str], row_digests: Sequence[str]) -> tuple[list[str], list[str]]:
+def _lexical_candidates(
+    ids: Sequence[str], row_digests: Sequence[str]
+) -> tuple[list[str], list[str]]:
     """Reorder (record id, signature digest) pairs into the lexical record-id order scoring binds."""
     order = sorted(range(len(ids)), key=lambda index: ids[index])
     return [ids[index] for index in order], [row_digests[index] for index in order]
 
 
-def _require_canonical_signatures(signatures: FloatArray, rows: int, width: int, source: str) -> None:
+def _require_canonical_signatures(
+    signatures: FloatArray, rows: int, width: int, source: str
+) -> None:
     """Reject a signature block that is not a canonical finite float64 array of the exact shape."""
     _require_canonical(signatures, "<f8", f"{source} signatures")
     if signatures.ndim != 2 or signatures.shape != (rows, width):
@@ -101,8 +105,10 @@ def _require_canonical(array: FloatArray | BoolArray, dtype: str, label: str) ->
 
 def temporal_signature_v2(raster: BoolArray, completion_steps: int, n_neurons: int) -> FloatArray:
     """Fold one completion raster into the neuron-major eight-bin float64 signature."""
-    _require(completion_steps >= 32 and completion_steps % _BINS == 0,
-             "completion window must be at least 32 steps and divisible by eight")
+    _require(
+        completion_steps >= 32 and completion_steps % _BINS == 0,
+        "completion window must be at least 32 steps and divisible by eight",
+    )
     _require_canonical(raster, "|b1", "completion raster")
     binary = _le(raster, "|b1")
     _require(binary.shape == (completion_steps, n_neurons), "completion raster shape mismatch")
@@ -158,7 +164,9 @@ def _strict_json(raw: bytes, label: str) -> dict[str, Any]:
 
 
 def _validate_schema(value: Mapping[str, Any], label: str) -> None:
-    schema = json.loads(files("snn_memory").joinpath("schema", _BANK_SCHEMA).read_bytes().decode("utf-8"))
+    schema = json.loads(
+        files("snn_memory").joinpath("schema", _BANK_SCHEMA).read_bytes().decode("utf-8")
+    )
     validate = cast(Callable[[object, object], None], import_module("jsonschema").validate)
     try:
         validate(value, schema)
@@ -227,14 +235,18 @@ def write_candidate_bank_v2(
     ordered = list(manifest["identities"]["ordered_record_ids"])
     n_neurons = int(layout["n_neurons"])
     _require(int(layout["bins"]) == _BINS, "signature bank must declare eight bins")
-    _require(int(layout["signature_width"]) == _BINS * n_neurons,
-             "signature width must be eight times the population")
+    _require(
+        int(layout["signature_width"]) == _BINS * n_neurons,
+        "signature width must be eight times the population",
+    )
     _require_canonical_signatures(signatures, len(ordered), _BINS * n_neurons, "written")
     block = _signatures_block(signatures, ordered)
     row_digests = [str(value) for value in block["row_digests"]]
     expected_bank_digest = candidate_bank_digest(*_lexical_candidates(ordered, row_digests))
-    _require(manifest["scoring"]["candidate_bank_digest"] == expected_bank_digest,
-             "scoring candidate-bank digest does not recompute from the ordered rows")
+    _require(
+        manifest["scoring"]["candidate_bank_digest"] == expected_bank_digest,
+        "scoring candidate-bank digest does not recompute from the ordered rows",
+    )
 
     sealed: dict[str, Any] = {key: value for key, value in manifest.items() if key != "self_sha256"}
     sealed["signatures"] = block
@@ -278,7 +290,11 @@ def _open_dir_from_root(path: Path, label: str) -> int:
 def _renameat2_noreplace(old_dir_fd: int, old_name: str, new_dir_fd: int, new_name: str) -> None:
     libc = ctypes.CDLL(None, use_errno=True)
     libc.renameat2.argtypes = [
-        ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_uint,
     ]
     result = libc.renameat2(
         old_dir_fd, os.fsencode(old_name), new_dir_fd, os.fsencode(new_name), _RENAME_NOREPLACE
@@ -356,27 +372,42 @@ def _packaged_schema_sha256(name: str) -> str:
     return _sha(files("snn_memory").joinpath("schema", name).read_bytes())
 
 
-def _validate_bank_internal(manifest: Mapping[str, Any], ordered: Sequence[str], n_neurons: int) -> None:
+def _validate_bank_internal(
+    manifest: Mapping[str, Any], ordered: Sequence[str], n_neurons: int
+) -> None:
     """Bank-internal invariants shared by writer (pre-install) and reader."""
     build = manifest["build"]
-    for key, schema_name in (("bank_schema_sha256", _BANK_SCHEMA),
-                             ("checkpoint_schema_sha256", "snn_memory_checkpoint_v2.schema.json")):
+    for key, schema_name in (
+        ("bank_schema_sha256", _BANK_SCHEMA),
+        ("checkpoint_schema_sha256", "snn_memory_checkpoint_v2.schema.json"),
+    ):
         if _packaged_schema_sha256(schema_name) != build[key]:
             raise CandidateBankError(f"bank build {key} differs from the packaged schema hash")
     calibration = manifest["calibration"]
     if [str(entry["record_id"]) for entry in calibration] != [str(rid) for rid in ordered]:
         raise CandidateBankError("bank calibration order or count differs from the ordered records")
-    for field in ("encoder_identity", "encoder_directory_digest", "encoder_config_digest",
-                  "model_config_digest", "input_current", "topology_digest", "backend_build_digest"):
+    for field in (
+        "encoder_identity",
+        "encoder_directory_digest",
+        "encoder_config_digest",
+        "model_config_digest",
+        "input_current",
+        "topology_digest",
+        "backend_build_digest",
+    ):
         if len({entry[field] for entry in calibration}) != 1:
             raise CandidateBankError(f"bank calibration entries disagree on {field}")
     first = calibration[0]
     if first["encoder_directory_digest"] != build["encoder_directory_digest"]:
-        raise CandidateBankError("bank calibration encoder directory differs from the build identity")
+        raise CandidateBankError(
+            "bank calibration encoder directory differs from the build identity"
+        )
     if first["encoder_config_digest"] != build["encoder_config_digest"]:
         raise CandidateBankError("bank calibration encoder config differs from the build identity")
     if first["backend_build_digest"] != build["backend_build_digest"]:
-        raise CandidateBankError("bank calibration backend-build digest differs from the build identity")
+        raise CandidateBankError(
+            "bank calibration backend-build digest differs from the build identity"
+        )
     # Ephemeral process identity (worker PID, nonce) lives in the CLI-report envelope,
     # never in this deterministic artifact; uniqueness is enforced at collection time.
     for entry in calibration:
@@ -394,7 +425,9 @@ def read_candidate_bank_v2(target: Path) -> ValidatedCandidateBank:
     bank_fd = _open_dir_from_root(target, "candidate bank directory")
     try:
         if set(os.listdir(bank_fd)) != {_BANK_PATH, _SIGNATURES_PATH}:
-            raise CandidateBankError("candidate bank directory inventory is not exactly bank.json and signatures.bin")
+            raise CandidateBankError(
+                "candidate bank directory inventory is not exactly bank.json and signatures.bin"
+            )
         manifest_bytes = _read_regular_bytes(bank_fd, _BANK_PATH, "candidate bank manifest")
         manifest = _strict_json(manifest_bytes, "candidate bank manifest")
         _validate_schema(manifest, "candidate bank")
@@ -410,7 +443,9 @@ def read_candidate_bank_v2(target: Path) -> ValidatedCandidateBank:
         n_neurons = int(layout["n_neurons"])
         width = _BINS * n_neurons
         _require(int(layout["signature_width"]) == width, "signature width mismatch")
-        _require(layout["semantic_version"] == _SEMANTIC_VERSION, "unexpected signature semantic version")
+        _require(
+            layout["semantic_version"] == _SEMANTIC_VERSION, "unexpected signature semantic version"
+        )
         _require(tuple(block["shape"]) == (len(ordered), width), "signature bank shape mismatch")
 
         body = _read_regular_bytes(bank_fd, _SIGNATURES_PATH, "candidate bank signatures")
@@ -428,12 +463,19 @@ def read_candidate_bank_v2(target: Path) -> ValidatedCandidateBank:
         if list(recomputed["row_digests"]) != list(block["row_digests"]):
             raise CandidateBankError("signature row digests mismatch")
         expected_bank_digest = candidate_bank_digest(
-            *_lexical_candidates(ordered, list(block["row_digests"])))
+            *_lexical_candidates(ordered, list(block["row_digests"]))
+        )
         if manifest["scoring"]["candidate_bank_digest"] != expected_bank_digest:
-            raise CandidateBankError("scoring candidate-bank digest does not recompute from the rows")
-        if ordered_record_ids_digest(tuple(str(value) for value in ordered)) != \
-                manifest["identities"]["candidate_set_digest"]:
-            raise CandidateBankError("candidate-set digest does not recompute from the ordered records")
+            raise CandidateBankError(
+                "scoring candidate-bank digest does not recompute from the rows"
+            )
+        if (
+            ordered_record_ids_digest(tuple(str(value) for value in ordered))
+            != manifest["identities"]["candidate_set_digest"]
+        ):
+            raise CandidateBankError(
+                "candidate-set digest does not recompute from the ordered records"
+            )
         if int(layout["completion_steps"]) != int(manifest["scoring"]["completion_steps"]):
             raise CandidateBankError("signature layout and scoring completion windows disagree")
         _validate_bank_internal(manifest, ordered, n_neurons)

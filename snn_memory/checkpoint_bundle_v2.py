@@ -55,8 +55,14 @@ _COMPONENT_FRAMING = 2
 _STATE_BYTES_PER_NEURON = 8 + 4 + 1 + 8 + 8
 
 _COMPONENT_ORDER = (
-    "topology", "adjacency_outgoing", "adjacency_incoming", "weights",
-    "training_final_state", "probe_initial_state", "signatures", "record_ids",
+    "topology",
+    "adjacency_outgoing",
+    "adjacency_incoming",
+    "weights",
+    "training_final_state",
+    "probe_initial_state",
+    "signatures",
+    "record_ids",
     "replay_schedule",
 )
 _COMPONENT_PATHS = {
@@ -131,7 +137,9 @@ class ValidatedCheckpointBundle:
 
 def _canonical_bytes(value: object) -> bytes:
     return (
-        json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+        json.dumps(
+            value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+        )
         + "\n"
     ).encode("utf-8")
 
@@ -303,7 +311,11 @@ def _renameat2_noreplace(old_dir_fd: int, old_name: str, new_dir_fd: int, new_na
     """
     libc = ctypes.CDLL(None, use_errno=True)
     libc.renameat2.argtypes = [
-        ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_uint,
     ]
     result = libc.renameat2(
         old_dir_fd, os.fsencode(old_name), new_dir_fd, os.fsencode(new_name), _RENAME_NOREPLACE
@@ -403,7 +415,9 @@ def _read_regular_bytes(directory_fd: int, name: str, label: str) -> bytes:
     return b"".join(chunks)
 
 
-def _component_records(inputs: CheckpointBundleInputs, n_excitatory: int) -> dict[str, dict[str, Any]]:
+def _component_records(
+    inputs: CheckpointBundleInputs, n_excitatory: int
+) -> dict[str, dict[str, Any]]:
     """Build the exact numeric/JSON component inventory and its semantic digests."""
     topology_bytes = _le(inputs.topology, "|b1").tobytes()
     weights_bytes = _le(inputs.weights, "<f8").tobytes()
@@ -422,43 +436,57 @@ def _component_records(inputs: CheckpointBundleInputs, n_excitatory: int) -> dic
     )
     payloads: dict[str, dict[str, Any]] = {
         "topology": {
-            "dtype": "|b1", "shape": list(inputs.topology.shape), "bytes": topology_bytes,
+            "dtype": "|b1",
+            "shape": list(inputs.topology.shape),
+            "bytes": topology_bytes,
             "semantic": topology_digest(_le(inputs.topology, "|b1"), n_excitatory),
         },
         "adjacency_outgoing": {
             "dtype": "<u8",
             "shape": [int(inputs.outgoing.offsets.size + inputs.outgoing.indices.size)],
-            "bytes": _csr_bytes(inputs.outgoing), "semantic": _csr_digest("outgoing", inputs.outgoing),
+            "bytes": _csr_bytes(inputs.outgoing),
+            "semantic": _csr_digest("outgoing", inputs.outgoing),
         },
         "adjacency_incoming": {
             "dtype": "<u8",
             "shape": [int(inputs.incoming.offsets.size + inputs.incoming.indices.size)],
-            "bytes": _csr_bytes(inputs.incoming), "semantic": _csr_digest("incoming", inputs.incoming),
+            "bytes": _csr_bytes(inputs.incoming),
+            "semantic": _csr_digest("incoming", inputs.incoming),
         },
         "weights": {
-            "dtype": "<f8", "shape": list(inputs.weights.shape), "bytes": weights_bytes,
+            "dtype": "<f8",
+            "shape": list(inputs.weights.shape),
+            "bytes": weights_bytes,
             "semantic": checkpoint_component_digest("weights", "<f8", inputs.weights),
         },
         "training_final_state": {
-            "dtype": "state", "shape": [int(inputs.training_final_state.voltage_mv.size)],
+            "dtype": "state",
+            "shape": [int(inputs.training_final_state.voltage_mv.size)],
             "bytes": _state_bytes(inputs.training_final_state),
             "semantic": _state_digest(inputs.training_final_state),
         },
         "probe_initial_state": {
-            "dtype": "state", "shape": [int(inputs.probe_initial_state.voltage_mv.size)],
+            "dtype": "state",
+            "shape": [int(inputs.probe_initial_state.voltage_mv.size)],
             "bytes": _state_bytes(inputs.probe_initial_state),
             "semantic": _state_digest(inputs.probe_initial_state),
         },
         "signatures": {
-            "dtype": "<f8", "shape": list(inputs.signatures.shape), "bytes": signatures_bytes,
+            "dtype": "<f8",
+            "shape": list(inputs.signatures.shape),
+            "bytes": signatures_bytes,
             "semantic": checkpoint_component_digest("signatures", "<f8", inputs.signatures),
         },
         "record_ids": {
-            "dtype": "json", "shape": [len(inputs.ordered_record_ids)], "bytes": record_ids_bytes,
+            "dtype": "json",
+            "shape": [len(inputs.ordered_record_ids)],
+            "bytes": record_ids_bytes,
             "semantic": ordered_record_ids_digest(inputs.ordered_record_ids),
         },
         "replay_schedule": {
-            "dtype": "json", "shape": [len(inputs.replay_schedule)], "bytes": schedule_bytes,
+            "dtype": "json",
+            "shape": [len(inputs.replay_schedule)],
+            "bytes": schedule_bytes,
             "semantic": replay_schedule_digest(inputs.replay_schedule),
         },
     }
@@ -485,33 +513,58 @@ def _require(condition: bool, message: str) -> None:
         raise CheckpointBundleError(message)
 
 
-def _check_manifest_bindings(manifest: Mapping[str, Any], records: Mapping[str, dict[str, Any]],
-                             ordered_record_ids: Sequence[str]) -> None:
+def _check_manifest_bindings(
+    manifest: Mapping[str, Any],
+    records: Mapping[str, dict[str, Any]],
+    ordered_record_ids: Sequence[str],
+) -> None:
     adjacency = manifest["adjacency"]
     arrays = manifest["arrays"]
     topology_semantic = records["topology"]["semantic_digest"]
     _require(manifest["topology_digest"] == topology_semantic, "manifest topology digest mismatch")
-    _require(adjacency["topology_digest"] == topology_semantic, "manifest adjacency topology mismatch")
-    _require(adjacency["outgoing_digest"] == records["adjacency_outgoing"]["semantic_digest"],
-             "manifest outgoing adjacency digest mismatch")
-    _require(adjacency["incoming_digest"] == records["adjacency_incoming"]["semantic_digest"],
-             "manifest incoming adjacency digest mismatch")
-    _require(arrays["weights_digest"] == records["weights"]["semantic_digest"],
-             "manifest weights digest mismatch")
-    _require(arrays["training_final_state_digest"] == records["training_final_state"]["semantic_digest"],
-             "manifest training-final state digest mismatch")
-    _require(arrays["probe_initial_state_digest"] == records["probe_initial_state"]["semantic_digest"],
-             "manifest probe initial state digest mismatch")
-    _require(arrays["signatures_digest"] == records["signatures"]["semantic_digest"],
-             "manifest signatures digest mismatch")
+    _require(
+        adjacency["topology_digest"] == topology_semantic, "manifest adjacency topology mismatch"
+    )
+    _require(
+        adjacency["outgoing_digest"] == records["adjacency_outgoing"]["semantic_digest"],
+        "manifest outgoing adjacency digest mismatch",
+    )
+    _require(
+        adjacency["incoming_digest"] == records["adjacency_incoming"]["semantic_digest"],
+        "manifest incoming adjacency digest mismatch",
+    )
+    _require(
+        arrays["weights_digest"] == records["weights"]["semantic_digest"],
+        "manifest weights digest mismatch",
+    )
+    _require(
+        arrays["training_final_state_digest"] == records["training_final_state"]["semantic_digest"],
+        "manifest training-final state digest mismatch",
+    )
+    _require(
+        arrays["probe_initial_state_digest"] == records["probe_initial_state"]["semantic_digest"],
+        "manifest probe initial state digest mismatch",
+    )
+    _require(
+        arrays["signatures_digest"] == records["signatures"]["semantic_digest"],
+        "manifest signatures digest mismatch",
+    )
     record_ids_semantic = records["record_ids"]["semantic_digest"]
-    _require(arrays["record_ids_digest"] == record_ids_semantic, "manifest record-ids digest mismatch")
-    _require(manifest["candidate_set_digest"] == record_ids_semantic,
-             "manifest candidate-set digest does not bind the ordered records")
-    _require(manifest["replay_order_digest"] == records["replay_schedule"]["semantic_digest"],
-             "manifest replay-order digest mismatch")
-    _require(tuple(manifest["ordered_record_ids"]) == tuple(ordered_record_ids),
-             "manifest record order differs from the sealed record IDs")
+    _require(
+        arrays["record_ids_digest"] == record_ids_semantic, "manifest record-ids digest mismatch"
+    )
+    _require(
+        manifest["candidate_set_digest"] == record_ids_semantic,
+        "manifest candidate-set digest does not bind the ordered records",
+    )
+    _require(
+        manifest["replay_order_digest"] == records["replay_schedule"]["semantic_digest"],
+        "manifest replay-order digest mismatch",
+    )
+    _require(
+        tuple(manifest["ordered_record_ids"]) == tuple(ordered_record_ids),
+        "manifest record order differs from the sealed record IDs",
+    )
 
 
 def _read_only(array: npt.NDArray[Any]) -> npt.NDArray[Any]:
@@ -545,14 +598,21 @@ def _validate_csr(csr: CsrArrays, topology: BoolArray, *, outgoing: bool) -> Non
         start, stop = int(offsets[node]), int(offsets[node + 1])
         row = indices[start:stop]
         if bool(np.any(row[1:] <= row[:-1])):
-            raise CheckpointBundleError(f"{orientation} adjacency row {node} is not strictly ascending")
-        expected = np.flatnonzero(topology[node] if outgoing else topology[:, node]).astype(np.uint64)
+            raise CheckpointBundleError(
+                f"{orientation} adjacency row {node} is not strictly ascending"
+            )
+        expected = np.flatnonzero(topology[node] if outgoing else topology[:, node]).astype(
+            np.uint64
+        )
         if row.size != expected.size or bool(np.any(row != expected)):
-            raise CheckpointBundleError(f"{orientation} adjacency row {node} disagrees with the topology")
+            raise CheckpointBundleError(
+                f"{orientation} adjacency row {node} disagrees with the topology"
+            )
 
 
-def _validate_weights(weights: FloatArray, topology: BoolArray, n_excitatory: int,
-                      weight_max: float) -> None:
+def _validate_weights(
+    weights: FloatArray, topology: BoolArray, n_excitatory: int, weight_max: float
+) -> None:
     n = topology.shape[0]
     if weights.dtype != np.float64 or weights.shape != (n, n):
         raise CheckpointBundleError("weights are not an <f8 square population matrix")
@@ -579,14 +639,21 @@ def _validate_state(state: StateArrays, n_neurons: int, label: str) -> None:
         raise CheckpointBundleError(f"{label} spike field has the wrong length")
     if state.refractory_steps.dtype != np.uint32 or state.spikes.dtype != np.bool_:
         raise CheckpointBundleError(f"{label} refractory or spike dtype mismatch")
-    for field, name in ((state.voltage_mv, "voltage"), (state.pre_trace, "pre-trace"),
-                        (state.post_trace, "post-trace")):
+    for field, name in (
+        (state.voltage_mv, "voltage"),
+        (state.pre_trace, "pre-trace"),
+        (state.post_trace, "post-trace"),
+    ):
         if field.dtype != np.float64 or not bool(np.isfinite(field).all()):
             raise CheckpointBundleError(f"{label} {name} is not finite <f8")
 
 
-def _validate_replay_schedule(schedule: Sequence[Mapping[str, Any]], ordered_record_ids: Sequence[str],
-                              seed: int, epochs_completed: int) -> None:
+def _validate_replay_schedule(
+    schedule: Sequence[Mapping[str, Any]],
+    ordered_record_ids: Sequence[str],
+    seed: int,
+    epochs_completed: int,
+) -> None:
     if epochs_completed == 0:
         if schedule:
             raise CheckpointBundleError("an untrained checkpoint must carry no replay entries")
@@ -597,18 +664,24 @@ def _validate_replay_schedule(schedule: Sequence[Mapping[str, Any]], ordered_rec
         strict = _strict_replay_entry(dict(entry))
         by_epoch.setdefault(int(strict["epoch"]), []).append(strict)
     if sorted(by_epoch) != list(range(epochs_completed)):
-        raise CheckpointBundleError("replay schedule does not cover every completed epoch exactly once")
+        raise CheckpointBundleError(
+            "replay schedule does not cover every completed epoch exactly once"
+        )
     record_timesteps: dict[str, int] = {}
     for epoch in range(epochs_completed):
         entries = by_epoch[epoch]
         if sorted(int(entry["replay_position"]) for entry in entries) != list(range(n)):
-            raise CheckpointBundleError(f"epoch {epoch} replay positions are not a full permutation")
+            raise CheckpointBundleError(
+                f"epoch {epoch} replay positions are not a full permutation"
+            )
         permutation = np.random.default_rng(np.random.SeedSequence([seed, epoch])).permutation(n)
         ordered = sorted(entries, key=lambda entry: int(entry["replay_position"]))
         for position, entry in enumerate(ordered):
             expected = ordered_record_ids[int(permutation[position])]
             if str(entry["record_id"]) != expected:
-                raise CheckpointBundleError(f"epoch {epoch} replay order breaks the seeded permutation")
+                raise CheckpointBundleError(
+                    f"epoch {epoch} replay order breaks the seeded permutation"
+                )
             timesteps = int(entry["timesteps"])
             if timesteps <= 0:
                 raise CheckpointBundleError("replay entry carries a non-positive timestep count")
@@ -626,17 +699,29 @@ def _reconstruct_model(identities: Mapping[str, Any]) -> Any:
     try:
         model = ModelConfig(**sealed)
     except (TypeError, ValueError) as error:
-        raise CheckpointBundleError(f"descriptor model configuration is invalid: {error}") from error
+        raise CheckpointBundleError(
+            f"descriptor model configuration is invalid: {error}"
+        ) from error
     if sealed != model.to_dict():
-        raise CheckpointBundleError("descriptor model config is not the full canonical configuration")
+        raise CheckpointBundleError(
+            "descriptor model config is not the full canonical configuration"
+        )
     if canonical_config_digest(model.to_dict()) != identities["model_config_digest"]:
-        raise CheckpointBundleError("descriptor model config does not match its model-config digest")
+        raise CheckpointBundleError(
+            "descriptor model config does not match its model-config digest"
+        )
     if model.n_neurons != int(identities["n_neurons"]):
-        raise CheckpointBundleError("descriptor neuron count disagrees with the model configuration")
+        raise CheckpointBundleError(
+            "descriptor neuron count disagrees with the model configuration"
+        )
     if model.n_excitatory != int(identities["n_excitatory"]):
-        raise CheckpointBundleError("descriptor excitatory count disagrees with the model configuration")
+        raise CheckpointBundleError(
+            "descriptor excitatory count disagrees with the model configuration"
+        )
     if float(model.weight_max) != float(identities["weight_max"]):
-        raise CheckpointBundleError("descriptor weight bound disagrees with the model configuration")
+        raise CheckpointBundleError(
+            "descriptor weight bound disagrees with the model configuration"
+        )
     return model
 
 
@@ -656,8 +741,14 @@ def _require_fresh_reset(state: StateArrays, model: Any, label: str) -> None:
         raise CheckpointBundleError(f"{label} synaptic trace field is not a fresh reset")
 
 
-def _validate_semantics(inputs: CheckpointBundleInputs, model: Any, expected_topology: BoolArray,
-                        condition: str, seed: int, epochs_completed: int) -> None:
+def _validate_semantics(
+    inputs: CheckpointBundleInputs,
+    model: Any,
+    expected_topology: BoolArray,
+    condition: str,
+    seed: int,
+    epochs_completed: int,
+) -> None:
     n_neurons = model.n_neurons
     _validate_topology(inputs.topology, n_neurons)
     if inputs.topology.shape != expected_topology.shape or not bool(
@@ -672,7 +763,9 @@ def _validate_semantics(inputs: CheckpointBundleInputs, model: Any, expected_top
     _require_fresh_reset(inputs.probe_initial_state, model, "probe-initial state")
     rows = len(inputs.ordered_record_ids)
     if inputs.signatures.dtype != np.float64 or inputs.signatures.shape != (rows, 8 * n_neurons):
-        raise CheckpointBundleError("signatures are not an <f8 (records, eight-bins-per-neuron) block")
+        raise CheckpointBundleError(
+            "signatures are not an <f8 (records, eight-bins-per-neuron) block"
+        )
     if not bool(np.isfinite(inputs.signatures).all()):
         raise CheckpointBundleError("signatures carry a non-finite value")
     if len(set(inputs.ordered_record_ids)) != rows:
@@ -682,8 +775,12 @@ def _validate_semantics(inputs: CheckpointBundleInputs, model: Any, expected_top
             raise CheckpointBundleError("an untrained checkpoint must complete zero epochs")
         _require_fresh_reset(inputs.training_final_state, model, "untrained training-final state")
     elif epochs_completed < 1:
-        raise CheckpointBundleError("a trained or control checkpoint must complete at least one epoch")
-    _validate_replay_schedule(inputs.replay_schedule, inputs.ordered_record_ids, seed, epochs_completed)
+        raise CheckpointBundleError(
+            "a trained or control checkpoint must complete at least one epoch"
+        )
+    _validate_replay_schedule(
+        inputs.replay_schedule, inputs.ordered_record_ids, seed, epochs_completed
+    )
 
 
 def _check_identity_agreement(identities: Mapping[str, Any], manifest: Mapping[str, Any]) -> None:
@@ -694,12 +791,20 @@ def _check_identity_agreement(identities: Mapping[str, Any], manifest: Mapping[s
         (identities["dataset_digest"], manifest["dataset_digest"], "dataset digest"),
         (identities["d2_file_sha256"], manifest["dataset_digest"], "D2 dataset digest"),
         (identities["task_set_digest"], manifest["task_set_digest"], "task-set digest"),
-        (identities["candidate_set_digest"], manifest["candidate_set_digest"], "candidate-set digest"),
+        (
+            identities["candidate_set_digest"],
+            manifest["candidate_set_digest"],
+            "candidate-set digest",
+        ),
         (int(identities["seed"]), int(manifest["seed"]), "seed"),
         (identities["condition"], manifest["condition"], "condition"),
         (identities["model_config_digest"], manifest["model_config_digest"], "model-config digest"),
         (float(identities["input_current"]), float(manifest["input_current"]), "input current"),
-        (identities["encoder_directory_digest"], encoder["directory_digest"], "encoder directory digest"),
+        (
+            identities["encoder_directory_digest"],
+            encoder["directory_digest"],
+            "encoder directory digest",
+        ),
         (identities["encoder_config_digest"], encoder["config_digest"], "encoder config digest"),
         (identities["repository_head"], build["repository_head"], "repository head"),
         (identities["patch_digest"], build["patch_digest"], "patch digest"),
@@ -750,13 +855,19 @@ def write_checkpoint_bundle_v2(
     n_excitatory = model.n_excitatory
     n_neurons = model.n_neurons
     seed = int(identities["seed"])
-    _require(inputs.topology.shape == (n_neurons, n_neurons), "topology shape differs from n_neurons")
+    _require(
+        inputs.topology.shape == (n_neurons, n_neurons), "topology shape differs from n_neurons"
+    )
     _require(inputs.weights.shape == (n_neurons, n_neurons), "weights shape differs from n_neurons")
     _require(0 < n_excitatory < n_neurons, "excitatory count must be within the population")
     _check_identity_agreement(identities, manifest)
     _validate_semantics(
-        inputs, model, _seed_topology(model, seed), str(identities["condition"]),
-        seed, int(manifest["epochs_completed"]),
+        inputs,
+        model,
+        _seed_topology(model, seed),
+        str(identities["condition"]),
+        seed,
+        int(manifest["epochs_completed"]),
     )
     records = _component_records(inputs, n_excitatory)
     _check_manifest_bindings(manifest, records, inputs.ordered_record_ids)
@@ -776,9 +887,19 @@ def write_checkpoint_bundle_v2(
         },
         "identities": dict(identities),
         "components": [
-            {key: records[role][key] for key in
-             ("path", "role", "file_sha256", "semantic_digest", "dtype", "shape",
-              "byte_length", "framing_version")}
+            {
+                key: records[role][key]
+                for key in (
+                    "path",
+                    "role",
+                    "file_sha256",
+                    "semantic_digest",
+                    "dtype",
+                    "shape",
+                    "byte_length",
+                    "framing_version",
+                )
+            }
             for role in _COMPONENT_ORDER
         ],
         "replay_schedule_digest": records["replay_schedule"]["semantic_digest"],
@@ -807,10 +928,18 @@ def read_checkpoint_bundle_v2(target: Path) -> ValidatedCheckpointBundle:
     bundle_fd = _open_dir_from_root(target, "checkpoint bundle directory")
     try:
         entries = set(os.listdir(bundle_fd))
-        expected = {_MANIFEST_PATH, _DESCRIPTOR_PATH, *(_COMPONENT_PATHS[role] for role in _COMPONENT_ORDER)}
+        expected = {
+            _MANIFEST_PATH,
+            _DESCRIPTOR_PATH,
+            *(_COMPONENT_PATHS[role] for role in _COMPONENT_ORDER),
+        }
         if entries != expected:
-            raise CheckpointBundleError("checkpoint bundle directory inventory does not match the descriptor")
-        descriptor_bytes = _read_regular_bytes(bundle_fd, _DESCRIPTOR_PATH, "checkpoint-bundle descriptor")
+            raise CheckpointBundleError(
+                "checkpoint bundle directory inventory does not match the descriptor"
+            )
+        descriptor_bytes = _read_regular_bytes(
+            bundle_fd, _DESCRIPTOR_PATH, "checkpoint-bundle descriptor"
+        )
         descriptor = _strict_json(descriptor_bytes, "checkpoint-bundle descriptor")
         _validate_schema(descriptor, _BUNDLE_SCHEMA, "checkpoint-bundle descriptor")
         stored_self = descriptor["self_sha256"]
@@ -844,7 +973,9 @@ def read_checkpoint_bundle_v2(target: Path) -> ValidatedCheckpointBundle:
                 raise CheckpointBundleError(f"checkpoint component {role} path mismatch")
             body = _read_regular_bytes(bundle_fd, entry["path"], f"checkpoint component {role}")
             if _sha(body) != entry["file_sha256"] or len(body) != entry["byte_length"]:
-                raise CheckpointBundleError(f"checkpoint component {role} file digest or length mismatch")
+                raise CheckpointBundleError(
+                    f"checkpoint component {role} file digest or length mismatch"
+                )
             semantic, value = _decode_component(role, entry, body, n_neurons, n_excitatory)
             if semantic != entry["semantic_digest"]:
                 raise CheckpointBundleError(f"checkpoint component {role} semantic digest mismatch")
@@ -867,8 +998,12 @@ def read_checkpoint_bundle_v2(target: Path) -> ValidatedCheckpointBundle:
         )
         seed = int(identities["seed"])
         _validate_semantics(
-            inputs, model, _seed_topology(model, seed), str(identities["condition"]),
-            seed, int(manifest["epochs_completed"]),
+            inputs,
+            model,
+            _seed_topology(model, seed),
+            str(identities["condition"]),
+            seed,
+            int(manifest["epochs_completed"]),
         )
     finally:
         os.close(bundle_fd)
@@ -883,14 +1018,21 @@ def read_checkpoint_bundle_v2(target: Path) -> ValidatedCheckpointBundle:
 
 
 _ROLE_DTYPE = {
-    "topology": "|b1", "adjacency_outgoing": "<u8", "adjacency_incoming": "<u8",
-    "weights": "<f8", "training_final_state": "state", "probe_initial_state": "state",
-    "signatures": "<f8", "record_ids": "json", "replay_schedule": "json",
+    "topology": "|b1",
+    "adjacency_outgoing": "<u8",
+    "adjacency_incoming": "<u8",
+    "weights": "<f8",
+    "training_final_state": "state",
+    "probe_initial_state": "state",
+    "signatures": "<f8",
+    "record_ids": "json",
+    "replay_schedule": "json",
 }
 
 
-def _decode_component(role: str, entry: Mapping[str, Any], body: bytes,
-                      n_neurons: int, n_excitatory: int) -> tuple[str, Any]:
+def _decode_component(
+    role: str, entry: Mapping[str, Any], body: bytes, n_neurons: int, n_excitatory: int
+) -> tuple[str, Any]:
     """Re-derive a component's semantic digest and its decoded, independently owned value."""
     if entry["dtype"] != _ROLE_DTYPE[role]:
         raise CheckpointBundleError(f"{role} component declares an unexpected dtype")
@@ -930,9 +1072,13 @@ def _decode_component(role: str, entry: Mapping[str, Any], body: bytes,
         signatures = np.frombuffer(body, dtype="<f8").reshape(shape)
         return checkpoint_component_digest("signatures", "<f8", signatures), _read_only(signatures)
     if role == "record_ids":
-        record_ids = tuple(_strict_str(value, "record id") for value in _strict_json_array(body, "record_ids"))
+        record_ids = tuple(
+            _strict_str(value, "record id") for value in _strict_json_array(body, "record_ids")
+        )
         return ordered_record_ids_digest(record_ids), record_ids
-    schedule = tuple(_strict_replay_entry(item) for item in _strict_json_array(body, "replay_schedule"))
+    schedule = tuple(
+        _strict_replay_entry(item) for item in _strict_json_array(body, "replay_schedule")
+    )
     return replay_schedule_digest(schedule), schedule
 
 
@@ -944,15 +1090,18 @@ def _decode_state(body: bytes, n_neurons: int) -> StateArrays:
     offset += n_neurons * 8
     refractory = np.frombuffer(body, dtype="<u4", count=n_neurons, offset=offset)
     offset += n_neurons * 4
-    _require_boolean_bytes(body[offset:offset + n_neurons], "state spikes")
+    _require_boolean_bytes(body[offset : offset + n_neurons], "state spikes")
     spikes = np.frombuffer(body, dtype="|b1", count=n_neurons, offset=offset)
     offset += n_neurons
     pre_trace = np.frombuffer(body, dtype="<f8", count=n_neurons, offset=offset)
     offset += n_neurons * 8
     post_trace = np.frombuffer(body, dtype="<f8", count=n_neurons, offset=offset)
     return StateArrays(
-        _read_only(voltage), _read_only(refractory), _read_only(spikes),
-        _read_only(pre_trace), _read_only(post_trace),
+        _read_only(voltage),
+        _read_only(refractory),
+        _read_only(spikes),
+        _read_only(pre_trace),
+        _read_only(post_trace),
     )
 
 
@@ -970,7 +1119,9 @@ def _strict_json_array(body: bytes, label: str) -> list[Any]:
 
     try:
         value = json.loads(
-            body.decode("utf-8"), parse_constant=reject_constant, object_pairs_hook=reject_duplicates
+            body.decode("utf-8"),
+            parse_constant=reject_constant,
+            object_pairs_hook=reject_duplicates,
         )
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise CheckpointBundleError(f"{label} is not strict UTF-8 JSON") from error
@@ -998,12 +1149,14 @@ def _strict_replay_entry(item: Any) -> Mapping[str, Any]:
         raise CheckpointBundleError("replay entry must be a JSON object")
     if set(item) != {"epoch", "record_id", "replay_position", "timesteps"}:
         raise CheckpointBundleError("replay entry does not carry the exact schema keys")
-    return MappingProxyType({
-        "epoch": _strict_int(item["epoch"], "replay epoch"),
-        "record_id": _strict_str(item["record_id"], "replay record id"),
-        "replay_position": _strict_int(item["replay_position"], "replay position"),
-        "timesteps": _strict_int(item["timesteps"], "replay timesteps"),
-    })
+    return MappingProxyType(
+        {
+            "epoch": _strict_int(item["epoch"], "replay epoch"),
+            "record_id": _strict_str(item["record_id"], "replay record id"),
+            "replay_position": _strict_int(item["replay_position"], "replay position"),
+            "timesteps": _strict_int(item["timesteps"], "replay timesteps"),
+        }
+    )
 
 
 def _require_boolean_bytes(raw: bytes, label: str) -> None:

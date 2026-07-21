@@ -19,7 +19,9 @@ from snn_memory.state import initialise_weights, validate_weights
 
 def _fixed_scaffold(shuffled: np.ndarray, weights: np.ndarray, excitatory: int) -> None:
     """Assert only the E→E block moved; every fixed pathway is byte-identical."""
-    np.testing.assert_array_equal(shuffled[:excitatory, excitatory:], weights[:excitatory, excitatory:])
+    np.testing.assert_array_equal(
+        shuffled[:excitatory, excitatory:], weights[:excitatory, excitatory:]
+    )
     np.testing.assert_array_equal(shuffled[excitatory:], weights[excitatory:])
 
 

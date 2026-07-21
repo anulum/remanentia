@@ -157,9 +157,7 @@ def _entities_from_predictions(predictions: Sequence[Mapping[str, object]]) -> l
             Entity(
                 text=str(prediction["text"]),
                 label=str(prediction["label"]),
-                score=(
-                    float(score_value) if isinstance(score_value, str | int | float) else 0.0
-                ),
+                score=(float(score_value) if isinstance(score_value, str | int | float) else 0.0),
                 start=int(start_value) if isinstance(start_value, str | int | float) else 0,
                 end=int(end_value) if isinstance(end_value, str | int | float) else 0,
             )

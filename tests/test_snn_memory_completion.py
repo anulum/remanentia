@@ -45,9 +45,7 @@ def test_trained_recurrence_completes_while_local_control_silences_it() -> None:
     sequences, labels = _controlled_sequences(model.n_neurons)
     seeds = [11, 29, 47, 71]
     for seed in seeds:
-        trained = train_memories(
-            sequences, labels, model, TrainConfig(seed=seed, epochs=220)
-        )
+        trained = train_memories(sequences, labels, model, TrainConfig(seed=seed, epochs=220))
         checkpoint = Checkpoint(
             trained.weights,
             trained.topology,

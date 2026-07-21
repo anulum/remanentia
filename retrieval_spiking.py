@@ -122,7 +122,7 @@ def spike_feature_python(
     for _ in range(steps):
         fired = (voltage >= -55.0).astype(np.float32)
         synaptic_current = weights.dot(fired)
-        voltage += (-(voltage + 65.0) / 10.0 + external_current + synaptic_current * 0.5)
+        voltage += -(voltage + 65.0) / 10.0 + external_current + synaptic_current * 0.5
         spiked = voltage >= -55.0
         spike_count += spiked.astype(np.float32)
         voltage[spiked] = -70.0

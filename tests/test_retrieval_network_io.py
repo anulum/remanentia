@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from REMANENTIA.retrieval_network_io import (
+from retrieval_network_io import (
     NetworkCacheKey,
     NetworkPaths,
     NetworkPayload,
@@ -92,9 +92,10 @@ def test_backend_and_path_normalization_contract(tmp_path: Path) -> None:
     assert normalize_backend("unknown") == "lsh"
     assert normalize_backend(None) == "lsh"
     assert resolve_path(str(absolute), base_dir=tmp_path) == absolute
-    assert resolve_path("states/network.npz", base_dir=tmp_path) == (
-        tmp_path / "states" / "network.npz"
-    ).resolve()
+    assert (
+        resolve_path("states/network.npz", base_dir=tmp_path)
+        == (tmp_path / "states" / "network.npz").resolve()
+    )
     assert infer_backend_from_path(Path("identity_embedding_v2.npz")) == "embedding"
     assert infer_backend_from_path(Path("identity_net.npz")) == "lsh"
 
@@ -230,9 +231,7 @@ def test_network_loading_tags_and_reuses_the_real_checkpoint(tmp_path: Path) -> 
     weights = np.arange(9, dtype=np.float64).reshape(3, 3)
     _save_checkpoint(checkpoint, weights=weights, threshold=np.array([-55.0]))
     stale_key: NetworkCacheKey = ("stale", 0, 0, "hash")
-    cache: dict[NetworkCacheKey, NetworkPayload] = {
-        stale_key: {"_checkpoint_path": "stale"}
-    }
+    cache: dict[NetworkCacheKey, NetworkPayload] = {stale_key: {"_checkpoint_path": "stale"}}
 
     first = load_network(paths, cache, checkpoint)
     second = load_network(paths, cache, checkpoint)

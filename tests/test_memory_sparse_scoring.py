@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
-from REMANENTIA.memory_sparse_scoring import (  # type: ignore[import]
+from memory_sparse_scoring import (
     build_weight_index,
     score_uncached,
     score_weight_index,

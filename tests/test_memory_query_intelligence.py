@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-from REMANENTIA.memory_query_intelligence import (  # type: ignore[import]
+from memory_query_intelligence import (
     reciprocal_rank_fusion,
     reciprocal_rank_fusion_python,
     tokenize,

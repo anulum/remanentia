@@ -23,9 +23,7 @@ def run_recall_command(
 ) -> None:
     """Run filtered index search or structured recall for CLI arguments."""
     has_filters = (
-        getattr(args, "project", "")
-        or getattr(args, "after", "")
-        or getattr(args, "before", "")
+        getattr(args, "project", "") or getattr(args, "after", "") or getattr(args, "before", "")
     )
     if has_filters:
         _run_filtered_recall(args, setup_llm_backend)

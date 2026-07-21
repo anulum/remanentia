@@ -66,9 +66,7 @@ def load_entity_graph(graph_dir: Path) -> EntityGraph:
             raise ValueError("relation source and target must be strings")
         if not isinstance(weight, (int, float)):
             raise ValueError("relation weight must be numeric")
-        relations.append(
-            {"source": source, "target": target, "weight": float(weight)}
-        )
+        relations.append({"source": source, "target": target, "weight": float(weight)})
     return entities, relations
 
 

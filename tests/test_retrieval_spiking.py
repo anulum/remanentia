@@ -13,7 +13,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from REMANENTIA.retrieval_spiking import (
+from retrieval_spiking import (
     cosine_similarity,
     cosine_similarity_python,
     encode_text,

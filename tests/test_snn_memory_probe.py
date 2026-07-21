@@ -29,7 +29,9 @@ def _sustaining_checkpoint() -> tuple[Checkpoint, np.ndarray]:
     np.fill_diagonal(weights, 0.0)
     topology = weights != 0.0
     signatures = np.ones((2, 8 * 30), dtype=np.float64)
-    checkpoint = Checkpoint(weights, topology, signatures, ("alpha", "beta"), model, {"metadata": {}})
+    checkpoint = Checkpoint(
+        weights, topology, signatures, ("alpha", "beta"), model, {"metadata": {}}
+    )
     cue = np.zeros((5, 30), dtype=np.float64)
     cue[:, :excitatory] = 30.0
     return checkpoint, cue

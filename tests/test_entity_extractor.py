@@ -409,9 +409,7 @@ class TestPythonEntityFallbackCoverage:
 
     def test_extract_relations_python_default_co_occurs(self):
         entities = [Entity("STDP", "algorithm", 0.9), Entity("BM25", "algorithm", 0.9)]
-        relations = _extract_relations_python(
-            "STDP and BM25 are both retrieval signals.", entities
-        )
+        relations = _extract_relations_python("STDP and BM25 are both retrieval signals.", entities)
 
         assert relations[0].relation_type == "co_occurs"
 

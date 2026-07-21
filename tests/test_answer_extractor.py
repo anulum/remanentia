@@ -110,7 +110,9 @@ class TestPythonFallbackDispatch:
         assert extract_answer("how many days did it take", "No dates or numbers here.") is None
 
     def test_extract_answer_dispatches_question_types_without_native_extension(self) -> None:
-        assert _extract_answer_python("when did it ship", "It shipped on 2026-02-03.") == "2026-02-03"
+        assert (
+            _extract_answer_python("when did it ship", "It shipped on 2026-02-03.") == "2026-02-03"
+        )
         assert _extract_answer_python("how many tests passed", "Exactly 42 tests passed.") == "42"
         assert _extract_answer_python("what version shipped", "Release v1.2.3 is live.") == "v1.2.3"
         assert _extract_answer_python("who approved it", "Alice approved the release.") == "Alice"

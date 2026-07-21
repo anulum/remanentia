@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-from REMANENTIA.consolidation_summary_dag import (  # type: ignore[import]
+from consolidation_summary_dag import (
     build_summary_dag_python,
     search_summary_dag,
 )

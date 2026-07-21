@@ -177,12 +177,8 @@ class TestDoGet:
     def test_status_with_data(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         graph_dir = tmp_path / "memory" / "graph"
         graph_dir.mkdir(parents=True)
-        (graph_dir / "entities.jsonl").write_text(
-            '{"id":"a"}\n{"id":"b"}\n', encoding="utf-8"
-        )
-        (graph_dir / "relations.jsonl").write_text(
-            '{"src":"a","tgt":"b"}\n', encoding="utf-8"
-        )
+        (graph_dir / "entities.jsonl").write_text('{"id":"a"}\n{"id":"b"}\n', encoding="utf-8")
+        (graph_dir / "relations.jsonl").write_text('{"src":"a","tgt":"b"}\n', encoding="utf-8")
         traces_dir = tmp_path / "reasoning_traces"
         traces_dir.mkdir()
         (traces_dir / "t1.md").write_text("trace", encoding="utf-8")

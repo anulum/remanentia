@@ -542,9 +542,7 @@ class TestModelLoading:
             assert date_normalizer._load_model() is False
 
     def test_model_normalise_full_flow(self, tmp_path: Path):
-        model_dir = _write_checkpoint(
-            tmp_path, [2, 0, 2, 3, 0, 4, 1, 0], confidence=0.9
-        )
+        model_dir = _write_checkpoint(tmp_path, [2, 0, 2, 3, 0, 4, 1, 0], confidence=0.9)
         with _model_at(model_dir):
             r = date_normalizer._model_normalise("test expression", date(2023, 6, 1))
         assert r is not None

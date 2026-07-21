@@ -20,7 +20,7 @@ from urllib.request import Request, urlopen
 
 import pytest
 
-from REMANENTIA.monitor import DASHBOARD_PATH, MonitorHandler  # type: ignore[import]
+from monitor import DASHBOARD_PATH, MonitorHandler
 
 
 @contextmanager

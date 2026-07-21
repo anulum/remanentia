@@ -162,8 +162,7 @@ class TestAnthropicBackend:
         assert result == "hosted answer"
         request = server.requests[0]
         headers = {
-            key.lower(): value
-            for key, value in cast(dict[str, str], request["headers"]).items()
+            key.lower(): value for key, value in cast(dict[str, str], request["headers"]).items()
         }
         payload = cast(dict[str, object], request["payload"])
         assert request["path"] == "/v1/messages"

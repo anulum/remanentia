@@ -285,9 +285,7 @@ def _load_model() -> bool:
 
         device = "cpu"
         model = _build_model(config["model_name"], config.get("num_digits", 8))
-        state = torch.load(
-            _MODEL_DIR / "model.pt", map_location=device, weights_only=True
-        )
+        state = torch.load(_MODEL_DIR / "model.pt", map_location=device, weights_only=True)
         model.load_state_dict(state)
         model.eval()
         _model = model

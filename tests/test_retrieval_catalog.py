@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from REMANENTIA.retrieval_catalog import (
+from retrieval_catalog import (
     append_history,
     chunk_trace_catalog,
     classify_trace_tier,

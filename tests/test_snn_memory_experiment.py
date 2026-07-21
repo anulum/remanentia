@@ -80,7 +80,9 @@ def test_encoder_only_condition_rejects_a_cue_without_external_input() -> None:
     checkpoint, sequences, labels = _checkpoint()
     empty = [np.zeros_like(sequences[0]), sequences[1]]
     with pytest.raises(ValueError, match="no external input"):
-        evaluate_condition(checkpoint, empty, labels, "encoder-only", 11, ProbeConfig(completion_steps=8))
+        evaluate_condition(
+            checkpoint, empty, labels, "encoder-only", 11, ProbeConfig(completion_steps=8)
+        )
 
 
 def test_benchmark_reports_all_five_conditions_and_holds_gates_closed() -> None:
@@ -97,7 +99,9 @@ def test_benchmark_reports_all_five_conditions_and_holds_gates_closed() -> None:
     # jsonschema module at runtime and only its callable is typed, so strict mypy holds
     # without a stub, ignore, or duplicated schema logic.
     root = Path(__file__).resolve().parents[1]
-    schema = json.loads((root / "docs/schema/snn_memory_result.schema.json").read_text(encoding="utf-8"))
+    schema = json.loads(
+        (root / "docs/schema/snn_memory_result.schema.json").read_text(encoding="utf-8")
+    )
     validate = cast(Callable[[object, object], None], import_module("jsonschema").validate)
     validate(json.loads(json.dumps(report)), schema)
     # Schema v1 pins all three reported G1/G2 gates to false structurally, so the guard
@@ -129,7 +133,9 @@ def _scores(seeds: list[int]) -> dict[str, dict[int, list[float]]]:
 
 def _details(seeds: list[int]) -> dict[str, dict[int, list[dict[str, Any]]]]:
     def rows(spikes: int) -> list[dict[str, Any]]:
-        return [{"label": "alpha", "prediction": "alpha", "correct": True, "completion_spikes": spikes}]
+        return [
+            {"label": "alpha", "prediction": "alpha", "correct": True, "completion_spikes": spikes}
+        ]
 
     completion = {"trained": 9, "shuffled": 1, "random": 1, "zero": 0, "encoder-only": 0}
     return {name: {seed: rows(completion[name]) for seed in seeds} for name in CONDITIONS}

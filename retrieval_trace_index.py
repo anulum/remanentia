@@ -67,8 +67,7 @@ def _read_trace_corpus(
     trace_files = sorted(traces_dir.glob("*.md"))
     semantic_files = sorted(semantic_dir.rglob("*.md")) if semantic_dir.exists() else []
     trace_texts = {
-        trace_file.name: trace_file.read_text(encoding="utf-8")
-        for trace_file in trace_files
+        trace_file.name: trace_file.read_text(encoding="utf-8") for trace_file in trace_files
     }
     trace_texts.update(
         {
@@ -89,9 +88,7 @@ def _restore_disk_index(
     return {
         "trace_files": trace_files,
         "trace_texts": trace_texts,
-        "trace_spikes": cast(
-            dict[str, npt.NDArray[np.float32]], disk_index["trace_spikes"]
-        ),
+        "trace_spikes": cast(dict[str, npt.NDArray[np.float32]], disk_index["trace_spikes"]),
         "trace_names_lower": cast(dict[str, str], disk_index["trace_names_lower"]),
         "idf": cast(dict[str, float], disk_index["idf"]),
     }

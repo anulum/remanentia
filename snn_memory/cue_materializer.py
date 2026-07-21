@@ -113,14 +113,70 @@ TOKENIZER_RULE = (
 )
 NOISE_LEXICON_IDENTITY = "remanentia-snn-v2-noise-lexicon-v1"
 NOISE_LEXICON = (
-    "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta",
-    "iota", "kappa", "lambda", "mu", "nu", "xi", "omicron", "pi",
-    "rho", "sigma", "tau", "upsilon", "phi", "chi", "psi", "omega",
-    "agate", "amber", "basalt", "beryl", "flint", "garnet", "gneiss", "jasper",
-    "marble", "obsidian", "onyx", "opal", "pumice", "quartz", "schist", "slate",
-    "alder", "aspen", "birch", "cedar", "elm", "hazel", "larch", "linden",
-    "maple", "rowan", "spruce", "willow", "brook", "cliff", "dune", "fjord",
-    "glacier", "lagoon", "mesa", "tundra", "café", "naïve", "señal", "žula",
+    "alpha",
+    "beta",
+    "gamma",
+    "delta",
+    "epsilon",
+    "zeta",
+    "eta",
+    "theta",
+    "iota",
+    "kappa",
+    "lambda",
+    "mu",
+    "nu",
+    "xi",
+    "omicron",
+    "pi",
+    "rho",
+    "sigma",
+    "tau",
+    "upsilon",
+    "phi",
+    "chi",
+    "psi",
+    "omega",
+    "agate",
+    "amber",
+    "basalt",
+    "beryl",
+    "flint",
+    "garnet",
+    "gneiss",
+    "jasper",
+    "marble",
+    "obsidian",
+    "onyx",
+    "opal",
+    "pumice",
+    "quartz",
+    "schist",
+    "slate",
+    "alder",
+    "aspen",
+    "birch",
+    "cedar",
+    "elm",
+    "hazel",
+    "larch",
+    "linden",
+    "maple",
+    "rowan",
+    "spruce",
+    "willow",
+    "brook",
+    "cliff",
+    "dune",
+    "fjord",
+    "glacier",
+    "lagoon",
+    "mesa",
+    "tundra",
+    "café",
+    "naïve",
+    "señal",
+    "žula",
 )
 CUE_SET_NAME = "cue_set.json"
 NOISE_LEXICON_NAME = "noise_lexicon.txt"
@@ -357,10 +413,7 @@ def _selected_positions(
 
 def _noise_token(base_text_sha256: str, gap: int, lexicon: Sequence[str]) -> str:
     material = (
-        _NOISE_TOKEN_DOMAIN
-        + base_text_sha256.encode("ascii")
-        + b"\0"
-        + gap.to_bytes(8, "big")
+        _NOISE_TOKEN_DOMAIN + base_text_sha256.encode("ascii") + b"\0" + gap.to_bytes(8, "big")
     )
     return lexicon[int(hashlib.sha256(material).hexdigest(), 16) % len(lexicon)]
 
@@ -514,9 +567,7 @@ def _encode_array(array: FloatArray | IntArray) -> str:
     return base64.b64encode(np.ascontiguousarray(array).tobytes()).decode("ascii")
 
 
-def _decode_array(
-    encoded: str, dtype: str, count: int, context: str
-) -> FloatArray | IntArray:
+def _decode_array(encoded: str, dtype: str, count: int, context: str) -> FloatArray | IntArray:
     try:
         raw = base64.b64decode(encoded, validate=True)
     except (ValueError, TypeError) as error:
@@ -600,8 +651,9 @@ class _OutputTransaction:
             # linkat of the anonymous inode into the captured directory fd keeps
             # the hard no-clobber property: a collision inside the fresh root
             # surfaces as a raw OSError instead of replacing bytes.
-            os.link(f"/proc/self/fd/{descriptor}", leaf, dst_dir_fd=directory_fd,
-                    follow_symlinks=True)
+            os.link(
+                f"/proc/self/fd/{descriptor}", leaf, dst_dir_fd=directory_fd, follow_symlinks=True
+            )
             os.fsync(directory_fd)
         finally:
             os.close(descriptor)
@@ -683,9 +735,7 @@ def _bundle_arrays(
 ) -> tuple[FloatArray, IntArray, IntArray, FloatArray, tuple[int, int]]:
     events = split_events(text)
     embedding = adapter.encode(events)
-    currents = embeddings_to_currents(
-        embedding, model, encoder_config, input_current=input_current
-    )
+    currents = embeddings_to_currents(embedding, model, encoder_config, input_current=input_current)
     rows, columns = np.nonzero(currents)
     values = currents[rows, columns]
     return (
@@ -780,7 +830,9 @@ def validate_cue_bundle_bytes(
     embedding_count = embedding_spec["shape"][0] * embedding_spec["shape"][1]
     embedding = cast(
         FloatArray,
-        _decode_array(embedding_spec["data_base64"], "<f8", embedding_count, "cue-bundle embedding"),
+        _decode_array(
+            embedding_spec["data_base64"], "<f8", embedding_count, "cue-bundle embedding"
+        ),
     ).reshape(embedding_spec["shape"][0], embedding_spec["shape"][1])
     currents_spec = payload["currents"]
     timesteps = len(events) * (encoder_config.packet_ms + encoder_config.silent_ms)
@@ -931,9 +983,7 @@ def _record_entry(
     record_sha = cast(str, item["content_sha256"])
     event_count = cast(int, item["event_count"])
     boundaries = _block_boundaries(event_count)
-    blocks = [
-        list(range(boundaries[index], boundaries[index + 1])) for index in range(BLOCK_COUNT)
-    ]
+    blocks = [list(range(boundaries[index], boundaries[index + 1])) for index in range(BLOCK_COUNT)]
     calibration_index = _calibration_block_index(record_sha)
     permutation = _FAMILY_PERMUTATIONS[_family_permutation_index(record_sha)]
     texts: dict[str, str] = {}
@@ -1084,9 +1134,7 @@ def materialize_cue_set(
     implementations = {
         "cue_materializer": _implementation(sys.modules[__name__], MATERIALIZER_LOGICAL_PATH),
         "split_events": _implementation(encoder_module, SPLIT_EVENTS_LOGICAL_PATH),
-        "sentence_encoder": _implementation(
-            sentence_encoder_module, SENTENCE_ENCODER_LOGICAL_PATH
-        ),
+        "sentence_encoder": _implementation(sentence_encoder_module, SENTENCE_ENCODER_LOGICAL_PATH),
     }
     bundle_implementations = {
         name: {"logical_path": block["logical_path"], "sha256": block["sha256"]}
@@ -1251,9 +1299,7 @@ def _validate_record(record: dict[str, Any], registry: dict[str, set[str]]) -> N
     record_hash = cast(str, record["record_id"]).removeprefix("sha256:")
     event_count = _require_int(record["event_count"], "record event count")
     boundaries = _block_boundaries(event_count)
-    blocks = [
-        list(range(boundaries[index], boundaries[index + 1])) for index in range(BLOCK_COUNT)
-    ]
+    blocks = [list(range(boundaries[index], boundaries[index + 1])) for index in range(BLOCK_COUNT)]
     calibration_index = _calibration_block_index(record_hash)
     if record["calibration_block_index"] != calibration_index:
         raise CueMaterializerError("calibration block index differs from its record digest")
@@ -1384,9 +1430,7 @@ def validate_cue_set_bytes(
     }
     for record in payload["records"]:
         _validate_record(record, registry)
-    return CueSetArtifact(
-        _frozen(payload), raw, file_sha256, cast(str, payload["self_sha256"])
-    )
+    return CueSetArtifact(_frozen(payload), raw, file_sha256, cast(str, payload["self_sha256"]))
 
 
 def _validate_implementations(payload: dict[str, Any]) -> None:
@@ -1466,9 +1510,7 @@ def read_cue_set(cue_set_path: Path, expected_file_sha256: str) -> CueSetArtifac
                 "base cue",
             )
             _require_canonical_cue_text(base_text, "base")
-            _require_line_count(
-                base_text, cast("Sequence[int]", base_cue["event_indices"]), "base"
-            )
+            _require_line_count(base_text, cast("Sequence[int]", base_cue["event_indices"]), "base")
             lines = _line_tokens(base_text)
             if sum(len(line) for line in lines) != base_cue["token_count"]:
                 raise CueMaterializerError("base cue token count differs from its text")

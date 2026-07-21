@@ -183,6 +183,7 @@ class TestLocalReaderSelection:
         # model/endpoint the reader actually queried is the resolved one — a
         # local score is attributable only if the backend was built from it.
         import bench_longmemeval as b
+
         requests: list[dict[str, object]] = []
 
         class ReaderHandler(BaseHTTPRequestHandler):
@@ -199,9 +200,7 @@ class TestLocalReaderSelection:
                 assert self.path == "/v1/chat/completions"
                 length = int(self.headers["Content-Length"])
                 requests.append(json.loads(self.rfile.read(length)))
-                body = json.dumps(
-                    {"choices": [{"message": {"content": "answer"}}]}
-                ).encode()
+                body = json.dumps({"choices": [{"message": {"content": "answer"}}]}).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(body)))

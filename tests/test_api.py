@@ -483,8 +483,7 @@ class TestGraph:
         graph_dir = tmp_path / "graph"
         graph_dir.mkdir()
         (graph_dir / "entities.jsonl").write_text(
-            '{"id":"other","label":"Other"}\n\n'
-            '{"id":"stdp","label":"STDP"}\n',
+            '{"id":"other","label":"Other"}\n\n{"id":"stdp","label":"STDP"}\n',
             encoding="utf-8",
         )
 
@@ -524,9 +523,7 @@ class TestRecall:
         assert data["trace"] == "2026-03-15_decision_stdp_removal.md"
         assert data["score"] > 0
         assert "Decision: Remove SNN" in data["snippet"]
-        assert data["semantic_memories"][0]["path"].endswith(
-            "2026-03-15_remanentia-decision.md"
-        )
+        assert data["semantic_memories"][0]["path"].endswith("2026-03-15_remanentia-decision.md")
         assert "stdp" in data["entities"]
         assert data["elapsed_ms"] >= 0
 
@@ -653,7 +650,9 @@ class TestPublicVectorSearch:
         monkeypatch.setattr(consolidation_engine, "SEMANTIC_DIR", semantic_dir)
         monkeypatch.setattr(consolidation_engine, "GRAPH_DIR", graph_dir)
         monkeypatch.setattr(consolidation_engine, "CONSOLIDATION_DIR", consolidation_dir)
-        monkeypatch.setattr(consolidation_engine, "PENDING_PATH", consolidation_dir / "pending.json")
+        monkeypatch.setattr(
+            consolidation_engine, "PENDING_PATH", consolidation_dir / "pending.json"
+        )
         monkeypatch.setattr(
             consolidation_engine,
             "LAST_RUN_PATH",

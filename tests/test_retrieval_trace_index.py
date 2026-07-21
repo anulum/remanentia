@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from REMANENTIA.retrieval_trace_index import (
+from retrieval_trace_index import (
     RetrievalNetworkState,
     TraceIndexMemoryCache,
     build_trace_index,
@@ -154,7 +154,9 @@ def test_memory_and_disk_cache_paths_are_real_and_trace_changes_invalidate_them(
     )
     assert cache_path.stat().st_mtime_ns == fixed_mtime_ns
 
-    trace.write_text("Tokamak control baseline with a measured disruption result.", encoding="utf-8")
+    trace.write_text(
+        "Tokamak control baseline with a measured disruption result.", encoding="utf-8"
+    )
     os.utime(trace, ns=(trace.stat().st_atime_ns, trace.stat().st_mtime_ns + 1))
     invalidated = build_trace_index(traces, semantic, cache_path, network, disk_memory)
 

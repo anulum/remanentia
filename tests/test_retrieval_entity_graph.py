@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from REMANENTIA.retrieval_entity_graph import (
+from retrieval_entity_graph import (
     EntityRecord,
     RelationRecord,
     entity_graph_score,
@@ -123,12 +123,8 @@ def test_portable_graph_score_covers_direct_reverse_shared_and_unrelated_edges()
     reverse = entity_graph_score_python(
         "tokamak mitigation", "scpn_control-results.md", entities, relations
     )
-    shared = entity_graph_score_python(
-        "persistent memory", "memory-notes.md", entities, relations
-    )
-    unrelated = entity_graph_score_python(
-        "SCPN control", "memory-notes.md", entities, relations
-    )
+    shared = entity_graph_score_python("persistent memory", "memory-notes.md", entities, relations)
+    unrelated = entity_graph_score_python("SCPN control", "memory-notes.md", entities, relations)
 
     assert direct == pytest.approx(1.0)
     assert reverse == pytest.approx(1.0)

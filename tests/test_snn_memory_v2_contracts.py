@@ -82,9 +82,7 @@ def _dataset_fixture(root: Path) -> tuple[Path, dict[str, Any], str]:
     canonical_tasks = "remanentia:snn-memory:task-set:v2\n" + "".join(
         f"{task_id}\n" for task_id in sorted(_TASK_IDS)
     )
-    artifacts["task_set"] = _write_bytes(
-        root, "meta/task_set.txt", canonical_tasks.encode("ascii")
-    )
+    artifacts["task_set"] = _write_bytes(root, "meta/task_set.txt", canonical_tasks.encode("ascii"))
     schedules = {
         "capacity_prefixes": [4, 8, 12, 16],
         **{
@@ -97,25 +95,19 @@ def _dataset_fixture(root: Path) -> tuple[Path, dict[str, Any], str]:
             )
         },
     }
-    source_universe_artifact = _write_bytes(
-        root, "source/universe.jsonl", b"source-universe\n"
-    )
+    source_universe_artifact = _write_bytes(root, "source/universe.jsonl", b"source-universe\n")
     distractor = _write_bytes(root, "distractors/distractor.txt", b"distractor\n")
 
     records: list[dict[str, Any]] = []
     for record_index in range(16):
         training_text = f"training-payload-{record_index:02d}\n".encode().ljust(1000, b"x")
-        training = _write_bytes(
-            root, f"training/source-{record_index:02d}.txt", training_text
-        )
+        training = _write_bytes(root, f"training/source-{record_index:02d}.txt", training_text)
         training["event_indices"] = list(range(50))
         record_id = f"sha256:{training['sha256']}"
 
         calibration_id = _opaque_id("cue", f"calibration-{record_index}")
         calibration_text = f"calibrationtoken{record_index:02d}"
-        calibration = _write_bytes(
-            root, f"cues/{calibration_id}.txt", calibration_text.encode()
-        )
+        calibration = _write_bytes(root, f"cues/{calibration_id}.txt", calibration_text.encode())
         calibration.update(
             {
                 "cue_id": calibration_id,
@@ -129,9 +121,7 @@ def _dataset_fixture(root: Path) -> tuple[Path, dict[str, Any], str]:
             cue_id = _opaque_id("cue", f"base-{record_index}-{family}")
             variants: list[dict[str, Any]] = []
             for requested in (0, 10, 25, 40):
-                variant_id = _opaque_id(
-                    "variant", f"variant-{record_index}-{family}-{requested}"
-                )
+                variant_id = _opaque_id("variant", f"variant-{record_index}-{family}-{requested}")
                 text = f"token{record_index:02d}{family_index}{requested:02d}"
                 variant = _write_bytes(root, f"variants/{variant_id}.txt", text.encode())
                 variant.update(
@@ -148,12 +138,12 @@ def _dataset_fixture(root: Path) -> tuple[Path, dict[str, Any], str]:
                 )
                 variants.append(variant)
             base_cue: dict[str, Any] = {
-                    "cue_id": cue_id,
-                    "task": "record_recall" if family_index % 2 == 0 else "next_event",
-                    "transform_family": family,
-                    "event_indices": [family_index + 1],
-                    "variants": variants,
-                }
+                "cue_id": cue_id,
+                "task": "record_recall" if family_index % 2 == 0 else "next_event",
+                "transform_family": family,
+                "event_indices": [family_index + 1],
+                "variants": variants,
+            }
             if base_cue["task"] == "next_event":
                 base_cue["expected_record_id"] = record_id
             base_cues.append(base_cue)
@@ -289,9 +279,9 @@ def _checkpoint_value(dataset: ValidatedDatasetV2) -> dict[str, Any]:
         "scoring_calibration": {
             "abstention_threshold": 0.3,
             "metric": "temporal-overlap",
-            "development_artifact_digest": manifest["artifacts"][
-                "development_calibration"
-            ]["sha256"],
+            "development_artifact_digest": manifest["artifacts"]["development_calibration"][
+                "sha256"
+            ],
         },
     }
 
@@ -304,9 +294,7 @@ def _task_output_value(
         "schema_version": 2,
         "checkpoint_digest": checkpoint.digest,
         "cue_digest": _digest(b"cue"),
-        "initial_state_digest": checkpoint.manifest["arrays"][
-            "probe_initial_state_digest"
-        ],
+        "initial_state_digest": checkpoint.manifest["arrays"]["probe_initial_state_digest"],
         "process_instance_digest": _digest(b"process-instance"),
         "backend_digest": checkpoint.manifest["build"]["backend_build_digest"],
         "record_order_digest": dataset.manifest["candidate_set"]["digest"],
@@ -410,9 +398,7 @@ def test_manifest_digest_is_checked_before_json_parse(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("raw_bytes", [b"{", b"[]"])
-def test_dataset_reader_rejects_nonobject_or_invalid_json(
-    tmp_path: Path, raw_bytes: bytes
-) -> None:
+def test_dataset_reader_rejects_nonobject_or_invalid_json(tmp_path: Path, raw_bytes: bytes) -> None:
     path = tmp_path / "dataset.json"
     path.write_bytes(raw_bytes)
 
@@ -520,9 +506,9 @@ def test_dataset_reader_rejects_invalid_real_artifact_surfaces(
 
 def test_dataset_reader_rejects_duplicate_artifact_digest(tmp_path: Path) -> None:
     path, manifest, _ = _dataset_fixture(tmp_path)
-    manifest["artifacts"]["temporal_edges"]["sha256"] = manifest["artifacts"][
-        "provenance_store"
-    ]["sha256"]
+    manifest["artifacts"]["temporal_edges"]["sha256"] = manifest["artifacts"]["provenance_store"][
+        "sha256"
+    ]
     digest = _rewrite_dataset(path, manifest)
 
     with pytest.raises(ValueError, match="duplicate artifact digest"):
@@ -586,9 +572,7 @@ def test_empty_cues_have_identity_jaccard_similarity() -> None:
 
 
 def test_canonical_json_digest_treats_frozen_sequences_as_json_arrays() -> None:
-    assert canonical_json_digest({"values": (1, 2)}) == canonical_json_digest(
-        {"values": [1, 2]}
-    )
+    assert canonical_json_digest({"values": (1, 2)}) == canonical_json_digest({"values": [1, 2]})
 
 
 def test_dataset_reader_rejects_normalized_duplicate_variant(tmp_path: Path) -> None:
@@ -693,9 +677,7 @@ def test_dataset_enforces_real_payload_and_event_bounds(
         ("timestamp-precision", "exact integer second"),
     ],
 )
-def test_dataset_cross_contracts_fail_closed(
-    tmp_path: Path, corruption: str, match: str
-) -> None:
+def test_dataset_cross_contracts_fail_closed(tmp_path: Path, corruption: str, match: str) -> None:
     path, manifest, _ = _dataset_fixture(tmp_path)
     first = manifest["records"][0]
     second = manifest["records"][1]
@@ -712,9 +694,9 @@ def test_dataset_cross_contracts_fail_closed(
     elif corruption == "encoder-config":
         manifest["encoder"]["config"]["feature_dim"] = 128
     elif corruption == "duplicate-path":
-        manifest["artifacts"]["temporal_edges"]["path"] = manifest["artifacts"][
-            "provenance_store"
-        ]["path"]
+        manifest["artifacts"]["temporal_edges"]["path"] = manifest["artifacts"]["provenance_store"][
+            "path"
+        ]
     elif corruption == "record-binding":
         replacement = f"sha256:{_digest(b'replacement-record-id')}"
         first["record_id"] = replacement
@@ -749,9 +731,7 @@ def test_dataset_cross_contracts_fail_closed(
     elif corruption == "duplicate-variant-id":
         second_variant["variant_id"] = first_variant["variant_id"]
     elif corruption == "variant-leak":
-        first_variant["variant_id"] = (
-            f"variant-{first['record_id'].removeprefix('sha256:')[:32]}"
-        )
+        first_variant["variant_id"] = f"variant-{first['record_id'].removeprefix('sha256:')[:32]}"
     elif corruption == "variant-nonopaque-path":
         old_path = tmp_path / first_variant["path"]
         new_relative = "variants/descriptive.txt"
@@ -762,7 +742,9 @@ def test_dataset_cross_contracts_fail_closed(
         calibration = second["calibration_cue"]
         text = (tmp_path / first["calibration_cue"]["path"]).read_text()
         fullwidth = "".join(
-            chr(ord(character) + 0xFEE0) if character.isascii() and character.isalpha() else character
+            chr(ord(character) + 0xFEE0)
+            if character.isascii() and character.isalpha()
+            else character
             for character in text
         )
         (tmp_path / calibration["path"]).write_text(fullwidth)
@@ -780,12 +762,8 @@ def test_dataset_cross_contracts_fail_closed(
         read_and_validate_dataset_v2(path, digest)
 
 
-@pytest.mark.parametrize(
-    "artifact_kind", ["dataset", "checkpoint", "task-output", "evaluation"]
-)
-def test_public_readers_reject_unknown_schema_fields(
-    tmp_path: Path, artifact_kind: str
-) -> None:
+@pytest.mark.parametrize("artifact_kind", ["dataset", "checkpoint", "task-output", "evaluation"])
+def test_public_readers_reject_unknown_schema_fields(tmp_path: Path, artifact_kind: str) -> None:
     path, manifest, dataset_digest = _dataset_fixture(tmp_path)
     if artifact_kind == "dataset":
         manifest["unknown"] = True
@@ -798,9 +776,7 @@ def test_public_readers_reject_unknown_schema_fields(
     checkpoint_value = _checkpoint_value(dataset)
     checkpoint_path = tmp_path / "checkpoint.json"
     checkpoint_digest = _write_manifest(checkpoint_path, checkpoint_value)
-    checkpoint = read_and_validate_checkpoint_v2(
-        checkpoint_path, checkpoint_digest, dataset
-    )
+    checkpoint = read_and_validate_checkpoint_v2(checkpoint_path, checkpoint_digest, dataset)
     if artifact_kind == "checkpoint":
         checkpoint_value["unknown"] = True
         digest = _write_manifest(checkpoint_path, checkpoint_value)
@@ -812,9 +788,7 @@ def test_public_readers_reject_unknown_schema_fields(
         output_path = tmp_path / "task-output.json"
         digest = _write_manifest(output_path, value)
         with pytest.raises(ValueError, match="failed .*task_output_v2"):
-            read_and_validate_task_output_v2(
-                output_path, digest, checkpoint, dataset
-            )
+            read_and_validate_task_output_v2(output_path, digest, checkpoint, dataset)
     else:
         value = _evaluation_value(dataset)
         value["unknown"] = True
@@ -831,25 +805,15 @@ def test_checkpoint_task_output_and_evaluation_bind_real_files(
     dataset = dataset_snapshot[3]
     checkpoint_path = root / "checkpoint.json"
     checkpoint_digest = _write_manifest(checkpoint_path, _checkpoint_value(dataset))
-    checkpoint = read_and_validate_checkpoint_v2(
-        checkpoint_path, checkpoint_digest, dataset
-    )
+    checkpoint = read_and_validate_checkpoint_v2(checkpoint_path, checkpoint_digest, dataset)
 
     output_path = root / "task-output.json"
-    output_digest = _write_manifest(
-        output_path, _task_output_value(checkpoint, dataset)
-    )
-    output = read_and_validate_task_output_v2(
-        output_path, output_digest, checkpoint, dataset
-    )
+    output_digest = _write_manifest(output_path, _task_output_value(checkpoint, dataset))
+    output = read_and_validate_task_output_v2(output_path, output_digest, checkpoint, dataset)
 
     evaluation_path = root / "evaluation.json"
-    evaluation_digest = _write_manifest(
-        evaluation_path, _evaluation_value(dataset)
-    )
-    evaluation = read_and_validate_evaluation_v2(
-        evaluation_path, evaluation_digest, dataset
-    )
+    evaluation_digest = _write_manifest(evaluation_path, _evaluation_value(dataset))
+    evaluation = read_and_validate_evaluation_v2(evaluation_path, evaluation_digest, dataset)
 
     assert output.digest == output_digest
     assert evaluation.manifest["gates"]["completeness_pass"] is True
@@ -864,9 +828,7 @@ def test_task_output_rejects_invalid_rank_surface(
     dataset = dataset_snapshot[3]
     checkpoint_path = root / "checkpoint.json"
     checkpoint_digest = _write_manifest(checkpoint_path, _checkpoint_value(dataset))
-    checkpoint = read_and_validate_checkpoint_v2(
-        checkpoint_path, checkpoint_digest, dataset
-    )
+    checkpoint = read_and_validate_checkpoint_v2(checkpoint_path, checkpoint_digest, dataset)
     value = _task_output_value(checkpoint, dataset)
     if corruption == "off-candidate":
         off_candidate = f"sha256:{_digest(b'off-candidate')}"
@@ -878,9 +840,7 @@ def test_task_output_rejects_invalid_rank_surface(
     output_digest = _write_manifest(output_path, value)
 
     with pytest.raises(ValueError, match="off-candidate|score/rank"):
-        read_and_validate_task_output_v2(
-            output_path, output_digest, checkpoint, dataset
-        )
+        read_and_validate_task_output_v2(output_path, output_digest, checkpoint, dataset)
 
 
 def test_probe_accepts_only_fresh_reset_state_never_training_final_state(
@@ -890,28 +850,20 @@ def test_probe_accepts_only_fresh_reset_state_never_training_final_state(
     dataset = dataset_snapshot[3]
     checkpoint_path = root / "checkpoint-state-separation.json"
     checkpoint_digest = _write_manifest(checkpoint_path, _checkpoint_value(dataset))
-    checkpoint = read_and_validate_checkpoint_v2(
-        checkpoint_path, checkpoint_digest, dataset
-    )
+    checkpoint = read_and_validate_checkpoint_v2(checkpoint_path, checkpoint_digest, dataset)
     arrays = checkpoint.manifest["arrays"]
     assert arrays["training_final_state_digest"] != arrays["probe_initial_state_digest"]
 
     value = _task_output_value(checkpoint, dataset)
     output_path = root / "task-output-fresh-state.json"
     output_digest = _write_manifest(output_path, value)
-    accepted = read_and_validate_task_output_v2(
-        output_path, output_digest, checkpoint, dataset
-    )
-    assert accepted.manifest["initial_state_digest"] == arrays[
-        "probe_initial_state_digest"
-    ]
+    accepted = read_and_validate_task_output_v2(output_path, output_digest, checkpoint, dataset)
+    assert accepted.manifest["initial_state_digest"] == arrays["probe_initial_state_digest"]
 
     value["initial_state_digest"] = arrays["training_final_state_digest"]
     output_digest = _write_manifest(output_path, value)
     with pytest.raises(ValueError, match="initial-state digest mismatch"):
-        read_and_validate_task_output_v2(
-            output_path, output_digest, checkpoint, dataset
-        )
+        read_and_validate_task_output_v2(output_path, output_digest, checkpoint, dataset)
 
 
 def test_incomplete_evaluation_forces_every_scientific_gate_false(
@@ -929,16 +881,12 @@ def test_incomplete_evaluation_forces_every_scientific_gate_false(
     evaluation_digest = _write_manifest(evaluation_path, value)
 
     with pytest.raises(ValueError, match="incomplete evaluation"):
-        read_and_validate_evaluation_v2(
-            evaluation_path, evaluation_digest, dataset
-        )
+        read_and_validate_evaluation_v2(evaluation_path, evaluation_digest, dataset)
 
     for gate in value["gates"]:
         value["gates"][gate] = False
     evaluation_digest = _write_manifest(evaluation_path, value)
-    evaluation = read_and_validate_evaluation_v2(
-        evaluation_path, evaluation_digest, dataset
-    )
+    evaluation = read_and_validate_evaluation_v2(evaluation_path, evaluation_digest, dataset)
     assert evaluation.manifest["gates"]["completeness_pass"] is False
 
 
@@ -1008,9 +956,7 @@ def test_checkpoint_cross_bindings_fail_closed(
     elif corruption == "topology":
         value["adjacency"]["topology_digest"] = _digest(b"wrong-topology")
     elif corruption == "calibration":
-        value["calibration_cue_digests"] = list(
-            reversed(value["calibration_cue_digests"])
-        )
+        value["calibration_cue_digests"] = list(reversed(value["calibration_cue_digests"]))
     else:
         value["scoring_calibration"]["development_artifact_digest"] = _digest(
             b"wrong-development-calibration"
@@ -1043,9 +989,7 @@ def test_task_output_cross_bindings_fail_closed(
     dataset = dataset_snapshot[3]
     checkpoint_path = root / "checkpoint.json"
     checkpoint_digest = _write_manifest(checkpoint_path, _checkpoint_value(dataset))
-    checkpoint = read_and_validate_checkpoint_v2(
-        checkpoint_path, checkpoint_digest, dataset
-    )
+    checkpoint = read_and_validate_checkpoint_v2(checkpoint_path, checkpoint_digest, dataset)
     value = _task_output_value(checkpoint, dataset)
     off_candidate = f"sha256:{_digest(b'off-candidate-output')}"
     if corruption == "checkpoint":
@@ -1062,16 +1006,12 @@ def test_task_output_cross_bindings_fail_closed(
     elif corruption == "off-prediction":
         value["predicted_record_id"] = off_candidate
     else:
-        value["predicted_record_id"] = dataset.manifest["candidate_set"][
-            "ordered_record_ids"
-        ][1]
+        value["predicted_record_id"] = dataset.manifest["candidate_set"]["ordered_record_ids"][1]
     output_path = root / f"task-output-{corruption}.json"
     output_digest = _write_manifest(output_path, value)
 
     with pytest.raises(ValueError, match=match):
-        read_and_validate_task_output_v2(
-            output_path, output_digest, checkpoint, dataset
-        )
+        read_and_validate_task_output_v2(output_path, output_digest, checkpoint, dataset)
 
 
 @pytest.mark.parametrize(
@@ -1092,9 +1032,7 @@ def test_task_output_cross_bindings_fail_closed(
         ("completeness", "reported completeness contradicts"),
     ],
 )
-def test_evaluation_cross_bindings_fail_closed(
-    tmp_path: Path, corruption: str, match: str
-) -> None:
+def test_evaluation_cross_bindings_fail_closed(tmp_path: Path, corruption: str, match: str) -> None:
     path, manifest, dataset_digest = _dataset_fixture(tmp_path)
     if corruption == "dataset-task-set":
         task_ref = manifest["artifacts"]["task_set"]
@@ -1150,9 +1088,7 @@ def test_untrained_checkpoint_requires_zero_completed_epochs(
 
     value["epochs_completed"] = 0
     checkpoint_digest = _write_manifest(checkpoint_path, value)
-    checkpoint = read_and_validate_checkpoint_v2(
-        checkpoint_path, checkpoint_digest, dataset
-    )
+    checkpoint = read_and_validate_checkpoint_v2(checkpoint_path, checkpoint_digest, dataset)
     assert checkpoint.manifest["epochs_completed"] == 0
 
 

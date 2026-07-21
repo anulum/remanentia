@@ -67,11 +67,43 @@ FAMILIES = ("truncation", "deletion", "masking", "sparse_noise")
 PERMUTATIONS = tuple(itertools.permutations(FAMILIES))
 PERCENTS = (0, 10, 25, 40)
 BASE_TIMESTAMP = 1_700_000_000
-WORD_A = ("ledger", "orchard", "harbour", "granite", "willow", "meadow", "signal", "quarry",
-          "lantern", "compass", "thicket", "estuary", "paddock", "furnace", "gable", "cistern")
+WORD_A = (
+    "ledger",
+    "orchard",
+    "harbour",
+    "granite",
+    "willow",
+    "meadow",
+    "signal",
+    "quarry",
+    "lantern",
+    "compass",
+    "thicket",
+    "estuary",
+    "paddock",
+    "furnace",
+    "gable",
+    "cistern",
+)
 WORD_B = ("morning", "evening", "quiet", "sudden", "steady", "distant", "narrow")
-WORD_C = ("ridge", "valley", "coast", "plain", "summit", "delta", "basin", "moor",
-          "heath", "fen", "loch", "strand", "combe", "tor", "glen", "wold")
+WORD_C = (
+    "ridge",
+    "valley",
+    "coast",
+    "plain",
+    "summit",
+    "delta",
+    "basin",
+    "moor",
+    "heath",
+    "fen",
+    "loch",
+    "strand",
+    "combe",
+    "tor",
+    "glen",
+    "wold",
+)
 
 MODEL = ModelConfig(n_neurons=64)
 ENCODER_CONFIG = EncoderConfig(feature_dim=16, packet_ms=5, silent_ms=2, active_fraction=0.1)
@@ -314,7 +346,9 @@ def _nfkc_collision_doc() -> bytes:
     nfd_line = "Café résumé entry keeps stable text mark-{i:02d}."
     lines = [nfc_line.format(i=index) for index in range(10)]
     lines += [nfd_line.format(i=index) for index in range(10)]
-    lines += [f"Distinct tail sentence {index:02d} carries unrelated closing text." for index in range(30)]
+    lines += [
+        f"Distinct tail sentence {index:02d} carries unrelated closing text." for index in range(30)
+    ]
     return ("\n".join(lines) + "\n").encode("utf-8")
 
 
@@ -472,9 +506,11 @@ def _check_happy_manifest(
             for variant in base_cue["variants"]:
                 assert record_hash[:32] not in variant["variant_id"]
                 assert record_hash[:32] not in variant["path"]
-                if base_cue["transform_family"] == "sparse_noise" and variant[
-                    "selected_positions"
-                ] and variant["selected_positions"][-1] == token_count:
+                if (
+                    base_cue["transform_family"] == "sparse_noise"
+                    and variant["selected_positions"]
+                    and variant["selected_positions"][-1] == token_count
+                ):
                     gap_at_end = True
         calibration = record["calibration_cue"]
         assert record_hash[:32] not in calibration["cue_id"]
@@ -735,8 +771,14 @@ def _check_inprocess_residual_policy(
     before_a = _tree_snapshot(replacement)
     target_a = workspace / "residual-attack-a"
     _run_attacked_materialisation(
-        workspace, repo, universe_path, universe_sha, encoder_checkpoint, encoder_digest,
-        target_a, lambda path: os.rename(replacement, path),
+        workspace,
+        repo,
+        universe_path,
+        universe_sha,
+        encoder_checkpoint,
+        encoder_digest,
+        target_a,
+        lambda path: os.rename(replacement, path),
     )
     assert target_a.is_dir() and not target_a.is_symlink()
     assert _tree_snapshot(target_a) == before_a, (
@@ -756,8 +798,14 @@ def _check_inprocess_residual_policy(
     empty_stat = os.stat(empty_replacement, follow_symlinks=False)
     target_b = workspace / "residual-attack-b"
     _run_attacked_materialisation(
-        workspace, repo, universe_path, universe_sha, encoder_checkpoint, encoder_digest,
-        target_b, lambda path: os.rename(empty_replacement, path),
+        workspace,
+        repo,
+        universe_path,
+        universe_sha,
+        encoder_checkpoint,
+        encoder_digest,
+        target_b,
+        lambda path: os.rename(empty_replacement, path),
     )
     survivor = os.stat(target_b, follow_symlinks=False)
     assert stat.S_ISDIR(survivor.st_mode) and not target_b.is_symlink(), (
@@ -776,8 +824,14 @@ def _check_inprocess_residual_policy(
     # stat-raises path of the inode binding and the residual policy.
     target_c = workspace / "residual-attack-c"
     _run_attacked_materialisation(
-        workspace, repo, universe_path, universe_sha, encoder_checkpoint, encoder_digest,
-        target_c, lambda path: None,
+        workspace,
+        repo,
+        universe_path,
+        universe_sha,
+        encoder_checkpoint,
+        encoder_digest,
+        target_c,
+        lambda path: None,
     )
     assert not target_c.exists(), "renamed-away pathname must not be recreated"
     moved_c = moved_of(target_c)
@@ -814,15 +868,24 @@ def _check_write_transactions(
         return [
             str(script),
             "materialize",
-            "--repo-root", str(repo),
-            "--source-universe", str(universe_path),
-            "--source-universe-sha256", universe_sha,
-            "--encoder-checkpoint", str(encoder_checkpoint),
-            "--encoder-digest", digest,
-            "--output-dir", str(target),
-            "--model-config", str(model_config),
-            "--encoder-config", str(encoder_config),
-            "--input-current", str(INPUT_CURRENT),
+            "--repo-root",
+            str(repo),
+            "--source-universe",
+            str(universe_path),
+            "--source-universe-sha256",
+            universe_sha,
+            "--encoder-checkpoint",
+            str(encoder_checkpoint),
+            "--encoder-digest",
+            digest,
+            "--output-dir",
+            str(target),
+            "--model-config",
+            str(model_config),
+            "--encoder-config",
+            str(encoder_config),
+            "--input-current",
+            str(INPUT_CURRENT),
         ]
 
     # Real installed wrong-digest cleanup: the owned pathname still binds, so the
@@ -944,15 +1007,24 @@ def _check_cli(
         [
             str(script),
             "materialize",
-            "--repo-root", str(repo),
-            "--source-universe", str(universe_path),
-            "--source-universe-sha256", universe_sha,
-            "--encoder-checkpoint", str(encoder_checkpoint),
-            "--encoder-digest", encoder_digest,
-            "--output-dir", str(cli_output),
-            "--model-config", str(model_config),
-            "--encoder-config", str(encoder_config),
-            "--input-current", "18.0",
+            "--repo-root",
+            str(repo),
+            "--source-universe",
+            str(universe_path),
+            "--source-universe-sha256",
+            universe_sha,
+            "--encoder-checkpoint",
+            str(encoder_checkpoint),
+            "--encoder-digest",
+            encoder_digest,
+            "--output-dir",
+            str(cli_output),
+            "--model-config",
+            str(model_config),
+            "--encoder-config",
+            str(encoder_config),
+            "--input-current",
+            "18.0",
         ],
         cwd=workspace,
         env=environment,
@@ -975,11 +1047,16 @@ def _check_cli(
         [
             str(script),
             "validate-set",
-            "--cue-set", str(api_output / "cue_set.json"),
-            "--cue-set-sha256", set_sha,
-            "--repo-root", str(repo),
-            "--source-universe", str(universe_path),
-            "--source-universe-sha256", universe_sha,
+            "--cue-set",
+            str(api_output / "cue_set.json"),
+            "--cue-set-sha256",
+            set_sha,
+            "--repo-root",
+            str(repo),
+            "--source-universe",
+            str(universe_path),
+            "--source-universe-sha256",
+            universe_sha,
         ],
         cwd=workspace,
         env=environment,
@@ -996,10 +1073,14 @@ def _check_cli(
         [
             str(script),
             "validate-bundle",
-            "--bundle", str(api_output / bundle_ref["path"]),
-            "--bundle-sha256", bundle_ref["sha256"],
-            "--encoder-checkpoint", str(encoder_checkpoint),
-            "--encoder-digest", encoder_digest,
+            "--bundle",
+            str(api_output / bundle_ref["path"]),
+            "--bundle-sha256",
+            bundle_ref["sha256"],
+            "--encoder-checkpoint",
+            str(encoder_checkpoint),
+            "--encoder-digest",
+            encoder_digest,
         ],
         cwd=workspace,
         env=environment,
@@ -1016,8 +1097,10 @@ def _check_cli(
         [
             str(script),
             "validate-set",
-            "--cue-set", str(api_output / "cue_set.json"),
-            "--cue-set-sha256", "0" * 64,
+            "--cue-set",
+            str(api_output / "cue_set.json"),
+            "--cue-set-sha256",
+            "0" * 64,
         ],
         workspace,
         check=False,
@@ -1029,9 +1112,12 @@ def _check_cli(
         [
             str(script),
             "validate-set",
-            "--cue-set", str(api_output / "cue_set.json"),
-            "--cue-set-sha256", set_sha,
-            "--repo-root", str(repo),
+            "--cue-set",
+            str(api_output / "cue_set.json"),
+            "--cue-set-sha256",
+            set_sha,
+            "--repo-root",
+            str(repo),
         ],
         workspace,
         check=False,
@@ -1060,14 +1146,22 @@ def _check_cli_inprocess(
     stdout, _ = _module_cli(
         [
             "materialize",
-            "--repo-root", str(repo),
-            "--source-universe", str(universe_path),
-            "--source-universe-sha256", universe_sha,
-            "--encoder-checkpoint", str(encoder_checkpoint),
-            "--encoder-digest", encoder_digest,
-            "--output-dir", str(workspace / "inprocess-output"),
-            "--model-config", str(model_config),
-            "--encoder-config", str(encoder_config),
+            "--repo-root",
+            str(repo),
+            "--source-universe",
+            str(universe_path),
+            "--source-universe-sha256",
+            universe_sha,
+            "--encoder-checkpoint",
+            str(encoder_checkpoint),
+            "--encoder-digest",
+            encoder_digest,
+            "--output-dir",
+            str(workspace / "inprocess-output"),
+            "--model-config",
+            str(model_config),
+            "--encoder-config",
+            str(encoder_config),
         ],
         0,
     )
@@ -1076,30 +1170,46 @@ def _check_cli_inprocess(
     _, stderr = _module_cli(
         [
             "materialize",
-            "--repo-root", str(near_repo),
-            "--source-universe", str(near_universe_path),
-            "--source-universe-sha256", near_universe_sha,
-            "--encoder-checkpoint", str(encoder_checkpoint),
-            "--encoder-digest", encoder_digest,
-            "--output-dir", str(workspace / "inprocess-near-dup"),
+            "--repo-root",
+            str(near_repo),
+            "--source-universe",
+            str(near_universe_path),
+            "--source-universe-sha256",
+            near_universe_sha,
+            "--encoder-checkpoint",
+            str(encoder_checkpoint),
+            "--encoder-digest",
+            encoder_digest,
+            "--output-dir",
+            str(workspace / "inprocess-near-dup"),
         ],
         2,
     )
     assert "near-duplicate cues" in stderr
     stdout, _ = _module_cli(
-        ["validate-set", "--cue-set", str(api_output / "cue_set.json"),
-         "--cue-set-sha256", set_sha],
+        [
+            "validate-set",
+            "--cue-set",
+            str(api_output / "cue_set.json"),
+            "--cue-set-sha256",
+            set_sha,
+        ],
         0,
     )
     assert json.loads(stdout)["source_verified"] is False
     stdout, _ = _module_cli(
         [
             "validate-set",
-            "--cue-set", str(api_output / "cue_set.json"),
-            "--cue-set-sha256", set_sha,
-            "--repo-root", str(repo),
-            "--source-universe", str(universe_path),
-            "--source-universe-sha256", universe_sha,
+            "--cue-set",
+            str(api_output / "cue_set.json"),
+            "--cue-set-sha256",
+            set_sha,
+            "--repo-root",
+            str(repo),
+            "--source-universe",
+            str(universe_path),
+            "--source-universe-sha256",
+            universe_sha,
         ],
         0,
     )
@@ -1107,9 +1217,12 @@ def _check_cli_inprocess(
     _, stderr = _module_cli(
         [
             "validate-set",
-            "--cue-set", str(api_output / "cue_set.json"),
-            "--cue-set-sha256", set_sha,
-            "--repo-root", str(repo),
+            "--cue-set",
+            str(api_output / "cue_set.json"),
+            "--cue-set-sha256",
+            set_sha,
+            "--repo-root",
+            str(repo),
         ],
         2,
     )
@@ -1122,10 +1235,14 @@ def _check_cli_inprocess(
     stdout, _ = _module_cli(
         [
             "validate-bundle",
-            "--bundle", str(bundle_path),
-            "--bundle-sha256", bundle_sha,
-            "--encoder-checkpoint", str(encoder_checkpoint),
-            "--encoder-digest", encoder_digest,
+            "--bundle",
+            str(bundle_path),
+            "--bundle-sha256",
+            bundle_sha,
+            "--encoder-checkpoint",
+            str(encoder_checkpoint),
+            "--encoder-digest",
+            encoder_digest,
         ],
         0,
     )
@@ -1213,11 +1330,15 @@ def _check_replace_attack(
 ) -> None:
     selected = json.loads(universe_path.read_bytes())["selected"][0]
     original = (repo / selected["path"]).read_bytes()
-    forged = _run(
-        ["git", "hash-object", "-w", "--stdin"],
-        repo,
-        input_bytes=original.replace(b"Record", b"Forged"),
-    ).stdout.decode().strip()
+    forged = (
+        _run(
+            ["git", "hash-object", "-w", "--stdin"],
+            repo,
+            input_bytes=original.replace(b"Record", b"Forged"),
+        )
+        .stdout.decode()
+        .strip()
+    )
     _git(repo, "replace", selected["blob_oid"], forged)
     try:
         _expect(
@@ -1349,12 +1470,18 @@ def _check_cli_default_configs(
         [
             str(script),
             "materialize",
-            "--repo-root", str(repo),
-            "--source-universe", str(universe_path),
-            "--source-universe-sha256", universe_sha,
-            "--encoder-checkpoint", str(encoder_checkpoint),
-            "--encoder-digest", encoder_digest,
-            "--output-dir", str(workspace / "cli-default-out"),
+            "--repo-root",
+            str(repo),
+            "--source-universe",
+            str(universe_path),
+            "--source-universe-sha256",
+            universe_sha,
+            "--encoder-checkpoint",
+            str(encoder_checkpoint),
+            "--encoder-digest",
+            encoder_digest,
+            "--output-dir",
+            str(workspace / "cli-default-out"),
         ],
         cwd=workspace,
         env=environment,
@@ -1490,6 +1617,7 @@ def _check_crafted_manifests(base_bytes: bytes) -> None:
         "cue-set encoder configuration digest mismatch",
         craft(lambda p: p["encoder"].update(config_digest="0" * 64)),
     )
+
     def invalid_encoder_config(payload: dict[str, Any]) -> None:
         payload["encoder"]["config"]["feature_dim"] = float(
             payload["encoder"]["config"]["feature_dim"]
@@ -1535,11 +1663,19 @@ def _check_crafted_manifests(base_bytes: bytes) -> None:
     )
     _expect(
         "calibration block index differs from its record digest",
-        craft(lambda p: record(p).update(calibration_block_index=(record(p)["calibration_block_index"] + 1) % 5)),
+        craft(
+            lambda p: record(p).update(
+                calibration_block_index=(record(p)["calibration_block_index"] + 1) % 5
+            )
+        ),
     )
     _expect(
         "family permutation index differs from its record digest",
-        craft(lambda p: record(p).update(family_permutation_index=(record(p)["family_permutation_index"] + 1) % 24)),
+        craft(
+            lambda p: record(p).update(
+                family_permutation_index=(record(p)["family_permutation_index"] + 1) % 24
+            )
+        ),
     )
 
     def leak_calibration(payload: dict[str, Any]) -> None:
@@ -1584,6 +1720,7 @@ def _check_crafted_manifests(base_bytes: bytes) -> None:
             target[field] = source[field]
 
     _expect("duplicate cue ID across the cue set", craft(duplicate_calibration))
+
     def duplicate_family(payload: dict[str, Any]) -> None:
         base_cue(payload)["transform_family"] = base_cue(payload, 1)["transform_family"]
 
@@ -1702,9 +1839,7 @@ def _craft_bundle(base_bytes: bytes, mutate: Callable[[dict[str, Any]], None]) -
     return _canonical(payload)
 
 
-def _swap_bundle_into_set(
-    destination: Path, payload: dict[str, Any], forged_bundle: bytes
-) -> str:
+def _swap_bundle_into_set(destination: Path, payload: dict[str, Any], forged_bundle: bytes) -> str:
     variant = payload["records"][0]["evaluation_base_cues"][0]["variants"][1]
     bundle_path = destination / variant["bundle"]["path"]
     bundle_path.unlink()
@@ -1713,9 +1848,7 @@ def _swap_bundle_into_set(
     return _reseal_set(destination, payload)
 
 
-def _retarget_calibration(
-    destination: Path, calibration: dict[str, Any], raw: bytes
-) -> None:
+def _retarget_calibration(destination: Path, calibration: dict[str, Any], raw: bytes) -> None:
     calibration["sha256"] = _sha(raw)
     calibration["cue_id"] = _cue_id(calibration["sha256"])
     calibration["path"] = f"cues/{calibration['cue_id']}.txt"
@@ -1783,7 +1916,9 @@ def _check_file_level_attacks(
     base_sha = base_cue["variants"][0]["sha256"]
     family = base_cue["transform_family"]
     for variant in base_cue["variants"]:
-        selected = _selected(family, base_sha, base_cue["token_count"], variant["requested_percent"])
+        selected = _selected(
+            family, base_sha, base_cue["token_count"], variant["requested_percent"]
+        )
         variant["selected_positions"] = selected
         variant["affected_count"] = len(selected)
         variant["realized_fraction"] = len(selected) / base_cue["token_count"]
@@ -2025,9 +2160,7 @@ def _check_crafted_bundles(base_bytes: bytes, input_current: float) -> None:
 
     def _currents(payload: dict[str, Any]) -> tuple[Any, Any, Any]:
         rows = np.frombuffer(base64.b64decode(payload["currents"]["row_base64"]), dtype="<i8")
-        columns = np.frombuffer(
-            base64.b64decode(payload["currents"]["column_base64"]), dtype="<i8"
-        )
+        columns = np.frombuffer(base64.b64decode(payload["currents"]["column_base64"]), dtype="<i8")
         values = np.frombuffer(base64.b64decode(payload["currents"]["value_base64"]), dtype="<f8")
         return rows.copy(), columns.copy(), values.copy()
 
@@ -2093,9 +2226,7 @@ def _check_crafted_bundles(base_bytes: bytes, input_current: float) -> None:
                 return
         raise AssertionError("fixture bundle does not admit the event-move forgery")
 
-    _expect(
-        "cue-bundle per-event active counts differ from the contract", craft(unbalanced_events)
-    )
+    _expect("cue-bundle per-event active counts differ from the contract", craft(unbalanced_events))
 
 
 def _check_bundle_read_surface(workspace: Path, bundle_path: Path, bundle_sha: str) -> None:
@@ -2140,9 +2271,11 @@ def _check_encoder_forgeries(
 
     def swap_embedding_rows(payload: dict[str, Any]) -> None:
         shape = payload["embedding"]["shape"]
-        matrix = np.frombuffer(
-            base64.b64decode(payload["embedding"]["data_base64"]), dtype="<f8"
-        ).reshape(shape[0], shape[1]).copy()
+        matrix = (
+            np.frombuffer(base64.b64decode(payload["embedding"]["data_base64"]), dtype="<f8")
+            .reshape(shape[0], shape[1])
+            .copy()
+        )
         matrix[[0, 1]] = matrix[[1, 0]]
         payload["embedding"]["data_base64"] = base64.b64encode(matrix.tobytes()).decode("ascii")
 
@@ -2154,9 +2287,13 @@ def _check_encoder_forgeries(
     )
 
     def move_latency(payload: dict[str, Any]) -> None:
-        period = payload["encoder"]["config"]["packet_ms"] + payload["encoder"]["config"]["silent_ms"]
+        period = (
+            payload["encoder"]["config"]["packet_ms"] + payload["encoder"]["config"]["silent_ms"]
+        )
         packet = payload["encoder"]["config"]["packet_ms"]
-        rows = np.frombuffer(base64.b64decode(payload["currents"]["row_base64"]), dtype="<i8").copy()
+        rows = np.frombuffer(
+            base64.b64decode(payload["currents"]["row_base64"]), dtype="<i8"
+        ).copy()
         columns = np.frombuffer(
             base64.b64decode(payload["currents"]["column_base64"]), dtype="<i8"
         ).copy()
@@ -2191,9 +2328,7 @@ def _forge_bundle_bytes(
 ) -> bytes:
     events = _split_events(text)
     embedding = adapter.encode(events)
-    currents = embeddings_to_currents(
-        embedding, MODEL, ENCODER_CONFIG, input_current=INPUT_CURRENT
-    )
+    currents = embeddings_to_currents(embedding, MODEL, ENCODER_CONFIG, input_current=INPUT_CURRENT)
     rows, columns = np.nonzero(currents)
     payload = json.loads(json.dumps(template))
     raw_text = text.encode("utf-8")
@@ -2213,9 +2348,9 @@ def _forge_bundle_bytes(
         "shape": [int(currents.shape[0]), int(currents.shape[1])],
         "row_base64": base64.b64encode(rows.astype("<i8").tobytes()).decode("ascii"),
         "column_base64": base64.b64encode(columns.astype("<i8").tobytes()).decode("ascii"),
-        "value_base64": base64.b64encode(
-            currents[rows, columns].astype("<f8").tobytes()
-        ).decode("ascii"),
+        "value_base64": base64.b64encode(currents[rows, columns].astype("<f8").tobytes()).decode(
+            "ascii"
+        ),
     }
     payload["self_sha256"] = _self_digest(payload, BUNDLE_DOMAIN)
     return _canonical(payload)
@@ -2322,9 +2457,10 @@ def _check_shifted_repo(
     )
     shifted_payload = json.loads((shifted_output / "cue_set.json").read_bytes())
     assert result.file_sha256 == _sha((shifted_output / "cue_set.json").read_bytes())
-    assert shifted_payload["source_universe"]["repository_head"] != happy_payload[
-        "source_universe"
-    ]["repository_head"]
+    assert (
+        shifted_payload["source_universe"]["repository_head"]
+        != happy_payload["source_universe"]["repository_head"]
+    )
 
     shared_ids = {record["record_id"] for record in happy_payload["records"]} & {
         record["record_id"] for record in shifted_payload["records"]
@@ -2339,9 +2475,7 @@ def _check_shifted_repo(
             identity.append((record["record_id"], record["calibration_cue"]["cue_id"]))
             for base_cue in record["evaluation_base_cues"]:
                 for variant in base_cue["variants"]:
-                    identity.append(
-                        (record["record_id"], variant["variant_id"], variant["sha256"])
-                    )
+                    identity.append((record["record_id"], variant["variant_id"], variant["sha256"]))
         return identity
 
     shared_happy = cue_identity(happy_payload)

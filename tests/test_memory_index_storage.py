@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
-from REMANENTIA.memory_index_storage import (  # type: ignore[import]
+from memory_index_storage import (
     embedding_sidecar_path,
     load_content_hashes,
     load_index_data,

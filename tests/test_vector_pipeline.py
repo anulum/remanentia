@@ -75,9 +75,7 @@ def _built_memory_index() -> MemoryIndex:
     return memory
 
 
-def _configure_real_memory_storage(
-    monkeypatch: MonkeyPatch, tmp_path: Path
-) -> tuple[Path, Path]:
+def _configure_real_memory_storage(monkeypatch: MonkeyPatch, tmp_path: Path) -> tuple[Path, Path]:
     source_dir = tmp_path / "memory"
     source_dir.mkdir()
     index_path = tmp_path / "state" / "memory_index.json.gz"
@@ -149,9 +147,7 @@ class TestLoadOrBuildMemoryIndex:
         assert result.search("alpha persisted", top_k=1) == []
         assert index_path.stat().st_mtime_ns > saved_mtime
 
-    def test_builds_when_no_cache_exists(
-        self, monkeypatch: MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_builds_when_no_cache_exists(self, monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
         source_dir, index_path = _configure_real_memory_storage(monkeypatch, tmp_path)
         _write_memory_source(
             source_dir / "memory.md",
@@ -257,9 +253,7 @@ class TestManifestResilience:
         # atomic_write_text cleans up its own tmpfile — no debris left behind.
         assert list(tmp_path.glob("*.tmp")) == []
 
-    def test_refresh_rebuilds_instead_of_raising_on_corrupt_manifest(
-        self, tmp_path: Path
-    ) -> None:
+    def test_refresh_rebuilds_instead_of_raising_on_corrupt_manifest(self, tmp_path: Path) -> None:
         index_dir = tmp_path / "vec"
         provider = KeywordEmbeddingProvider()
         # First refresh builds the index and writes a valid manifest.

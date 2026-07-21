@@ -405,9 +405,7 @@ def handle_recall(
                     snippet = note.content[:300]
                     if snippet[:100] not in seen_snippets:
                         seen_snippets.add(snippet[:100])
-                        parts.append(
-                            f"[knowledge] {note.title} (type={note.note_type})\n{snippet}"
-                        )
+                        parts.append(f"[knowledge] {note.title} (type={note.note_type})\n{snippet}")
             except Exception:  # pragma: no cover
                 log.debug("Knowledge graph recall failed", exc_info=True)
 

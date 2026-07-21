@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from REMANENTIA.retrieval_cache_io import (
+from retrieval_cache_io import (
     QueryFeatureCache,
     load_json_gz,
     load_npz_dict,

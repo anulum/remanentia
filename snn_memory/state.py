@@ -63,9 +63,7 @@ def initialise_weights(config: ModelConfig, seed: int) -> tuple[FloatArray, Bool
     rng = np.random.default_rng(seed)
     topology = rng.random((config.n_neurons, config.n_neurons)) < config.connectivity
     np.fill_diagonal(topology, False)
-    weights: FloatArray = np.zeros(
-        (config.n_neurons, config.n_neurons), dtype=np.float64
-    )
+    weights: FloatArray = np.zeros((config.n_neurons, config.n_neurons), dtype=np.float64)
     excitatory = rng.uniform(0.05, 0.2, size=weights.shape)
     inhibitory = -rng.uniform(0.05, 0.2, size=weights.shape)
     weights[: config.n_excitatory] = excitatory[: config.n_excitatory]

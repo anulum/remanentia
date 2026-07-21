@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from REMANENTIA.retrieval_text import (
+from retrieval_text import (
     bigrams,
     build_idf,
     expand_query,

@@ -118,9 +118,7 @@ class TestLoopClosure:
             now=0.0,
         )
         # Same text, different agent — must not close agentA's loop.
-        used = t.note_text(
-            "incremental vector index reuse content hash", "agentB", ledger, now=1.0
-        )
+        used = t.note_text("incremental vector index reuse content hash", "agentB", ledger, now=1.0)
         assert used == []
         assert _usage(ledger) == {"e1": None}
         assert t.pending_count == 1
@@ -145,9 +143,7 @@ class TestLoopClosure:
             ["totally unrelated alpha beta gamma", "incremental vector index reuse content hash"],
             now=0.0,
         )
-        used = t.note_text(
-            "incremental vector index reuse content hash", "agentA", ledger, now=1.0
-        )
+        used = t.note_text("incremental vector index reuse content hash", "agentA", ledger, now=1.0)
         assert used == [event_id]
         assert _usage(ledger) == {"e1": True}
 

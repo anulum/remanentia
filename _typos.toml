@@ -26,3 +26,10 @@ caf = "caf"
 aded = "aded"
 # variable names in rust_answer_normalizer: py/pn = predicted yes/no
 pn = "pn"
+# domain abbreviations used by the memory implementation
+inh = "inh"
+runn = "runn"
+# NumPy exposes the historical ``flags.writeable`` spelling.
+writeable = "writeable"
+# Expected output of the deliberately simple suffix stemmer.
+comput = "comput"

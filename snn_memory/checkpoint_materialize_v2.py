@@ -73,7 +73,11 @@ BoolArray = npt.NDArray[np.bool_]
 _ALLOWED_CONDITIONS = ("trained", "shuffled", "random", "zero", "untrained")
 _CONTROL_CONDITIONS = ("shuffled", "random", "zero")
 _FORBIDDEN_CONDITIONS = (
-    "encoder-only", "temporal-order-permuted", "leave-one-record-out", "G1-BG", "G1-STATE",
+    "encoder-only",
+    "temporal-order-permuted",
+    "leave-one-record-out",
+    "G1-BG",
+    "G1-STATE",
 )
 
 
@@ -86,7 +90,9 @@ def _sha(raw: bytes) -> str:
 
 
 def _is_sha256(value: Any) -> bool:
-    return isinstance(value, str) and len(value) == 64 and all(c in "0123456789abcdef" for c in value)
+    return (
+        isinstance(value, str) and len(value) == 64 and all(c in "0123456789abcdef" for c in value)
+    )
 
 
 def _canonical_json_bytes(value: Any) -> bytes:
@@ -154,8 +160,13 @@ def _fresh_state(model: ModelConfig) -> StateArrays:
     )
 
 
-def _stream_inputs(model: ModelConfig, weights: FloatArray, topology: BoolArray,
-                   packets: FloatArray, state: StateArrays) -> StreamInputs:
+def _stream_inputs(
+    model: ModelConfig,
+    weights: FloatArray,
+    topology: BoolArray,
+    packets: FloatArray,
+    state: StateArrays,
+) -> StreamInputs:
     return StreamInputs(
         voltage_mv=np.ascontiguousarray(state.voltage_mv, dtype=np.float64),
         refractory_steps=np.ascontiguousarray(state.refractory_steps, dtype=np.uint32),
@@ -208,8 +219,13 @@ def _initial_weights(model: ModelConfig, seed: int) -> tuple[FloatArray, BoolArr
     return initialise_weights(model, seed)
 
 
-def _encode_events(encoder_module: Any, model: ModelConfig, encoder_config: EncoderConfig,
-                   text: str, input_current: float) -> FloatArray:
+def _encode_events(
+    encoder_module: Any,
+    model: ModelConfig,
+    encoder_config: EncoderConfig,
+    text: str,
+    input_current: float,
+) -> FloatArray:
     events = split_events(text)
     if not events:
         raise MaterializeError("training or calibration text yields no events")
@@ -222,8 +238,9 @@ def _encode_events(encoder_module: Any, model: ModelConfig, encoder_config: Enco
     return current
 
 
-def _completion_raster(result: StreamResult, cue_steps: int, completion_steps: int,
-                       n_neurons: int) -> BoolArray:
+def _completion_raster(
+    result: StreamResult, cue_steps: int, completion_steps: int, n_neurons: int
+) -> BoolArray:
     raster = np.zeros((completion_steps, n_neurons), dtype=np.bool_)
     for step in range(completion_steps):
         timestep = cue_steps + step
@@ -261,7 +278,9 @@ def _open_dir_from_root(path: Path, label: str) -> int:
             try:
                 nxt = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=current)
             except OSError as error:
-                raise MaterializeError(f"{label} parent {part!r} cannot be opened safely") from error
+                raise MaterializeError(
+                    f"{label} parent {part!r} cannot be opened safely"
+                ) from error
             os.close(current)
             current = nxt
     except BaseException:
@@ -328,10 +347,14 @@ def _git(repo: Path, arguments: list[str]) -> bytes:
     # otherwise inflate the supervised process-group concurrency count.
     process = subprocess.run(
         ["git", "-C", str(repo), "-c", "gc.auto=0", *arguments],
-        capture_output=True, check=False, env=_thread_capped_env(),
+        capture_output=True,
+        check=False,
+        env=_thread_capped_env(),
     )
     if process.returncode != 0:
-        raise MaterializeError(f"git {' '.join(arguments)} failed: {process.stderr.decode('utf-8')}")
+        raise MaterializeError(
+            f"git {' '.join(arguments)} failed: {process.stderr.decode('utf-8')}"
+        )
     return process.stdout
 
 
@@ -356,24 +379,62 @@ def _le_bytes(array: npt.NDArray[Any], dtype: str) -> bytes:
 
 
 def _reject_evaluation_roles(config: Mapping[str, Any]) -> None:
-    forbidden = ("evaluation_cues", "evaluation_base_cues", "expected_answers",
-                 "expected_record_id", "expected_record_ids", "answer_key")
+    forbidden = (
+        "evaluation_cues",
+        "evaluation_base_cues",
+        "expected_answers",
+        "expected_record_id",
+        "expected_record_ids",
+        "answer_key",
+    )
     for key in forbidden:
         if key in config:
             raise MaterializeError(f"D4-A rejects the evaluation/expected-answer field {key!r}")
 
 
-_CONFIG_KEYS = frozenset({
-    "abstention_threshold", "backend_build_digest", "backend_version", "bank_schema_sha256",
-    "calibration_spec_digest", "checkpoint_schema_sha256", "completion_steps", "condition",
-    "crate_version", "cue_set", "d1", "d1_file_sha256", "d2_file_sha256", "development_artifact_digest",
-    "dirty_tree_digest", "encoder_checkpoint", "encoder_config", "encoder_config_digest",
-    "encoder_digest", "encoder_locator", "epochs", "experiment_digest", "experiment_lock_module_sha256",
-    "experiment_lock_schema_sha256", "extension_sha256", "gb_preflight_module_sha256", "input_current",
-    "materializer_module_sha256", "metric", "model_config_digest", "output", "patch_digest",
-    "python_wheel_sha256", "repo", "repository_head", "rust_wheel_sha256", "seed", "task_set_digest",
-    "trained_bundle",
-})
+_CONFIG_KEYS = frozenset(
+    {
+        "abstention_threshold",
+        "backend_build_digest",
+        "backend_version",
+        "bank_schema_sha256",
+        "calibration_spec_digest",
+        "checkpoint_schema_sha256",
+        "completion_steps",
+        "condition",
+        "crate_version",
+        "cue_set",
+        "d1",
+        "d1_file_sha256",
+        "d2_file_sha256",
+        "development_artifact_digest",
+        "dirty_tree_digest",
+        "encoder_checkpoint",
+        "encoder_config",
+        "encoder_config_digest",
+        "encoder_digest",
+        "encoder_locator",
+        "epochs",
+        "experiment_digest",
+        "experiment_lock_module_sha256",
+        "experiment_lock_schema_sha256",
+        "extension_sha256",
+        "gb_preflight_module_sha256",
+        "input_current",
+        "materializer_module_sha256",
+        "metric",
+        "model_config_digest",
+        "output",
+        "patch_digest",
+        "python_wheel_sha256",
+        "repo",
+        "repository_head",
+        "rust_wheel_sha256",
+        "seed",
+        "task_set_digest",
+        "trained_bundle",
+    }
+)
 
 
 def _strict_config(path: Path) -> dict[str, Any]:
@@ -392,8 +453,9 @@ def _strict_config(path: Path) -> dict[str, Any]:
         return seen
 
     try:
-        value = json.loads(raw.decode("utf-8"), parse_constant=reject_constant,
-                           object_pairs_hook=reject_duplicates)
+        value = json.loads(
+            raw.decode("utf-8"), parse_constant=reject_constant, object_pairs_hook=reject_duplicates
+        )
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise MaterializeError("config is not strict UTF-8 JSON") from error
     if not isinstance(value, dict):
@@ -427,8 +489,9 @@ class PreparedInputs:
     repository_head: str
 
 
-def _prepare_inputs(config: Mapping[str, Any], encoder_module: Any,
-                    need_training_currents: bool) -> PreparedInputs:
+def _prepare_inputs(
+    config: Mapping[str, Any], encoder_module: Any, need_training_currents: bool
+) -> PreparedInputs:
     """Authenticate D1 once, cross-bind D2, and build disjoint training/calibration currents.
 
     Plastic-training currents come from the complete authenticated D1 Git-record events in the
@@ -450,33 +513,64 @@ def _prepare_inputs(config: Mapping[str, Any], encoder_module: Any,
     cue_absolute = cue_path if cue_path.is_absolute() else Path.cwd() / cue_path
     d2_dir_fd = _open_dir_from_root(cue_absolute.parent, "D2 cue set")
     try:
-        return _prepare_from_captured(config, encoder_module, need_training_currents, d1, d1_raw,
-                                      d1_file_sha, d1_self, head, repo, d2_dir_fd, cue_absolute.name)
+        return _prepare_from_captured(
+            config,
+            encoder_module,
+            need_training_currents,
+            d1,
+            d1_raw,
+            d1_file_sha,
+            d1_self,
+            head,
+            repo,
+            d2_dir_fd,
+            cue_absolute.name,
+        )
     finally:
         os.close(d2_dir_fd)
 
 
-def _prepare_from_captured(config: Mapping[str, Any], encoder_module: Any, need_training_currents: bool,
-                          d1: Any, d1_raw: bytes, d1_file_sha: str, d1_self: str, head: str,
-                          repo: Path, d2_dir_fd: int, cue_name: str) -> PreparedInputs:
+def _prepare_from_captured(
+    config: Mapping[str, Any],
+    encoder_module: Any,
+    need_training_currents: bool,
+    d1: Any,
+    d1_raw: bytes,
+    d1_file_sha: str,
+    d1_self: str,
+    head: str,
+    repo: Path,
+    d2_dir_fd: int,
+    cue_name: str,
+) -> PreparedInputs:
     from snn_memory.v2_contracts import normalize_cue_text
 
     cue_raw = _read_at(d2_dir_fd, cue_name, "D2 cue set")
     cue = validate_cue_set_bytes(cue_raw, expected_file_sha256=str(config["d2_file_sha256"]))
     source = cue.payload["source_universe"]
-    if (str(source["file_sha256"]) != d1_file_sha
-            or str(source["payload_self_sha256"]) != d1_self
-            or str(source["repository_head"]) != head
-            or list(source["selected_record_ids"]) != list(d1.payload["selected_record_ids"])):
+    if (
+        str(source["file_sha256"]) != d1_file_sha
+        or str(source["payload_self_sha256"]) != d1_self
+        or str(source["repository_head"]) != head
+        or list(source["selected_record_ids"]) != list(d1.payload["selected_record_ids"])
+    ):
         raise MaterializeError("cue set does not cross-bind the exact D1 artifact and HEAD")
     model = _model_from_config(cue.payload["model"]["config"])
     encoder_config = EncoderConfig(**dict(cue.payload["encoder"]["config"]))
     input_current = float(cue.payload["model"]["input_current"])
     if canonical_config_digest(model.to_dict()) != str(config["model_config_digest"]):
-        raise MaterializeError("declared model-config digest differs from the D2 model configuration")
-    if canonical_config_digest(dict(cue.payload["encoder"]["config"])) != str(config["encoder_config_digest"]):
-        raise MaterializeError("declared encoder-config digest differs from the D2 encoder configuration")
-    if canonical_config_digest(dict(config["encoder_config"])) != str(config["encoder_config_digest"]):
+        raise MaterializeError(
+            "declared model-config digest differs from the D2 model configuration"
+        )
+    if canonical_config_digest(dict(cue.payload["encoder"]["config"])) != str(
+        config["encoder_config_digest"]
+    ):
+        raise MaterializeError(
+            "declared encoder-config digest differs from the D2 encoder configuration"
+        )
+    if canonical_config_digest(dict(config["encoder_config"])) != str(
+        config["encoder_config_digest"]
+    ):
         raise MaterializeError("declared encoder config differs from its declared digest")
     if float(config["input_current"]) != input_current:
         raise MaterializeError("declared input current differs from the D2 model input current")
@@ -488,7 +582,9 @@ def _prepare_from_captured(config: Mapping[str, Any], encoder_module: Any, need_
     if int(cue.payload["model"]["n_neurons"]) != model.n_neurons:
         raise MaterializeError("D2 model neuron count differs from its configuration")
 
-    cue_by_id = {str(record["record_id"]): record["calibration_cue"] for record in cue.payload["records"]}
+    cue_by_id = {
+        str(record["record_id"]): record["calibration_cue"] for record in cue.payload["records"]
+    }
     encoder_identity = str(cue.payload["encoder"]["identity"])
     encoder_directory_digest = str(cue.payload["encoder"]["directory_sha256"])
     # Lock-family convention (canonical_config_digest), proven equal to the D2-carried
@@ -515,75 +611,117 @@ def _prepare_from_captured(config: Mapping[str, Any], encoder_module: Any, need_
         if len(events) != int(record["event_count"]):
             raise MaterializeError(f"D1 record {rid} event count differs from its binding")
         order_digest, hashes = _event_order(events)
-        if order_digest != str(record["event_order_digest"]) or hashes != list(record["event_sha256"]):
+        if order_digest != str(record["event_order_digest"]) or hashes != list(
+            record["event_sha256"]
+        ):
             raise MaterializeError(f"D1 record {rid} event hashes differ from its binding")
         if need_training_currents:
             training_currents.append(
-                _encode_events(encoder_module, model, encoder_config, text, input_current))
+                _encode_events(encoder_module, model, encoder_config, text, input_current)
+            )
         training_digests.append({"record_id": rid, "digest": str(record["content_sha256"])})
 
         calibration = cue_by_id[rid]
         indices = [int(index) for index in calibration["event_indices"]]
         block_text = _block_text([events[index] for index in indices])
         if _sha(block_text.encode("utf-8")) != str(calibration["sha256"]):
-            raise MaterializeError(f"re-derived calibration block for {rid} differs from the cue digest")
-        cue_bytes = _read_relative_at(d2_dir_fd, str(calibration["path"]), f"calibration cue for {rid}")
+            raise MaterializeError(
+                f"re-derived calibration block for {rid} differs from the cue digest"
+            )
+        cue_bytes = _read_relative_at(
+            d2_dir_fd, str(calibration["path"]), f"calibration cue for {rid}"
+        )
         if _sha(cue_bytes) != str(calibration["sha256"]) or cue_bytes.decode("utf-8") != block_text:
-            raise MaterializeError(f"calibration cue file for {rid} differs from the re-derived block")
+            raise MaterializeError(
+                f"calibration cue file for {rid} differs from the re-derived block"
+            )
         if len(block_text.split("\n")) != len(indices):
-            raise MaterializeError(f"calibration cue line count for {rid} differs from the event indices")
-        if _sha(normalize_cue_text(block_text).encode("utf-8")) != str(calibration["normalized_text_sha256"]):
-            raise MaterializeError(f"calibration cue normalized digest for {rid} differs from its binding")
+            raise MaterializeError(
+                f"calibration cue line count for {rid} differs from the event indices"
+            )
+        if _sha(normalize_cue_text(block_text).encode("utf-8")) != str(
+            calibration["normalized_text_sha256"]
+        ):
+            raise MaterializeError(
+                f"calibration cue normalized digest for {rid} differs from its binding"
+            )
         current = np.ascontiguousarray(
-            _encode_events(encoder_module, model, encoder_config, block_text, input_current), dtype="<f8")
+            _encode_events(encoder_module, model, encoder_config, block_text, input_current),
+            dtype="<f8",
+        )
         calibration_currents.append(current)
         calibration_digests.append({"record_id": rid, "digest": str(calibration["sha256"])})
-        calibration_evidence.append({
-            "record_id": rid,
-            "source_cue_sha256": str(calibration["sha256"]),
-            "current_semantic_digest": bundle.checkpoint_component_digest("calibration_current", "<f8", current),
-            "dtype": "<f8",
-            "shape": [int(current.shape[0]), int(current.shape[1])],
-            "input_current": input_current,
-            "encoder_identity": encoder_identity,
-            "encoder_directory_digest": encoder_directory_digest,
-            "encoder_config_digest": encoder_config_digest,
-            "model_config_digest": model_config_digest,
-        })
+        calibration_evidence.append(
+            {
+                "record_id": rid,
+                "source_cue_sha256": str(calibration["sha256"]),
+                "current_semantic_digest": bundle.checkpoint_component_digest(
+                    "calibration_current", "<f8", current
+                ),
+                "dtype": "<f8",
+                "shape": [int(current.shape[0]), int(current.shape[1])],
+                "input_current": input_current,
+                "encoder_identity": encoder_identity,
+                "encoder_directory_digest": encoder_directory_digest,
+                "encoder_config_digest": encoder_config_digest,
+                "model_config_digest": model_config_digest,
+            }
+        )
         ids.append(rid)
 
     return PreparedInputs(
-        ids=tuple(ids), training_currents=tuple(training_currents),
-        calibration_currents=tuple(calibration_currents), model=model, encoder_config=encoder_config,
-        input_current=input_current, training_source_digests=tuple(training_digests),
+        ids=tuple(ids),
+        training_currents=tuple(training_currents),
+        calibration_currents=tuple(calibration_currents),
+        model=model,
+        encoder_config=encoder_config,
+        input_current=input_current,
+        training_source_digests=tuple(training_digests),
         calibration_cue_digests=tuple(calibration_digests),
         calibration_evidence=tuple(calibration_evidence),
-        d1_file_sha256=d1_file_sha, d1_payload_self_sha256=d1_self, repository_head=head,
+        d1_file_sha256=d1_file_sha,
+        d1_payload_self_sha256=d1_self,
+        repository_head=head,
     )
 
 
-def _train_checkpoint(backend: StreamBackend, model: ModelConfig, seed: int,
-                      currents: Sequence[FloatArray], epochs: int, ids: Sequence[str]
-                      ) -> tuple[FloatArray, BoolArray, StateArrays, list[dict[str, Any]]]:
+def _train_checkpoint(
+    backend: StreamBackend,
+    model: ModelConfig,
+    seed: int,
+    currents: Sequence[FloatArray],
+    epochs: int,
+    ids: Sequence[str],
+) -> tuple[FloatArray, BoolArray, StateArrays, list[dict[str, Any]]]:
     from snn_memory.state import validate_weights
 
     weights, topology = _initial_weights(model, seed)
     schedule: list[dict[str, Any]] = []
     final_state = _fresh_state(model)
     for epoch in range(epochs):
-        permutation = np.random.default_rng(np.random.SeedSequence([seed, epoch])).permutation(len(currents))
+        permutation = np.random.default_rng(np.random.SeedSequence([seed, epoch])).permutation(
+            len(currents)
+        )
         for position, index in enumerate(permutation):
             record = int(index)
             timesteps = int(currents[record].shape[0])
             result = backend.run(
                 _stream_inputs(model, weights, topology, currents[record], _fresh_state(model)),
-                timesteps, True, model,
+                timesteps,
+                True,
+                model,
             )
             weights = np.ascontiguousarray(result.final_weights, dtype=np.float64)
             validate_weights(weights, topology, model)
             final_state = _result_state(result)
-            schedule.append({"epoch": epoch, "record_id": str(ids[record]),
-                             "replay_position": int(position), "timesteps": timesteps})
+            schedule.append(
+                {
+                    "epoch": epoch,
+                    "record_id": str(ids[record]),
+                    "replay_position": int(position),
+                    "timesteps": timesteps,
+                }
+            )
     return weights, topology, final_state, schedule
 
 
@@ -608,9 +746,14 @@ def _control_identity_expectations(config: Mapping[str, Any], ids: Sequence[str]
     }
 
 
-def _control_inputs(trained_dir: Path, model: ModelConfig, seed: int, condition: str,
-                    config: Mapping[str, Any], ids: Sequence[str]
-                    ) -> tuple[FloatArray, BoolArray, StateArrays, list[dict[str, Any]], int]:
+def _control_inputs(
+    trained_dir: Path,
+    model: ModelConfig,
+    seed: int,
+    condition: str,
+    config: Mapping[str, Any],
+    ids: Sequence[str],
+) -> tuple[FloatArray, BoolArray, StateArrays, list[dict[str, Any]], int]:
     from snn_memory.state import validate_weights
 
     trained = read_checkpoint_bundle_v2(trained_dir)
@@ -623,7 +766,9 @@ def _control_inputs(trained_dir: Path, model: ModelConfig, seed: int, condition:
         if identities.get(key) != value:
             raise MaterializeError(f"trained bundle {key} differs from the control configuration")
     if tuple(trained.manifest["ordered_record_ids"]) != tuple(ids):
-        raise MaterializeError("trained bundle record order differs from the control candidate order")
+        raise MaterializeError(
+            "trained bundle record order differs from the control candidate order"
+        )
     weights = np.ascontiguousarray(trained.inputs.weights, dtype=np.float64)
     topology = np.ascontiguousarray(trained.inputs.topology, dtype=np.bool_)
     control = np.ascontiguousarray(
@@ -631,14 +776,25 @@ def _control_inputs(trained_dir: Path, model: ModelConfig, seed: int, condition:
     )
     validate_weights(control, topology, model)
     schedule = [dict(entry) for entry in trained.inputs.replay_schedule]
-    return (control, topology, trained.inputs.training_final_state, schedule,
-            int(trained.manifest["epochs_completed"]))
+    return (
+        control,
+        topology,
+        trained.inputs.training_final_state,
+        schedule,
+        int(trained.manifest["epochs_completed"]),
+    )
 
 
-def _calibrate_candidates(config: Mapping[str, Any], worker_dir: Path, model: ModelConfig,
-                          weights: FloatArray, topology: BoolArray, cue_currents: Sequence[FloatArray],
-                          ids: Sequence[str], completion_steps: int
-                          ) -> tuple[FloatArray, list[int], list[dict[str, Any]]]:
+def _calibrate_candidates(
+    config: Mapping[str, Any],
+    worker_dir: Path,
+    model: ModelConfig,
+    weights: FloatArray,
+    topology: BoolArray,
+    cue_currents: Sequence[FloatArray],
+    ids: Sequence[str],
+    completion_steps: int,
+) -> tuple[FloatArray, list[int], list[dict[str, Any]]]:
     worker_dir.mkdir(parents=True, exist_ok=True)
     weights_bytes = _le_bytes(weights, "<f8")
     topology_bytes = _le_bytes(topology, "|b1")
@@ -646,7 +802,11 @@ def _calibrate_candidates(config: Mapping[str, Any], worker_dir: Path, model: Mo
     (worker_dir / "weights.bin").write_bytes(weights_bytes)
     (worker_dir / "topology.bin").write_bytes(topology_bytes)
     (worker_dir / "model_config.json").write_bytes(model_bytes)
-    weights_digest, topology_digest_hex, model_digest = _sha(weights_bytes), _sha(topology_bytes), _sha(model_bytes)
+    weights_digest, topology_digest_hex, model_digest = (
+        _sha(weights_bytes),
+        _sha(topology_bytes),
+        _sha(model_bytes),
+    )
     n = model.n_neurons
     signatures = np.empty((len(ids), 8 * n), dtype="<f8")
     fresh_pre_digest = _state_signature(_fresh_state(model))
@@ -662,46 +822,83 @@ def _calibrate_candidates(config: Mapping[str, Any], worker_dir: Path, model: Mo
         cue_digest = _sha(cue_bytes)
         nonce = os.urandom(16).hex()
         argv = [
-            sys.executable, "-m", "snn_memory.checkpoint_materialize_v2", "_calibrate",
-            "--weights", str(worker_dir / "weights.bin"), "--weights-digest", weights_digest,
-            "--topology", str(worker_dir / "topology.bin"), "--topology-digest", topology_digest_hex,
-            "--cue", str(cue_path), "--cue-digest", cue_digest,
-            "--model-config", str(worker_dir / "model_config.json"), "--model-config-digest", model_digest,
-            "--record-id", str(ids[index]), "--nonce", nonce,
-            "--completion-steps", str(completion_steps),
-            "--extension-sha256", str(config["extension_sha256"]),
-            "--crate-version", str(config["crate_version"]),
-            "--backend-build-digest", str(config["backend_build_digest"]),
+            sys.executable,
+            "-m",
+            "snn_memory.checkpoint_materialize_v2",
+            "_calibrate",
+            "--weights",
+            str(worker_dir / "weights.bin"),
+            "--weights-digest",
+            weights_digest,
+            "--topology",
+            str(worker_dir / "topology.bin"),
+            "--topology-digest",
+            topology_digest_hex,
+            "--cue",
+            str(cue_path),
+            "--cue-digest",
+            cue_digest,
+            "--model-config",
+            str(worker_dir / "model_config.json"),
+            "--model-config-digest",
+            model_digest,
+            "--record-id",
+            str(ids[index]),
+            "--nonce",
+            nonce,
+            "--completion-steps",
+            str(completion_steps),
+            "--extension-sha256",
+            str(config["extension_sha256"]),
+            "--crate-version",
+            str(config["crate_version"]),
+            "--backend-build-digest",
+            str(config["backend_build_digest"]),
         ]
-        process = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment)
+        process = subprocess.Popen(
+            argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment
+        )
         stdout, stderr = process.communicate()
         if process.returncode != 0:
             raise MaterializeError(f"calibration worker failed: {stderr.decode('utf-8')}")
         if stderr != b"":
-            raise MaterializeError(f"calibration worker emitted stray stderr: {stderr.decode('utf-8')[:500]!r}")
+            raise MaterializeError(
+                f"calibration worker emitted stray stderr: {stderr.decode('utf-8')[:500]!r}"
+            )
         report = _parse_worker_report(stdout)
         try:
             raster_raw = base64.b64decode(report["raster_b64"], validate=True)
         except (ValueError, TypeError) as error:
             raise MaterializeError("calibration worker raster is not valid base64") from error
         if len(raster_raw) != completion_steps * n:
-            raise MaterializeError("calibration worker raster byte length differs from the completion window")
+            raise MaterializeError(
+                "calibration worker raster byte length differs from the completion window"
+            )
         if bool(np.any(np.frombuffer(raster_raw, dtype=np.uint8) > 1)):
             raise MaterializeError("calibration worker raster carries a byte outside {0, 1}")
         raster = np.frombuffer(raster_raw, dtype="|b1").reshape(completion_steps, n)
         expected = {
-            "pid": process.pid, "record_id": str(ids[index]), "cue_digest": cue_digest, "nonce": nonce,
-            "weights_digest": weights_digest, "final_weights_digest": weights_digest,
+            "pid": process.pid,
+            "record_id": str(ids[index]),
+            "cue_digest": cue_digest,
+            "nonce": nonce,
+            "weights_digest": weights_digest,
+            "final_weights_digest": weights_digest,
             "topology_digest": topology_digest_hex,
-            "model_config_digest": model_digest, "completion_steps": completion_steps,
-            "extension_sha256": str(config["extension_sha256"]), "crate_version": str(config["crate_version"]),
+            "model_config_digest": model_digest,
+            "completion_steps": completion_steps,
+            "extension_sha256": str(config["extension_sha256"]),
+            "crate_version": str(config["crate_version"]),
             "backend_build_digest": str(config["backend_build_digest"]),
-            "pre_state_digest": fresh_pre_digest, "shape": [completion_steps, n],
+            "pre_state_digest": fresh_pre_digest,
+            "shape": [completion_steps, n],
             "raster_digest": _sha(_le_bytes(raster, "|b1")),
         }
         for key, value in expected.items():
             if report.get(key) != value:
-                raise MaterializeError(f"calibration worker report field {key!r} is not bound to its input")
+                raise MaterializeError(
+                    f"calibration worker report field {key!r} is not bound to its input"
+                )
         if not _is_sha256(report["post_state_digest"]):
             raise MaterializeError("calibration worker post-state digest is not a sha256 digest")
         if process.pid in pids or nonce in nonces:
@@ -709,24 +906,46 @@ def _calibrate_candidates(config: Mapping[str, Any], worker_dir: Path, model: Mo
         pids.add(process.pid)
         nonces.add(nonce)
         ordered_pids.append(process.pid)
-        evidence.append({
-            "record_id": str(ids[index]), "worker_pid": int(process.pid), "nonce": nonce,
-            "pre_state_digest": fresh_pre_digest, "post_state_digest": str(report["post_state_digest"]),
-            "input_weights_digest": weights_digest, "final_weights_digest": weights_digest,
-            "topology_digest": topology_digest_hex, "cue_digest": cue_digest,
-            "backend_build_digest": str(config["backend_build_digest"]),
-            "raster_digest": str(report["raster_digest"]),
-        })
+        evidence.append(
+            {
+                "record_id": str(ids[index]),
+                "worker_pid": int(process.pid),
+                "nonce": nonce,
+                "pre_state_digest": fresh_pre_digest,
+                "post_state_digest": str(report["post_state_digest"]),
+                "input_weights_digest": weights_digest,
+                "final_weights_digest": weights_digest,
+                "topology_digest": topology_digest_hex,
+                "cue_digest": cue_digest,
+                "backend_build_digest": str(config["backend_build_digest"]),
+                "raster_digest": str(report["raster_digest"]),
+            }
+        )
         signatures[index] = bank.temporal_signature_v2(raster, completion_steps, n)
     return signatures, ordered_pids, evidence
 
 
-_WORKER_REPORT_KEYS = frozenset({
-    "pid", "record_id", "cue_digest", "nonce", "weights_digest", "final_weights_digest",
-    "topology_digest", "model_config_digest", "completion_steps", "extension_sha256", "crate_version",
-    "backend_build_digest", "pre_state_digest", "post_state_digest", "shape",
-    "raster_digest", "raster_b64",
-})
+_WORKER_REPORT_KEYS = frozenset(
+    {
+        "pid",
+        "record_id",
+        "cue_digest",
+        "nonce",
+        "weights_digest",
+        "final_weights_digest",
+        "topology_digest",
+        "model_config_digest",
+        "completion_steps",
+        "extension_sha256",
+        "crate_version",
+        "backend_build_digest",
+        "pre_state_digest",
+        "post_state_digest",
+        "shape",
+        "raster_digest",
+        "raster_b64",
+    }
+)
 
 
 def _parse_worker_report(stdout: bytes) -> dict[str, Any]:
@@ -743,7 +962,9 @@ def _parse_worker_report(stdout: bytes) -> dict[str, Any]:
 
     try:
         report = json.loads(
-            stdout.decode("utf-8"), parse_constant=reject_constant, object_pairs_hook=reject_duplicates
+            stdout.decode("utf-8"),
+            parse_constant=reject_constant,
+            object_pairs_hook=reject_duplicates,
         )
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise MaterializeError("calibration worker report is not strict JSON") from error
@@ -769,22 +990,34 @@ def _cmd_calibrate(arguments: argparse.Namespace) -> dict[str, Any]:
 
     completion = int(arguments.completion_steps)
     if completion < 32 or completion % 8 != 0:
-        raise MaterializeError("worker completion window must be at least 32 steps and divisible by eight")
+        raise MaterializeError(
+            "worker completion window must be at least 32 steps and divisible by eight"
+        )
     model_bytes = _authenticated_worker_bytes(
-        Path(arguments.model_config), arguments.model_config_digest, "model-config")
+        Path(arguments.model_config), arguments.model_config_digest, "model-config"
+    )
     parsed_model = _strict_json_object(model_bytes, "worker model-config")
     model = _model_from_config(parsed_model)
     if parsed_model != model.to_dict():
         raise MaterializeError("worker model config is not the full canonical configuration")
     n = model.n_neurons
-    weights_bytes = _authenticated_worker_bytes(Path(arguments.weights), arguments.weights_digest, "weights")
+    weights_bytes = _authenticated_worker_bytes(
+        Path(arguments.weights), arguments.weights_digest, "weights"
+    )
     topology_bytes = _authenticated_worker_bytes(
-        Path(arguments.topology), arguments.topology_digest, "topology")
-    cue_bytes = _authenticated_worker_bytes(Path(arguments.cue), arguments.cue_digest, "calibration cue")
+        Path(arguments.topology), arguments.topology_digest, "topology"
+    )
+    cue_bytes = _authenticated_worker_bytes(
+        Path(arguments.cue), arguments.cue_digest, "calibration cue"
+    )
     if bool(np.any(np.frombuffer(topology_bytes, dtype=np.uint8) > 1)):
         raise MaterializeError("worker topology carries a byte outside {0, 1}")
-    weights = np.ascontiguousarray(np.frombuffer(weights_bytes, dtype="<f8").reshape(n, n), dtype=np.float64)
-    topology = np.ascontiguousarray(np.frombuffer(topology_bytes, dtype="|b1").reshape(n, n), dtype=np.bool_)
+    weights = np.ascontiguousarray(
+        np.frombuffer(weights_bytes, dtype="<f8").reshape(n, n), dtype=np.float64
+    )
+    topology = np.ascontiguousarray(
+        np.frombuffer(topology_bytes, dtype="|b1").reshape(n, n), dtype=np.bool_
+    )
     validate_weights(weights, topology, model)
     cue_flat = np.frombuffer(cue_bytes, dtype="<f8")
     if not bool(np.isfinite(cue_flat).all()):
@@ -794,37 +1027,64 @@ def _cmd_calibrate(arguments: argparse.Namespace) -> dict[str, Any]:
         raise MaterializeError("calibration cue current is not a whole (timesteps, n_neurons) grid")
     cue = np.ascontiguousarray(cue_flat.reshape(cue_steps, n), dtype=np.float64)
     packets = np.concatenate([cue, np.zeros((completion, n), dtype=np.float64)], axis=0)
-    backend = load_stream_backend(BackendIdentity(2, arguments.crate_version, arguments.extension_sha256))
+    backend = load_stream_backend(
+        BackendIdentity(2, arguments.crate_version, arguments.extension_sha256)
+    )
     if str(arguments.backend_build_digest) != backend.identity.extension_sha256:
         raise MaterializeError("worker backend-build digest is not the loaded extension identity")
     pre_state = _fresh_state(model)
-    result = backend.run(_stream_inputs(model, weights, topology, packets, pre_state),
-                         cue_steps, False, model)
-    final_weights_digest = _sha(_le_bytes(np.ascontiguousarray(result.final_weights, dtype=np.float64), "<f8"))
+    result = backend.run(
+        _stream_inputs(model, weights, topology, packets, pre_state), cue_steps, False, model
+    )
+    final_weights_digest = _sha(
+        _le_bytes(np.ascontiguousarray(result.final_weights, dtype=np.float64), "<f8")
+    )
     if final_weights_digest != arguments.weights_digest:
         raise MaterializeError("calibration with plasticity disabled must not change the weights")
     raster = _completion_raster(result, cue_steps, completion, n)
     raster_bytes = _le_bytes(raster, "|b1")
     return {
-        "pid": os.getpid(), "record_id": arguments.record_id, "cue_digest": arguments.cue_digest,
-        "nonce": arguments.nonce, "weights_digest": arguments.weights_digest,
-        "final_weights_digest": final_weights_digest, "topology_digest": arguments.topology_digest,
+        "pid": os.getpid(),
+        "record_id": arguments.record_id,
+        "cue_digest": arguments.cue_digest,
+        "nonce": arguments.nonce,
+        "weights_digest": arguments.weights_digest,
+        "final_weights_digest": final_weights_digest,
+        "topology_digest": arguments.topology_digest,
         "model_config_digest": arguments.model_config_digest,
-        "completion_steps": completion, "extension_sha256": backend.identity.extension_sha256,
-        "crate_version": backend.identity.crate_version, "backend_build_digest": arguments.backend_build_digest,
-        "pre_state_digest": _state_signature(pre_state), "post_state_digest": _state_signature(_result_state(result)),
-        "shape": [completion, n], "raster_digest": _sha(raster_bytes),
+        "completion_steps": completion,
+        "extension_sha256": backend.identity.extension_sha256,
+        "crate_version": backend.identity.crate_version,
+        "backend_build_digest": arguments.backend_build_digest,
+        "pre_state_digest": _state_signature(pre_state),
+        "post_state_digest": _state_signature(_result_state(result)),
+        "shape": [completion, n],
+        "raster_digest": _sha(raster_bytes),
         "raster_b64": base64.b64encode(raster_bytes).decode("ascii"),
     }
 
 
-def _build_manifest(config: Mapping[str, Any], model: ModelConfig, seed: int, condition: str,
-                    ids: Sequence[str], topology: BoolArray, outgoing: CsrArrays, incoming: CsrArrays,
-                    weights: FloatArray, tf_state: StateArrays, probe_state: StateArrays,
-                    signatures: FloatArray, schedule: Sequence[Mapping[str, Any]], epochs_completed: int,
-                    training_digests: Sequence[Mapping[str, str]],
-                    calibration_digests: Sequence[Mapping[str, str]]) -> dict[str, Any]:
-    topo_digest = topology_digest(np.ascontiguousarray(topology, dtype=np.bool_), model.n_excitatory)
+def _build_manifest(
+    config: Mapping[str, Any],
+    model: ModelConfig,
+    seed: int,
+    condition: str,
+    ids: Sequence[str],
+    topology: BoolArray,
+    outgoing: CsrArrays,
+    incoming: CsrArrays,
+    weights: FloatArray,
+    tf_state: StateArrays,
+    probe_state: StateArrays,
+    signatures: FloatArray,
+    schedule: Sequence[Mapping[str, Any]],
+    epochs_completed: int,
+    training_digests: Sequence[Mapping[str, str]],
+    calibration_digests: Sequence[Mapping[str, str]],
+) -> dict[str, Any]:
+    topo_digest = topology_digest(
+        np.ascontiguousarray(topology, dtype=np.bool_), model.n_excitatory
+    )
     record_ids_digest = bundle.ordered_record_ids_digest(ids)
     return {
         "schema_version": 2,
@@ -855,7 +1115,9 @@ def _build_manifest(config: Mapping[str, Any], model: ModelConfig, seed: int, co
             "weights_digest": bundle.checkpoint_component_digest("weights", "<f8", weights),
             "training_final_state_digest": bundle._state_digest(tf_state),
             "probe_initial_state_digest": bundle._state_digest(probe_state),
-            "signatures_digest": bundle.checkpoint_component_digest("signatures", "<f8", signatures),
+            "signatures_digest": bundle.checkpoint_component_digest(
+                "signatures", "<f8", signatures
+            ),
             "record_ids_digest": record_ids_digest,
         },
         "epochs_completed": epochs_completed,
@@ -877,8 +1139,9 @@ def _build_manifest(config: Mapping[str, Any], model: ModelConfig, seed: int, co
     }
 
 
-def _build_identities(config: Mapping[str, Any], model: ModelConfig, seed: int, condition: str,
-                      ids: Sequence[str]) -> dict[str, Any]:
+def _build_identities(
+    config: Mapping[str, Any], model: ModelConfig, seed: int, condition: str, ids: Sequence[str]
+) -> dict[str, Any]:
     return {
         "experiment_digest": str(config["experiment_digest"]),
         "dataset_digest": str(config["d2_file_sha256"]),
@@ -905,14 +1168,21 @@ def _build_identities(config: Mapping[str, Any], model: ModelConfig, seed: int, 
     }
 
 
-def _lexical_candidates(ids: Sequence[str], row_digests: Sequence[str]) -> tuple[list[str], list[str]]:
+def _lexical_candidates(
+    ids: Sequence[str], row_digests: Sequence[str]
+) -> tuple[list[str], list[str]]:
     """Reorder (record id, signature digest) pairs into the lexical record-id order scoring needs."""
     order = sorted(range(len(ids)), key=lambda index: ids[index])
     return [ids[index] for index in order], [row_digests[index] for index in order]
 
 
-def _build_scoring_target(config: Mapping[str, Any], ids: Sequence[str], row_digests: Sequence[str],
-                          output: Path, completion_steps: int) -> Any:
+def _build_scoring_target(
+    config: Mapping[str, Any],
+    ids: Sequence[str],
+    row_digests: Sequence[str],
+    output: Path,
+    completion_steps: int,
+) -> Any:
     # Checkpoint/bank keep the frozen D1 candidate order; the scoring target requires the lexical
     # immutable-record-id order, so reorder the paired signature digests to match.
     lex_ids, lex_digests = _lexical_candidates(ids, row_digests)
@@ -926,13 +1196,24 @@ def _build_scoring_target(config: Mapping[str, Any], ids: Sequence[str], row_dig
         "candidate_bank_digest": candidate_bank_digest(lex_ids, lex_digests),
     }
     payload: dict[str, Any] = {
-        "schema_version": 2, "artifact_type": "snn-memory-scoring-target-v2",
-        "state": "fixture_only", "lane_role": "lane_p", "completion_steps": completion_steps, "bins": 8,
-        "signature_dtype": "<f8", "similarity": "cosine",
-        "zero_norm_rule": "zero-score-when-either-norm-is-zero", "score_order": "descending",
+        "schema_version": 2,
+        "artifact_type": "snn-memory-scoring-target-v2",
+        "state": "fixture_only",
+        "lane_role": "lane_p",
+        "completion_steps": completion_steps,
+        "bins": 8,
+        "signature_dtype": "<f8",
+        "similarity": "cosine",
+        "zero_norm_rule": "zero-score-when-either-norm-is-zero",
+        "score_order": "descending",
         "tie_rule": "lexical-record-id",
-        "abstention": {"threshold": float(config["abstention_threshold"]), "rule": "strict-greater-than"},
-        "correctness_rule": "exact-record-id", "top_k": 5, "max_payload_utf8_bytes": 20000,
+        "abstention": {
+            "threshold": float(config["abstention_threshold"]),
+            "rule": "strict-greater-than",
+        },
+        "correctness_rule": "exact-record-id",
+        "top_k": 5,
+        "max_payload_utf8_bytes": 20000,
         "candidate_order": lex_ids,
         "candidate_signature_digests": lex_digests,
         "identities": identities,
@@ -941,28 +1222,43 @@ def _build_scoring_target(config: Mapping[str, Any], ids: Sequence[str], row_dig
     return write_artifact(payload, output)
 
 
-def _merge_calibration_evidence(calibration: Sequence[Mapping[str, Any]],
-                                worker_evidence: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def _merge_calibration_evidence(
+    calibration: Sequence[Mapping[str, Any]], worker_evidence: Sequence[Mapping[str, Any]]
+) -> list[dict[str, Any]]:
     if len(calibration) != len(worker_evidence):
         raise MaterializeError("calibration and worker evidence lengths differ")
     merged: list[dict[str, Any]] = []
     for encoder_entry, worker_entry in zip(calibration, worker_evidence):
         if str(encoder_entry["record_id"]) != str(worker_entry["record_id"]):
             raise MaterializeError("calibration and worker evidence record order differs")
-        deterministic_worker = {key: value for key, value in dict(worker_entry).items()
-                                if key not in ("worker_pid", "nonce")}
+        deterministic_worker = {
+            key: value
+            for key, value in dict(worker_entry).items()
+            if key not in ("worker_pid", "nonce")
+        }
         merged.append({**dict(encoder_entry), **deterministic_worker})
     return merged
 
 
-def _build_bank_manifest(config: Mapping[str, Any], model: ModelConfig, seed: int, condition: str,
-                         ids: Sequence[str], checkpoint: Any, scoring: Any, completion_steps: int,
-                         row_digests: Sequence[str], calibration: Sequence[Mapping[str, Any]],
-                         worker_evidence: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+def _build_bank_manifest(
+    config: Mapping[str, Any],
+    model: ModelConfig,
+    seed: int,
+    condition: str,
+    ids: Sequence[str],
+    checkpoint: Any,
+    scoring: Any,
+    completion_steps: int,
+    row_digests: Sequence[str],
+    calibration: Sequence[Mapping[str, Any]],
+    worker_evidence: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
     n = model.n_neurons
     return {
-        "schema_version": 2, "artifact_type": "snn-memory-candidate-bank-v2",
-        "state": "fixture_only", "lane_role": "lane_p",
+        "schema_version": 2,
+        "artifact_type": "snn-memory-candidate-bank-v2",
+        "state": "fixture_only",
+        "lane_role": "lane_p",
         "checkpoint": {
             "descriptor_self_sha256": checkpoint.descriptor_self_sha256,
             "manifest_file_sha256": checkpoint.manifest_file_sha256,
@@ -975,12 +1271,19 @@ def _build_bank_manifest(config: Mapping[str, Any], model: ModelConfig, seed: in
             "candidate_set_digest": bundle.ordered_record_ids_digest(ids),
             "d1_file_sha256": str(config["d1_file_sha256"]),
             "d2_file_sha256": str(config["d2_file_sha256"]),
-            "lane_role": "lane_p", "seed": seed, "condition": condition,
+            "lane_role": "lane_p",
+            "seed": seed,
+            "condition": condition,
             "ordered_record_ids": list(ids),
         },
         "signature_layout": {
-            "semantic_version": "snn-temporal-signature-v2", "bins": 8, "layout": "neuron-major",
-            "n_neurons": n, "signature_width": 8 * n, "completion_steps": completion_steps, "dtype": "<f8",
+            "semantic_version": "snn-temporal-signature-v2",
+            "bins": 8,
+            "layout": "neuron-major",
+            "n_neurons": n,
+            "signature_width": 8 * n,
+            "completion_steps": completion_steps,
+            "dtype": "<f8",
         },
         "calibration": _merge_calibration_evidence(calibration, worker_evidence),
         "scoring": {
@@ -1010,7 +1313,11 @@ def _install_output_atomically(parent_fd: int, staging_name: str, final_name: st
     """Atomically install a staged output with no clobber relative to a verified parent fd."""
     libc = ctypes.CDLL(None, use_errno=True)
     libc.renameat2.argtypes = [
-        ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_uint,
     ]
     result = libc.renameat2(
         parent_fd, os.fsencode(staging_name), parent_fd, os.fsencode(final_name), 1
@@ -1041,7 +1348,9 @@ def _cmd_materialize(arguments: argparse.Namespace) -> dict[str, Any]:
     if encoder_module.digest != str(config["encoder_digest"]):
         raise MaterializeError("sentence-encoder directory digest differs from the pinned digest")
 
-    prepared = _prepare_inputs(config, encoder_module, need_training_currents=(condition == "trained"))
+    prepared = _prepare_inputs(
+        config, encoder_module, need_training_currents=(condition == "trained")
+    )
     model = prepared.model
     ids = list(prepared.ids)
     training_digests = list(prepared.training_source_digests)
@@ -1066,7 +1375,9 @@ def _cmd_materialize(arguments: argparse.Namespace) -> dict[str, Any]:
     absolute_final = final_output if final_output.is_absolute() else Path.cwd() / final_output
     if absolute_final.name in (os.curdir, os.pardir, ""):
         raise MaterializeError("materialization output has no valid final component")
-    parent_fd = bundle._open_dir_from_root(absolute_final.parent, "materialization output parent directory")
+    parent_fd = bundle._open_dir_from_root(
+        absolute_final.parent, "materialization output parent directory"
+    )
     try:
         try:
             os.stat(absolute_final.name, dir_fd=parent_fd, follow_symlinks=False)
@@ -1078,8 +1389,21 @@ def _cmd_materialize(arguments: argparse.Namespace) -> dict[str, Any]:
         staging = absolute_final.parent / staging_name
         try:
             report = _produce_output(
-                config, staging, model, seed, condition, ids, weights, topology, tf_state, schedule,
-                epochs_completed, prepared, training_digests, calibration_digests, completion_steps,
+                config,
+                staging,
+                model,
+                seed,
+                condition,
+                ids,
+                weights,
+                topology,
+                tf_state,
+                schedule,
+                epochs_completed,
+                prepared,
+                training_digests,
+                calibration_digests,
+                completion_steps,
                 final_output,
             )
             _install_output_atomically(parent_fd, staging_name, absolute_final.name)
@@ -1091,72 +1415,135 @@ def _cmd_materialize(arguments: argparse.Namespace) -> dict[str, Any]:
     return report
 
 
-def _produce_output(config: Mapping[str, Any], staging: Path, model: ModelConfig, seed: int,
-                    condition: str, ids: Sequence[str], weights: FloatArray, topology: BoolArray,
-                    tf_state: StateArrays, schedule: Sequence[Mapping[str, Any]], epochs_completed: int,
-                    prepared: PreparedInputs, training_digests: Sequence[Mapping[str, str]],
-                    calibration_digests: Sequence[Mapping[str, str]], completion_steps: int,
-                    final_output: Path) -> dict[str, Any]:
+def _produce_output(
+    config: Mapping[str, Any],
+    staging: Path,
+    model: ModelConfig,
+    seed: int,
+    condition: str,
+    ids: Sequence[str],
+    weights: FloatArray,
+    topology: BoolArray,
+    tf_state: StateArrays,
+    schedule: Sequence[Mapping[str, Any]],
+    epochs_completed: int,
+    prepared: PreparedInputs,
+    training_digests: Sequence[Mapping[str, str]],
+    calibration_digests: Sequence[Mapping[str, str]],
+    completion_steps: int,
+    final_output: Path,
+) -> dict[str, Any]:
     probe_state = _fresh_state(model)
     signatures, worker_pids, worker_evidence = _calibrate_candidates(
-        config, staging / "workers", model, weights, topology, prepared.calibration_currents, list(ids),
+        config,
+        staging / "workers",
+        model,
+        weights,
+        topology,
+        prepared.calibration_currents,
+        list(ids),
         completion_steps,
     )
-    row_digests = [bank.signature_row_digest(record_id, signatures[index])
-                   for index, record_id in enumerate(ids)]
+    row_digests = [
+        bank.signature_row_digest(record_id, signatures[index])
+        for index, record_id in enumerate(ids)
+    ]
     outgoing = _csr_from_topology(topology, outgoing=True)
     incoming = _csr_from_topology(topology, outgoing=False)
     inputs = CheckpointBundleInputs(
         topology=np.ascontiguousarray(topology, dtype=np.bool_),
-        outgoing=outgoing, incoming=incoming,
+        outgoing=outgoing,
+        incoming=incoming,
         weights=np.ascontiguousarray(weights, dtype=np.float64),
-        training_final_state=tf_state, probe_initial_state=probe_state,
+        training_final_state=tf_state,
+        probe_initial_state=probe_state,
         signatures=np.ascontiguousarray(signatures, dtype="<f8"),
-        ordered_record_ids=tuple(ids), replay_schedule=tuple(schedule),
+        ordered_record_ids=tuple(ids),
+        replay_schedule=tuple(schedule),
     )
-    manifest = _build_manifest(config, model, seed, condition, list(ids), topology, outgoing, incoming,
-                               weights, tf_state, probe_state, signatures, schedule, epochs_completed,
-                               training_digests, calibration_digests)
+    manifest = _build_manifest(
+        config,
+        model,
+        seed,
+        condition,
+        list(ids),
+        topology,
+        outgoing,
+        incoming,
+        weights,
+        tf_state,
+        probe_state,
+        signatures,
+        schedule,
+        epochs_completed,
+        training_digests,
+        calibration_digests,
+    )
     identities = _build_identities(config, model, seed, condition, list(ids))
     checkpoint = write_checkpoint_bundle_v2(
-        staging / "checkpoint", state="fixture_only", manifest=manifest, identities=identities,
+        staging / "checkpoint",
+        state="fixture_only",
+        manifest=manifest,
+        identities=identities,
         inputs=inputs,
     )
-    scoring = _build_scoring_target(config, list(ids), row_digests, staging / "scoring_target.json",
-                                    completion_steps)
-    bank_manifest = _build_bank_manifest(config, model, seed, condition, list(ids), checkpoint, scoring,
-                                         completion_steps, row_digests,
-                                         list(prepared.calibration_evidence), worker_evidence)
+    scoring = _build_scoring_target(
+        config, list(ids), row_digests, staging / "scoring_target.json", completion_steps
+    )
+    bank_manifest = _build_bank_manifest(
+        config,
+        model,
+        seed,
+        condition,
+        list(ids),
+        checkpoint,
+        scoring,
+        completion_steps,
+        row_digests,
+        list(prepared.calibration_evidence),
+        worker_evidence,
+    )
     validated_bank = bank.write_candidate_bank_v2(
-        staging / "bank", manifest=bank_manifest,
+        staging / "bank",
+        manifest=bank_manifest,
         signatures=np.ascontiguousarray(signatures, dtype="<f8"),
     )
     return {
-        "seed": seed, "condition": condition, "n_neurons": model.n_neurons,
-        "epochs_completed": epochs_completed, "ordered_record_ids": list(ids),
-        "checkpoint_dir": str(final_output / "checkpoint"), "bank_dir": str(final_output / "bank"),
+        "seed": seed,
+        "condition": condition,
+        "n_neurons": model.n_neurons,
+        "epochs_completed": epochs_completed,
+        "ordered_record_ids": list(ids),
+        "checkpoint_dir": str(final_output / "checkpoint"),
+        "bank_dir": str(final_output / "bank"),
         "checkpoint_descriptor_self_sha256": checkpoint.descriptor_self_sha256,
         "checkpoint_manifest_file_sha256": checkpoint.manifest_file_sha256,
         "bank_self_sha256": validated_bank.self_sha256,
         "scoring_target_self_sha256": scoring.payload_self_sha256,
         "candidate_bank_digest": candidate_bank_digest(list(ids), list(row_digests)),
-        "worker_pids": worker_pids, "materialize_pid": os.getpid(),
+        "worker_pids": worker_pids,
+        "materialize_pid": os.getpid(),
         "worker_evidence": [dict(entry) for entry in worker_evidence],
     }
 
 
 def _cmd_read_checkpoint(arguments: argparse.Namespace) -> dict[str, Any]:
     validated = read_checkpoint_bundle_v2(Path(arguments.bundle))
-    return {"descriptor_self_sha256": validated.descriptor_self_sha256,
-            "manifest_file_sha256": validated.manifest_file_sha256,
-            "seed": validated.manifest["seed"], "condition": validated.manifest["condition"]}
+    return {
+        "descriptor_self_sha256": validated.descriptor_self_sha256,
+        "manifest_file_sha256": validated.manifest_file_sha256,
+        "seed": validated.manifest["seed"],
+        "condition": validated.manifest["condition"],
+    }
 
 
 def _cmd_read_bank(arguments: argparse.Namespace) -> dict[str, Any]:
     validated = bank.read_candidate_bank_v2(Path(arguments.bank))
-    return {"self_sha256": validated.self_sha256,
-            "row_digests": list(validated.row_digests),
-            "candidate_bank_digest": validated.manifest["scoring"]["candidate_bank_digest"]}
+    return {
+        "self_sha256": validated.self_sha256,
+        "row_digests": list(validated.row_digests),
+        "candidate_bank_digest": validated.manifest["scoring"]["candidate_bank_digest"],
+    }
 
 
 def _reconcile_bank_checkpoint(validated_bank: Any, checkpoint: Any) -> None:
@@ -1167,18 +1554,38 @@ def _reconcile_bank_checkpoint(validated_bank: Any, checkpoint: Any) -> None:
     bank_build = validated_bank.manifest["build"]
     ordered = tuple(bank_identities["ordered_record_ids"])
     identity_pairs: tuple[tuple[Any, Any, str], ...] = (
-        (bank_identities["experiment_digest"], identities["experiment_digest"], "experiment digest"),
+        (
+            bank_identities["experiment_digest"],
+            identities["experiment_digest"],
+            "experiment digest",
+        ),
         (bank_identities["dataset_digest"], identities["dataset_digest"], "dataset digest"),
         (bank_identities["task_set_digest"], identities["task_set_digest"], "task-set digest"),
-        (bank_identities["candidate_set_digest"], identities["candidate_set_digest"], "candidate-set digest"),
+        (
+            bank_identities["candidate_set_digest"],
+            identities["candidate_set_digest"],
+            "candidate-set digest",
+        ),
         (bank_identities["d1_file_sha256"], identities["d1_file_sha256"], "D1 digest"),
         (bank_identities["d2_file_sha256"], identities["d2_file_sha256"], "D2 digest"),
         (bank_identities["lane_role"], checkpoint.descriptor["lane_role"], "lane role"),
         (int(bank_identities["seed"]), int(identities["seed"]), "seed"),
         (bank_identities["condition"], identities["condition"], "condition"),
-        (bank_build["encoder_directory_digest"], identities["encoder_directory_digest"], "encoder directory"),
-        (bank_build["encoder_config_digest"], identities["encoder_config_digest"], "encoder config"),
-        (bank_build["materializer_module_sha256"], identities["materializer_module_sha256"], "materializer"),
+        (
+            bank_build["encoder_directory_digest"],
+            identities["encoder_directory_digest"],
+            "encoder directory",
+        ),
+        (
+            bank_build["encoder_config_digest"],
+            identities["encoder_config_digest"],
+            "encoder config",
+        ),
+        (
+            bank_build["materializer_module_sha256"],
+            identities["materializer_module_sha256"],
+            "materializer",
+        ),
         (bank_build["backend_build_digest"], identities["backend_build_digest"], "backend build"),
         (bank_build["python_wheel_sha256"], identities["python_wheel_sha256"], "python wheel"),
         (bank_build["rust_wheel_sha256"], identities["rust_wheel_sha256"], "rust wheel"),
@@ -1191,60 +1598,90 @@ def _reconcile_bank_checkpoint(validated_bank: Any, checkpoint: Any) -> None:
     if validated_bank.manifest["state"] != checkpoint.descriptor["state"]:
         raise MaterializeError("candidate bank state differs from the checkpoint descriptor state")
     if bundle.ordered_record_ids_digest(ordered) != bank_identities["candidate_set_digest"]:
-        raise MaterializeError("candidate bank candidate-set digest does not recompute from the ordered records")
-    if _le_bytes(validated_bank.signatures, "<f8") != _le_bytes(checkpoint.inputs.signatures, "<f8"):
+        raise MaterializeError(
+            "candidate bank candidate-set digest does not recompute from the ordered records"
+        )
+    if _le_bytes(validated_bank.signatures, "<f8") != _le_bytes(
+        checkpoint.inputs.signatures, "<f8"
+    ):
         raise MaterializeError("candidate bank signatures differ from the checkpoint signatures")
     completion = int(validated_bank.manifest["signature_layout"]["completion_steps"])
     if completion != int(validated_bank.manifest["scoring"]["completion_steps"]):
         raise MaterializeError("candidate bank layout and scoring completion windows disagree")
     calibration = validated_bank.manifest["calibration"]
-    cue_by_id = {str(entry["record_id"]): str(entry["digest"])
-                 for entry in manifest["calibration_cue_digests"]}
+    cue_by_id = {
+        str(entry["record_id"]): str(entry["digest"])
+        for entry in manifest["calibration_cue_digests"]
+    }
     if tuple(str(entry["record_id"]) for entry in calibration) != ordered:
         raise MaterializeError("candidate bank calibration order differs from the ordered records")
     for entry in calibration:
         rid = str(entry["record_id"])
         if cue_by_id.get(rid) != str(entry["source_cue_sha256"]):
-            raise MaterializeError(f"calibration source cue digest for {rid} differs from the checkpoint")
+            raise MaterializeError(
+                f"calibration source cue digest for {rid} differs from the checkpoint"
+            )
         if entry["encoder_directory_digest"] != identities["encoder_directory_digest"]:
-            raise MaterializeError(f"calibration encoder directory for {rid} differs from the checkpoint")
+            raise MaterializeError(
+                f"calibration encoder directory for {rid} differs from the checkpoint"
+            )
         if entry["encoder_config_digest"] != identities["encoder_config_digest"]:
-            raise MaterializeError(f"calibration encoder config for {rid} differs from the checkpoint")
+            raise MaterializeError(
+                f"calibration encoder config for {rid} differs from the checkpoint"
+            )
         if entry["model_config_digest"] != identities["model_config_digest"]:
-            raise MaterializeError(f"calibration model config for {rid} differs from the checkpoint")
+            raise MaterializeError(
+                f"calibration model config for {rid} differs from the checkpoint"
+            )
         if float(entry["input_current"]) != float(identities["input_current"]):
-            raise MaterializeError(f"calibration input current for {rid} differs from the checkpoint")
+            raise MaterializeError(
+                f"calibration input current for {rid} differs from the checkpoint"
+            )
 
 
 def _cmd_bind(arguments: argparse.Namespace) -> dict[str, Any]:
     checkpoint = read_checkpoint_bundle_v2(Path(arguments.checkpoint))
     validated_bank = bank.read_candidate_bank_v2(Path(arguments.bank))
     binding = validated_bank.manifest["checkpoint"]
-    if (binding["descriptor_self_sha256"] != checkpoint.descriptor_self_sha256
-            or binding["manifest_file_sha256"] != checkpoint.manifest_file_sha256
-            or binding["manifest_payload_self_sha256"] != checkpoint.manifest_payload_self_sha256):
+    if (
+        binding["descriptor_self_sha256"] != checkpoint.descriptor_self_sha256
+        or binding["manifest_file_sha256"] != checkpoint.manifest_file_sha256
+        or binding["manifest_payload_self_sha256"] != checkpoint.manifest_payload_self_sha256
+    ):
         raise MaterializeError("candidate bank does not bind the presented checkpoint bundle")
-    if validated_bank.manifest["identities"]["ordered_record_ids"] != checkpoint.manifest["ordered_record_ids"]:
+    if (
+        validated_bank.manifest["identities"]["ordered_record_ids"]
+        != checkpoint.manifest["ordered_record_ids"]
+    ):
         raise MaterializeError("candidate bank record order differs from the checkpoint")
     _reconcile_bank_checkpoint(validated_bank, checkpoint)
     scoring_bytes = _read_regular_file(Path(arguments.scoring_target), "scoring target")
     scoring = validate_artifact_bytes(scoring_bytes, expected_type="snn-memory-scoring-target-v2")
     scoring_block = validated_bank.manifest["scoring"]
     if scoring.payload_self_sha256 != scoring_block["scoring_target_self_sha256"]:
-        raise MaterializeError("candidate bank scoring-target digest differs from the presented target")
+        raise MaterializeError(
+            "candidate bank scoring-target digest differs from the presented target"
+        )
     bank_ids = [str(value) for value in validated_bank.manifest["identities"]["ordered_record_ids"]]
-    lexical_bank_ids, lexical_bank_digests = _lexical_candidates(bank_ids, list(validated_bank.row_digests))
+    lexical_bank_ids, lexical_bank_digests = _lexical_candidates(
+        bank_ids, list(validated_bank.row_digests)
+    )
     if list(scoring.payload["candidate_order"]) != lexical_bank_ids:
         raise MaterializeError("scoring-target candidate order differs from the lexical bank order")
     if list(scoring.payload["candidate_signature_digests"]) != lexical_bank_digests:
         raise MaterializeError("scoring-target signature digests differ from the bank rows")
-    if scoring.payload["identities"]["candidate_bank_digest"] != scoring_block["candidate_bank_digest"]:
+    if (
+        scoring.payload["identities"]["candidate_bank_digest"]
+        != scoring_block["candidate_bank_digest"]
+    ):
         raise MaterializeError("scoring-target candidate-bank digest differs from the bank")
     layout = validated_bank.manifest["signature_layout"]
     if int(scoring.payload["completion_steps"]) != int(layout["completion_steps"]):
         raise MaterializeError("scoring-target completion window differs from the bank layout")
     if int(scoring.payload["completion_steps"]) != int(scoring_block["completion_steps"]):
-        raise MaterializeError("scoring-target completion window differs from the bank scoring block")
+        raise MaterializeError(
+            "scoring-target completion window differs from the bank scoring block"
+        )
     if int(scoring.payload["bins"]) != int(layout["bins"]):
         raise MaterializeError("scoring-target bin count differs from the bank layout")
     if str(scoring.payload["signature_dtype"]) != str(layout["dtype"]):
@@ -1253,9 +1690,12 @@ def _cmd_bind(arguments: argparse.Namespace) -> dict[str, Any]:
         raise MaterializeError("scoring-target abstention rule is not strict-greater-than")
     if scoring_block["abstention_rule"] != "strict_greater_than":
         raise MaterializeError("bank abstention rule is not strict_greater_than")
-    return {"bound": True, "checkpoint_descriptor_self_sha256": checkpoint.descriptor_self_sha256,
-            "bank_self_sha256": validated_bank.self_sha256,
-            "scoring_target_self_sha256": scoring.payload_self_sha256}
+    return {
+        "bound": True,
+        "checkpoint_descriptor_self_sha256": checkpoint.descriptor_self_sha256,
+        "bank_self_sha256": validated_bank.self_sha256,
+        "scoring_target_self_sha256": scoring.payload_self_sha256,
+    }
 
 
 def main(argv: Sequence[str] | None = None) -> int:

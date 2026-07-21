@@ -42,12 +42,15 @@ class TestAvailabilityAndPolicy:
         assert is_available() is (importlib.util.find_spec("director_ai") is not None)
 
     def test_default_policy(self) -> None:
-        assert GuardedPolicy(
-            approve_threshold=0.3,
-            block_below=0.15,
-            use_nli=None,
-            injection_detection=True,
-        ) == DEFAULT_POLICY
+        assert (
+            GuardedPolicy(
+                approve_threshold=0.3,
+                block_below=0.15,
+                use_nli=None,
+                injection_detection=True,
+            )
+            == DEFAULT_POLICY
+        )
 
     def test_policy_is_frozen(self) -> None:
         mutable_view = cast(_MutablePolicy, DEFAULT_POLICY)
@@ -71,9 +74,7 @@ class TestFactsFromRealSearchResults:
         assert facts == {"a": "short answer"}
 
     def test_falls_back_to_snippet(self) -> None:
-        assert facts_from_results([_hit("a", snippet="snippet only")]) == {
-            "a": "snippet only"
-        }
+        assert facts_from_results([_hit("a", snippet="snippet only")]) == {"a": "snippet only"}
 
     def test_deduplicates_first_named_result(self) -> None:
         facts = facts_from_results(

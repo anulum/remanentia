@@ -60,8 +60,7 @@ def recall_from_index(
     if not scored:
         return f"No memories found for: {query}"
     return "\n\n".join(
-        f"[{name} (score={score:.2f})]\n{snippet}"
-        for name, score, snippet in scored[:top_k]
+        f"[{name} (score={score:.2f})]\n{snippet}" for name, score, snippet in scored[:top_k]
     )
 
 
@@ -85,9 +84,7 @@ def query_graph(graph_dir: Path, *, entity: str = "", top: int = 10) -> str:
         matches.sort(key=lambda relation: -float(relation.get("weight", 0)))
         lines = [f"Connections for '{entity}':"]
         for relation in matches[:top]:
-            other = (
-                relation["target"] if relation["source"] == entity else relation["source"]
-            )
+            other = relation["target"] if relation["source"] == entity else relation["source"]
             lines.append(
                 f"  {other} (weight={relation['weight']}, "
                 f"{len(relation.get('evidence', []))} traces)"

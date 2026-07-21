@@ -40,6 +40,7 @@ def _checkpoint() -> tuple[Checkpoint, list[np.ndarray], list[str]]:
 
 # ---- disjoint_split -------------------------------------------------------------------------------
 
+
 def test_disjoint_split_is_strictly_non_overlapping() -> None:
     sequence = np.arange(80.0).reshape(8, 10)
     cue, suffix = h.disjoint_split(sequence, 0.5)
@@ -60,6 +61,7 @@ def test_disjoint_split_rejects_a_sequence_too_short_to_split() -> None:
 
 # ---- corrupt_cue ----------------------------------------------------------------------------------
 
+
 def test_corrupt_cue_drops_a_deterministic_fraction_of_driven_steps() -> None:
     cue = np.zeros((8, 4))
     cue[[1, 3, 5, 7]] = 5.0
@@ -67,8 +69,12 @@ def test_corrupt_cue_drops_a_deterministic_fraction_of_driven_steps() -> None:
     driven_before = int(np.any(cue != 0.0, axis=1).sum())
     driven_after = int(np.any(corrupted != 0.0, axis=1).sum())
     assert driven_after == driven_before - 1
-    assert np.all(np.isin(np.flatnonzero(np.any(corrupted != 0.0, axis=1)),
-                          np.flatnonzero(np.any(cue != 0.0, axis=1))))
+    assert np.all(
+        np.isin(
+            np.flatnonzero(np.any(corrupted != 0.0, axis=1)),
+            np.flatnonzero(np.any(cue != 0.0, axis=1)),
+        )
+    )
 
 
 def test_corrupt_cue_with_too_small_a_fraction_drops_nothing() -> None:
@@ -90,16 +96,22 @@ def test_corrupt_cue_rejects_a_cue_without_input() -> None:
 
 # ---- _trim_to_input via drive ---------------------------------------------------------------------
 
+
 def test_drive_rejects_a_driver_without_input() -> None:
     checkpoint, _sequences, _labels = _checkpoint()
     with pytest.raises(ValueError, match="no external input"):
         h._drive_completion(
-            checkpoint.weights, checkpoint.topology, checkpoint.model,
-            np.zeros((4, checkpoint.model.n_neurons)), 4, "empty",
+            checkpoint.weights,
+            checkpoint.topology,
+            checkpoint.model,
+            np.zeros((4, checkpoint.model.n_neurons)),
+            4,
+            "empty",
         )
 
 
 # ---- _predict -------------------------------------------------------------------------------------
+
 
 def test_predict_returns_the_best_positive_match() -> None:
     targets = np.array([[1.0, 0.0], [0.0, 1.0]])
@@ -113,6 +125,7 @@ def test_predict_abstains_when_no_target_matches() -> None:
 
 
 # ---- _condition_weights ---------------------------------------------------------------------------
+
 
 def test_condition_weights_encoder_only_is_zeroed() -> None:
     checkpoint, _sequences, _labels = _checkpoint()
@@ -136,10 +149,15 @@ def test_condition_weights_rejects_an_unsupported_condition() -> None:
 
 # ---- held_out_target_signatures + probe_condition -------------------------------------------------
 
+
 def test_target_signatures_have_one_row_per_label() -> None:
     checkpoint, sequences, labels = _checkpoint()
     targets = h.held_out_target_signatures(
-        sequences, labels, checkpoint.weights, checkpoint.topology, checkpoint.model,
+        sequences,
+        labels,
+        checkpoint.weights,
+        checkpoint.topology,
+        checkpoint.model,
         ProbeConfig(completion_steps=8),
     )
     assert targets.shape[0] == len(labels)
@@ -170,9 +188,12 @@ def test_probe_condition_corruption_and_blank_paths_run() -> None:
 
 # ---- benchmark + decision report ------------------------------------------------------------------
 
+
 def test_held_out_benchmark_runs_and_reports_gates() -> None:
     checkpoint, sequences, labels = _checkpoint()
-    report = h.held_out_benchmark(checkpoint, sequences, labels, [11, 29], ProbeConfig(completion_steps=6))
+    report = h.held_out_benchmark(
+        checkpoint, sequences, labels, [11, 29], ProbeConfig(completion_steps=6)
+    )
     assert report["seeds"] == [11, 29]
     assert set(report["p_at_1"]) == set(h.CONDITIONS)
     assert set(report["gates"]) >= {"g1_pass", "g2_pass", "g2_false_recall_ok"}
@@ -185,8 +206,11 @@ def _const(value: float, seeds: list[int], rows: int = 2) -> dict[int, list[floa
 def test_decision_report_passes_both_gates_on_a_strong_effect() -> None:
     seeds = [11, 29, 47]
     scores = {
-        "trained": _const(1.0, seeds), "shuffled": _const(0.0, seeds),
-        "random": _const(0.0, seeds), "zero": _const(0.0, seeds), "encoder-only": _const(0.0, seeds),
+        "trained": _const(1.0, seeds),
+        "shuffled": _const(0.0, seeds),
+        "random": _const(0.0, seeds),
+        "zero": _const(0.0, seeds),
+        "encoder-only": _const(0.0, seeds),
     }
     corrupted = {"trained": _const(1.0, seeds), "shuffled": _const(0.0, seeds)}
     false_recall = _const(0.0, seeds)
@@ -211,8 +235,11 @@ def test_decision_report_fails_gates_on_a_null_effect() -> None:
 def test_decision_report_fails_g2_when_false_recall_is_high() -> None:
     seeds = [11, 29, 47]
     scores = {
-        "trained": _const(1.0, seeds), "shuffled": _const(0.0, seeds),
-        "random": _const(0.0, seeds), "zero": _const(0.0, seeds), "encoder-only": _const(0.0, seeds),
+        "trained": _const(1.0, seeds),
+        "shuffled": _const(0.0, seeds),
+        "random": _const(0.0, seeds),
+        "zero": _const(0.0, seeds),
+        "encoder-only": _const(0.0, seeds),
     }
     corrupted = {"trained": _const(1.0, seeds), "shuffled": _const(0.0, seeds)}
     report = h.held_out_decision_report(scores, corrupted, _const(0.5, seeds), seeds)

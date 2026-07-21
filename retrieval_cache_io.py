@@ -95,8 +95,7 @@ def load_trace_index_cache(cache_path: Path, cache_key: str) -> dict[str, object
     spike_mapping = cast(dict[str, object], trace_spikes)
     return {
         "trace_spikes": {
-            name: np.asarray(values, dtype=np.float32)
-            for name, values in spike_mapping.items()
+            name: np.asarray(values, dtype=np.float32) for name, values in spike_mapping.items()
         },
         "trace_names_lower": cast(dict[str, object], trace_names_lower),
         "idf": cast(dict[str, object], idf),
@@ -155,7 +154,6 @@ def persist_query_feature_cache(
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     items = list(cache.items())[-limit:]
     payload: dict[str, object] = {
-        f"{signature}\0{query}": features
-        for (signature, query), features in items
+        f"{signature}\0{query}": features for (signature, query), features in items
     }
     save_json_gz(cache_path, payload)

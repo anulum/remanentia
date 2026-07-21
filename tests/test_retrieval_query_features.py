@@ -17,8 +17,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from REMANENTIA.retrieval_cache_io import load_query_feature_cache
-from REMANENTIA.retrieval_query_features import (
+from retrieval_cache_io import load_query_feature_cache
+from retrieval_query_features import (
     QueryFeatureStore,
     RetrievalNetworkState,
 )

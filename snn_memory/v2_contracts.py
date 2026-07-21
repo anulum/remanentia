@@ -165,9 +165,7 @@ def _schema_bytes(schema_name: str) -> bytes:
 
 def _validate_schema(value: Mapping[str, Any], schema_name: str, label: str) -> None:
     schema = _parse_json(_schema_bytes(schema_name), f"schema {schema_name}")
-    validate = cast(
-        Callable[[object, object], None], import_module("jsonschema").validate
-    )
+    validate = cast(Callable[[object, object], None], import_module("jsonschema").validate)
     try:
         validate(value, schema)
     except Exception as exc:
@@ -213,10 +211,7 @@ def _artifact_refs(manifest: Mapping[str, Any]) -> list[Mapping[str, Any]]:
         refs.append(cast(Mapping[str, Any], record["training_source"]))
         refs.append(cast(Mapping[str, Any], record["calibration_cue"]))
         for base_cue in record["evaluation_base_cues"]:
-            refs.extend(
-                cast(Mapping[str, Any], variant)
-                for variant in base_cue["variants"]
-            )
+            refs.extend(cast(Mapping[str, Any], variant) for variant in base_cue["variants"])
     return refs
 
 
@@ -238,9 +233,7 @@ def _secure_artifact_path(root: Path, relative: str) -> Path:
     return resolved
 
 
-def _decode_and_check_normalized(
-    raw_bytes: bytes, expected_digest: str, label: str
-) -> str:
+def _decode_and_check_normalized(raw_bytes: bytes, expected_digest: str, label: str) -> str:
     try:
         text = raw_bytes.decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -257,9 +250,7 @@ def _require_strictly_increasing(values: Sequence[int], label: str) -> None:
         raise ValueError(f"{label} indices must be strictly increasing")
 
 
-def read_and_validate_dataset_v2(
-    path: Path, expected_digest: str
-) -> ValidatedDatasetV2:
+def read_and_validate_dataset_v2(path: Path, expected_digest: str) -> ValidatedDatasetV2:
     """Authenticate and validate one schema-v2 dataset snapshot.
 
     Every referenced artifact is read exactly once after path and symlink checks.
@@ -286,9 +277,7 @@ def read_and_validate_dataset_v2(
         raise ValueError("candidate order differs from record order")
     if candidate_set["digest"] != ordered_record_ids_digest(record_ids):
         raise ValueError("candidate-set digest does not bind the ordered IDs")
-    if manifest["encoder"]["config_digest"] != canonical_json_digest(
-        manifest["encoder"]["config"]
-    ):
+    if manifest["encoder"]["config_digest"] != canonical_json_digest(manifest["encoder"]["config"]):
         raise ValueError("encoder configuration digest mismatch")
 
     refs = _artifact_refs(manifest)
@@ -331,9 +320,7 @@ def read_and_validate_dataset_v2(
         training_indices = cast(tuple[int, ...], training["event_indices"])
         _require_strictly_increasing(training_indices, "training event")
         if not (
-            source_universe["event_min"]
-            <= len(training_indices)
-            <= source_universe["event_max"]
+            source_universe["event_min"] <= len(training_indices) <= source_universe["event_max"]
         ):
             raise ValueError(f"training event count is out of bounds for {record_id}")
         training_index_set = set(training_indices)
@@ -446,9 +433,7 @@ def read_and_validate_checkpoint_v2(
     audit-only; every probe binds a distinct freshly reset initial-state digest.
     """
 
-    loaded = _load_json_artifact(
-        path, expected_digest, _CHECKPOINT_SCHEMA, "checkpoint"
-    )
+    loaded = _load_json_artifact(path, expected_digest, _CHECKPOINT_SCHEMA, "checkpoint")
     value = loaded.manifest
     dataset_value = dataset.manifest
     record_ids = dataset_value["candidate_set"]["ordered_record_ids"]
@@ -487,9 +472,10 @@ def read_and_validate_checkpoint_v2(
         raise ValueError("checkpoint training-source bindings mismatch")
     if value["calibration_cue_digests"] != expected_calibration:
         raise ValueError("checkpoint calibration-cue bindings mismatch")
-    if value["scoring_calibration"]["development_artifact_digest"] != dataset_value[
-        "artifacts"
-    ]["development_calibration"]["sha256"]:
+    if (
+        value["scoring_calibration"]["development_artifact_digest"]
+        != dataset_value["artifacts"]["development_calibration"]["sha256"]
+    ):
         raise ValueError("checkpoint development-calibration artifact mismatch")
     return loaded
 
@@ -507,9 +493,7 @@ def read_and_validate_task_output_v2(
     against the checkpoint manifest.
     """
 
-    loaded = _load_json_artifact(
-        path, expected_digest, _TASK_OUTPUT_SCHEMA, "task output"
-    )
+    loaded = _load_json_artifact(path, expected_digest, _TASK_OUTPUT_SCHEMA, "task output")
     value = loaded.manifest
     candidates = set(dataset.manifest["candidate_set"]["ordered_record_ids"])
     if value["checkpoint_digest"] != checkpoint.digest:
@@ -518,9 +502,7 @@ def read_and_validate_task_output_v2(
         raise ValueError("task output record-order digest mismatch")
     if value["backend_digest"] != checkpoint.manifest["build"]["backend_build_digest"]:
         raise ValueError("task output backend build digest mismatch")
-    if value["initial_state_digest"] != checkpoint.manifest["arrays"][
-        "probe_initial_state_digest"
-    ]:
+    if value["initial_state_digest"] != checkpoint.manifest["arrays"]["probe_initial_state_digest"]:
         raise ValueError("task output initial-state digest mismatch")
     ranked = cast(list[str], value["ranked_record_ids"])
     predicted = cast(str | None, value["predicted_record_id"])
@@ -540,9 +522,7 @@ def read_and_validate_evaluation_v2(
 ) -> ValidatedArtifactV2:
     """Authenticate evaluation output and derive completeness fail-closed."""
 
-    loaded = _load_json_artifact(
-        path, expected_digest, _EVALUATION_SCHEMA, "evaluation"
-    )
+    loaded = _load_json_artifact(path, expected_digest, _EVALUATION_SCHEMA, "evaluation")
     value = loaded.manifest
     if value["dataset_digest"] != dataset.digest:
         raise ValueError("evaluation dataset digest mismatch")
@@ -564,9 +544,7 @@ def read_and_validate_evaluation_v2(
         raise ValueError("completed task count mismatch")
     if value["expected_task_set_digest"] != task_set_digest(list(expected)):
         raise ValueError("expected task-set digest mismatch")
-    if value["expected_task_set_digest"] != dataset.manifest["artifacts"]["task_set"][
-        "sha256"
-    ]:
+    if value["expected_task_set_digest"] != dataset.manifest["artifacts"]["task_set"]["sha256"]:
         raise ValueError("evaluation expected tasks do not match the dataset task set")
     if value["completed_task_set_digest"] != task_set_digest(list(completed)):
         raise ValueError("completed task-set digest mismatch")

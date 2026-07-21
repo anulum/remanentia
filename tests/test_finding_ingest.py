@@ -131,9 +131,7 @@ class TestIngestCore:
         _append_event(hub, ["malformed", "finding"])
         _append_event(hub, _valid_finding_record("good"))
         sink_dir = tmp_path / "findings"
-        report = ingest_from_hub(
-            hub, MarkdownFindingSink(sink_dir), tmp_path / "cur.json"
-        )
+        report = ingest_from_hub(hub, MarkdownFindingSink(sink_dir), tmp_path / "cur.json")
         assert [body for _, body in _markdown_records(sink_dir)] == ["good"]
         assert report.rejected == 1
         assert "unparsable payload" in report.rejections[0][1]

@@ -17,9 +17,7 @@ from snn_memory.metrics import cosine_scores, recurrence_to_input_ratio, tempora
 
 
 def test_temporal_signature_bins_raster_by_time() -> None:
-    raster = np.array(
-        [[True, False], [True, True], [False, True], [False, False]], dtype=np.bool_
-    )
+    raster = np.array([[True, False], [True, True], [False, True], [False, False]], dtype=np.bool_)
     signature = temporal_signature(raster, bins=2)
     assert signature.tolist() == [2.0, 1.0, 0.0, 1.0]
 

@@ -137,11 +137,17 @@ def _condition_weights(
     if condition not in {"trained", "shuffled", "random", "zero"}:
         raise ValueError(f"unsupported control condition: {condition}")
     return make_control(
-        checkpoint.weights, checkpoint.topology, checkpoint.model, cast(ControlName, condition), seed
+        checkpoint.weights,
+        checkpoint.topology,
+        checkpoint.model,
+        cast(ControlName, condition),
+        seed,
     )
 
 
-def _blank_completion(weights: FloatArray, topology: Any, model: Any, completion_steps: int) -> FloatArray:
+def _blank_completion(
+    weights: FloatArray, topology: Any, model: Any, completion_steps: int
+) -> FloatArray:
     """Autonomous completion from rest with NO external input, for the false-recall audit."""
     currents = np.zeros((completion_steps, model.n_neurons), dtype=np.float64)
     result = run_episode(
@@ -229,11 +235,18 @@ def held_out_benchmark(
     false_recall: dict[int, list[float]] = {}
     for run_seed in seeds:
         for condition in CONDITIONS:
-            values, _rows = probe_condition(checkpoint, sequences, labels, condition, run_seed, probe)
+            values, _rows = probe_condition(
+                checkpoint, sequences, labels, condition, run_seed, probe
+            )
             scores[condition][run_seed] = values
         for condition in ("trained", "shuffled"):
             values, _rows = probe_condition(
-                checkpoint, sequences, labels, condition, run_seed, probe,
+                checkpoint,
+                sequences,
+                labels,
+                condition,
+                run_seed,
+                probe,
                 corruption=_CORRUPTION_FRACTION,
             )
             corrupted[condition][run_seed] = values

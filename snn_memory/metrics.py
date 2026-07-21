@@ -31,12 +31,15 @@ def cosine_scores(signature: FloatArray, candidates: FloatArray) -> FloatArray:
     candidate_norm = np.linalg.norm(candidates, axis=1)
     denominator = candidate_norm * query_norm
     numerator = np.asarray(candidates @ signature, dtype=np.float64)
-    return np.asarray(np.divide(
-        numerator,
-        denominator,
-        out=np.zeros(candidates.shape[0], dtype=np.float64),
-        where=denominator > 0.0,
-    ), dtype=np.float64)
+    return np.asarray(
+        np.divide(
+            numerator,
+            denominator,
+            out=np.zeros(candidates.shape[0], dtype=np.float64),
+            where=denominator > 0.0,
+        ),
+        dtype=np.float64,
+    )
 
 
 def recurrence_to_input_ratio(recurrent: FloatArray, inputs: FloatArray) -> float:

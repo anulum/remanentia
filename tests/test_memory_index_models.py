@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from compiled_memory import CompiledFact, write_compiled_facts
-from REMANENTIA.memory_index_models import (  # type: ignore[import]
+from memory_index_models import (
     Document,
     Paragraph,
     SearchResult,

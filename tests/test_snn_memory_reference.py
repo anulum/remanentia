@@ -141,7 +141,12 @@ def test_run_episode_rejects_wrong_current_shape() -> None:
     config, weights, topology = _pair_network()
     with pytest.raises(ValueError, match="timesteps, n_neurons"):
         run_episode(
-            initialise_state(config), weights, topology, np.zeros(4), config, plasticity_enabled=False
+            initialise_state(config),
+            weights,
+            topology,
+            np.zeros(4),
+            config,
+            plasticity_enabled=False,
         )
 
 

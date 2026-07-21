@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-from REMANENTIA.consolidation_trace_analysis import (  # type: ignore[import]
+from consolidation_trace_analysis import (
     cluster_traces,
     cluster_traces_python,
     extract_entities,
