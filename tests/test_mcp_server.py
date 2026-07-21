@@ -155,7 +155,7 @@ class TestMCPProtocol:
         }
         resp = handle_request(req)
         assert resp["result"]["content"][0]["type"] == "text"
-        assert "No memories found" in resp["result"]["content"][0]["text"]
+        assert resp["result"]["content"][0]["text"] == "Empty query."
 
     def test_tools_call_status(self):
         req = {
