@@ -110,10 +110,14 @@ def find_related_traces(
 ) -> list[dict[str, object]]:
     """Rank neighboring Markdown traces by lexical Jaccard similarity."""
     root = traces_dir.resolve()
-    if not trace_name or not re.fullmatch(r"[A-Za-z0-9_.\-]+\.md", trace_name):
+    if (
+        not trace_name
+        or len(trace_name) > 255
+        or not re.fullmatch(r"[A-Za-z0-9_.\-]+\.md", trace_name)
+    ):
         return []
     target = (root / trace_name).resolve()
-    if not target.exists() or not target.is_file():
+    if not target.is_relative_to(root) or not target.exists() or not target.is_file():
         return []
 
     target_text = target.read_text(encoding="utf-8")

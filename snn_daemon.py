@@ -489,11 +489,13 @@ def drop_stimulus(text: str, source: str = "unknown"):
     ts = int(time.time())
     # Derive a filesystem-safe token from the source identifier
     tmp = source.replace("/", "_").replace("\\", "_")
-    safe_source = "".join(ch for ch in tmp if ch.isalnum() or ch in ("_", "-")) or "unknown"
+    safe_source = "".join(ch for ch in tmp if ch.isalnum() or ch in ("_", "-"))[:64] or "unknown"
     fname = f"{safe_source}_{ts}.json"
     if not re.fullmatch(r"[A-Za-z0-9_\-]+\.json", fname):
         raise ValueError("invalid stimulus filename")
     path = (STIMULUS_DIR / fname).resolve()
+    if not path.is_relative_to(STIMULUS_DIR.resolve()):  # pragma: no cover - defensive invariant
+        raise ValueError("invalid stimulus path")
     # Store text only — daemon re-encodes at its own neuron count
     data = {
         "text": text,

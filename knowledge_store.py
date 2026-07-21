@@ -131,7 +131,7 @@ def _extract_entities(text: str) -> set[str]:
             entities.add(k)
     for m in re.finditer(r"v\d+\.\d+(?:\.\d+)?", text):
         entities.add(m.group())
-    for m in re.finditer(r"\d+\.\d+%|\d+%", text):
+    for m in re.finditer(r"\d+(?:\.\d+)?%", text):
         entities.add(m.group())
     for m in re.finditer(r"(?<=[.!?\n] |\: )[A-Z][a-z]{2,}", text):
         entities.add(m.group().lower())
@@ -194,7 +194,7 @@ def _generate_prospective_queries(
         queries.append(f"what about {ent}")
         if any(act in content_lower for act in _POSITIVE_ACTIONS | _NEGATIVE_ACTIONS):
             queries.append(f"what happened to {ent}")
-        if re.search(r"\d+\.\d+%|\d+%", content):
+        if re.search(r"\d+(?:\.\d+)?%", content):
             queries.append(f"what is the score for {ent}")
 
     # Keyword-based questions
@@ -626,8 +626,8 @@ class KnowledgeStore:
                 return nid
 
             # Different percentage for same context
-            content_pcts = set(re.findall(r"\d+\.\d+%|\d+%", content))
-            note_pcts = set(re.findall(r"\d+\.\d+%|\d+%", note.content))
+            content_pcts = set(re.findall(r"\d+(?:\.\d+)?%", content))
+            note_pcts = set(re.findall(r"\d+(?:\.\d+)?%", note.content))
             if content_pcts and note_pcts and content_pcts != note_pcts:
                 # Only if they share meaningful entities (not just "%" in both)
                 if len(shared_entities) >= 2:

@@ -114,6 +114,7 @@ def test_related_traces_rank_real_markdown_by_shared_terms(tmp_path: Path) -> No
     assert find_related_traces(tmp_path, "../plasma-control.md") == []
     assert find_related_traces(tmp_path, "") == []
     assert find_related_traces(tmp_path, "not-markdown.txt") == []
+    assert find_related_traces(tmp_path, "a" * 256 + ".md") == []
     assert find_related_traces(tmp_path, "missing.md") == []
     (tmp_path / "directory.md").mkdir()
     assert find_related_traces(tmp_path, "directory.md") == []

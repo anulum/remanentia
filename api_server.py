@@ -128,7 +128,7 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
             self._json_response(
                 {"error": "rate limit exceeded"},
                 429,
-                headers={"Retry-After": limiter.retry_after_seconds()},
+                retry_after=limiter.retry_after_seconds(),
             )
             return False
 
@@ -324,7 +324,7 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
         data: Mapping[str, JsonValue],
         status: int = 200,
         *,
-        headers: dict[str, str] | None = None,
+        retry_after: str | None = None,
     ) -> None:
         """Write a JSON response with audit metadata and CORS headers."""
 
@@ -336,8 +336,8 @@ class RemanentiaHandler(BaseHTTPRequestHandler):
         allow_origin = cors_allow_origin(self.headers.get("Origin"))
         if allow_origin is not None:
             self.send_header("Access-Control-Allow-Origin", allow_origin)
-        for name, value in (headers or {}).items():
-            self.send_header(name, value)
+        if retry_after is not None:
+            self.send_header("Retry-After", str(max(1, int(retry_after))))
         self.end_headers()
         self.wfile.write(body)
 
