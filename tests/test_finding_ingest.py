@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 from typing import Any, cast
 
@@ -128,7 +129,12 @@ class TestIngestCore:
 
     def test_unparsable_payload_is_a_rejection_not_a_crash(self, tmp_path: Path) -> None:
         hub = tmp_path / "hub.db"
-        _append_event(hub, ["malformed", "finding"])
+        _append_event(hub, {"placeholder": True})
+        with sqlite3.connect(hub) as connection:
+            connection.execute(
+                "UPDATE events SET payload = ? WHERE seq = 1",
+                (json.dumps(["malformed", "finding"]),),
+            )
         _append_event(hub, _valid_finding_record("good"))
         sink_dir = tmp_path / "findings"
         report = ingest_from_hub(hub, MarkdownFindingSink(sink_dir), tmp_path / "cur.json")

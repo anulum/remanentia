@@ -14,6 +14,7 @@ import importlib.util
 import json
 import sys
 import threading
+from types import SimpleNamespace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -205,15 +206,30 @@ def test_api_benchmarks_measures_expected_endpoints():
     assert paths.count("/vector/search/public") == 2
 
 
-def test_direct_recall_benchmark_uses_memory_recall():
+def test_direct_recall_benchmark_uses_memory_recall(monkeypatch: pytest.MonkeyPatch):
+    calls: list[tuple[str, int, bool]] = []
+
+    def fake_recall(query: str, *, top_k: int, include_content: bool):
+        calls.append((query, top_k, include_content))
+        return SimpleNamespace(elapsed_ms=1.25, semantic_memories=[{"path": "fixture.md"}])
+
+    import memory_recall
+
+    monkeypatch.setattr(memory_recall, "recall", fake_recall)
     benchmark = _load_benchmark_module()
 
     result = benchmark.direct_recall_benchmark("SNN removal decision", 1)
 
+    assert calls == [
+        ("SNN removal decision", 3, False),
+        ("SNN removal decision", 3, False),
+    ]
     assert result["name"] == "direct_recall"
     assert result["n"] == 1
-    assert result["last_result_summary"]["elapsed_ms"] >= 0.0
-    assert result["last_result_summary"]["semantic_memory_count"] >= 1
+    assert result["last_result_summary"] == {
+        "elapsed_ms": 1.25,
+        "semantic_memory_count": 1,
+    }
 
 
 def test_hardware_snapshot_reads_host_context_and_gpu(tmp_path: Path):
