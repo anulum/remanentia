@@ -75,6 +75,20 @@ def _cli_store_paths() -> StorePaths:
     return resolve_store_paths(base=BASE)
 
 
+def _cli_graph_dir() -> Path:
+    """Return the selected graph root while preserving explicit test overrides."""
+    if os.environ.get("REMANENTIA_BASE") or os.environ.get("REMANENTIA_STIMULI_DIR"):
+        return _cli_store_paths().graph_dir
+    return GRAPH_DIR
+
+
+def _cli_state_dir() -> Path:
+    """Return the selected state root while preserving explicit test overrides."""
+    if os.environ.get("REMANENTIA_BASE") or os.environ.get("REMANENTIA_STIMULI_DIR"):
+        return _cli_store_paths().state_dir
+    return STATE_DIR
+
+
 def cmd_recall(args: argparse.Namespace) -> None:
     """Deep memory recall."""
     from cli_recall import run_recall_command
@@ -260,7 +274,7 @@ def cmd_claim_schema(args: argparse.Namespace) -> None:
 
 def cmd_graph(args: argparse.Namespace) -> None:
     """Show top entity relationships."""
-    relations_path = GRAPH_DIR / "relations.jsonl"
+    relations_path = _cli_graph_dir() / "relations.jsonl"
     if not relations_path.exists():
         print("No relations. Run: remanentia consolidate")
         return
@@ -276,7 +290,7 @@ def cmd_graph(args: argparse.Namespace) -> None:
 
 def cmd_entities(args: argparse.Namespace) -> None:
     """List all known entities."""
-    entities_path = GRAPH_DIR / "entities.jsonl"
+    entities_path = _cli_graph_dir() / "entities.jsonl"
     if not entities_path.exists():
         print("No entities. Run: remanentia consolidate")
         return
@@ -327,7 +341,7 @@ def cmd_daemon(args: argparse.Namespace) -> None:
             _systemctl_user("stop", VECTOR_WORKER_SERVICE)
             print(f"Vector worker service stop requested: {VECTOR_WORKER_SERVICE}")
             return
-        worker = _read_vector_worker_state()
+        worker = _read_vector_worker_state(_cli_state_dir())
         pid = worker.get("pid")
         if isinstance(pid, int):
             try:

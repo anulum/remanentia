@@ -123,6 +123,66 @@ def test_selected_store_reaches_runtime_surfaces_in_fresh_process(tmp_path: Path
     assert payload["trace"] == "onboarding.md"
     assert (store / "snn_state" / "memory_index.json.gz").is_file()
 
+    graph_dir = store / "memory" / "graph"
+    (graph_dir / "relations.jsonl").write_text(
+        json.dumps(
+            {
+                "source": "deployment",
+                "target": "loopback",
+                "weight": 3,
+                "evidence": ["onboarding.md"],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (graph_dir / "entities.jsonl").write_text(
+        json.dumps({"id": "loopback", "type": "concept", "trace_count": 1}) + "\n",
+        encoding="utf-8",
+    )
+
+    graph = subprocess.run(
+        [sys.executable, "-m", "cli", "graph"],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert "deployment" in graph.stdout
+    assert "loopback" in graph.stdout
+
+    entities = subprocess.run(
+        [sys.executable, "-m", "cli", "entities"],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert "loopback" in entities.stdout
+
+    (store / "snn_state" / "vector_refresh_worker.json").write_text(
+        json.dumps({"timestamp_unix": 0, "pid": 424242, "status": "idle"}) + "\n",
+        encoding="utf-8",
+    )
+    stop = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import argparse, cli; "
+                "cli._systemd_user_unit_available = lambda _service: False; "
+                "cli.os.kill = lambda pid, sig: print(f'kill:{pid}:{sig}'); "
+                "cli.cmd_daemon(argparse.Namespace(action='stop'))"
+            ),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert "kill:424242:" in stop.stdout
+    assert "Sent SIGTERM to vector worker PID 424242" in stop.stdout
+
     probe = subprocess.run(
         [
             sys.executable,
