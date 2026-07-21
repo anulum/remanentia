@@ -40,6 +40,7 @@ import os
 import types
 import time
 from datetime import date
+from statistics import median
 from unittest.mock import patch
 
 import numpy as np
@@ -262,7 +263,8 @@ class TestLLMSetupPerformance:
         from llm_setup import write_config
 
         path = tmp_path / "perf.toml"
-        ms, result = _timed(write_config, path=path, n=50)
+        samples = [_timed(write_config, path=path, n=10)[0] for _ in range(5)]
+        ms = median(samples)
         assert ms < _budget(10), f"write_config: {ms:.2f}ms exceeds 10ms budget"
 
 
