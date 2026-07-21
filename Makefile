@@ -21,9 +21,17 @@ test-cov-combined:
 	PYTHON=$(PYTHON) bash tools/run_combined_coverage.sh
 
 build-rust:
-	@for crate in $(CRATES); do \
-		echo "== maturin develop $$crate ==" ; \
-		$(PYTHON) -m maturin develop --release --manifest-path $$crate/Cargo.toml || exit 1 ; \
+	@wheel_root=$$(mktemp -d); \
+	trap 'rm -rf "$$wheel_root"' EXIT; \
+	for crate in $(CRATES); do \
+		wheel_dir="$$wheel_root/$$(basename "$$crate")"; \
+		mkdir -p "$$wheel_dir"; \
+		echo "== maturin build $$crate =="; \
+		$(PYTHON) -m maturin build --release --manifest-path "$$crate/Cargo.toml" \
+			--interpreter "$(PYTHON)" --out "$$wheel_dir" || exit 1; \
+		set -- "$$wheel_dir"/*.whl; \
+		[ "$$#" -eq 1 ] && [ -f "$$1" ] || { echo "expected one wheel for $$crate" >&2; exit 1; }; \
+		$(PYTHON) -m pip install --force-reinstall --no-deps "$$1" || exit 1; \
 	done
 
 # Prove the installed-wheel SNN-memory coverage floors that live OUTSIDE the
