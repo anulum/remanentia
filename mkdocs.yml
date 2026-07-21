@@ -38,6 +38,9 @@ plugins:
         python:
           paths: ["."]
           options:
+            preload_modules:
+              - consolidation_summary_dag
+              - memory_index_models
             show_source: true
             show_root_heading: true
             members_order: source
