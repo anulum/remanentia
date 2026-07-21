@@ -11,7 +11,6 @@
 from __future__ import annotations
 
 import json
-import re
 import time
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -110,10 +109,11 @@ def find_related_traces(
 ) -> list[dict[str, object]]:
     """Rank neighboring Markdown traces by lexical Jaccard similarity."""
     root = traces_dir.resolve()
+    stem = trace_name[:-3] if trace_name.endswith(".md") else ""
     if (
-        not trace_name
+        not stem
         or len(trace_name) > 255
-        or not re.fullmatch(r"[A-Za-z0-9_.\-]+\.md", trace_name)
+        or not all(char.isascii() and (char.isalnum() or char in "_.-") for char in stem)
     ):
         return []
     target = (root / trace_name).resolve()

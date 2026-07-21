@@ -23,6 +23,7 @@ from knowledge_store import (
     _extract_entities,
     _generate_prospective_queries,
     _note_id,
+    _percentage_tokens,
     _tokenize,
     extract_person_names,
 )
@@ -84,6 +85,11 @@ class TestExtractEntities:
     def test_percentages(self) -> None:
         ents = _extract_entities("Accuracy was 81.2%.")
         assert "81.2%" in ents
+        assert _percentage_tokens("Scores 80%, 81.2%, 5.% and 6.7.8%.") == {
+            "80%",
+            "81.2%",
+            "8%",
+        }
 
 
 class TestNoteId:

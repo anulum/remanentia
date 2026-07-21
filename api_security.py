@@ -226,7 +226,12 @@ def cors_origins_from_env() -> list[str]:
     configured = os.environ.get("REMANENTIA_CORS_ORIGINS", "").strip()
     if not configured:
         return ["*"]
-    return [origin.strip() for origin in configured.split(",") if origin.strip()]
+    origins = []
+    for raw_origin in configured.split(","):
+        origin = raw_origin.strip()
+        if origin and "\r" not in origin and "\n" not in origin:
+            origins.append(origin)
+    return origins
 
 
 def cors_allow_origin(request_origin: str | None) -> str | None:
@@ -242,8 +247,10 @@ def cors_allow_origin(request_origin: str | None) -> str | None:
     origins = cors_origins_from_env()
     if origins == ["*"]:
         return "*"
-    if request_origin is not None and request_origin in origins:
-        return request_origin
+    if request_origin is not None:
+        for allowed_origin in origins:
+            if request_origin == allowed_origin:
+                return allowed_origin
     return None
 
 

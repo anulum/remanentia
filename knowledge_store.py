@@ -33,6 +33,32 @@ TRIGGERS_PATH = BASE / "memory" / "triggers.jsonl"
 # Typed edge types for graph traversal (Feature 4)
 EDGE_TYPES = {"related", "supersedes", "superseded_by", "depends_on", "derived_from", "contains"}
 
+
+def _percentage_tokens(text: str) -> set[str]:
+    """Extract integer and decimal percentage tokens in one linear scan."""
+    percentages: set[str] = set()
+    index = 0
+    while index < len(text):
+        if not text[index].isdigit():
+            index += 1
+            continue
+        start = index
+        while index < len(text) and text[index].isdigit():
+            index += 1
+        if index < len(text) and text[index] == ".":
+            decimal = index
+            index += 1
+            fraction = index
+            while index < len(text) and text[index].isdigit():
+                index += 1
+            if fraction == index:
+                index = decimal
+        if index < len(text) and text[index] == "%":
+            percentages.add(text[start : index + 1])
+            index += 1
+    return percentages
+
+
 # Contradiction signal words
 _POSITIVE_ACTIONS = {
     "added",
@@ -131,8 +157,7 @@ def _extract_entities(text: str) -> set[str]:
             entities.add(k)
     for m in re.finditer(r"v\d+\.\d+(?:\.\d+)?", text):
         entities.add(m.group())
-    for m in re.finditer(r"\d+(?:\.\d+)?%", text):
-        entities.add(m.group())
+    entities.update(_percentage_tokens(text))
     for m in re.finditer(r"(?<=[.!?\n] |\: )[A-Z][a-z]{2,}", text):
         entities.add(m.group().lower())
     return entities
@@ -194,7 +219,7 @@ def _generate_prospective_queries(
         queries.append(f"what about {ent}")
         if any(act in content_lower for act in _POSITIVE_ACTIONS | _NEGATIVE_ACTIONS):
             queries.append(f"what happened to {ent}")
-        if re.search(r"\d+(?:\.\d+)?%", content):
+        if _percentage_tokens(content):
             queries.append(f"what is the score for {ent}")
 
     # Keyword-based questions
@@ -626,8 +651,8 @@ class KnowledgeStore:
                 return nid
 
             # Different percentage for same context
-            content_pcts = set(re.findall(r"\d+(?:\.\d+)?%", content))
-            note_pcts = set(re.findall(r"\d+(?:\.\d+)?%", note.content))
+            content_pcts = _percentage_tokens(content)
+            note_pcts = _percentage_tokens(note.content)
             if content_pcts and note_pcts and content_pcts != note_pcts:
                 # Only if they share meaningful entities (not just "%" in both)
                 if len(shared_entities) >= 2:

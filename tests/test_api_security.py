@@ -508,3 +508,13 @@ class TestCorsOrigins:
         monkeypatch.setenv("REMANENTIA_CORS_ORIGINS", "https://ok.example")
         assert cors_allow_origin("https://evil.example") is None
         assert cors_allow_origin(None) is None
+
+    def test_configured_allowlist_drops_header_injection(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv(
+            "REMANENTIA_CORS_ORIGINS",
+            "https://ok.example,https://bad.example\r\nX-Injected: yes",
+        )
+        assert cors_origins_from_env() == ["https://ok.example"]
+        assert cors_allow_origin("https://bad.example\r\nX-Injected: yes") is None
