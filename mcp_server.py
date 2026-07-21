@@ -305,6 +305,9 @@ def handle_recall(
     """Memory recall via unified BM25 + embedding index + knowledge notes."""
     global _UNIFIED_INDEX
 
+    if not query.strip():
+        return "Empty query."
+
     workspace = (base or BASE).resolve()
     default_workspace = workspace == BASE.resolve()
     if not default_workspace and index is None and index_path is None:
