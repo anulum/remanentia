@@ -5,7 +5,7 @@
 # Mirrors pyproject core deps + the [api] extra, plus the build toolchain so the
 # local package installs with --no-build-isolation (no unpinned build fetch).
 pip==26.1.2
-setuptools>=75.0
+setuptools>=83.0.0
 wheel
 defusedxml>=0.7.1
 numpy>=1.24
