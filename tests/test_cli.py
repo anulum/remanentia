@@ -27,6 +27,14 @@ from cli import (
 )
 
 
+def test_cli_runtime_dirs_follow_selected_store(tmp_path, monkeypatch):
+    """Graph and worker commands resolve their roots from REMANENTIA_BASE."""
+    monkeypatch.setenv("REMANENTIA_BASE", str(tmp_path))
+
+    assert cli._cli_graph_dir() == tmp_path / "memory" / "graph"
+    assert cli._cli_state_dir() == tmp_path / "snn_state"
+
+
 # ── cmd_status ───────────────────────────────────────────────────
 
 
