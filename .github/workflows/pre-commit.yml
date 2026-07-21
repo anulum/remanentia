@@ -26,4 +26,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd  # v3.0.1
+      # Run the tool directly: pre-commit/action v3 transitively invokes
+      # actions/cache by a mutable tag, which violates SHA-pinning policy.
+      - name: Install pre-commit
+        run: python -m pip install "pre-commit==4.5.1"
+
+      - name: Run pre-commit
+        run: pre-commit run --all-files --show-diff-on-failure
