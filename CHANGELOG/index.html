@@ -1,0 +1,4305 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Local-first, auditable memory for AI agents and knowledge-intensive software">
+      
+      
+        <meta name="author" content="Miroslav Šotek">
+      
+      
+        <link rel="canonical" href="https://anulum.github.io/remanentia/CHANGELOG/">
+      
+      
+        <link rel="prev" href="../research/temporal_snn_memory/">
+      
+      
+      
+      <link rel="icon" href="../assets/anulum_logo_company.jpg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>Changelog - Remanentia</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#changelog" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Remanentia" class="md-header__button md-logo" aria-label="Remanentia" data-md-component="logo">
+      
+  <img src="../assets/anulum_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Remanentia
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Changelog
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="amber"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="deep-purple" data-md-color-accent="amber"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/anulum/remanentia" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    anulum/remanentia
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Remanentia" class="md-nav__button md-logo" aria-label="Remanentia" data-md-component="logo">
+      
+  <img src="../assets/anulum_logo.png" alt="logo">
+
+    </a>
+    Remanentia
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/anulum/remanentia" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    anulum/remanentia
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Discover
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Discover
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../product/use-cases-and-value/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Use Cases and Value
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/learning-path/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Learning Path
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Tutorials
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Tutorials
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/quickstart/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quick Start
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/agent-memory/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Agent Memory with MCP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/knowledge_store_tutorial/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Knowledge Store
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/temporal_tutorial/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Temporal Queries
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/notebook_walkthrough/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Notebook Walkthrough
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Guides
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Guides
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/getting-started/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Getting Started
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/choose-an-interface/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Choose an Interface
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/USER_MANUAL/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    User Manual
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/INTEGRATION_GUIDE/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Integration Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/container_deployment/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Container Deployment
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/PERFORMANCE_TUNING/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/local_llm_setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Local LLM Setup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Model Cards
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Model Cards
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../models/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../models/embedding/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Embedding (C1)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../models/cross_encoder/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cross-Encoder (C2)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../models/relation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Relation Classifier (C3)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../models/date_normalizer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Date Normaliser (C4)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../models/fact_validity/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Fact Validity (C5)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    API Reference
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            API Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    API Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/memory_index/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    memory_index
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/memory_sources/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    memory_sources
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/store_paths/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    store_paths
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/store_manifest/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    store_manifest
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/store_sources/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    store_sources
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/index_freshness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    index_freshness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/claim_axes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    claim_axes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/claim_schema/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    claim_schema
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/memory_recall/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    memory_recall
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/recall_ledger/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    recall_ledger
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/recall_outcome_tracker/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    recall_outcome_tracker
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/recall_calibration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    recall_calibration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/bus_recall/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    bus_recall
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/retrieved_context/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    retrieved_context
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/full_s_diagnostics/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    full_s_diagnostics
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/benchmark_suites/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    benchmark_suites
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/benchmark_evidence/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    benchmark_evidence
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/benchmark_manifest/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    benchmark_manifest
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/benchmark_report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    benchmark_report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/efficiency_frontier/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    efficiency_frontier
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/compiled_memory/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    compiled_memory
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/mcp_server/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    mcp_server
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/knowledge_store/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    knowledge_store
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/consolidation_engine/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    consolidation_engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/answer_extractor/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    answer_extractor
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/answer_normalizer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    answer_normalizer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/temporal_graph/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    temporal_graph
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/entity_extractor/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    entity_extractor
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/observer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    observer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/reflector/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    reflector
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/arcane_retriever/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    arcane_retriever
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/fact_decomposer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    fact_decomposer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/date_normalizer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    date_normalizer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/temporal_relation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    temporal_relation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/fact_validity_model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    fact_validity_model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/api/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    api
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/openapi_export/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    openapi_export
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/api_server/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    api_server
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/api_security/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    api_security
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/llm_backend/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    llm_backend
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/llm_setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    llm_setup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/context_builder/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    context_builder
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/signal_detector/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    signal_detector
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/skill_extractor/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    skill_extractor
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/active_retrieval/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    active_retrieval
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/aggregate_precompute/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    aggregate_precompute
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/cross_session_synthesis/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    cross_session_synthesis
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/device_utils/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    device_utils
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/finding_ingest/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    finding_ingest
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/feed_ingest/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    feed_ingest
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/feed_normalization/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    feed_normalization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/write_discipline/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    write_discipline
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/coverage_accuracy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    coverage_accuracy
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/no_egress_audit/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    no_egress_audit
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/lineage_completeness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    lineage_completeness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/fleet_recall_scorer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    fleet_recall_scorer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/judge_agreement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    judge_agreement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/provenance_export/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    provenance_export
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/world_class_scorecard/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    world_class_scorecard
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/lean_context/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    lean_context
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/observed_context/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    observed_context
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/reader_budget/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    reader_budget
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/hypothesis_checkpoint/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    hypothesis_checkpoint
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/scorecard_report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    scorecard_report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/answer_confidence/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    answer_confidence
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/discipline_impact/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    discipline_impact
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/file_utils/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    file_utils
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/finding_envelope/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    finding_envelope
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/recall_gate/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    recall_gate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/memory_guarded/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    memory_guarded
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/pii_redactor/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    pii_redactor
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/seed_utils/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    seed_utils
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/vector_index/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    vector_index
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/vector_pipeline/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    vector_pipeline
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/cli_recall/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    cli_recall
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/memory_dates/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    memory_dates
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/text_chunking/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    text_chunking
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/cli/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CLI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_2" id="__nav_7_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    ADR Log
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_2">
+            <span class="md-nav__icon md-icon"></span>
+            ADR Log
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Index
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0000-template/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Template
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-use-adr-log/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0001 Use ADR log
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0002-remove-pickle-runtime/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0002 Remove pickle runtime
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0003-pluggable-llm-backend-protocol/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0003 Pluggable LLM backend
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0004-dual-retrieval-stacks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0004 Dual retrieval stacks
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0005-rule-based-date-normalisation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0005 Rule-based date normalisation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0006-preregister-temporal-snn-memory-experiment/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0006 Preregister temporal SNN experiment
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0007-amend-g2-supra-threshold-operating-point/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0007 Amend G2 operating point
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0008-amend-stdp-reach-ltp-dominant-plasticity/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0008 Amend STDP reach
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-amend-weight-max-headroom-for-reachable-depolarisation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0009 Amend weight headroom
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Benchmarks
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            Benchmarks
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/LongMemEval/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LongMemEval
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/LOCOMO/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LOCOMO
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/CHANNEL_ABLATIONS/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Channel Ablations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/SOVEREIGN_MEMORY_EVALUATION/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Sovereign Memory Evaluation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Research
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            Research
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/snn_consolidation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    SNN Consolidation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/temporal_snn_memory/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Temporal SNN Memory Experiment
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Changelog
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Changelog
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#unreleased" class="md-nav__link">
+    <span class="md-ellipsis">
+      [Unreleased]
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[Unreleased]">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added" class="md-nav__link">
+    <span class="md-ellipsis">
+      Added
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed" class="md-nav__link">
+    <span class="md-ellipsis">
+      Changed
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#050-2026-06-29" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.5.0] - 2026-06-29
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[0.5.0] - 2026-06-29">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Added
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Changed
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#040-2026-06-28" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.4.0] - 2026-06-28
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[0.4.0] - 2026-06-28">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Added
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixed" class="md-nav__link">
+    <span class="md-ellipsis">
+      Fixed
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Changed
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Documentation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#added_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      Added
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixed_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Fixed
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#031-2026-03-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.3.1] - 2026-03-26
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[0.3.1] - 2026-03-26">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#retrieval-quality-wave-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Retrieval Quality (Wave 2)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      Testing
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#030-2026-03-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.3.0] - 2026-03-26
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[0.3.0] - 2026-03-26">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#retrieval-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      Retrieval Engine
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#temporal-reasoning" class="md-nav__link">
+    <span class="md-ellipsis">
+      Temporal Reasoning
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#entity-graph" class="md-nav__link">
+    <span class="md-ellipsis">
+      Entity Graph
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#concurrency" class="md-nav__link">
+    <span class="md-ellipsis">
+      Concurrency
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#answer-extraction" class="md-nav__link">
+    <span class="md-ellipsis">
+      Answer Extraction
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexing" class="md-nav__link">
+    <span class="md-ellipsis">
+      Indexing
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#testing_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Testing
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#unreleased" class="md-nav__link">
+    <span class="md-ellipsis">
+      [Unreleased]
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[Unreleased]">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added" class="md-nav__link">
+    <span class="md-ellipsis">
+      Added
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed" class="md-nav__link">
+    <span class="md-ellipsis">
+      Changed
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#050-2026-06-29" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.5.0] - 2026-06-29
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[0.5.0] - 2026-06-29">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Added
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Changed
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#040-2026-06-28" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.4.0] - 2026-06-28
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[0.4.0] - 2026-06-28">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Added
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixed" class="md-nav__link">
+    <span class="md-ellipsis">
+      Fixed
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Changed
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Documentation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#added_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      Added
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixed_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Fixed
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#031-2026-03-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.3.1] - 2026-03-26
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[0.3.1] - 2026-03-26">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#retrieval-quality-wave-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Retrieval Quality (Wave 2)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      Testing
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#030-2026-03-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      [0.3.0] - 2026-03-26
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[0.3.0] - 2026-03-26">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#retrieval-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      Retrieval Engine
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#temporal-reasoning" class="md-nav__link">
+    <span class="md-ellipsis">
+      Temporal Reasoning
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#entity-graph" class="md-nav__link">
+    <span class="md-ellipsis">
+      Entity Graph
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#concurrency" class="md-nav__link">
+    <span class="md-ellipsis">
+      Concurrency
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#answer-extraction" class="md-nav__link">
+    <span class="md-ellipsis">
+      Answer Extraction
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexing" class="md-nav__link">
+    <span class="md-ellipsis">
+      Indexing
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#testing_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Testing
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<p>All notable changes to Remanentia are documented here.
+Format: <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog</a>.</p>
+<h2 id="unreleased">[Unreleased]<a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
+<h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
+<ul>
+<li>The documentation now includes a product and use-case overview, an interface
+  chooser, a stable API entry point, a complete MCP tutorial, all accepted ADRs,
+  and sovereign-evaluation navigation.</li>
+</ul>
+<h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
+<ul>
+<li>CLI, MCP, HTTP, container, and Python surfaces now derive mutable runtime
+  paths from the operator-selected <code>REMANENTIA_BASE</code>; onboarding examples set an
+  explicit writable store.</li>
+<li>Product positioning separates the tested retrieval core from legacy and
+  preregistered temporal-SNN research.</li>
+<li>Cross-session entity-summary synthesis is now <strong>off by default</strong> (opt in with
+  <code>REMANENTIA_SYNTHESIS_ENABLE=1</code>, replacing the previous
+  <code>REMANENTIA_SYNTHESIS_DISABLE</code> opt-out). A 2-seed full-S ablation found no
+  reliable accuracy effect — the per-seed reader-judge swings exceeded the
+  on/off difference — so it ships as an opt-in experiment rather than a default.</li>
+</ul>
+<h2 id="050-2026-06-29">[0.5.0] - 2026-06-29<a class="headerlink" href="#050-2026-06-29" title="Permanent link">&para;</a></h2>
+<h3 id="added_1">Added<a class="headerlink" href="#added_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>cross_session_synthesis.py</code> consolidates the retrieved facts about a
+  question's named entities into one deduplicated, chronologically-ordered
+  <code>ENTITY SUMMARY</code> block (latest dated statement marked <code>(most recent)</code>) before
+  the reader sees the context. It runs only over already-retrieved facts, adds
+  no extra model call, and is wired into the multi-session and knowledge-update
+  reader path alongside the deterministic aggregation pre-compute. Opt out with
+  <code>REMANENTIA_SYNTHESIS_DISABLE=1</code>.</li>
+</ul>
+<h3 id="changed_1">Changed<a class="headerlink" href="#changed_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Container image installs its runtime and build toolchain from a fully
+  hash-pinned lock (<code>requirements/docker.txt</code>, generated by
+  <code>pip-compile --generate-hashes</code>) using <code>pip install --require-hashes</code>, and
+  builds the local package with <code>--no-build-isolation --no-deps</code>, removing
+  unpinned runtime and build-time dependency fetches from the build.</li>
+</ul>
+<h2 id="040-2026-06-28">[0.4.0] - 2026-06-28<a class="headerlink" href="#040-2026-06-28" title="Permanent link">&para;</a></h2>
+<h3 id="added_2">Added<a class="headerlink" href="#added_2" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>store_sources.py</code>, <code>remanentia-store-sources</code>, and
+  <code>remanentia store-sources</code> write the selected-store <code>MemoryIndex</code> source
+  config used to index traces, semantic memory, compiled facts, and the
+  external stimulus firehose during MS.0 backfill refreshes.</li>
+<li><code>store_manifest.py</code>, <code>remanentia-store-manifest</code>, and
+  <code>remanentia store-manifest</code> record the selected memory-store paths and current
+  artifact counts before backlog reconsolidation mutates corpus state.</li>
+<li><code>store_paths.py</code> centralises the canonical memory-store layout so hub ingest,
+  feed ingest, and index freshness monitoring derive findings, cursor, digest,
+  stimuli, and vector-index paths from the same <code>REMANENTIA_BASE</code> /
+  <code>REMANENTIA_STIMULI_DIR</code> contract.</li>
+<li><code>memory_sources.py</code> provides neutral repository-local MemoryIndex source
+  defaults plus JSON/env configuration through
+  <code>REMANENTIA_MEMORY_SOURCES_CONFIG</code> and <code>REMANENTIA_MEMORY_SOURCES_JSON</code>.</li>
+<li><code>data/compiled_seed_facts.jsonl</code> supplies durable historical and cross-project
+  compiled-memory seed facts as data instead of Python control flow.</li>
+<li><code>feed_ingest.py</code> and the <code>remanentia-feed-ingest</code> console script ingest explicit
+  <code>Finding:</code> / <code>Decision:</code> rows from <code>~/synapse/feed.ndjson</code>, reuse the
+  <code>synapse_channel</code> finding parser and admission gate, and persist admitted
+  candidates through the existing Markdown finding sink.</li>
+<li>Full LongMemEval-S benchmark mode (<code>bench_longmemeval.py --full</code>): runs the realistic
+  ~50-session haystack instead of the oracle (gold-only) setting, with a new
+  retrieved-context reader that feeds the reader only the top retrieved sessions rather
+  than the whole history. Tunable via <code>REMANENTIA_FULL_MAX_SESSIONS</code>,
+  <code>REMANENTIA_FULL_CHAR_BUDGET</code>, <code>REMANENTIA_FULL_RETRIEVE_K</code>.</li>
+<li><code>retrieved_context.py</code> — budget-limited retrieved-session assembly and gold-session
+  recall scoring for large-haystack evaluation.</li>
+<li><code>tools/retrieval_recall.py</code> — full-S retrieval-recall diagnostic (recall@N per
+  category, no LLM calls).</li>
+<li>Claim-axis JSON Schema export via <code>remanentia claim-schema</code> and
+  <code>remanentia-claim-schema</code>, with a committed schema artefact for shared
+  evidence/status/admission/freshness consumers.</li>
+<li>Benchmark reproducibility manifests via <code>remanentia-benchmark-manifest</code>, with
+  report/source SHA-256 hashes, reproduction commands, score summaries, and
+  environment metadata for committed evidence artefacts.</li>
+<li>Deterministic REST OpenAPI schema export via <code>remanentia openapi</code>, including
+  runtime-aligned bearer-auth annotations and a committed schema artifact for
+  client generation and release audits.</li>
+<li>Benchmark efficiency-frontier reporting via <code>remanentia-efficiency-frontier</code>,
+  with explicit baseline metadata and null-preserving accuracy/token/p95-latency
+  comparisons from committed evidence reports.</li>
+<li>Benchmark evidence reports via <code>remanentia-benchmark-report</code>, with
+  LongMemEval judge prompt hashes, token accounting, and latency metadata on
+  newly judged result rows.</li>
+<li>Full-S LongMemEval Arcane hypothesis rows now include retrieval-selection
+  diagnostics: selected sessions, answer-session recall, session-limit misses,
+  and character-budget misses.</li>
+<li>Full-S LongMemEval evaluation now prints the same retrieval-vs-synthesis
+  taxonomy exposed by <code>remanentia-full-s-diagnostics</code>.</li>
+<li>Recall abstention calibration CLI/API with held-out coverage, accuracy, and
+  calibration-error reporting from correctness-labelled recall ledger outcomes.</li>
+<li>Dockerfile and Compose deployment for the REST API, with a non-root runtime,
+  persistent <code>/data</code> store, secret-mounted API token, and <code>/health</code> healthcheck.</li>
+<li>Shared claim-axis vocabulary now keeps finding ingest admission and recall
+  rendering on the same evidence/status/admission/freshness wire values.</li>
+<li>SYNAPSE feed ingest now normalises project, actor, sequence, and timestamp
+  provenance before admitted findings enter memory.</li>
+<li>Finding envelope verification now accepts audited supersession closures and
+  downgrades superseded signed findings to ungraded after signature verification.</li>
+<li>Finding ingest now rejects falsified findings that still claim
+  reference-validated status before they enter persistent memory.</li>
+</ul>
+<h3 id="fixed">Fixed<a class="headerlink" href="#fixed" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>temporal_relation.py</code> now has typed model/tokenizer/config boundaries,
+  complete docstrings, and a strict-mypy clean dedicated C3 wrapper test
+  surface at 100% focused coverage.</li>
+<li>The top-level public export facade now has a strict-mypy clean test surface,
+  stale fallback import ignores removed, and <code>__version__</code> aligned with package
+  metadata.</li>
+<li><code>fact_decomposer.py</code> now has typed session input and optional native-extension
+  boundaries, a documented <code>FactIndex.__post_init__</code>, and a strict-mypy clean
+  dedicated decomposition/index test surface at 100% focused coverage.</li>
+<li><code>llm_backend.py</code> now has typed TOML, hosted-SDK, and local HTTP JSON
+  boundaries, complete audited backend docstrings, and a strict-mypy clean
+  dedicated backend test surface at 100% focused coverage.</li>
+<li><code>consolidation_engine.py</code> now has typed JSON/trace/DAG boundaries,
+  complete audited helper docstrings, strict-mypy clean dedicated tests, and
+  100% focused consolidation coverage with weak consolidation assertions
+  tightened to real graph/relation/status outcomes.</li>
+<li><code>api.py</code> now exposes FastAPI route annotations that stay runtime-safe for
+  Pydantic response schema generation, while its request models, middleware,
+  health/status/graph/vector/correctness handlers, and helper functions are
+  strict-mypy/docstring clean with 100% focused API coverage.</li>
+<li><code>api_server.py</code> now has typed stdlib-server security dependencies,
+  JSON-object request validation, complete audited handler docstrings, and a
+  strict-mypy clean dedicated HTTP handler test surface at 100% focused
+  coverage.</li>
+<li><code>temporal_graph.py</code> now has typed optional Rust-extension boundaries,
+  complete audited graph/dataclass docstrings, strict-mypy clean fallback and
+  LongMemEval integration tests, and 100% focused coverage.</li>
+<li><code>answer_extractor.py</code> now has typed optional native-extension and LLM backend
+  boundaries, complete audited helper docstrings, and a strict-mypy clean
+  dedicated answer-extraction test surface at 100% focused coverage.</li>
+<li><code>memory_recall.py</code> now has explicit JSON row typing, complete audited helper
+  docstrings, and a strict-mypy clean dedicated recall test surface while
+  preserving 100% focused coverage and Rust-extension fallback coverage.</li>
+<li><code>answer_normalizer.py</code> now has complete audited helper docstrings and its
+  dedicated normalisation tests are strict-mypy clean at 100% focused coverage,
+  with Rust-extension wiring and fallback behavior verified.</li>
+<li><code>api_security.py</code> now uses explicit typed path inputs and complete helper
+  docstrings, with its dedicated security primitive tests strict-mypy clean at
+  100% focused coverage.</li>
+<li><code>benchmark_suites.py</code> now ignores non-object benchmark JSON reports, exposes
+  explicit typed query rows, and is strict-mypy/docstring clean with 100%
+  focused coverage.</li>
+<li>API reference wiring now has a local gate that checks packaged Python
+  modules, <code>docs/api</code> pages, and MkDocs navigation stay in parity.</li>
+<li>Knowledge-store note and trigger IDs now use SHA-256 digest prefixes, and
+  optional embedding, GLiNER, and recall-bus shutdown failure paths log
+  recoverable exceptions instead of silently swallowing them.</li>
+<li>Cross-encoder reranking is on by default again in <code>ArcaneRetriever</code>. It had been
+  gated behind an opt-in environment flag, which silently cost ~8–9 LongMemEval
+  questions (knowledge-update and multi-session). Opt out with
+  <code>REMANENTIA_ARCANE_CE_DISABLE=1</code> for latency-sensitive live/MCP use.</li>
+</ul>
+<h3 id="changed_2">Changed<a class="headerlink" href="#changed_2" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>aggregate_precompute.py</code> now emits conservative <code>COMPUTED COUNT:</code> lines for
+  explicit distinct-count questions and the LongMemEval reader prompt trusts
+  them alongside deterministic totals.</li>
+<li><code>tools/install_user_services.py</code> now accepts <code>--base</code> and <code>--stimuli-dir</code>,
+  exports the selected store into generated API, vector-worker, and
+  freshness-watchdog units, and writes vector-worker and freshness artifacts
+  under that selected store.</li>
+<li><code>remanentia status</code> and <code>remanentia init</code> now use the same canonical
+  <code>store_paths.py</code> resolver as ingest and freshness monitoring, so
+  <code>REMANENTIA_BASE</code> selects one operator-visible store instead of leaving CLI
+  status on import-time repository paths.</li>
+<li><code>memory_index.py</code> no longer hardcodes deployment-specific source roots; it
+  consumes the resolved <code>memory_sources.SourceConfig</code> while preserving the
+  existing <code>SOURCES</code> / <code>SOURCE_EXTENSIONS</code> compatibility globals for tests and
+  callers that patch them.</li>
+<li><code>compiled_memory.py</code> loads seed facts from tracked JSONL data, with an installed
+  data-file fallback, and no longer mines the removed internal benchmark script.</li>
+<li>Benchmark reporting reconciled around the two LongMemEval settings. The headline is
+  now the full-S retrieval setting (3-run mean 56.6% overall on the current
+  <code>gpt-4o-mini</code>), which is what published leaderboards measure; the 72.2%/~71% figures
+  are labelled as the oracle setting (gold sessions only, retrieval not exercised) and
+  marked not comparable to leaderboards. Per-run accuracy history, including the three
+  full-S runs, is recorded in <code>benchmarks/longmemeval_history.jsonl</code>.</li>
+<li><code>arcane_retriever.py</code> is strict-mypy clean.</li>
+</ul>
+<h3 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>compiled_memory</code> now has a MkDocs API page documenting seed facts and generated
+  compiled-fact outputs.</li>
+<li><strong>Model cards published</strong> (2026-04-17) at <code>docs/models/</code> for the five
+  trained components (C1 embedding, C2 cross-encoder, C3 relation
+  classifier, C4 date normaliser, C5 fact-validity). Each card states
+  what the model does, what it was trained on, how it was evaluated,
+  and what it does <strong>not</strong> do. C3 in particular is publicly documented
+  as non-functional (F1-macro 0.178 vs 0.167 random baseline) —
+  previously this fact lived only in <code>training/HONEST_ASSESSMENT.md</code>.
+  Not wired into any default code path regardless. README updated with
+  component-status table.</li>
+<li><strong>LOCOMO committed result published</strong> (2026-04-17): 83.1 % overall
+  (1 651 / 1 986) from <code>paper/locomo_results.json</code> supersedes the
+  pre-LLM 74.7 % baseline in README and <code>docs/benchmarks/LOCOMO.md</code>.</li>
+</ul>
+<h3 id="added_3">Added<a class="headerlink" href="#added_3" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>LongMemEval R11 — 65% temporal target achieved</strong> (2026-04-11, commits 94f44c7 + 8b187a4 + d9d9713 + 9dd754b):</li>
+<li><strong>temporal-reasoning: 65.4% (87/133)</strong> — target achieved, up from R10 57.9% (+7.5pp / +10 questions)</li>
+<li>Cumulative R8 → R11: 45.9% → 65.4% = <strong>+19.5pp / +26 questions</strong></li>
+<li>Overall: 72.2% (361/500); R10→R11 movement (−0.6pp) within LLM single-run noise envelope</li>
+<li>Category changes R10→R11: multi-session 63.2%→54.1% (−12, within typical ~±10 question noise — all R11 code changes are gated inside <code>if qtype == "temporal-reasoning"</code> branches and do not touch multi-session pipeline), knowledge-update 88.5%→84.6% (−3), preference 83.3%→90.0% (+2, recovered)</li>
+<li>Four pipeline changes for temporal-reasoning:<ul>
+<li><strong>Fuzzy inclusive/exclusive durations</strong> (commit 94f44c7): <code>temporal_code_execute</code> and <code>extract_duration</code> emit dual-format output ("30 days or 31 days counting both endpoints") so the LLM/judge has both inclusive and exclusive forms.</li>
+<li><strong>Question_date anchoring</strong> (commit 8b187a4): plumb <code>question_date</code> from oracle through <code>run_benchmark → _arcane_answer → _build_context → _tremu_precompute → temporal_code_execute</code>. Prepends <code>TODAY (question was asked on): ...</code> to temporal-reasoning LLM prompt. Fixed "how many X ago" queries where the LLM was hallucinating "today" as an arbitrary date.</li>
+<li><strong>Multi-event proximity tuning</strong> (commit d9d9713): <code>_score_event_vs_query</code> combines unigram + 2× bigram + density term; <code>_proximity_score</code> uses distance-weighted scoring within a tighter 60-char window. Eliminates tied scoring that caused <code>_pick_duration_pair</code> / <code>extract_duration</code> to choose the wrong date pair.</li>
+<li><strong>Narrow multi-hop chain resolution</strong> (commit 9dd754b): <code>_expand_chained_dates</code> resolves <code>"N (days|weeks|months) (after|before) YYYY-MM-DD"</code> patterns within a single sentence, emitting the computed ISO date as a new <code>TemporalEvent</code>. Scope limited to ISO anchors; entity-linked chains out of scope.</li>
+</ul>
+</li>
+<li>31 new tests across temporal_graph (22: fuzzy dual-format, question_date anchor, scoring, proximity, chained), answer_extractor (9: dual-format + proximity), bringing total to 1,814</li>
+<li>
+<p>R10 results archived as <code>data/longmemeval_hypotheses.results.R10_baseline.jsonl</code> (gitignored)</p>
+</li>
+<li>
+<p><strong>LongMemEval R10 — intraday HH:MM resolution</strong> (2026-04-11, commits 416228f + d0c7640):</p>
+</li>
+<li><strong>Overall: 72.8% (364/500)</strong> — within LLM judge noise margin of R9 73.0%</li>
+<li><strong>temporal-reasoning: 57.9% (77/133)</strong>, up from R9 56.4% (+1.5pp / +2 questions)</li>
+<li>knowledge-update 88.5%, multi-session 63.2%, single-session-preference 83.3% (was 90.0% — LLM noise on 30-question subset)</li>
+<li>Cumulative: temporal 45.9% (R8) → 57.9% (R10) = +12pp / +16 questions</li>
+<li><code>date_normalizer._parse_session_datetime()</code> parses LongMemEval timestamps with HH:MM precision</li>
+<li><code>AtomicFact.session_date</code> field propagated by <code>fact_decomposer</code> for intraday tiebreaking</li>
+<li><code>arcane_retriever._sort_results_chronologically()</code> uses 4-tier key:
+    <code>(date, normalised_session_datetime, session_idx, turn_idx)</code> — same-day facts sorted by HH:MM</li>
+<li><code>ArcaneRetriever.build_context</code> accepts <code>sort_chronologically: bool = False</code>;
+    bench_longmemeval passes <code>True</code> only for temporal-reasoning. RRF relevance order preserved
+    for knowledge-update, multi-session, and preference qtypes (first release of Task #32 caused
+    -5 question regression in each; <code>fix: qtype-aware chronological sort</code> restored them)</li>
+<li>14 new tests across date_normalizer (10), arcane_retriever (5 sort + 2 flag), fact_decomposer (2)</li>
+<li>
+<p>R9 results archived as <code>data/longmemeval_hypotheses.results.R9_baseline.jsonl</code> (gitignored)</p>
+</li>
+<li>
+<p><strong>LongMemEval R9 — temporal breakthrough</strong> (2026-04-11):</p>
+</li>
+<li>Overall 73.0% (365/500), up from R8 69.0% (+4.0pp)</li>
+<li>temporal-reasoning 56.4% (75/133), up from R8 45.9% (+10.5pp, +14 questions)</li>
+<li>multi-session: 63.9%, knowledge-update: 88.5%, all single-session ≥85.7%</li>
+<li>Three pipeline changes:<ul>
+<li><strong>Session-anchored date resolution</strong> (commit 50149ff): <code>normalise_in_context()</code>
+  resolves vague expressions ("yesterday", "3 weeks ago") against session
+  timestamps at index time. Wired into <code>bench_longmemeval._build_index_for_question</code>
+  and <code>temporal_graph.extract_events</code>. 28 new tests.</li>
+<li><strong>Explicit duration arithmetic + TReMu pre-computation</strong> (commit e062f0e):
+  <code>_pick_duration_pair()</code> keyword-matched event pairing, weeks/months/counting
+  support in <code>temporal_code_execute()</code>, <code>extract_duration()</code> in answer_extractor
+  with priority over Rust path, <code>_tremu_precompute()</code> prepends <code>COMPUTED ANSWER:</code>
+  to LLM context for temporal questions. 17 new tests.</li>
+<li><strong>Chronological session ordering</strong> (commit e867382): <code>_sort_results_chronologically()</code>
+  sorts FusedResult by <code>valid_from</code>/<code>date_mentions</code>, sessions sorted by
+  <code>haystack_dates</code> before LLM context build. 7 new tests.</li>
+</ul>
+</li>
+<li><strong>Local LLM backend switched to Gemma 3 4B via Ollama</strong> (commit de8d731):</li>
+<li><code>LLMConfig</code> defaults to <code>gemma3:4b</code> on Ollama port 11434 (was Qwen 2.5 7B on 8080)</li>
+<li>Benchmark on RX 6600 XT 8GB via Vulkan: 45-67 tok/s, 3.5 GB VRAM</li>
+<li>Gemma 4 e2b/e4b found broken in Ollama 0.20.2 (q4_K_M tag dedups to bf16)</li>
+<li>Multi-GPU Vulkan tensor split confirmed unviable due to PCIe x1 bottleneck (0.6 tok/s)</li>
+<li><code>tools/bench_local_llm.sh</code> reproducible benchmark harness, <code>docs/guides/local_llm_setup.md</code></li>
+<li><strong>Recall + SNN Rust rustification (13th crate, 52 functions total)</strong>:</li>
+<li><code>remanentia_recall</code> (new crate): tokenize_words (1.4×), tokenize_words_min,
+    token_overlap_score, assess_novelty — wired into memory_recall.py</li>
+<li><code>arcane_stdp.encode_text</code>: hash-based unigram+bigram SNN encoding — wired
+    into snn_backend.py (3rd Rust function alongside stdp_batch, lif_step)</li>
+<li>Key finding: assess_novelty 0.03× due to HashSet FFI overhead on 500+ tokens;
+    encode_text 0.9× due to numpy array FFI. Both document the pyclass-vs-stateless
+    boundary. tokenize_words achieves 1.4× on 3.8K char input.</li>
+<li>38 new tests (24 recall parity + 14 SNN encode parity/performance)</li>
+<li><strong>Tier 1–3 Rust rustification (12 crates, 23 functions)</strong>:</li>
+<li><code>remanentia_retrieve</code> (new crate): 13 hot-path functions — tokenize, stem, hash_encode (26.7×),
+    tfidf_score, spike_feature, snn_affinity, cosine_sim, RRF, entity_graph_score, filename_bonus</li>
+<li><code>remanentia_fact_decomposer</code>: <code>RustFactIndex</code> persistent pyclass (8.8×)</li>
+<li><code>remanentia_temporal</code>: <code>build_temporal_edges</code>, <code>score_temporal_query</code> (2.3×)</li>
+<li><code>remanentia_knowledge_store</code>: <code>knowledge_search</code>, <code>get_related_ids</code>, <code>graph_search</code>,
+    <code>RustKnowledgeIndex</code> pyclass</li>
+<li><code>remanentia_consolidation</code>: <code>cluster_traces</code> (76.1×), <code>build_summary_dag</code>, <code>cluster_notes</code> (12.6×)</li>
+<li><code>arcane_stdp</code>: <code>homeostatic_scaling</code> (45.4×)</li>
+<li>Key finding: <code>#[pyclass]</code> persistent objects &gt;&gt; stateless FFI for class methods;
+    Python datetime parsing overhead accounts for 76× in cluster_traces;
+    FFI dict construction overhead makes build_summary_dag slower in Rust (0.3×)</li>
+<li><strong>26 end-to-end tests</strong> (<code>test_e2e_rust_pipeline.py</code>): full pipeline coverage across Tiers 1–3
+  — ingest → retrieve → consolidate → DAG, cross-tier integration, Rust path verification</li>
+<li><strong>31 Tier 3 unit tests</strong> (<code>test_tier3_rust.py</code>): cluster_traces, homeostatic_scaling,
+  cluster_notes, build_summary_dag — exact parity with Python paths</li>
+<li><strong>41 Tier 2 unit tests</strong> (<code>test_tier2_rust.py</code>): RustFactIndex, temporal edges,
+  temporal query, knowledge search/graph/related</li>
+<li><strong>65 Tier 1 retrieval tests</strong> in <code>test_remanentia_retrieve.py</code></li>
+<li><strong>Temporal training pipeline (C1–C5)</strong>: 5 models trained on 5x RX 6600 XT (ROCm 6.2)</li>
+<li>C1: fine-tuned <code>all-MiniLM-L6-v2</code> embedding model for temporal-aware retrieval</li>
+<li>C2: fine-tuned <code>ms-marco-MiniLM-L-6-v2</code> cross-encoder (AP=84.57%)</li>
+<li>C3: temporal relation classifier (<code>bert-small</code>, 6 classes: before/after/same_day/overlaps/contains/unknown)</li>
+<li>C4: date normaliser with rule-based engine (95% confidence) + ML fallback (<code>bert-mini</code>)</li>
+<li>C5: fact validity model for type classification + supersession detection (combined=100%)</li>
+<li><strong>date_normalizer.py</strong>: rule-based + ML vague date normalisation ("3 weeks ago" → ISO date)</li>
+<li>12 rule patterns: quantified, couple, few, several, weekday, 11 simple expressions</li>
+<li>Confidence scoring (0.7–0.95) with graceful ML fallback</li>
+<li><strong>temporal_relation.py</strong>: temporal relation classifier for event ordering</li>
+<li><strong>fact_validity_model.py</strong>: fact type + supersession detection model</li>
+<li><strong>training/</strong>: full training infrastructure (data generation, 5 training scripts, parallel launcher)</li>
+<li><strong>197 new tests</strong> (844 → 1,041):</li>
+<li>test_date_normalizer (80): rule patterns, ML mock, month arithmetic, weekday, edge cases, model loading</li>
+<li>test_temporal_relation (17): classification, ordering, model loading/exception, N&gt;2 pairwise</li>
+<li>test_fact_validity_model (18): type/supersedes/boundary classification, model loading/exception</li>
+<li>test_temporal_training_integration (24): parse_dates+C4, _build_fact+C5, _ch_temporal+C3, full pipeline, graceful degradation</li>
+<li>test_temporal_synth (32): date normalisation, temporal relations, fact validity generators, save_jsonl</li>
+<li>test_generate_data (26): tokenise, BM25, flatten_turns, triplet/pair/date extraction</li>
+<li><code>temporal</code> optional dependency group in pyproject.toml</li>
+<li>Date extraction coverage: +321% dated facts (121 → 510) after reference_date plumbing fix</li>
+<li>Local evaluation harness (<code>training/eval_local.py</code>): retrieval recall, date coverage, TReMu hits — no API needed</li>
+<li>Honest assessment (<code>training/HONEST_ASSESSMENT.md</code>): component-level validation status</li>
+<li><strong>LongMemEval temporal-reasoning: 45.9% (R8 baseline)</strong> — GPT-4o-mini verified</li>
+<li>Rust STDP/LIF acceleration (arcane_stdp) — 2–3x speedup, bit-exact with numpy</li>
+<li>Enterprise hardening: ARCHITECTURE, CONTRIBUTING, SECURITY, GOVERNANCE, ROADMAP, VALIDATION, NOTICE, CITATION.cff</li>
+<li>MkDocs documentation site with 4 guides, 9 API refs, benchmarks, research</li>
+<li>GitHub issue/PR templates, dependabot, CodeQL, Scorecard, stale bot workflows</li>
+<li>README badges, header image, branding footer</li>
+<li><strong>100% test coverage</strong>: 1,599 tests across 19 modules (zero lines missing)</li>
+<li>Tests for api_server.py, arcane_retriever.py, fact_decomposer.py (3 new test files)</li>
+<li>api_server, arcane_retriever, fact_decomposer added to py-modules</li>
+</ul>
+<h3 id="fixed_1">Fixed<a class="headerlink" href="#fixed_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li>CI: PEP 639 license classifier conflict</li>
+<li>CI: mock anthropic import in _get_client tests</li>
+<li>SPDX headers: Sotek → Šotek across all source files</li>
+<li>SPDX headers: full 6-line header on all edited test files</li>
+</ul>
+<h2 id="031-2026-03-26">[0.3.1] - 2026-03-26<a class="headerlink" href="#031-2026-03-26" title="Permanent link">&para;</a></h2>
+<h3 id="retrieval-quality-wave-2">Retrieval Quality (Wave 2)<a class="headerlink" href="#retrieval-quality-wave-2" title="Permanent link">&para;</a></h3>
+<ul>
+<li>
+<p><strong>Sentence-level indexing</strong>: paragraphs over 200 chars are split into
+  sentences with 1-sentence overlap context windows. Finer granularity means
+  more precise BM25 matching — a sentence about "pottery" no longer competes
+  with a 500-word paragraph where "pottery" appears once.</p>
+</li>
+<li>
+<p><strong>Query decomposition for multi-hop</strong>: complex queries like "What hobbies
+  does the person who works at Google have?" are automatically decomposed into
+  sub-queries ["who works at Google?", "what hobbies?"]. Results are combined
+  and re-ranked by relevance to the original query.</p>
+</li>
+<li>
+<p><strong>Enhanced prospective queries (12 categories)</strong>: expanded from 5 pattern
+  types to 12: named entities, functions, activities/preferences, occupation,
+  relationships, allergies/health, travel/location, learning/skills, favourites,
+  decisions/findings/metrics, versions/dates, file/code. Cap raised to 20
+  queries per paragraph.</p>
+</li>
+<li>
+<p><strong>Confidence scoring</strong>: every SearchResult now includes a <code>confidence</code> field
+  (0.0-1.0) computed from score normalisation, answer extraction success, and
+  absolute score thresholds.</p>
+</li>
+<li>
+<p><strong>Cross-reference answer verification</strong>: when multiple results extract the
+  same answer, confidence is boosted proportionally. Disagreements are left
+  at base confidence.</p>
+</li>
+</ul>
+<h3 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">&para;</a></h3>
+<ul>
+<li>25 new tests covering all wave 2 features (668 total, up from 643).</li>
+</ul>
+<h2 id="030-2026-03-26">[0.3.0] - 2026-03-26<a class="headerlink" href="#030-2026-03-26" title="Permanent link">&para;</a></h2>
+<h3 id="retrieval-engine">Retrieval Engine<a class="headerlink" href="#retrieval-engine" title="Permanent link">&para;</a></h3>
+<ul>
+<li>
+<p><strong>Real term frequency in BM25</strong>: scoring now uses actual token counts per
+  paragraph instead of binary presence. Paragraphs that mention a query term
+  multiple times rank higher, matching the standard BM25 formula:
+  <code>IDF * tf * (k1+1) / (tf + k1*(1-b+b*dl/avg_dl))</code>.</p>
+</li>
+<li>
+<p><strong>DF-tracked incremental IDF</strong>: <code>add_file()</code> now maintains a global document
+  frequency counter (<code>_df</code>). New tokens get accurate IDF values computed from
+  real corpus statistics instead of the previous <code>log(1 + N/2)</code> approximation
+  that drifted over time.</p>
+</li>
+<li>
+<p><strong>Normalised score fusion</strong>: when the bi-encoder model is loaded, BM25 and
+  embedding scores are normalised to [0,1] before fusion. Previously raw BM25
+  scores (unbounded) were mixed with cosine similarities ([-1,1]), producing
+  incommensurable fused scores.</p>
+</li>
+<li>
+<p><strong>Reciprocal Rank Fusion (RRF)</strong>: replaces the naive weighted sum for
+  BM25+embedding fusion. RRF score = sum(1/(k+rank)) across ranked lists.
+  Scale-invariant, well-proven in hybrid retrieval (Cormack et al. 2009, k=60).</p>
+</li>
+</ul>
+<h3 id="temporal-reasoning">Temporal Reasoning<a class="headerlink" href="#temporal-reasoning" title="Permanent link">&para;</a></h3>
+<ul>
+<li>
+<p><strong>Relative date resolution</strong>: <code>parse_dates()</code> now resolves "yesterday",
+  "today", "last week", "last month", "last year", "this week", "this month",
+  "this year" against a reference date. Previously these expressions were
+  detected by regex but never converted to actual calendar dates.</p>
+</li>
+<li>
+<p><strong>O(N) edge building</strong>: <code>add_events()</code> replaced the O(N^2) pairwise
+  comparison with date-bucketed approach: same_day edges within buckets,
+  before/after edges only between adjacent date buckets with capped edges
+  per pair. At 10,000 events this reduces edge count from ~5,000 to &lt;500.</p>
+</li>
+<li>
+<p><strong>Query-relevant date extraction</strong>: <code>_extract_date_answer()</code> now scores
+  all date candidates by proximity to query terms and returns the highest-scored
+  match, instead of blindly returning the first date found in the text.</p>
+</li>
+</ul>
+<h3 id="entity-graph">Entity Graph<a class="headerlink" href="#entity-graph" title="Permanent link">&para;</a></h3>
+<ul>
+<li>
+<p><strong>Typed relations persisted</strong>: <code>consolidation_engine._update_graph()</code> now
+  extracts typed relations (caused_by, fixed_by, replaced, contradicts,
+  version_of, depends_on, improved, produced, used_in, tested_with) from
+  trace text and persists them to <code>relations.jsonl</code>. Previously only co_occurs
+  edges were written despite <code>entity_extractor.extract_relations()</code> detecting
+  11 typed relation types.</p>
+</li>
+<li>
+<p><strong>Typed relation boost in retrieval</strong>: <code>_entity_boost_score()</code> gives 1.5x
+  the boost weight to typed relations vs co_occurs, since they carry stronger
+  semantic signal for query answering.</p>
+</li>
+</ul>
+<h3 id="concurrency">Concurrency<a class="headerlink" href="#concurrency" title="Permanent link">&para;</a></h3>
+<ul>
+<li>
+<p><strong>Async consolidation</strong>: <code>handle_remember()</code> runs consolidation in a
+  background thread with 10-second debounce, instead of blocking every write
+  with a synchronous <code>consolidate()</code> call.</p>
+</li>
+<li>
+<p><strong>Thread-safe singletons</strong>: <code>_UNIFIED_INDEX</code>, <code>_KNOWLEDGE_STORE</code>, and index
+  writes are protected by <code>threading.Lock</code>. Safe for concurrent access from
+  the FastAPI server.</p>
+</li>
+</ul>
+<h3 id="answer-extraction">Answer Extraction<a class="headerlink" href="#answer-extraction" title="Permanent link">&para;</a></h3>
+<ul>
+<li>
+<p><strong>Query-proximity scoring</strong>: all answer extractors (_extract_date_answer,
+  _extract_number_answer, _extract_name_answer) now collect ALL candidates
+  and score by proximity to query terms in the source text, returning the
+  highest-scored match instead of the first regex hit.</p>
+</li>
+<li>
+<p><strong>Improved yes/no detection</strong>: expanded negation markers (15 patterns
+  including "couldn't", "unable", "failed to", etc.) with majority-vote
+  scoring across query terms.</p>
+</li>
+</ul>
+<h3 id="indexing">Indexing<a class="headerlink" href="#indexing" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Raised chunking limits</strong>: <code>MAX_CODE_CHUNK_CHARS</code> raised from 500 to 1000,
+  <code>MAX_CODE_CHUNKS</code> raised from 50 to 200. Previously files over ~25K chars
+  had content silently discarded. Now indexes up to 200K chars per file.</li>
+</ul>
+<h3 id="testing_1">Testing<a class="headerlink" href="#testing_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li>45 new tests covering all improvements (643 total, up from 598).</li>
+<li>Dedicated <code>test_improvements.py</code> with tests for: _token_counts, RRF,
+  relative date resolution, typed relations, async consolidation, thread
+  safety, query-proximity scoring, chunking limits.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      © 1996–2026 Miroslav Šotek / ANULUM · www.anulum.li · protoscience@anulum.li
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "..", "features": ["navigation.sections", "navigation.expand", "navigation.top", "content.code.copy", "search.highlight", "search.suggest"], "search": "../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>

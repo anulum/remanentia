@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://remanentia.com/schema/snn_memory_source_universe_v2.schema.json",
+  "title": "REMANENTIA SNN source universe v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "artifact_type", "selector_version", "repository", "constants", "implementations", "schema_v1_manifests", "considered", "eligible_record_ids", "selected_record_ids", "selected_paths", "selected", "self_sha256"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "artifact_type": {"const": "snn-memory-source-universe"},
+    "selector_version": {"const": 1},
+    "repository": {"$ref": "#/$defs/repository"},
+    "constants": {"$ref": "#/$defs/constants"},
+    "implementations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selector", "split_events"],
+      "properties": {
+        "selector": {
+          "allOf": [
+            {"$ref": "#/$defs/implementation"},
+            {"properties": {"logical_path": {"const": "snn_memory/source_universe.py"}}}
+          ]
+        },
+        "split_events": {
+          "allOf": [
+            {"$ref": "#/$defs/implementation"},
+            {"properties": {"logical_path": {"const": "snn_memory/encoder.py"}}}
+          ]
+        }
+      }
+    },
+    "schema_v1_manifests": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"$ref": "#/$defs/manifest"}},
+    "considered": {"type": "array", "items": {"$ref": "#/$defs/audit"}},
+    "eligible_record_ids": {"type": "array", "items": {"$ref": "#/$defs/record_id"}, "uniqueItems": true},
+    "selected_record_ids": {"type": "array", "minItems": 16, "maxItems": 16, "items": {"$ref": "#/$defs/record_id"}, "uniqueItems": true},
+    "selected_paths": {"type": "array", "minItems": 16, "maxItems": 16, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "selected": {"type": "array", "minItems": 16, "maxItems": 16, "items": {"$ref": "#/$defs/selected"}},
+    "self_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "sha1": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "record_id": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "repository": {
+      "type": "object", "additionalProperties": false, "required": ["head", "object_format"],
+      "properties": {"head": {"$ref": "#/$defs/sha1"}, "object_format": {"const": "sha1"}}
+    },
+    "constants": {
+      "type": "object", "additionalProperties": false,
+      "required": ["selection_domain_ascii", "min_bytes", "max_bytes", "min_events", "max_events", "selected_count", "path_normalization", "exclusion_rules"],
+      "properties": {
+        "selection_domain_ascii": {"const": "remanentia-snn-v2-lock\\0"},
+        "min_bytes": {"const": 1000}, "max_bytes": {"const": 20000},
+        "min_events": {"const": 50}, "max_events": {"const": 256},
+        "selected_count": {"const": 16},
+        "path_normalization": {"const": "posix-segments-unicode-nfc-v1"},
+        "exclusion_rules": {"const": "remanentia-snn-v2-source-exclusions-v1"}
+      }
+    },
+    "implementation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["logical_path", "sha256", "byte_count", "bytes_base64"],
+      "properties": {
+        "logical_path": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_count": {"type": "integer", "minimum": 1},
+        "bytes_base64": {"type": "string", "minLength": 1}
+      }
+    },
+    "manifest": {
+      "type": "object", "additionalProperties": false, "required": ["path", "sha256", "blob_oid", "sources"],
+      "properties": {"path": {"type": "string", "minLength": 1}, "sha256": {"$ref": "#/$defs/sha256"}, "blob_oid": {"$ref": "#/$defs/sha1"}, "sources": {"type": "array", "items": {"$ref": "#/$defs/manifest_source"}}}
+    },
+    "manifest_source": {"type": "object", "additionalProperties": false, "required": ["label", "declared_path", "resolved_path", "sha256"], "properties": {"label": {"type": "string", "minLength": 1}, "declared_path": {"type": "string", "minLength": 1}, "resolved_path": {"type": "string", "minLength": 1}, "sha256": {"$ref": "#/$defs/sha256"}}},
+    "audit": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "normalized_path", "status", "reason", "mode", "kind", "blob_oid"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1}, "normalized_path": {"type": "string", "minLength": 1},
+        "status": {"enum": ["eligible", "excluded"]},
+        "reason": {"enum": ["eligible", "internal", "coordination", "schema_v1_manifest", "vendor", "generated", "license_only", "index_only", "empty", "bytes_below_min", "bytes_above_max", "events_below_min", "events_above_max", "non_regular"]},
+        "mode": {"type": "string", "pattern": "^[0-7]{6}$"}, "kind": {"type": "string", "minLength": 1},
+        "byte_count": {"type": "integer", "minimum": 0}, "event_count": {"type": "integer", "minimum": 0},
+        "content_sha256": {"$ref": "#/$defs/sha256"}, "blob_oid": {"$ref": "#/$defs/sha1"},
+        "content_commit": {"$ref": "#/$defs/sha1"}, "latest_path_commit": {"$ref": "#/$defs/sha1"},
+        "timestamp_ns": {"type": "integer", "minimum": 0}, "timestamp_source": {"const": "git-commit"},
+        "timestamp_precision": {"const": "seconds"}, "event_order_digest": {"$ref": "#/$defs/sha256"},
+        "selection_key": {"$ref": "#/$defs/sha256"}, "record_id": {"$ref": "#/$defs/record_id"},
+        "event_sha256": {"type": "array", "items": {"$ref": "#/$defs/sha256"}}
+        ,"rank": {"type": "integer", "minimum": 0, "maximum": 15}
+      }
+    },
+    "selected": {
+      "allOf": [
+        {"$ref": "#/$defs/audit"},
+        {"type": "object", "required": ["rank", "selection_key", "record_id", "event_sha256"],
+         "properties": {"rank": {"type": "integer", "minimum": 0, "maximum": 15}}}
+      ]
+    }
+  }
+}

@@ -1,0 +1,121 @@
+{
+  "$id": "https://remanentia.com/schemas/claim_axes.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "not": {
+        "properties": {
+          "claim_status": {
+            "const": "reference-validated"
+          },
+          "evidence_kind": {
+            "const": "falsified"
+          }
+        },
+        "required": [
+          "evidence_kind",
+          "claim_status"
+        ]
+      }
+    }
+  ],
+  "description": "Shared evidence, claim-status, admission, and freshness axes for Remanentia findings and recall rendering.",
+  "properties": {
+    "admission": {
+      "description": "Admission-boundary value used by recall rendering.",
+      "enum": [
+        "admitted",
+        "floored",
+        "rejected"
+      ],
+      "type": "string"
+    },
+    "claim_status": {
+      "description": "Claim-boundary status after validation or review.",
+      "enum": [
+        "bounded-model",
+        "bounded-support",
+        "external-dependency-blocked",
+        "reference-validated",
+        "refuted",
+        "roadmap",
+        "toolchain-gated",
+        "validation-gap"
+      ],
+      "type": "string"
+    },
+    "evidence_kind": {
+      "description": "Evidence basis for the finding.",
+      "enum": [
+        "curated",
+        "falsified",
+        "formally-proven",
+        "hardware-validated",
+        "measured",
+        "noise-limited",
+        "producer-asserted"
+      ],
+      "type": "string"
+    },
+    "freshness": {
+      "description": "Source-freshness value for validation rendering.",
+      "enum": [
+        "traceable-unchecked",
+        "untraceable",
+        "verified-at-source"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "evidence_kind",
+    "claim_status"
+  ],
+  "title": "Remanentia Claim Axes",
+  "type": "object",
+  "x-remanentia-axis-sets": {
+    "admission": [
+      "admitted",
+      "floored",
+      "rejected"
+    ],
+    "claim_status": [
+      "bounded-model",
+      "bounded-support",
+      "external-dependency-blocked",
+      "reference-validated",
+      "refuted",
+      "roadmap",
+      "toolchain-gated",
+      "validation-gap"
+    ],
+    "evidence_kind": [
+      "curated",
+      "falsified",
+      "formally-proven",
+      "hardware-validated",
+      "measured",
+      "noise-limited",
+      "producer-asserted"
+    ],
+    "freshness": [
+      "traceable-unchecked",
+      "untraceable",
+      "verified-at-source"
+    ]
+  },
+  "x-remanentia-invariants": [
+    {
+      "action": "reject-before-persistence",
+      "claim_status": "reference-validated",
+      "evidence_kind": "falsified"
+    }
+  ],
+  "x-remanentia-render-modes": [
+    "boundary",
+    "refuted",
+    "validated"
+  ],
+  "x-remanentia-schema-version": "2026-06-27"
+}

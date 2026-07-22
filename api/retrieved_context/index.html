@@ -1,0 +1,4539 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Local-first, auditable memory for AI agents and knowledge-intensive software">
+      
+      
+        <meta name="author" content="Miroslav Šotek">
+      
+      
+        <link rel="canonical" href="https://anulum.github.io/remanentia/api/retrieved_context/">
+      
+      
+        <link rel="prev" href="../bus_recall/">
+      
+      
+        <link rel="next" href="../full_s_diagnostics/">
+      
+      
+      <link rel="icon" href="../../assets/anulum_logo_company.jpg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>retrieved_context - Remanentia</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#retrieved_context_1" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Remanentia" class="md-header__button md-logo" aria-label="Remanentia" data-md-component="logo">
+      
+  <img src="../../assets/anulum_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Remanentia
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              retrieved_context
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="amber"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="deep-purple" data-md-color-accent="amber"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/anulum/remanentia" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    anulum/remanentia
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Remanentia" class="md-nav__button md-logo" aria-label="Remanentia" data-md-component="logo">
+      
+  <img src="../../assets/anulum_logo.png" alt="logo">
+
+    </a>
+    Remanentia
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/anulum/remanentia" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    anulum/remanentia
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Discover
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Discover
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../product/use-cases-and-value/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Use Cases and Value
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/learning-path/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Learning Path
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Tutorials
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Tutorials
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/quickstart/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quick Start
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/agent-memory/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Agent Memory with MCP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/knowledge_store_tutorial/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Knowledge Store
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/temporal_tutorial/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Temporal Queries
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/notebook_walkthrough/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Notebook Walkthrough
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Guides
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Guides
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/getting-started/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Getting Started
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/choose-an-interface/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Choose an Interface
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/USER_MANUAL/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    User Manual
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/INTEGRATION_GUIDE/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Integration Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/container_deployment/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Container Deployment
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/PERFORMANCE_TUNING/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/local_llm_setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Local LLM Setup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Model Cards
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Model Cards
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../models/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../models/embedding/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Embedding (C1)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../models/cross_encoder/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cross-Encoder (C2)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../models/relation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Relation Classifier (C3)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../models/date_normalizer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Date Normaliser (C4)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../models/fact_validity/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Fact Validity (C5)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    API Reference
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            API Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    API Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory_index/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    memory_index
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory_sources/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    memory_sources
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../store_paths/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    store_paths
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../store_manifest/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    store_manifest
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../store_sources/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    store_sources
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index_freshness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    index_freshness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../claim_axes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    claim_axes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../claim_schema/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    claim_schema
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory_recall/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    memory_recall
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recall_ledger/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    recall_ledger
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recall_outcome_tracker/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    recall_outcome_tracker
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recall_calibration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    recall_calibration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bus_recall/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    bus_recall
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    retrieved_context
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    retrieved_context
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#retrieved_context" class="md-nav__link">
+    <span class="md-ellipsis">
+      retrieved_context
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="retrieved_context">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#retrieved_context.RetrievedContext" class="md-nav__link">
+    <span class="md-ellipsis">
+      RetrievedContext
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retrieved_context.RetrievalSelectionDiagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      RetrievalSelectionDiagnostics
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RetrievalSelectionDiagnostics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#retrieved_context.RetrievalSelectionDiagnostics.as_json_dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      as_json_dict
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retrieved_context.rank_ordered_sessions" class="md-nav__link">
+    <span class="md-ellipsis">
+      rank_ordered_sessions
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retrieved_context.select_sessions" class="md-nav__link">
+    <span class="md-ellipsis">
+      select_sessions
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retrieved_context.gold_session_recall" class="md-nav__link">
+    <span class="md-ellipsis">
+      gold_session_recall
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retrieved_context.build_selection_diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      build_selection_diagnostics
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="build_selection_diagnostics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#retrieved_context.build_selection_diagnostics--parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      Parameters
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retrieved_context.build_selection_diagnostics--returns" class="md-nav__link">
+    <span class="md-ellipsis">
+      Returns
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../full_s_diagnostics/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    full_s_diagnostics
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark_suites/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    benchmark_suites
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark_evidence/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    benchmark_evidence
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark_manifest/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    benchmark_manifest
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark_report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    benchmark_report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../efficiency_frontier/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    efficiency_frontier
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../compiled_memory/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    compiled_memory
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp_server/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    mcp_server
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../knowledge_store/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    knowledge_store
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../consolidation_engine/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    consolidation_engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../answer_extractor/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    answer_extractor
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../answer_normalizer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    answer_normalizer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../temporal_graph/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    temporal_graph
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../entity_extractor/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    entity_extractor
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    observer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reflector/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    reflector
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../arcane_retriever/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    arcane_retriever
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fact_decomposer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    fact_decomposer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../date_normalizer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    date_normalizer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../temporal_relation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    temporal_relation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fact_validity_model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    fact_validity_model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    api
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../openapi_export/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    openapi_export
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api_server/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    api_server
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api_security/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    api_security
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../llm_backend/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    llm_backend
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../llm_setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    llm_setup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../context_builder/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    context_builder
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../signal_detector/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    signal_detector
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../skill_extractor/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    skill_extractor
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../active_retrieval/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    active_retrieval
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../aggregate_precompute/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    aggregate_precompute
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cross_session_synthesis/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    cross_session_synthesis
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../device_utils/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    device_utils
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../finding_ingest/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    finding_ingest
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../feed_ingest/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    feed_ingest
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../feed_normalization/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    feed_normalization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../write_discipline/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    write_discipline
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage_accuracy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    coverage_accuracy
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../no_egress_audit/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    no_egress_audit
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../lineage_completeness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    lineage_completeness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fleet_recall_scorer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    fleet_recall_scorer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../judge_agreement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    judge_agreement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../provenance_export/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    provenance_export
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../world_class_scorecard/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    world_class_scorecard
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../lean_context/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    lean_context
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observed_context/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    observed_context
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reader_budget/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    reader_budget
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hypothesis_checkpoint/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    hypothesis_checkpoint
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scorecard_report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    scorecard_report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../answer_confidence/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    answer_confidence
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../discipline_impact/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    discipline_impact
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../file_utils/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    file_utils
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../finding_envelope/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    finding_envelope
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recall_gate/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    recall_gate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory_guarded/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    memory_guarded
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pii_redactor/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    pii_redactor
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../seed_utils/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    seed_utils
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vector_index/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    vector_index
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vector_pipeline/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    vector_pipeline
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli_recall/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    cli_recall
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory_dates/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    memory_dates
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../text_chunking/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    text_chunking
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CLI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_2" id="__nav_7_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    ADR Log
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_2">
+            <span class="md-nav__icon md-icon"></span>
+            ADR Log
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Index
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0000-template/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Template
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0001-use-adr-log/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0001 Use ADR log
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0002-remove-pickle-runtime/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0002 Remove pickle runtime
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0003-pluggable-llm-backend-protocol/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0003 Pluggable LLM backend
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0004-dual-retrieval-stacks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0004 Dual retrieval stacks
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0005-rule-based-date-normalisation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0005 Rule-based date normalisation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0006-preregister-temporal-snn-memory-experiment/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0006 Preregister temporal SNN experiment
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0007-amend-g2-supra-threshold-operating-point/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0007 Amend G2 operating point
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0008-amend-stdp-reach-ltp-dominant-plasticity/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0008 Amend STDP reach
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0009-amend-weight-max-headroom-for-reachable-depolarisation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0009 Amend weight headroom
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Benchmarks
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            Benchmarks
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../benchmarks/LongMemEval/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LongMemEval
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../benchmarks/LOCOMO/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LOCOMO
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../benchmarks/CHANNEL_ABLATIONS/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Channel Ablations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../benchmarks/SOVEREIGN_MEMORY_EVALUATION/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Sovereign Memory Evaluation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Research
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            Research
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/snn_consolidation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    SNN Consolidation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/temporal_snn_memory/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Temporal SNN Memory Experiment
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CHANGELOG/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Changelog
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#retrieved_context" class="md-nav__link">
+    <span class="md-ellipsis">
+      retrieved_context
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="retrieved_context">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#retrieved_context.RetrievedContext" class="md-nav__link">
+    <span class="md-ellipsis">
+      RetrievedContext
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retrieved_context.RetrievalSelectionDiagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      RetrievalSelectionDiagnostics
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RetrievalSelectionDiagnostics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#retrieved_context.RetrievalSelectionDiagnostics.as_json_dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      as_json_dict
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retrieved_context.rank_ordered_sessions" class="md-nav__link">
+    <span class="md-ellipsis">
+      rank_ordered_sessions
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retrieved_context.select_sessions" class="md-nav__link">
+    <span class="md-ellipsis">
+      select_sessions
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retrieved_context.gold_session_recall" class="md-nav__link">
+    <span class="md-ellipsis">
+      gold_session_recall
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retrieved_context.build_selection_diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      build_selection_diagnostics
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="build_selection_diagnostics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#retrieved_context.build_selection_diagnostics--parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      Parameters
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retrieved_context.build_selection_diagnostics--returns" class="md-nav__link">
+    <span class="md-ellipsis">
+      Returns
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<!--
+SPDX-License-Identifier: AGPL-3.0-or-later
+Commercial license available
+© Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+© Code 2020–2026 Miroslav Šotek. All rights reserved.
+ORCID: 0009-0009-3560-0851
+Contact: www.anulum.li | protoscience@anulum.li
+Remanentia — retrieved-context API reference
+-->
+
+<h1 id="retrieved_context_1">retrieved_context<a class="headerlink" href="#retrieved_context_1" title="Permanent link">&para;</a></h1>
+
+
+<div class="doc doc-object doc-module">
+
+
+
+<h2 id="retrieved_context" class="doc doc-heading">
+            <code>retrieved_context</code>
+
+
+<a href="#retrieved_context" class="headerlink" title="Permanent link">&para;</a></h2>
+
+    <div class="doc doc-contents first">
+
+        <p>Assemble a budget-limited reader context from retrieval results.</p>
+<p>The oracle LongMemEval setting hands the reader every haystack session (~8K
+tokens) because the haystack <em>is</em> the gold sessions. The realistic full-S
+setting has ~50 sessions per question (~123K tokens) of which only ~2 are gold,
+so the full history cannot be dumped — the system must <em>retrieve</em> the right
+sessions. This module turns a list of ranked :class:<code>FusedResult</code> facts into the
+set of source sessions the reader should see, under an explicit session-count
+and character budget, and reports which sessions were selected so retrieval
+recall can be measured independently of synthesis.</p>
+<p>Session selection is rank-first: a session enters the selected set the first
+time one of its facts appears in the (already RRF/rerank-ordered) results.
+Highest-ranked sessions win the budget; the survivors are rendered oldest-first
+so the reader sees a chronological transcript.</p>
+
+
+
+
+
+
+
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="retrieved_context.RetrievedContext" class="doc doc-heading">
+            <code>RetrievedContext</code>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#retrieved_context.RetrievedContext" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+        <p>The reader context plus the provenance needed to score retrieval.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="retrieved_context.RetrievedContext.session_text">session_text</span></code></td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>the rendered transcript of the selected sessions,
+oldest-first, ready to drop into the reader prompt.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="retrieved_context.RetrievedContext.session_blocks">session_blocks</span></code></td>
+            <td>
+                  <code><span title="list">list</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>the same selected sessions as individual rendered
+transcripts (the parts joined into <code>session_text</code>), oldest-first —
+so an observer can process one bounded session at a time rather than
+the whole concatenated dump.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="retrieved_context.RetrievedContext.selected_session_idxs">selected_session_idxs</span></code></td>
+            <td>
+                  <code><span title="list">list</span>[<span title="int">int</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>haystack indices of the sessions included, in
+display (chronological) order — the set against which retrieval
+recall is measured.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="retrieved_context.RetrievedContext.n_candidate_sessions">n_candidate_sessions</span></code></td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>how many distinct sessions the ranked results
+spanned before the budget was applied (selection headroom).</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="retrieved_context.RetrievedContext.dropped_to_session_limit">dropped_to_session_limit</span></code></td>
+            <td>
+                  <code><span title="list">list</span>[<span title="int">int</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>candidate session indices that were valid but
+outside the configured <code>max_sessions</code> reader limit.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="retrieved_context.RetrievedContext.dropped_to_budget">dropped_to_budget</span></code></td>
+            <td>
+                  <code><span title="list">list</span>[<span title="int">int</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>candidate session indices inside <code>max_sessions</code>
+that were removed because the rendered context would exceed the
+character budget.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+              <details class="quote">
+                <summary>Source code in <code>retrieved_context.py</code></summary>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">49</span>
+<span class="normal">50</span>
+<span class="normal">51</span>
+<span class="normal">52</span>
+<span class="normal">53</span>
+<span class="normal">54</span>
+<span class="normal">55</span>
+<span class="normal">56</span>
+<span class="normal">57</span>
+<span class="normal">58</span>
+<span class="normal">59</span>
+<span class="normal">60</span>
+<span class="normal">61</span>
+<span class="normal">62</span>
+<span class="normal">63</span>
+<span class="normal">64</span>
+<span class="normal">65</span>
+<span class="normal">66</span>
+<span class="normal">67</span>
+<span class="normal">68</span>
+<span class="normal">69</span>
+<span class="normal">70</span>
+<span class="normal">71</span>
+<span class="normal">72</span>
+<span class="normal">73</span>
+<span class="normal">74</span>
+<span class="normal">75</span>
+<span class="normal">76</span>
+<span class="normal">77</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">RetrievedContext</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The reader context plus the provenance needed to score retrieval.</span>
+
+<span class="sd">    Attributes:</span>
+<span class="sd">        session_text: the rendered transcript of the selected sessions,</span>
+<span class="sd">            oldest-first, ready to drop into the reader prompt.</span>
+<span class="sd">        session_blocks: the same selected sessions as individual rendered</span>
+<span class="sd">            transcripts (the parts joined into ``session_text``), oldest-first —</span>
+<span class="sd">            so an observer can process one bounded session at a time rather than</span>
+<span class="sd">            the whole concatenated dump.</span>
+<span class="sd">        selected_session_idxs: haystack indices of the sessions included, in</span>
+<span class="sd">            display (chronological) order — the set against which retrieval</span>
+<span class="sd">            recall is measured.</span>
+<span class="sd">        n_candidate_sessions: how many distinct sessions the ranked results</span>
+<span class="sd">            spanned before the budget was applied (selection headroom).</span>
+<span class="sd">        dropped_to_session_limit: candidate session indices that were valid but</span>
+<span class="sd">            outside the configured ``max_sessions`` reader limit.</span>
+<span class="sd">        dropped_to_budget: candidate session indices inside ``max_sessions``</span>
+<span class="sd">            that were removed because the rendered context would exceed the</span>
+<span class="sd">            character budget.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">session_text</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">selected_session_idxs</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>
+    <span class="n">session_blocks</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">n_candidate_sessions</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">dropped_to_session_limit</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">dropped_to_budget</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+              </details>
+
+
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="retrieved_context.RetrievalSelectionDiagnostics" class="doc doc-heading">
+            <code>RetrievalSelectionDiagnostics</code>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#retrieved_context.RetrievalSelectionDiagnostics" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+        <p>Structured evidence for a full-S reader session-selection decision.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="retrieved_context.RetrievalSelectionDiagnostics.selected_session_idxs">selected_session_idxs</span></code></td>
+            <td>
+                  <code><span title="list">list</span>[<span title="int">int</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Session indices rendered into the reader prompt.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="retrieved_context.RetrievalSelectionDiagnostics.candidate_session_count">candidate_session_count</span></code></td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Number of distinct retrieved sessions before
+reader limits were applied.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="retrieved_context.RetrievalSelectionDiagnostics.dropped_to_session_limit">dropped_to_session_limit</span></code></td>
+            <td>
+                  <code><span title="list">list</span>[<span title="int">int</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Valid candidate session indices excluded by
+the <code>max_sessions</code> cap.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="retrieved_context.RetrievalSelectionDiagnostics.dropped_to_budget">dropped_to_budget</span></code></td>
+            <td>
+                  <code><span title="list">list</span>[<span title="int">int</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Candidate session indices excluded by the character
+budget after the session cap.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="retrieved_context.RetrievalSelectionDiagnostics.answer_session_recall">answer_session_recall</span></code></td>
+            <td>
+                  <code><span title="float">float</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Fraction of answer-session IDs selected into the
+reader context, or <code>None</code> when the dataset row has no answer
+sessions.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="retrieved_context.RetrievalSelectionDiagnostics.selected_answer_session_ids">selected_answer_session_ids</span></code></td>
+            <td>
+                  <code><span title="list">list</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Gold answer-session IDs included in the
+reader prompt.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="retrieved_context.RetrievalSelectionDiagnostics.missing_answer_session_ids">missing_answer_session_ids</span></code></td>
+            <td>
+                  <code><span title="list">list</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Gold answer-session IDs absent from the
+reader prompt, including IDs missing from the haystack mapping.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="retrieved_context.RetrievalSelectionDiagnostics.session_limited_answer_session_ids">session_limited_answer_session_ids</span></code></td>
+            <td>
+                  <code><span title="list">list</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Gold answer-session IDs excluded by
+the <code>max_sessions</code> cap.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="retrieved_context.RetrievalSelectionDiagnostics.budget_dropped_answer_session_ids">budget_dropped_answer_session_ids</span></code></td>
+            <td>
+                  <code><span title="list">list</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Gold answer-session IDs excluded by
+the character budget.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+              <details class="quote">
+                <summary>Source code in <code>retrieved_context.py</code></summary>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 80</span>
+<span class="normal"> 81</span>
+<span class="normal"> 82</span>
+<span class="normal"> 83</span>
+<span class="normal"> 84</span>
+<span class="normal"> 85</span>
+<span class="normal"> 86</span>
+<span class="normal"> 87</span>
+<span class="normal"> 88</span>
+<span class="normal"> 89</span>
+<span class="normal"> 90</span>
+<span class="normal"> 91</span>
+<span class="normal"> 92</span>
+<span class="normal"> 93</span>
+<span class="normal"> 94</span>
+<span class="normal"> 95</span>
+<span class="normal"> 96</span>
+<span class="normal"> 97</span>
+<span class="normal"> 98</span>
+<span class="normal"> 99</span>
+<span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span>
+<span class="normal">103</span>
+<span class="normal">104</span>
+<span class="normal">105</span>
+<span class="normal">106</span>
+<span class="normal">107</span>
+<span class="normal">108</span>
+<span class="normal">109</span>
+<span class="normal">110</span>
+<span class="normal">111</span>
+<span class="normal">112</span>
+<span class="normal">113</span>
+<span class="normal">114</span>
+<span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">RetrievalSelectionDiagnostics</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Structured evidence for a full-S reader session-selection decision.</span>
+
+<span class="sd">    Attributes:</span>
+<span class="sd">        selected_session_idxs: Session indices rendered into the reader prompt.</span>
+<span class="sd">        candidate_session_count: Number of distinct retrieved sessions before</span>
+<span class="sd">            reader limits were applied.</span>
+<span class="sd">        dropped_to_session_limit: Valid candidate session indices excluded by</span>
+<span class="sd">            the ``max_sessions`` cap.</span>
+<span class="sd">        dropped_to_budget: Candidate session indices excluded by the character</span>
+<span class="sd">            budget after the session cap.</span>
+<span class="sd">        answer_session_recall: Fraction of answer-session IDs selected into the</span>
+<span class="sd">            reader context, or ``None`` when the dataset row has no answer</span>
+<span class="sd">            sessions.</span>
+<span class="sd">        selected_answer_session_ids: Gold answer-session IDs included in the</span>
+<span class="sd">            reader prompt.</span>
+<span class="sd">        missing_answer_session_ids: Gold answer-session IDs absent from the</span>
+<span class="sd">            reader prompt, including IDs missing from the haystack mapping.</span>
+<span class="sd">        session_limited_answer_session_ids: Gold answer-session IDs excluded by</span>
+<span class="sd">            the ``max_sessions`` cap.</span>
+<span class="sd">        budget_dropped_answer_session_ids: Gold answer-session IDs excluded by</span>
+<span class="sd">            the character budget.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">selected_session_idxs</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>
+    <span class="n">candidate_session_count</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">dropped_to_session_limit</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>
+    <span class="n">dropped_to_budget</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>
+    <span class="n">answer_session_recall</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span>
+    <span class="n">selected_answer_session_ids</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="n">missing_answer_session_ids</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="n">session_limited_answer_session_ids</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="n">budget_dropped_answer_session_ids</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">as_json_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">JsonDiagnosticValue</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a JSON-serialisable representation for benchmark artefacts.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;selected_session_idxs&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">selected_session_idxs</span><span class="p">,</span>
+            <span class="s2">&quot;candidate_session_count&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">candidate_session_count</span><span class="p">,</span>
+            <span class="s2">&quot;dropped_to_session_limit&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">dropped_to_session_limit</span><span class="p">,</span>
+            <span class="s2">&quot;dropped_to_budget&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">dropped_to_budget</span><span class="p">,</span>
+            <span class="s2">&quot;answer_session_recall&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">answer_session_recall</span><span class="p">,</span>
+            <span class="s2">&quot;selected_answer_session_ids&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">selected_answer_session_ids</span><span class="p">,</span>
+            <span class="s2">&quot;missing_answer_session_ids&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">missing_answer_session_ids</span><span class="p">,</span>
+            <span class="s2">&quot;session_limited_answer_session_ids&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_limited_answer_session_ids</span><span class="p">,</span>
+            <span class="s2">&quot;budget_dropped_answer_session_ids&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">budget_dropped_answer_session_ids</span><span class="p">,</span>
+        <span class="p">}</span>
+</code></pre></div></td></tr></table></div>
+              </details>
+
+
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="retrieved_context.RetrievalSelectionDiagnostics.as_json_dict" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">as_json_dict</span><span class="p">()</span></code>
+
+<a href="#retrieved_context.RetrievalSelectionDiagnostics.as_json_dict" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Return a JSON-serialisable representation for benchmark artefacts.</p>
+
+            <details class="quote">
+              <summary>Source code in <code>retrieved_context.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">as_json_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">JsonDiagnosticValue</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a JSON-serialisable representation for benchmark artefacts.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;selected_session_idxs&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">selected_session_idxs</span><span class="p">,</span>
+        <span class="s2">&quot;candidate_session_count&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">candidate_session_count</span><span class="p">,</span>
+        <span class="s2">&quot;dropped_to_session_limit&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">dropped_to_session_limit</span><span class="p">,</span>
+        <span class="s2">&quot;dropped_to_budget&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">dropped_to_budget</span><span class="p">,</span>
+        <span class="s2">&quot;answer_session_recall&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">answer_session_recall</span><span class="p">,</span>
+        <span class="s2">&quot;selected_answer_session_ids&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">selected_answer_session_ids</span><span class="p">,</span>
+        <span class="s2">&quot;missing_answer_session_ids&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">missing_answer_session_ids</span><span class="p">,</span>
+        <span class="s2">&quot;session_limited_answer_session_ids&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_limited_answer_session_ids</span><span class="p">,</span>
+        <span class="s2">&quot;budget_dropped_answer_session_ids&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">budget_dropped_answer_session_ids</span><span class="p">,</span>
+    <span class="p">}</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="retrieved_context.rank_ordered_sessions" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">rank_ordered_sessions</span><span class="p">(</span><span class="n">results</span><span class="p">)</span></code>
+
+<a href="#retrieved_context.rank_ordered_sessions" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Distinct source-session indices in order of first appearance in <em>results</em>.</p>
+<p><em>results</em> is assumed already ordered best-first (RRF + cross-encoder). The
+first fact from a session fixes that session's rank; later facts from the
+same session do not move it. This is the order sessions compete for the
+budget in.</p>
+
+            <details class="quote">
+              <summary>Source code in <code>retrieved_context.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">130</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span>
+<span class="normal">135</span>
+<span class="normal">136</span>
+<span class="normal">137</span>
+<span class="normal">138</span>
+<span class="normal">139</span>
+<span class="normal">140</span>
+<span class="normal">141</span>
+<span class="normal">142</span>
+<span class="normal">143</span>
+<span class="normal">144</span>
+<span class="normal">145</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">rank_ordered_sessions</span><span class="p">(</span><span class="n">results</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">_Result</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Distinct source-session indices in order of first appearance in *results*.</span>
+
+<span class="sd">    *results* is assumed already ordered best-first (RRF + cross-encoder). The</span>
+<span class="sd">    first fact from a session fixes that session&#39;s rank; later facts from the</span>
+<span class="sd">    same session do not move it. This is the order sessions compete for the</span>
+<span class="sd">    budget in.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">seen</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+    <span class="n">ordered</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+        <span class="n">idx</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">fact</span><span class="o">.</span><span class="n">session_idx</span>
+        <span class="k">if</span> <span class="n">idx</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
+            <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span>
+            <span class="n">ordered</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">ordered</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="retrieved_context.select_sessions" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">select_sessions</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="n">sessions</span><span class="p">,</span> <span class="n">session_dates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">max_sessions</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">char_budget</span><span class="o">=</span><span class="mi">80000</span><span class="p">)</span></code>
+
+<a href="#retrieved_context.select_sessions" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Pick the sessions the reader should see and render them chronologically.</p>
+<p>The top <code>max_sessions</code> distinct sessions by best-fact rank are taken, then
+trimmed lowest-rank-first until the rendered transcript fits <code>char_budget</code>
+(a session is kept whole or dropped whole — never half-rendered). Survivors
+are displayed oldest-first when <em>session_dates</em> are available, so multi-step
+reasoning sees the conversation in order.</p>
+<p>Returns a :class:<code>RetrievedContext</code> carrying both the prompt text and the
+selected session indices (for retrieval-recall scoring).</p>
+
+            <details class="quote">
+              <summary>Source code in <code>retrieved_context.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">158</span>
+<span class="normal">159</span>
+<span class="normal">160</span>
+<span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span>
+<span class="normal">194</span>
+<span class="normal">195</span>
+<span class="normal">196</span>
+<span class="normal">197</span>
+<span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span>
+<span class="normal">201</span>
+<span class="normal">202</span>
+<span class="normal">203</span>
+<span class="normal">204</span>
+<span class="normal">205</span>
+<span class="normal">206</span>
+<span class="normal">207</span>
+<span class="normal">208</span>
+<span class="normal">209</span>
+<span class="normal">210</span>
+<span class="normal">211</span>
+<span class="normal">212</span>
+<span class="normal">213</span>
+<span class="normal">214</span>
+<span class="normal">215</span>
+<span class="normal">216</span>
+<span class="normal">217</span>
+<span class="normal">218</span>
+<span class="normal">219</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">select_sessions</span><span class="p">(</span>
+    <span class="n">results</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">_Result</span><span class="p">],</span>
+    <span class="n">sessions</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]],</span>
+    <span class="n">session_dates</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">max_sessions</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
+    <span class="n">char_budget</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">80_000</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RetrievedContext</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Pick the sessions the reader should see and render them chronologically.</span>
+
+<span class="sd">    The top ``max_sessions`` distinct sessions by best-fact rank are taken, then</span>
+<span class="sd">    trimmed lowest-rank-first until the rendered transcript fits ``char_budget``</span>
+<span class="sd">    (a session is kept whole or dropped whole — never half-rendered). Survivors</span>
+<span class="sd">    are displayed oldest-first when *session_dates* are available, so multi-step</span>
+<span class="sd">    reasoning sees the conversation in order.</span>
+
+<span class="sd">    Returns a :class:`RetrievedContext` carrying both the prompt text and the</span>
+<span class="sd">    selected session indices (for retrieval-recall scoring).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">dates</span> <span class="o">=</span> <span class="n">session_dates</span> <span class="ow">or</span> <span class="p">[]</span>
+    <span class="n">candidates</span> <span class="o">=</span> <span class="n">rank_ordered_sessions</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
+    <span class="n">n_candidates</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">candidates</span><span class="p">)</span>
+
+    <span class="c1"># Take top-N by rank, guarding against stale indices.</span>
+    <span class="n">valid</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">candidates</span> <span class="k">if</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">sessions</span><span class="p">)]</span>
+    <span class="n">chosen</span> <span class="o">=</span> <span class="n">valid</span><span class="p">[:</span><span class="n">max_sessions</span><span class="p">]</span>
+    <span class="n">dropped_to_session_limit</span> <span class="o">=</span> <span class="n">valid</span><span class="p">[</span><span class="n">max_sessions</span><span class="p">:]</span>
+
+    <span class="c1"># Enforce the character budget, dropping the lowest-ranked chosen sessions</span>
+    <span class="c1"># first. Rendered length is recomputed per session (header + turns).</span>
+    <span class="n">kept</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">dropped</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">used</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">chosen</span><span class="p">:</span>
+        <span class="n">date</span> <span class="o">=</span> <span class="n">dates</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span> <span class="k">if</span> <span class="n">idx</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">dates</span><span class="p">)</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">block</span> <span class="o">=</span> <span class="n">_render_session</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">sessions</span><span class="p">[</span><span class="n">idx</span><span class="p">],</span> <span class="n">date</span><span class="p">)</span>
+        <span class="c1"># +2 for the blank-line join between blocks.</span>
+        <span class="n">cost</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">block</span><span class="p">)</span> <span class="o">+</span> <span class="mi">2</span>
+        <span class="k">if</span> <span class="n">kept</span> <span class="ow">and</span> <span class="n">used</span> <span class="o">+</span> <span class="n">cost</span> <span class="o">&gt;</span> <span class="n">char_budget</span><span class="p">:</span>
+            <span class="n">dropped</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span>
+            <span class="k">continue</span>
+        <span class="n">kept</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span>
+        <span class="n">used</span> <span class="o">+=</span> <span class="n">cost</span>
+
+    <span class="c1"># Display oldest-first by session date; undated sort last but stable.</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_date_key</span><span class="p">(</span><span class="n">idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">dates</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span> <span class="k">if</span> <span class="n">idx</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">dates</span><span class="p">)</span> <span class="ow">and</span> <span class="n">dates</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span> <span class="k">else</span> <span class="s2">&quot;</span><span class="se">\xff</span><span class="s2">&quot;</span>
+
+    <span class="n">display</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">kept</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="n">_date_key</span><span class="p">)</span>
+
+    <span class="n">parts</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">_render_session</span><span class="p">(</span><span class="n">order</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">sessions</span><span class="p">[</span><span class="n">idx</span><span class="p">],</span> <span class="n">_date_key</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\xff</span><span class="s2">&quot;</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">order</span><span class="p">,</span> <span class="n">idx</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">display</span><span class="p">)</span>
+    <span class="p">]</span>
+    <span class="k">return</span> <span class="n">RetrievedContext</span><span class="p">(</span>
+        <span class="n">session_text</span><span class="o">=</span><span class="s2">&quot;</span><span class="se">\n\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">parts</span><span class="p">),</span>
+        <span class="n">selected_session_idxs</span><span class="o">=</span><span class="n">display</span><span class="p">,</span>
+        <span class="n">session_blocks</span><span class="o">=</span><span class="n">parts</span><span class="p">,</span>
+        <span class="n">n_candidate_sessions</span><span class="o">=</span><span class="n">n_candidates</span><span class="p">,</span>
+        <span class="n">dropped_to_session_limit</span><span class="o">=</span><span class="n">dropped_to_session_limit</span><span class="p">,</span>
+        <span class="n">dropped_to_budget</span><span class="o">=</span><span class="n">dropped</span><span class="p">,</span>
+    <span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="retrieved_context.gold_session_recall" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">gold_session_recall</span><span class="p">(</span><span class="n">selected_idxs</span><span class="p">,</span> <span class="n">gold_idxs</span><span class="p">)</span></code>
+
+<a href="#retrieved_context.gold_session_recall" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Fraction of gold answer sessions present in the selected set.</p>
+<p>1.0 means every gold session was retrieved into the reader context (so any
+failure is synthesis, not retrieval); 0.0 means none were (a pure retrieval
+miss). Empty gold returns 1.0 (nothing to recall — vacuously complete).</p>
+
+            <details class="quote">
+              <summary>Source code in <code>retrieved_context.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">222</span>
+<span class="normal">223</span>
+<span class="normal">224</span>
+<span class="normal">225</span>
+<span class="normal">226</span>
+<span class="normal">227</span>
+<span class="normal">228</span>
+<span class="normal">229</span>
+<span class="normal">230</span>
+<span class="normal">231</span>
+<span class="normal">232</span>
+<span class="normal">233</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">gold_session_recall</span><span class="p">(</span><span class="n">selected_idxs</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">gold_idxs</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Fraction of gold answer sessions present in the selected set.</span>
+
+<span class="sd">    1.0 means every gold session was retrieved into the reader context (so any</span>
+<span class="sd">    failure is synthesis, not retrieval); 0.0 means none were (a pure retrieval</span>
+<span class="sd">    miss). Empty gold returns 1.0 (nothing to recall — vacuously complete).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">gold</span> <span class="o">=</span> <span class="p">{</span><span class="n">g</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">gold_idxs</span> <span class="k">if</span> <span class="n">g</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">}</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">gold</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mf">1.0</span>
+    <span class="n">selected</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">selected_idxs</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">gold</span> <span class="o">&amp;</span> <span class="n">selected</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">gold</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="retrieved_context.build_selection_diagnostics" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">build_selection_diagnostics</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">haystack_session_ids</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">answer_session_ids</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+<a href="#retrieved_context.build_selection_diagnostics" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Map selected session indices back to LongMemEval answer-session IDs.</p>
+<h5 id="retrieved_context.build_selection_diagnostics--parameters">Parameters<a class="headerlink" href="#retrieved_context.build_selection_diagnostics--parameters" title="Permanent link">&para;</a></h5>
+<p>context:
+    The selected reader context returned by :func:<code>select_sessions</code>.
+haystack_session_ids:
+    Dataset session IDs in haystack order. When omitted, answer-session
+    recall cannot be tied back to external IDs.
+answer_session_ids:
+    Gold answer-session IDs for the question.</p>
+<h5 id="retrieved_context.build_selection_diagnostics--returns">Returns<a class="headerlink" href="#retrieved_context.build_selection_diagnostics--returns" title="Permanent link">&para;</a></h5>
+<p>RetrievalSelectionDiagnostics
+    The selected/dropped session evidence suitable for JSONL benchmark
+    artefacts.</p>
+
+            <details class="quote">
+              <summary>Source code in <code>retrieved_context.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">236</span>
+<span class="normal">237</span>
+<span class="normal">238</span>
+<span class="normal">239</span>
+<span class="normal">240</span>
+<span class="normal">241</span>
+<span class="normal">242</span>
+<span class="normal">243</span>
+<span class="normal">244</span>
+<span class="normal">245</span>
+<span class="normal">246</span>
+<span class="normal">247</span>
+<span class="normal">248</span>
+<span class="normal">249</span>
+<span class="normal">250</span>
+<span class="normal">251</span>
+<span class="normal">252</span>
+<span class="normal">253</span>
+<span class="normal">254</span>
+<span class="normal">255</span>
+<span class="normal">256</span>
+<span class="normal">257</span>
+<span class="normal">258</span>
+<span class="normal">259</span>
+<span class="normal">260</span>
+<span class="normal">261</span>
+<span class="normal">262</span>
+<span class="normal">263</span>
+<span class="normal">264</span>
+<span class="normal">265</span>
+<span class="normal">266</span>
+<span class="normal">267</span>
+<span class="normal">268</span>
+<span class="normal">269</span>
+<span class="normal">270</span>
+<span class="normal">271</span>
+<span class="normal">272</span>
+<span class="normal">273</span>
+<span class="normal">274</span>
+<span class="normal">275</span>
+<span class="normal">276</span>
+<span class="normal">277</span>
+<span class="normal">278</span>
+<span class="normal">279</span>
+<span class="normal">280</span>
+<span class="normal">281</span>
+<span class="normal">282</span>
+<span class="normal">283</span>
+<span class="normal">284</span>
+<span class="normal">285</span>
+<span class="normal">286</span>
+<span class="normal">287</span>
+<span class="normal">288</span>
+<span class="normal">289</span>
+<span class="normal">290</span>
+<span class="normal">291</span>
+<span class="normal">292</span>
+<span class="normal">293</span>
+<span class="normal">294</span>
+<span class="normal">295</span>
+<span class="normal">296</span>
+<span class="normal">297</span>
+<span class="normal">298</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">build_selection_diagnostics</span><span class="p">(</span>
+    <span class="n">context</span><span class="p">:</span> <span class="n">RetrievedContext</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">haystack_session_ids</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">answer_session_ids</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RetrievalSelectionDiagnostics</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Map selected session indices back to LongMemEval answer-session IDs.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    context:</span>
+<span class="sd">        The selected reader context returned by :func:`select_sessions`.</span>
+<span class="sd">    haystack_session_ids:</span>
+<span class="sd">        Dataset session IDs in haystack order. When omitted, answer-session</span>
+<span class="sd">        recall cannot be tied back to external IDs.</span>
+<span class="sd">    answer_session_ids:</span>
+<span class="sd">        Gold answer-session IDs for the question.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    RetrievalSelectionDiagnostics</span>
+<span class="sd">        The selected/dropped session evidence suitable for JSONL benchmark</span>
+<span class="sd">        artefacts.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">haystack_ids</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">sid</span><span class="p">)</span> <span class="k">for</span> <span class="n">sid</span> <span class="ow">in</span> <span class="n">haystack_session_ids</span> <span class="ow">or</span> <span class="p">()]</span>
+    <span class="n">answer_ids</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">sid</span><span class="p">)</span> <span class="k">for</span> <span class="n">sid</span> <span class="ow">in</span> <span class="n">answer_session_ids</span> <span class="ow">or</span> <span class="p">()]</span>
+    <span class="n">id_to_idx</span> <span class="o">=</span> <span class="p">{</span><span class="n">sid</span><span class="p">:</span> <span class="n">idx</span> <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">sid</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">haystack_ids</span><span class="p">)}</span>
+
+    <span class="n">selected_idxs</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">selected_session_idxs</span><span class="p">)</span>
+    <span class="n">session_limited_idxs</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">dropped_to_session_limit</span><span class="p">)</span>
+    <span class="n">budget_dropped_idxs</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">dropped_to_budget</span><span class="p">)</span>
+
+    <span class="n">selected_answer_ids</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">missing_answer_ids</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">session_limited_answer_ids</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">budget_dropped_answer_ids</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">for</span> <span class="n">answer_id</span> <span class="ow">in</span> <span class="n">answer_ids</span><span class="p">:</span>
+        <span class="n">idx</span> <span class="o">=</span> <span class="n">id_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">answer_id</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">idx</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">missing_answer_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">answer_id</span><span class="p">)</span>
+            <span class="k">continue</span>
+        <span class="k">if</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">selected_idxs</span><span class="p">:</span>
+            <span class="n">selected_answer_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">answer_id</span><span class="p">)</span>
+            <span class="k">continue</span>
+        <span class="n">missing_answer_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">answer_id</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">session_limited_idxs</span><span class="p">:</span>
+            <span class="n">session_limited_answer_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">answer_id</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">budget_dropped_idxs</span><span class="p">:</span>
+            <span class="n">budget_dropped_answer_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">answer_id</span><span class="p">)</span>
+
+    <span class="n">answer_session_recall</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">selected_answer_ids</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">answer_ids</span><span class="p">)</span> <span class="k">if</span> <span class="n">answer_ids</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="k">return</span> <span class="n">RetrievalSelectionDiagnostics</span><span class="p">(</span>
+        <span class="n">selected_session_idxs</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">selected_session_idxs</span><span class="p">),</span>
+        <span class="n">candidate_session_count</span><span class="o">=</span><span class="n">context</span><span class="o">.</span><span class="n">n_candidate_sessions</span><span class="p">,</span>
+        <span class="n">dropped_to_session_limit</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">dropped_to_session_limit</span><span class="p">),</span>
+        <span class="n">dropped_to_budget</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">dropped_to_budget</span><span class="p">),</span>
+        <span class="n">answer_session_recall</span><span class="o">=</span><span class="n">answer_session_recall</span><span class="p">,</span>
+        <span class="n">selected_answer_session_ids</span><span class="o">=</span><span class="n">selected_answer_ids</span><span class="p">,</span>
+        <span class="n">missing_answer_session_ids</span><span class="o">=</span><span class="n">missing_answer_ids</span><span class="p">,</span>
+        <span class="n">session_limited_answer_session_ids</span><span class="o">=</span><span class="n">session_limited_answer_ids</span><span class="p">,</span>
+        <span class="n">budget_dropped_answer_session_ids</span><span class="o">=</span><span class="n">budget_dropped_answer_ids</span><span class="p">,</span>
+    <span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      © 1996–2026 Miroslav Šotek / ANULUM · www.anulum.li · protoscience@anulum.li
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.sections", "navigation.expand", "navigation.top", "content.code.copy", "search.highlight", "search.suggest"], "search": "../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>

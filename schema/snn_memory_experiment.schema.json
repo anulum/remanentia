@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://remanentia.com/schemas/snn_memory_experiment.v1.schema.json",
+  "title": "Remanentia Temporal SNN Memory Experiment Configuration",
+  "description": "Configuration accepted by the public train CLI. Omitted model fields use the declared ModelConfig defaults.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["model", "encoder", "train"],
+  "properties": {
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["n_neurons", "connectivity"],
+      "properties": {
+        "n_neurons": {"type": "integer", "minimum": 2},
+        "excitatory_fraction": {"type": "number", "exclusiveMinimum": 0.0, "exclusiveMaximum": 1.0},
+        "dt_ms": {"type": "number", "exclusiveMinimum": 0.0},
+        "tau_m_ms": {"type": "number", "exclusiveMinimum": 0.0},
+        "v_rest_mv": {"type": "number"},
+        "v_reset_mv": {"type": "number"},
+        "v_threshold_mv": {"type": "number"},
+        "refractory_ms": {"type": "number", "minimum": 0.0},
+        "tau_plus_ms": {"type": "number", "exclusiveMinimum": 0.0},
+        "tau_minus_ms": {"type": "number", "exclusiveMinimum": 0.0},
+        "a_plus": {"type": "number", "minimum": 0.0},
+        "a_minus": {"type": "number", "minimum": 0.0},
+        "weight_min": {"const": 0.0},
+        "weight_max": {"type": "number", "exclusiveMinimum": 0.0},
+        "connectivity": {"type": "number", "exclusiveMinimum": 0.0, "maximum": 1.0}
+      }
+    },
+    "encoder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["feature_dim", "packet_ms", "silent_ms"],
+      "properties": {
+        "feature_dim": {"type": "integer", "minimum": 8},
+        "packet_ms": {"type": "integer", "minimum": 2},
+        "silent_ms": {"type": "integer", "minimum": 0},
+        "active_fraction": {"type": "number", "exclusiveMinimum": 0.0, "maximum": 1.0},
+        "projection_seed": {"$ref": "#/$defs/seed"}
+      }
+    },
+    "train": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seed", "epochs", "input_current"],
+      "properties": {
+        "seed": {"$ref": "#/$defs/seed"},
+        "epochs": {"type": "integer", "minimum": 1},
+        "input_current": {"type": "number", "exclusiveMinimum": 0.0}
+      }
+    }
+  },
+  "$defs": {
+    "seed": {"type": "integer", "minimum": 0, "maximum": 4294967295}
+  },
+  "x-remanentia-fixed-semantics": {
+    "orientation": "row-pre-column-post",
+    "plasticity": "online-pair-stdp-e-to-e",
+    "trace_update_order": "decay-existing-traces, apply-deltas, then-add-current-spikes"
+  }
+}

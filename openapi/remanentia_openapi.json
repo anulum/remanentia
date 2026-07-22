@@ -1,0 +1,522 @@
+{
+  "components": {
+    "schemas": {
+      "ConsolidateRequest": {
+        "description": "Request body for consolidation runs.",
+        "properties": {
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          }
+        },
+        "title": "ConsolidateRequest",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "PublicVectorSearchRequest": {
+        "description": "Request body for public-safe vector search.",
+        "properties": {
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "source": {
+            "default": "",
+            "title": "Source",
+            "type": "string"
+          },
+          "top_k": {
+            "default": 5,
+            "title": "Top K",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "PublicVectorSearchRequest",
+        "type": "object"
+      },
+      "RecallCorrectnessRequest": {
+        "description": "Request body for recall correctness feedback.",
+        "properties": {
+          "by": {
+            "default": "",
+            "title": "By",
+            "type": "string"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "was_correct": {
+            "title": "Was Correct",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "query",
+          "was_correct"
+        ],
+        "title": "RecallCorrectnessRequest",
+        "type": "object"
+      },
+      "RecallRequest": {
+        "description": "Request body for `/recall`.",
+        "properties": {
+          "format": {
+            "default": "summary",
+            "title": "Format",
+            "type": "string"
+          },
+          "include_content": {
+            "default": false,
+            "title": "Include Content",
+            "type": "boolean"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "top_k": {
+            "default": 3,
+            "title": "Top K",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "RecallRequest",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "Local-first, auditable memory for AI agents and knowledge-intensive software",
+    "title": "Remanentia",
+    "version": "0.5.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/consolidate": {
+      "post": {
+        "description": "Run the consolidation engine and return its result payload.",
+        "operationId": "consolidate_endpoint_consolidate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsolidateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Consolidate Endpoint Consolidate Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Consolidate Endpoint"
+      }
+    },
+    "/entities": {
+      "get": {
+        "description": "Return all entity graph nodes from the JSONL graph store.",
+        "operationId": "list_entities_entities_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response List Entities Entities Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "List Entities"
+      }
+    },
+    "/graph": {
+      "get": {
+        "description": "Return top weighted graph relations.",
+        "operationId": "graph_graph_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "top",
+            "required": false,
+            "schema": {
+              "default": 15,
+              "maximum": 100,
+              "title": "Top",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Graph Graph Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Graph"
+      }
+    },
+    "/graph/entity/{entity_id}": {
+      "get": {
+        "description": "Return one entity and weighted graph connections.",
+        "operationId": "entity_detail_graph_entity__entity_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entity_id",
+            "required": true,
+            "schema": {
+              "title": "Entity Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Entity Detail Graph Entity  Entity Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Entity Detail"
+      }
+    },
+    "/health": {
+      "get": {
+        "description": "Return service health and daemon freshness state.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Health Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [],
+        "summary": "Health"
+      }
+    },
+    "/recall": {
+      "post": {
+        "description": "Recall memory context and return summary or LLM-context JSON.",
+        "operationId": "recall_endpoint_recall_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Recall Endpoint Recall Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Recall Endpoint"
+      }
+    },
+    "/recall/correctness": {
+      "post": {
+        "description": "Record a downstream verifier's correctness verdict for a prior recall.\n\nThe HTTP write seam a calibration consumer posts its verdict to: an answer\nthat used a recalled memory and passed verification \u21d2 ``was_correct=true``;\na flagged, halted, or corrected answer \u21d2 ``false``. The verdict attaches to\nthe most recent matching recall in the query-stream ledger, and the conformal\nabstention gate calibrates on this label (distinct from the usage-only\n``was_used``, which the server derives automatically). An auth-protected\nwrite; unknown queries return 404 so a misdirected verdict is not silently\nswallowed.",
+        "operationId": "recall_correctness_endpoint_recall_correctness_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecallCorrectnessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Recall Correctness Endpoint Recall Correctness Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Recall Correctness Endpoint"
+      }
+    },
+    "/status": {
+      "get": {
+        "description": "Return memory-store, graph, and daemon status counters.",
+        "operationId": "status_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Status Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Status"
+      }
+    },
+    "/vector/search/public": {
+      "post": {
+        "description": "Public-safe vector search.\n\nThe result policy is server-controlled. Callers can narrow by source,\nbut cannot widen the public corpus allowlist.",
+        "operationId": "public_vector_search_endpoint_vector_search_public_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublicVectorSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Public Vector Search Endpoint Vector Search Public Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [],
+        "summary": "Public Vector Search Endpoint"
+      }
+    }
+  },
+  "x-remanentia-auth-exempt-paths": [
+    "/health",
+    "/vector/search/public"
+  ],
+  "x-remanentia-export": {
+    "private_path_policy": "all non-exempt operations require BearerAuth",
+    "security_scheme": "BearerAuth"
+  }
+}

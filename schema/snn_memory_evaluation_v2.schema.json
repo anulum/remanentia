@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://remanentia.com/schemas/snn_memory_evaluation_v2.schema.json",
+  "title": "Remanentia temporal SNN held-out evaluation v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "experiment_digest", "dataset_digest", "candidate_set_digest", "ordered_record_ids", "expected_task_count", "completed_task_count", "expected_task_set_digest", "completed_task_set_digest", "expected_tasks", "completed_tasks", "missing_tasks", "unexpected_tasks", "digest_failures", "per_seed_metrics", "nested_uncertainty", "control_metrics", "baseline_metrics", "mechanism_metrics", "audit_metrics", "gates"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "experiment_digest": {"$ref": "#/$defs/sha256"},
+    "dataset_digest": {"$ref": "#/$defs/sha256"},
+    "candidate_set_digest": {"$ref": "#/$defs/sha256"},
+    "ordered_record_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/recordId"}},
+    "expected_task_count": {"type": "integer", "minimum": 1},
+    "completed_task_count": {"type": "integer", "minimum": 0},
+    "expected_task_set_digest": {"$ref": "#/$defs/sha256"},
+    "completed_task_set_digest": {"$ref": "#/$defs/sha256"},
+    "expected_tasks": {"$ref": "#/$defs/taskIds"},
+    "completed_tasks": {"$ref": "#/$defs/taskIds"},
+    "missing_tasks": {"$ref": "#/$defs/taskIds"},
+    "unexpected_tasks": {"$ref": "#/$defs/taskIds"},
+    "digest_failures": {"$ref": "#/$defs/taskIds"},
+    "per_seed_metrics": {"type": "array", "items": {"$ref": "#/$defs/seedMetric"}},
+    "nested_uncertainty": {"$ref": "#/$defs/uncertainty"},
+    "control_metrics": {"type": "array", "items": {"$ref": "#/$defs/namedMetric"}},
+    "baseline_metrics": {"type": "array", "items": {"$ref": "#/$defs/namedMetric"}},
+    "mechanism_metrics": {"type": "array", "items": {"$ref": "#/$defs/namedMetric"}},
+    "audit_metrics": {"type": "array", "items": {"$ref": "#/$defs/namedMetric"}},
+    "gates": {"$ref": "#/$defs/gates"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "recordId": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "taskId": {"type": "string", "pattern": "^task:[a-f0-9]{64}$"},
+    "taskIds": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/taskId"}},
+    "namedMetric": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "value", "denominator"],
+      "properties": {"name": {"type": "string", "minLength": 1}, "value": {"type": "number"}, "denominator": {"type": "integer", "minimum": 0}}
+    },
+    "seedMetric": {
+      "type": "object", "additionalProperties": false,
+      "required": ["seed", "arm", "p_at_1", "records", "base_cues", "variants"],
+      "properties": {"seed": {"enum": [11, 29, 47, 71, 101, 131, 167, 211, 257, 307]}, "arm": {"type": "string", "minLength": 1}, "p_at_1": {"type": "number", "minimum": 0.0, "maximum": 1.0}, "records": {"type": "integer", "minimum": 0}, "base_cues": {"type": "integer", "minimum": 0}, "variants": {"type": "integer", "minimum": 0}}
+    },
+    "uncertainty": {
+      "type": "object", "additionalProperties": false,
+      "required": ["method", "replicates", "bootstrap_seed", "mean", "lower", "upper", "seed_denominator"],
+      "properties": {"method": {"const": "nested-seed-record-cue-bootstrap-v1"}, "replicates": {"const": 10000}, "bootstrap_seed": {"type": "integer", "minimum": 0, "maximum": 4294967295}, "mean": {"type": "number"}, "lower": {"type": "number"}, "upper": {"type": "number"}, "seed_denominator": {"const": 10}}
+    },
+    "gates": {
+      "type": "object", "additionalProperties": false,
+      "required": ["completeness_pass", "g0_fidelity_pass", "g1_controlled_completion_pass", "g2_locked_recall_pass", "g3_mechanism_pass", "heldout_utility_pass"],
+      "properties": {"completeness_pass": {"type": "boolean"}, "g0_fidelity_pass": {"type": "boolean"}, "g1_controlled_completion_pass": {"type": "boolean"}, "g2_locked_recall_pass": {"type": "boolean"}, "g3_mechanism_pass": {"type": "boolean"}, "heldout_utility_pass": {"type": "boolean"}}
+    }
+  }
+}

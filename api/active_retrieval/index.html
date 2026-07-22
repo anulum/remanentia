@@ -1,0 +1,4569 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Local-first, auditable memory for AI agents and knowledge-intensive software">
+      
+      
+        <meta name="author" content="Miroslav Šotek">
+      
+      
+        <link rel="canonical" href="https://anulum.github.io/remanentia/api/active_retrieval/">
+      
+      
+        <link rel="prev" href="../skill_extractor/">
+      
+      
+        <link rel="next" href="../aggregate_precompute/">
+      
+      
+      <link rel="icon" href="../../assets/anulum_logo_company.jpg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>active_retrieval - Remanentia</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#active_retrieval" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Remanentia" class="md-header__button md-logo" aria-label="Remanentia" data-md-component="logo">
+      
+  <img src="../../assets/anulum_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Remanentia
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              active_retrieval
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="amber"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="deep-purple" data-md-color-accent="amber"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/anulum/remanentia" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    anulum/remanentia
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Remanentia" class="md-nav__button md-logo" aria-label="Remanentia" data-md-component="logo">
+      
+  <img src="../../assets/anulum_logo.png" alt="logo">
+
+    </a>
+    Remanentia
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/anulum/remanentia" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    anulum/remanentia
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Discover
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Discover
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../product/use-cases-and-value/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Use Cases and Value
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/learning-path/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Learning Path
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Tutorials
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Tutorials
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/quickstart/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quick Start
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/agent-memory/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Agent Memory with MCP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/knowledge_store_tutorial/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Knowledge Store
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/temporal_tutorial/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Temporal Queries
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/notebook_walkthrough/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Notebook Walkthrough
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Guides
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Guides
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/getting-started/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Getting Started
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/choose-an-interface/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Choose an Interface
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/USER_MANUAL/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    User Manual
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/INTEGRATION_GUIDE/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Integration Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/container_deployment/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Container Deployment
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/PERFORMANCE_TUNING/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/local_llm_setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Local LLM Setup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Model Cards
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Model Cards
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../models/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../models/embedding/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Embedding (C1)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../models/cross_encoder/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cross-Encoder (C2)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../models/relation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Relation Classifier (C3)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../models/date_normalizer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Date Normaliser (C4)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../models/fact_validity/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Fact Validity (C5)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    API Reference
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            API Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    API Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory_index/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    memory_index
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory_sources/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    memory_sources
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../store_paths/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    store_paths
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../store_manifest/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    store_manifest
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../store_sources/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    store_sources
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index_freshness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    index_freshness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../claim_axes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    claim_axes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../claim_schema/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    claim_schema
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory_recall/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    memory_recall
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recall_ledger/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    recall_ledger
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recall_outcome_tracker/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    recall_outcome_tracker
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recall_calibration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    recall_calibration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bus_recall/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    bus_recall
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../retrieved_context/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    retrieved_context
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../full_s_diagnostics/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    full_s_diagnostics
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark_suites/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    benchmark_suites
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark_evidence/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    benchmark_evidence
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark_manifest/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    benchmark_manifest
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark_report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    benchmark_report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../efficiency_frontier/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    efficiency_frontier
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../compiled_memory/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    compiled_memory
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp_server/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    mcp_server
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../knowledge_store/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    knowledge_store
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../consolidation_engine/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    consolidation_engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../answer_extractor/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    answer_extractor
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../answer_normalizer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    answer_normalizer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../temporal_graph/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    temporal_graph
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../entity_extractor/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    entity_extractor
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    observer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reflector/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    reflector
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../arcane_retriever/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    arcane_retriever
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fact_decomposer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    fact_decomposer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../date_normalizer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    date_normalizer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../temporal_relation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    temporal_relation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fact_validity_model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    fact_validity_model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    api
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../openapi_export/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    openapi_export
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api_server/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    api_server
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api_security/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    api_security
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../llm_backend/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    llm_backend
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../llm_setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    llm_setup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../context_builder/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    context_builder
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../signal_detector/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    signal_detector
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../skill_extractor/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    skill_extractor
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    active_retrieval
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    active_retrieval
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#purpose" class="md-nav__link">
+    <span class="md-ellipsis">
+      Purpose
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      Architecture
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision-point-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Decision Point Detection
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Decision Point Detection">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pattern-categories" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pattern categories
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pattern-design-rationale" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pattern design rationale
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rust-acceleration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Rust acceleration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wiring" class="md-nav__link">
+    <span class="md-ellipsis">
+      Wiring
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory-consultation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Memory Consultation
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Memory Consultation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#algorithm" class="md-nav__link">
+    <span class="md-ellipsis">
+      Algorithm
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      Dependencies
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#output-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      Output format
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#deduplication" class="md-nav__link">
+    <span class="md-ellipsis">
+      Deduplication
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision-guard" class="md-nav__link">
+    <span class="md-ellipsis">
+      Decision Guard
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Decision Guard">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#algorithm_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Algorithm
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#contradiction-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Contradiction detection
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warning-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      Warning format
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Usage
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pipeline-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pipeline Integration
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pipeline Integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#current-integration-points" class="md-nav__link">
+    <span class="md-ellipsis">
+      Current integration points
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      Data flow
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#interaction-with-other-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      Interaction with other modules
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance" class="md-nav__link">
+    <span class="md-ellipsis">
+      Performance
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#python-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      Python API
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Limitations
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test Coverage
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      API Reference
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#active_retrieval.extract_decision_points" class="md-nav__link">
+    <span class="md-ellipsis">
+      extract_decision_points
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#active_retrieval.consult_memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      consult_memory
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#active_retrieval.decision_guard" class="md-nav__link">
+    <span class="md-ellipsis">
+      decision_guard
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../aggregate_precompute/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    aggregate_precompute
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cross_session_synthesis/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    cross_session_synthesis
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../device_utils/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    device_utils
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../finding_ingest/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    finding_ingest
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../feed_ingest/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    feed_ingest
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../feed_normalization/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    feed_normalization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../write_discipline/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    write_discipline
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage_accuracy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    coverage_accuracy
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../no_egress_audit/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    no_egress_audit
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../lineage_completeness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    lineage_completeness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fleet_recall_scorer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    fleet_recall_scorer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../judge_agreement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    judge_agreement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../provenance_export/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    provenance_export
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../world_class_scorecard/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    world_class_scorecard
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../lean_context/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    lean_context
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observed_context/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    observed_context
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reader_budget/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    reader_budget
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hypothesis_checkpoint/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    hypothesis_checkpoint
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scorecard_report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    scorecard_report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../answer_confidence/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    answer_confidence
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../discipline_impact/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    discipline_impact
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../file_utils/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    file_utils
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../finding_envelope/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    finding_envelope
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recall_gate/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    recall_gate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory_guarded/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    memory_guarded
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pii_redactor/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    pii_redactor
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../seed_utils/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    seed_utils
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vector_index/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    vector_index
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vector_pipeline/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    vector_pipeline
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli_recall/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    cli_recall
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory_dates/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    memory_dates
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../text_chunking/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    text_chunking
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CLI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_2" id="__nav_7_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    ADR Log
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_2">
+            <span class="md-nav__icon md-icon"></span>
+            ADR Log
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Index
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0000-template/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Template
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0001-use-adr-log/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0001 Use ADR log
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0002-remove-pickle-runtime/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0002 Remove pickle runtime
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0003-pluggable-llm-backend-protocol/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0003 Pluggable LLM backend
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0004-dual-retrieval-stacks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0004 Dual retrieval stacks
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0005-rule-based-date-normalisation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0005 Rule-based date normalisation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0006-preregister-temporal-snn-memory-experiment/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0006 Preregister temporal SNN experiment
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0007-amend-g2-supra-threshold-operating-point/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0007 Amend G2 operating point
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0008-amend-stdp-reach-ltp-dominant-plasticity/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0008 Amend STDP reach
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0009-amend-weight-max-headroom-for-reachable-depolarisation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    0009 Amend weight headroom
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Benchmarks
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            Benchmarks
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../benchmarks/LongMemEval/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LongMemEval
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../benchmarks/LOCOMO/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LOCOMO
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../benchmarks/CHANNEL_ABLATIONS/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Channel Ablations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../benchmarks/SOVEREIGN_MEMORY_EVALUATION/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Sovereign Memory Evaluation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Research
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            Research
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/snn_consolidation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    SNN Consolidation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/temporal_snn_memory/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Temporal SNN Memory Experiment
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CHANGELOG/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Changelog
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#purpose" class="md-nav__link">
+    <span class="md-ellipsis">
+      Purpose
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      Architecture
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision-point-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Decision Point Detection
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Decision Point Detection">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pattern-categories" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pattern categories
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pattern-design-rationale" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pattern design rationale
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rust-acceleration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Rust acceleration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wiring" class="md-nav__link">
+    <span class="md-ellipsis">
+      Wiring
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory-consultation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Memory Consultation
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Memory Consultation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#algorithm" class="md-nav__link">
+    <span class="md-ellipsis">
+      Algorithm
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      Dependencies
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#output-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      Output format
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#deduplication" class="md-nav__link">
+    <span class="md-ellipsis">
+      Deduplication
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision-guard" class="md-nav__link">
+    <span class="md-ellipsis">
+      Decision Guard
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Decision Guard">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#algorithm_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Algorithm
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#contradiction-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Contradiction detection
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warning-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      Warning format
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Usage
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pipeline-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pipeline Integration
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pipeline Integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#current-integration-points" class="md-nav__link">
+    <span class="md-ellipsis">
+      Current integration points
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      Data flow
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#interaction-with-other-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      Interaction with other modules
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance" class="md-nav__link">
+    <span class="md-ellipsis">
+      Performance
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#python-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      Python API
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Limitations
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test Coverage
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      API Reference
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#active_retrieval.extract_decision_points" class="md-nav__link">
+    <span class="md-ellipsis">
+      extract_decision_points
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#active_retrieval.consult_memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      consult_memory
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#active_retrieval.decision_guard" class="md-nav__link">
+    <span class="md-ellipsis">
+      decision_guard
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="active_retrieval">active_retrieval<a class="headerlink" href="#active_retrieval" title="Permanent link">&para;</a></h1>
+<p>Proactive memory consultation for reasoning-time decision support.
+Identifies decision points in agent reasoning and retrieves relevant
+past decisions, applicable skills, and contradiction warnings.
+Rust-accelerated decision point extraction.</p>
+<h2 id="purpose">Purpose<a class="headerlink" href="#purpose" title="Permanent link">&para;</a></h2>
+<p>Active retrieval enables agents to proactively consult memory DURING
+reasoning — not just when explicitly asked. When the agent is about to
+make a decision (change code, delete a file, choose between approaches),
+active retrieval automatically:</p>
+<ol>
+<li>Identifies the decision point in the reasoning text</li>
+<li>Retrieves relevant past decisions from memory</li>
+<li>Queries applicable skills from the skill store</li>
+<li>Returns warnings if past reasoning contradicts the proposed action</li>
+</ol>
+<p>This prevents the agent from repeating past mistakes or contradicting
+established decisions. It is the difference between an agent that
+forgets everything between sessions and one that learns from experience.</p>
+<h2 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>Agent reasoning text (ongoing)
+        │
+        ▼
+  extract_decision_points(text)
+        │   ← Rust: remanentia_active_retrieval.extract_decision_points
+        │   Splits text by sentence boundaries [.!?\n]
+        │   Filters: len &gt;= 15 chars, matches 1+ of 4 decision patterns
+        │
+        ▼
+  For each decision point (max 3):
+        │
+        ├── retrieve(point, top_k=3)         ← retrieve.py (BM25 search)
+        │     Returns: [{trace, score, tier, content}, ...]
+        │     Filter: score &gt;= 0.2, deduplicate by trace name
+        │
+        ├── query_skills(point, top_k=2)     ← skill_extractor.py
+        │     Returns: [{name, description, match_score}, ...]
+        │
+        ▼
+  Format as advisory context block
+        │
+        ▼
+  &quot;## Memory Advisory (automatic)\n\n**Decision:** ...\n  Past reasoning: ...\n  Applicable skills: ...&quot;
+</code></pre></div>
+<h2 id="decision-point-detection">Decision Point Detection<a class="headerlink" href="#decision-point-detection" title="Permanent link">&para;</a></h2>
+<p><code>extract_decision_points(text)</code> identifies sentences containing decision
+language. The function splits text on <code>[.!?\n]</code> boundaries, filters
+sentences shorter than 15 characters, and matches each against 4
+compiled regex patterns.</p>
+<h3 id="pattern-categories">Pattern categories<a class="headerlink" href="#pattern-categories" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Pattern regex</th>
+<th>What it matches</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>(?:going to\|will\|plan to\|about to)\s+(?:change\|modify\|delete\|remove\|add\|replace\|refactor)</code></td>
+<td>Stated intent to modify</td>
+<td>"I'm about to delete the SNN module"</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>(?:choosing\|chose\|decision\|decided)\s+(?:to\|between\|against)</code></td>
+<td>Explicit choice language</td>
+<td>"We decided against using embeddings"</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>(?:trade.?off\|alternative\|instead of\|rather than)</code></td>
+<td>Comparison/alternative analysis</td>
+<td>"BM25 rather than full embedding search"</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>(?:should we\|should i\|do we\|question is)</code></td>
+<td>Open questions during reasoning</td>
+<td>"Should we keep the SNN backend?"</td>
+</tr>
+</tbody>
+</table>
+<h3 id="pattern-design-rationale">Pattern design rationale<a class="headerlink" href="#pattern-design-rationale" title="Permanent link">&para;</a></h3>
+<p>These 4 categories cover the complete decision lifecycle:</p>
+<ol>
+<li><strong>Intent</strong> — the agent declares what it's about to do</li>
+<li><strong>Choice</strong> — a decision has been made or is being made</li>
+<li><strong>Analysis</strong> — alternatives are being weighed</li>
+<li><strong>Inquiry</strong> — the agent is uncertain and asking</li>
+</ol>
+<p>Each pattern requires BOTH a decision verb AND a specific context word.
+"Going to the store" does NOT match (no modify/delete/etc. action).
+"Should we go?" does NOT match (no decision-relevant context).</p>
+<h3 id="rust-acceleration">Rust acceleration<a class="headerlink" href="#rust-acceleration" title="Permanent link">&para;</a></h3>
+<p>The Rust crate <code>remanentia_active_retrieval</code> provides <code>extract_decision_points</code>
+with compiled <code>LazyLock&lt;Regex&gt;</code> patterns and <code>LazyLock&lt;Regex&gt;</code> for sentence
+splitting:</p>
+<div class="highlight"><pre><span></span><code><span class="k">static</span><span class="w"> </span><span class="n">DECISION_PATTERNS</span><span class="p">:</span><span class="w"> </span><span class="nc">LazyLock</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Regex</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">LazyLock</span><span class="p">::</span><span class="n">new</span><span class="p">(</span><span class="o">||</span><span class="w"> </span><span class="fm">vec!</span><span class="p">[</span>
+<span class="w">    </span><span class="n">Regex</span><span class="p">::</span><span class="n">new</span><span class="p">(</span><span class="s">r&quot;(?i)(?:going to|will|plan to|about to)\s+(?:change|modify|delete|remove|add|replace|refactor)&quot;</span><span class="p">).</span><span class="n">unwrap</span><span class="p">(),</span>
+<span class="w">    </span><span class="n">Regex</span><span class="p">::</span><span class="n">new</span><span class="p">(</span><span class="s">r&quot;(?i)(?:choosing|chose|decision|decided)\s+(?:to|between|against)&quot;</span><span class="p">).</span><span class="n">unwrap</span><span class="p">(),</span>
+<span class="w">    </span><span class="n">Regex</span><span class="p">::</span><span class="n">new</span><span class="p">(</span><span class="s">r&quot;(?i)(?:trade.?off|alternative|instead of|rather than)&quot;</span><span class="p">).</span><span class="n">unwrap</span><span class="p">(),</span>
+<span class="w">    </span><span class="n">Regex</span><span class="p">::</span><span class="n">new</span><span class="p">(</span><span class="s">r&quot;(?i)(?:should we|should i|do we|question is)&quot;</span><span class="p">).</span><span class="n">unwrap</span><span class="p">(),</span>
+<span class="p">]);</span>
+
+<span class="k">static</span><span class="w"> </span><span class="n">RE_SENT_SPLIT</span><span class="p">:</span><span class="w"> </span><span class="nc">LazyLock</span><span class="o">&lt;</span><span class="n">Regex</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">LazyLock</span><span class="p">::</span><span class="n">new</span><span class="p">(</span><span class="o">||</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">Regex</span><span class="p">::</span><span class="n">new</span><span class="p">(</span><span class="s">r&quot;[.!?\n]&quot;</span><span class="p">).</span><span class="n">unwrap</span><span class="p">()</span>
+<span class="p">});</span>
+</code></pre></div>
+<p>Measured performance: <strong>4.1 µs</strong> per call (Intel Core i5-11600K @ 3.90GHz,
+verified from <code>/proc/cpuinfo</code>).</p>
+<h3 id="wiring">Wiring<a class="headerlink" href="#wiring" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">extract_decision_points</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">remanentia_active_retrieval</span><span class="w"> </span><span class="kn">import</span> <span class="n">extract_decision_points</span> <span class="k">as</span> <span class="n">_rust_dp</span>
+        <span class="k">return</span> <span class="n">_rust_dp</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>  <span class="c1"># pragma: no cover</span>
+    <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+        <span class="k">pass</span>
+    <span class="c1"># Python fallback: re.split + re.search loop</span>
+</code></pre></div>
+<h2 id="memory-consultation">Memory Consultation<a class="headerlink" href="#memory-consultation" title="Permanent link">&para;</a></h2>
+<p><code>consult_memory(reasoning_text, top_k=3)</code> is the primary entry point
+for proactive memory access.</p>
+<h3 id="algorithm">Algorithm<a class="headerlink" href="#algorithm" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>1. Extract decision points from reasoning text
+2. If no decision points found:
+   a. Fall back: query retrieve() with first 200 chars
+   b. If best score &lt; 0.3: return &quot;&quot; (nothing relevant)
+   c. Else: format as minimal advisory
+3. For each decision point (max 3):
+   a. retrieve(point, top_k=3) → past decisions
+   b. Filter: score &gt;= 0.2, deduplicate by trace name
+   c. query_skills(point, top_k=2) → applicable procedures
+   d. If neither found: skip this point
+   e. Format as advisory block
+4. Join all advisory blocks with separator
+5. Return formatted string (or &quot;&quot; if empty)
+</code></pre></div>
+<h3 id="dependencies">Dependencies<a class="headerlink" href="#dependencies" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Function</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>retrieve.py</code></td>
+<td><code>retrieve(query, top_k, include_content)</code></td>
+<td>BM25 search over traces</td>
+</tr>
+<tr>
+<td><code>skill_extractor.py</code></td>
+<td><code>query_skills(query, top_k)</code></td>
+<td>Procedural skill lookup</td>
+</tr>
+</tbody>
+</table>
+<h3 id="output-format">Output format<a class="headerlink" href="#output-format" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="gu">## Memory Advisory (automatic)</span>
+
+<span class="gs">**Decision:**</span> I&#39;m about to change the STDP time constant from 20ms to 15ms
+  Past reasoning:
+<span class="w">  </span><span class="k">-</span><span class="w"> </span>2026-03-15_stdp_experiment.md (score=0.742)
+<span class="w">  </span><span class="k">-</span><span class="w"> </span>2026-03-10_snn_tuning.md (score=0.531)
+  Applicable skills:
+<span class="w">  </span><span class="k">-</span><span class="w"> </span>stdp-time-constant-tuning: Changed STDP tau from 25ms to 20ms because convergence improved
+
+<span class="gs">**Decision:**</span> Should we remove the sparse weight save code?
+  Past reasoning:
+<span class="w">  </span><span class="k">-</span><span class="w"> </span>2026-03-20_architecture.md (score=0.623)
+</code></pre></div>
+<h3 id="deduplication">Deduplication<a class="headerlink" href="#deduplication" title="Permanent link">&para;</a></h3>
+<p>Traces are deduplicated across decision points via a <code>seen_traces</code> set.
+If trace A appears for decision point 1, it won't appear again for
+decision point 2. This prevents the advisory from repeating the same
+evidence.</p>
+<h2 id="decision-guard">Decision Guard<a class="headerlink" href="#decision-guard" title="Permanent link">&para;</a></h2>
+<p><code>decision_guard(action, context="")</code> provides a safety check before
+destructive actions.</p>
+<h3 id="algorithm_1">Algorithm<a class="headerlink" href="#algorithm_1" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>1. Combine action + context into a single query
+2. retrieve(query, top_k=5, include_content=True)
+3. For each result with score &gt;= 0.3:
+   a. Split content into sentences
+   b. For each sentence containing contradiction words:
+      (&quot;don&#39;t&quot;, &quot;never&quot;, &quot;avoid&quot;, &quot;wrong&quot;, &quot;mistake&quot;, &quot;failed&quot;, &quot;broke&quot;)
+      c. Check if sentence shares &gt;= 2 words with the action
+      d. If yes: add warning
+4. Return list of warnings (empty = safe to proceed)
+</code></pre></div>
+<h3 id="contradiction-detection">Contradiction detection<a class="headerlink" href="#contradiction-detection" title="Permanent link">&para;</a></h3>
+<p>The guard uses a two-gate system:
+1. <strong>Lexical gate</strong>: sentence must contain a contradiction word
+2. <strong>Topical gate</strong>: sentence must share &gt;= 2 words with the action</p>
+<p>This prevents false positives like "The weather was wrong" triggering
+on action "delete database schema".</p>
+<h3 id="warning-format">Warning format<a class="headerlink" href="#warning-format" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="p">[</span>
+    <span class="s2">&quot;Trace &#39;2026-03-15_decision.md&#39; (score=0.742): never delete sparse weight code because it&#39;s needed for checkpoint recovery&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;Trace &#39;2026-03-10_fix.md&#39; (score=0.531): avoided removing the save function after it broke training&quot;</span>
+<span class="p">]</span>
+</code></pre></div>
+<h3 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="n">warnings</span> <span class="o">=</span> <span class="n">decision_guard</span><span class="p">(</span>
+    <span class="n">action</span><span class="o">=</span><span class="s2">&quot;delete sparse W save code&quot;</span><span class="p">,</span>
+    <span class="n">context</span><span class="o">=</span><span class="s2">&quot;cleaning up snn_backend.py&quot;</span>
+<span class="p">)</span>
+<span class="k">if</span> <span class="n">warnings</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="n">warnings</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;WARNING: </span><span class="si">{</span><span class="n">w</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="c1"># Agent should acknowledge warnings before proceeding</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="c1"># Safe to proceed — no contradicting past reasoning</span>
+    <span class="k">pass</span>
+</code></pre></div>
+<h2 id="pipeline-integration">Pipeline Integration<a class="headerlink" href="#pipeline-integration" title="Permanent link">&para;</a></h2>
+<h3 id="current-integration-points">Current integration points<a class="headerlink" href="#current-integration-points" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Caller</th>
+<th>Function</th>
+<th>When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Agent reasoning hook</td>
+<td><code>consult_memory(text)</code></td>
+<td>During reasoning, before decisions</td>
+</tr>
+<tr>
+<td>Pre-action safety</td>
+<td><code>decision_guard(action, context)</code></td>
+<td>Before destructive operations</td>
+</tr>
+<tr>
+<td>MCP recall (planned)</td>
+<td><code>consult_memory(query)</code></td>
+<td>When recall context suggests decision</td>
+</tr>
+</tbody>
+</table>
+<h3 id="data-flow">Data flow<a class="headerlink" href="#data-flow" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>Agent reasoning → extract_decision_points() [Rust]
+    │
+    ├── retrieve.retrieve() → BM25 over reasoning_traces/
+    ├── skill_extractor.query_skills() → skills from snn_state/skills.json
+    │
+    ▼
+Advisory context string → injected into agent prompt
+</code></pre></div>
+<h3 id="interaction-with-other-modules">Interaction with other modules<a class="headerlink" href="#interaction-with-other-modules" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>retrieve.py</strong>: Provides the BM25 search backend for past trace lookup</li>
+<li><strong>skill_extractor.py</strong>: Provides procedural skill matching</li>
+<li><strong>memory_recall.py</strong>: Active retrieval is complementary — recall is
+  explicit (user asks), active retrieval is implicit (agent self-checks)</li>
+<li><strong>knowledge_store.py</strong>: Contradiction detection in knowledge_store
+  handles note-level conflicts; decision_guard handles action-level conflicts</li>
+</ul>
+<h2 id="performance">Performance<a class="headerlink" href="#performance" title="Permanent link">&para;</a></h2>
+<p>Measured on Intel Core i5-11600K @ 3.90GHz (verified from <code>/proc/cpuinfo</code>),
+2026-03-31, <code>time.perf_counter()</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Measured</th>
+<th>Budget</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>extract_decision_points</code> (Rust)</td>
+<td>4.1 µs</td>
+<td>&lt;10 µs</td>
+</tr>
+<tr>
+<td><code>consult_memory</code> (with 3 retrievals)</td>
+<td>&lt;200 ms</td>
+<td>&lt;500 ms</td>
+</tr>
+<tr>
+<td><code>decision_guard</code> (5 results)</td>
+<td>&lt;100 ms</td>
+<td>&lt;500 ms</td>
+</tr>
+</tbody>
+</table>
+<p>The Rust acceleration makes decision point extraction negligible —
+the bottleneck is <code>retrieve.retrieve()</code> which runs BM25 search.</p>
+<h2 id="python-api">Python API<a class="headerlink" href="#python-api" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">active_retrieval</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">extract_decision_points</span><span class="p">,</span>
+    <span class="n">consult_memory</span><span class="p">,</span>
+    <span class="n">decision_guard</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Extract decision points from reasoning text</span>
+<span class="n">text</span> <span class="o">=</span> <span class="s2">&quot;We are going to change the retrieval engine. Should we use BM25?&quot;</span>
+<span class="n">points</span> <span class="o">=</span> <span class="n">extract_decision_points</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+<span class="c1"># [&quot;We are going to change the retrieval engine&quot;,</span>
+<span class="c1">#  &quot;Should we use BM25&quot;]</span>
+
+<span class="c1"># Consult memory during reasoning</span>
+<span class="n">context</span> <span class="o">=</span> <span class="n">consult_memory</span><span class="p">(</span>
+    <span class="s2">&quot;I&#39;m about to replace the BM25 engine with embeddings-only search.&quot;</span>
+<span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+<span class="c1"># ## Memory Advisory (automatic)</span>
+<span class="c1"># **Decision:** about to replace the BM25 engine</span>
+<span class="c1"># Past reasoning: ...</span>
+
+<span class="c1"># Decision guard before destructive action</span>
+<span class="n">warnings</span> <span class="o">=</span> <span class="n">decision_guard</span><span class="p">(</span>
+    <span class="n">action</span><span class="o">=</span><span class="s2">&quot;delete snn_backend.py&quot;</span><span class="p">,</span>
+    <span class="n">context</span><span class="o">=</span><span class="s2">&quot;cleaning up unused modules&quot;</span>
+<span class="p">)</span>
+<span class="k">if</span> <span class="n">warnings</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="n">warnings</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;WARNING: </span><span class="si">{</span><span class="n">w</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
+<ol>
+<li>
+<p><strong>Regex-only decision detection</strong>: Cannot detect implicit decisions
+   ("Let me just quickly..." without explicit decision language).</p>
+</li>
+<li>
+<p><strong>BM25-only retrieval</strong>: Past decisions are retrieved by keyword
+   overlap, not semantic similarity. Paraphrased decisions may be missed.</p>
+</li>
+<li>
+<p><strong>No temporal weighting</strong>: Recent traces are not weighted higher
+   than old ones in the decision guard. A 6-month-old warning has
+   equal weight to yesterday's.</p>
+</li>
+<li>
+<p><strong>No confidence calibration</strong>: The 0.2 and 0.3 score thresholds
+   are empirical, not calibrated on a validation set.</p>
+</li>
+<li>
+<p><strong>Dependency on retrieve.py</strong>: The <code>retrieve()</code> function is a
+   legacy BM25 wrapper. Migration to <code>memory_recall.recall()</code> would
+   provide richer context (entity graph, temporal reasoning).</p>
+</li>
+</ol>
+<h2 id="test-coverage">Test Coverage<a class="headerlink" href="#test-coverage" title="Permanent link">&para;</a></h2>
+<p>Tests in <code>tests/test_improvements.py</code> and <code>tests/test_integration.py</code>:</p>
+<ul>
+<li><strong>Decision points</strong>: all 4 pattern categories, no matches, empty text,
+  short sentences filtered, multi-sentence text</li>
+<li><strong>Consult memory</strong>: with/without matching past decisions, fallback
+  path (no decision points), empty results</li>
+<li><strong>Decision guard</strong>: warning generation with contradiction words, safe
+  action passes, low-score filtering, word overlap threshold</li>
+<li><strong>Pipeline</strong>: integration with retrieve.py and skill_extractor</li>
+<li><strong>Rust wiring</strong>: extract_decision_points Rust vs Python equivalence</li>
+<li><strong>Performance</strong>: extract_decision_points &lt; 10µs</li>
+</ul>
+<p>Test dimensions: empty, error, negative, pipeline, roundtrip,
+performance.</p>
+<h2 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="active_retrieval.extract_decision_points" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">active_retrieval</span><span class="o">.</span><span class="n">extract_decision_points</span><span class="p">(</span><span class="n">text</span><span class="p">)</span></code>
+
+<a href="#active_retrieval.extract_decision_points" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+        <p>Identify sentences that contain decision points.</p>
+
+            <details class="quote">
+              <summary>Source code in <code>active_retrieval.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">65</span>
+<span class="normal">66</span>
+<span class="normal">67</span>
+<span class="normal">68</span>
+<span class="normal">69</span>
+<span class="normal">70</span>
+<span class="normal">71</span>
+<span class="normal">72</span>
+<span class="normal">73</span>
+<span class="normal">74</span>
+<span class="normal">75</span>
+<span class="normal">76</span>
+<span class="normal">77</span>
+<span class="normal">78</span>
+<span class="normal">79</span>
+<span class="normal">80</span>
+<span class="normal">81</span>
+<span class="normal">82</span>
+<span class="normal">83</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">extract_decision_points</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Identify sentences that contain decision points.&quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">remanentia_active_retrieval</span><span class="w"> </span><span class="kn">import</span> <span class="n">extract_decision_points</span> <span class="k">as</span> <span class="n">_rust_dp</span>
+
+        <span class="k">return</span> <span class="n">_rust_dp</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>  <span class="c1"># pragma: no cover</span>
+    <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+        <span class="k">pass</span>
+    <span class="n">sentences</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;[.!?\n]&quot;</span><span class="p">,</span> <span class="n">text</span><span class="p">)</span>
+    <span class="n">points</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">sentence</span> <span class="ow">in</span> <span class="n">sentences</span><span class="p">:</span>
+        <span class="n">stripped</span> <span class="o">=</span> <span class="n">sentence</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">stripped</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">stripped</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">15</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="k">for</span> <span class="n">pattern</span> <span class="ow">in</span> <span class="n">_DECISION_PATTERNS</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">pattern</span><span class="p">,</span> <span class="n">stripped</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span><span class="p">):</span>
+                <span class="n">points</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">stripped</span><span class="p">)</span>
+                <span class="k">break</span>
+    <span class="k">return</span> <span class="n">points</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="active_retrieval.consult_memory" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">active_retrieval</span><span class="o">.</span><span class="n">consult_memory</span><span class="p">(</span><span class="n">reasoning_text</span><span class="p">,</span> <span class="n">top_k</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span></code>
+
+<a href="#active_retrieval.consult_memory" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+        <p>Proactively consult memory for relevant past reasoning.</p>
+<p>Takes the agent's current reasoning text, identifies decision
+points, and retrieves related past decisions + applicable skills.</p>
+<p>Returns a formatted advisory block (or empty string if nothing relevant).</p>
+
+            <details class="quote">
+              <summary>Source code in <code>active_retrieval.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 86</span>
+<span class="normal"> 87</span>
+<span class="normal"> 88</span>
+<span class="normal"> 89</span>
+<span class="normal"> 90</span>
+<span class="normal"> 91</span>
+<span class="normal"> 92</span>
+<span class="normal"> 93</span>
+<span class="normal"> 94</span>
+<span class="normal"> 95</span>
+<span class="normal"> 96</span>
+<span class="normal"> 97</span>
+<span class="normal"> 98</span>
+<span class="normal"> 99</span>
+<span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span>
+<span class="normal">103</span>
+<span class="normal">104</span>
+<span class="normal">105</span>
+<span class="normal">106</span>
+<span class="normal">107</span>
+<span class="normal">108</span>
+<span class="normal">109</span>
+<span class="normal">110</span>
+<span class="normal">111</span>
+<span class="normal">112</span>
+<span class="normal">113</span>
+<span class="normal">114</span>
+<span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span>
+<span class="normal">128</span>
+<span class="normal">129</span>
+<span class="normal">130</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span>
+<span class="normal">135</span>
+<span class="normal">136</span>
+<span class="normal">137</span>
+<span class="normal">138</span>
+<span class="normal">139</span>
+<span class="normal">140</span>
+<span class="normal">141</span>
+<span class="normal">142</span>
+<span class="normal">143</span>
+<span class="normal">144</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">consult_memory</span><span class="p">(</span><span class="n">reasoning_text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">top_k</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Proactively consult memory for relevant past reasoning.</span>
+
+<span class="sd">    Takes the agent&#39;s current reasoning text, identifies decision</span>
+<span class="sd">    points, and retrieves related past decisions + applicable skills.</span>
+
+<span class="sd">    Returns a formatted advisory block (or empty string if nothing relevant).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">retrieve</span><span class="w"> </span><span class="kn">import</span> <span class="n">retrieve</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">skill_extractor</span><span class="w"> </span><span class="kn">import</span> <span class="n">query_skills</span>
+
+    <span class="n">decision_points</span> <span class="o">=</span> <span class="n">extract_decision_points</span><span class="p">(</span><span class="n">reasoning_text</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">decision_points</span><span class="p">:</span>
+        <span class="c1"># Fall back to using the full text as a query</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="n">retrieve</span><span class="p">(</span><span class="n">reasoning_text</span><span class="p">[:</span><span class="mi">200</span><span class="p">],</span> <span class="n">top_k</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">results</span> <span class="ow">or</span> <span class="n">results</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;score&quot;</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mf">0.3</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;## Memory Advisory (automatic)&quot;</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;score&quot;</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mf">0.3</span><span class="p">:</span>
+                <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;- **</span><span class="si">{</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;trace&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">** (relevance: </span><span class="si">{</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;score&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">, tier: </span><span class="si">{</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tier&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;?&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
+                <span class="p">)</span>
+        <span class="k">return</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+
+    <span class="n">advisories</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">seen_traces</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+
+    <span class="k">for</span> <span class="n">point</span> <span class="ow">in</span> <span class="n">decision_points</span><span class="p">[:</span><span class="mi">3</span><span class="p">]:</span>
+        <span class="c1"># Retrieve related past reasoning</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="n">retrieve</span><span class="p">(</span><span class="n">point</span><span class="p">,</span> <span class="n">top_k</span><span class="o">=</span><span class="n">top_k</span><span class="p">)</span>
+        <span class="n">relevant</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;score&quot;</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mf">0.2</span> <span class="ow">and</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;trace&quot;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">seen_traces</span><span class="p">]</span>
+
+        <span class="c1"># Query applicable skills</span>
+        <span class="n">skills</span> <span class="o">=</span> <span class="n">query_skills</span><span class="p">(</span><span class="n">point</span><span class="p">,</span> <span class="n">top_k</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">relevant</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">skills</span><span class="p">:</span>
+            <span class="k">continue</span>
+
+        <span class="n">advisory</span> <span class="o">=</span> <span class="p">[</span><span class="sa">f</span><span class="s2">&quot;**Decision:** </span><span class="si">{</span><span class="n">point</span><span class="p">[:</span><span class="mi">100</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="n">relevant</span><span class="p">:</span>
+            <span class="n">advisory</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;  Past reasoning:&quot;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">relevant</span><span class="p">:</span>
+                <span class="n">advisory</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  - </span><span class="si">{</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;trace&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> (score=</span><span class="si">{</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;score&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+                <span class="n">seen_traces</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;trace&quot;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="n">skills</span><span class="p">:</span>
+            <span class="n">advisory</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;  Applicable skills:&quot;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">skills</span><span class="p">:</span>
+                <span class="n">advisory</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  - </span><span class="si">{</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;description&#39;</span><span class="p">][:</span><span class="mi">60</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="n">advisories</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">advisory</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">advisories</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+
+    <span class="k">return</span> <span class="s2">&quot;## Memory Advisory (automatic)</span><span class="se">\n\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">advisories</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="active_retrieval.decision_guard" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">active_retrieval</span><span class="o">.</span><span class="n">decision_guard</span><span class="p">(</span><span class="n">action</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">)</span></code>
+
+<a href="#active_retrieval.decision_guard" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+        <p>Check if a proposed action contradicts past reasoning.</p>
+<p>Returns a list of warnings (empty = no conflicts found).
+This is a safety net, not a blocker — the agent can proceed
+but should acknowledge the contradiction.</p>
+
+            <details class="quote">
+              <summary>Source code in <code>active_retrieval.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">147</span>
+<span class="normal">148</span>
+<span class="normal">149</span>
+<span class="normal">150</span>
+<span class="normal">151</span>
+<span class="normal">152</span>
+<span class="normal">153</span>
+<span class="normal">154</span>
+<span class="normal">155</span>
+<span class="normal">156</span>
+<span class="normal">157</span>
+<span class="normal">158</span>
+<span class="normal">159</span>
+<span class="normal">160</span>
+<span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">decision_guard</span><span class="p">(</span><span class="n">action</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Check if a proposed action contradicts past reasoning.</span>
+
+<span class="sd">    Returns a list of warnings (empty = no conflicts found).</span>
+<span class="sd">    This is a safety net, not a blocker — the agent can proceed</span>
+<span class="sd">    but should acknowledge the contradiction.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">retrieve</span><span class="w"> </span><span class="kn">import</span> <span class="n">retrieve</span>
+
+    <span class="n">query</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">action</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">context</span><span class="si">}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="n">retrieve</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">top_k</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">include_content</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="n">warnings</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">action_lower</span> <span class="o">=</span> <span class="n">action</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+
+    <span class="c1"># Check for contradiction signals</span>
+    <span class="n">contradiction_words</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;don&#39;t&quot;</span><span class="p">,</span> <span class="s2">&quot;never&quot;</span><span class="p">,</span> <span class="s2">&quot;avoid&quot;</span><span class="p">,</span> <span class="s2">&quot;wrong&quot;</span><span class="p">,</span> <span class="s2">&quot;mistake&quot;</span><span class="p">,</span> <span class="s2">&quot;failed&quot;</span><span class="p">,</span> <span class="s2">&quot;broke&quot;</span><span class="p">}</span>
+
+    <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;score&quot;</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mf">0.3</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">content</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;content&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="c1"># Look for sentences that contain both the action topic and contradiction words</span>
+        <span class="k">for</span> <span class="n">sentence</span> <span class="ow">in</span> <span class="n">content</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">w</span> <span class="ow">in</span> <span class="n">sentence</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="n">contradiction_words</span><span class="p">):</span>
+                <span class="c1"># Check if the sentence is about the same topic</span>
+                <span class="n">action_words</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">action_lower</span><span class="o">.</span><span class="n">split</span><span class="p">())</span>
+                <span class="n">sentence_words</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">sentence</span><span class="o">.</span><span class="n">split</span><span class="p">())</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">action_words</span> <span class="o">&amp;</span> <span class="n">sentence_words</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">:</span>
+                    <span class="n">warnings</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Trace &#39;</span><span class="si">{</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;trace&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&#39; (score=</span><span class="si">{</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;score&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">): </span><span class="si">{</span><span class="n">sentence</span><span class="o">.</span><span class="n">strip</span><span class="p">()[:</span><span class="mi">120</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+                    <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">warnings</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      © 1996–2026 Miroslav Šotek / ANULUM · www.anulum.li · protoscience@anulum.li
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.sections", "navigation.expand", "navigation.top", "content.code.copy", "search.highlight", "search.suggest"], "search": "../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>

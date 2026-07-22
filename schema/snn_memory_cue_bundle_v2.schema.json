@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://remanentia.com/schema/snn_memory_cue_bundle_v2.schema.json",
+  "title": "Remanentia temporal SNN opaque probe cue bundle v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "artifact_type", "bundle_version", "cue_id", "text_sha256", "normalized_text_sha256", "text_utf8_base64", "encoder", "model", "embedding", "currents", "implementations", "self_sha256"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "artifact_type": {"const": "snn-memory-cue-bundle"},
+    "bundle_version": {"const": 1},
+    "cue_id": {"type": "string", "pattern": "^variant-[a-f0-9]{32}$"},
+    "text_sha256": {"$ref": "#/$defs/sha256"},
+    "normalized_text_sha256": {"$ref": "#/$defs/sha256"},
+    "text_utf8_base64": {"type": "string", "minLength": 1},
+    "encoder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "directory_sha256", "config_digest", "config"],
+      "properties": {
+        "identity": {"type": "string", "minLength": 1},
+        "directory_sha256": {"$ref": "#/$defs/sha256"},
+        "config_digest": {"$ref": "#/$defs/sha256"},
+        "config": {"$ref": "#/$defs/encoder_config"}
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["config_digest", "n_neurons", "input_current"],
+      "properties": {
+        "config_digest": {"$ref": "#/$defs/sha256"},
+        "n_neurons": {"type": "integer", "minimum": 2},
+        "input_current": {"type": "number", "exclusiveMinimum": 0.0}
+      }
+    },
+    "embedding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dtype", "shape", "data_base64"],
+      "properties": {
+        "dtype": {"const": "<f8"},
+        "shape": {"$ref": "#/$defs/shape2"},
+        "data_base64": {"type": "string", "minLength": 1}
+      }
+    },
+    "currents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["encoding", "dtype", "index_dtype", "shape", "row_base64", "column_base64", "value_base64"],
+      "properties": {
+        "encoding": {"const": "coo-sorted-v1"},
+        "dtype": {"const": "<f8"},
+        "index_dtype": {"const": "<i8"},
+        "shape": {"$ref": "#/$defs/shape2"},
+        "row_base64": {"type": "string", "minLength": 1},
+        "column_base64": {"type": "string", "minLength": 1},
+        "value_base64": {"type": "string", "minLength": 1}
+      }
+    },
+    "implementations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cue_materializer", "split_events", "sentence_encoder"],
+      "properties": {
+        "cue_materializer": {
+          "allOf": [
+            {"$ref": "#/$defs/implementation_digest"},
+            {"properties": {"logical_path": {"const": "snn_memory/cue_materializer.py"}}}
+          ]
+        },
+        "split_events": {
+          "allOf": [
+            {"$ref": "#/$defs/implementation_digest"},
+            {"properties": {"logical_path": {"const": "snn_memory/encoder.py"}}}
+          ]
+        },
+        "sentence_encoder": {
+          "allOf": [
+            {"$ref": "#/$defs/implementation_digest"},
+            {"properties": {"logical_path": {"const": "snn_memory/sentence_encoder.py"}}}
+          ]
+        }
+      }
+    },
+    "self_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "shape2": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {"type": "integer", "minimum": 1},
+        {"type": "integer", "minimum": 1}
+      ]
+    },
+    "encoder_config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["feature_dim", "packet_ms", "silent_ms", "active_fraction", "projection_seed"],
+      "properties": {
+        "feature_dim": {"type": "integer", "minimum": 8},
+        "packet_ms": {"type": "integer", "minimum": 2},
+        "silent_ms": {"type": "integer", "minimum": 0},
+        "active_fraction": {"type": "number", "exclusiveMinimum": 0.0, "maximum": 1.0},
+        "projection_seed": {"type": "integer", "minimum": 0, "maximum": 4294967295}
+      }
+    },
+    "implementation_digest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["logical_path", "sha256"],
+      "properties": {
+        "logical_path": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}
