@@ -40,9 +40,10 @@ define and own a new evaluation category no leaderboard measures.
 - [ ] **New-category axes:** write-discipline→accuracy curve, calibrated abstention
   (coverage-accuracy), fleet-fed multi-producer recall, lineage-of-belief
   auditability (every answer traces to a queryable provenance record)
-- [ ] **Make every quality claim real:** exercise the Rust fast-path in CI
-  (build + parity coverage), close the lineage producer loop, hash-pin dependencies
-  with a supply-chain gate, strict-mypy + numpy-docstring enforcement
+- [x] Exercise the Rust fast-path in CI with build and parity coverage
+- [x] Close the lineage producer loop through queryable provenance exports
+- [x] Hash-pin dependencies and enforce the release supply-chain gate
+- [ ] Enforce strict mypy and NumPy-convention public docstrings
 
 ## v1.0.0 — General Availability
 
