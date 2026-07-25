@@ -2,9 +2,9 @@
 # Runtime deps
 -r requirements.txt
 # Dev tools
-pytest>=9.0.3
-pytest-cov>=5.0
-httpx>=0.25
-ruff>=0.15.11
+pytest>=9.1.1
+pytest-cov>=7.1.0
+httpx>=0.28.1
+ruff>=0.16.0
 bandit>=1.9.4
 scpn-studio-platform>=0.10,<0.11; python_version >= "3.12"
