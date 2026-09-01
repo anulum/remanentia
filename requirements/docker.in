@@ -4,7 +4,7 @@
 #     --output-file requirements/docker.txt requirements/docker.in
 # Mirrors pyproject core deps + the [api] extra, plus the build toolchain so the
 # local package installs with --no-build-isolation (no unpinned build fetch).
-pip==26.1.2
+pip==26.2
 setuptools>=83.0.0
 wheel
 defusedxml>=0.7.1
